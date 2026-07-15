@@ -97,7 +97,10 @@ export default function BookingDetail() {
     if (!id) return;
     setPayLoading(true);
     try {
-      const originUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const originUrl =
+        typeof window !== "undefined" && window.location
+          ? window.location.origin
+          : process.env.EXPO_PUBLIC_BACKEND_URL || "";
       const res: any = await api(`/bookings/${id}/deposit`, {
         method: "POST",
         body: { origin_url: originUrl },
