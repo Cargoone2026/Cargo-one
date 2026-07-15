@@ -571,7 +571,9 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
     if booking["payment_status"] == "paid":
         raise HTTPException(status_code=400, detail="Already paid")
 
-    origin_url = body.get("origin_url", "https://cargo-one-preview.preview.emergentagent.com")
+    origin_url = body.get("origin_url")
+    if not origin_url:
+        raise HTTPException(status_code=400, detail="origin_url required")
     success_url = f"{origin_url}/customer/booking/{booking_id}?payment=success&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin_url}/customer/booking/{booking_id}?payment=cancel"
 
@@ -676,14 +678,25 @@ async def my_bookings(user: dict = Depends(get_current_user)):
     else:
         q = {}
     bookings = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    # enrich with job snippet + other party details (if paid)
+    # Batch fetch jobs and users to avoid N+1 queries
+    job_ids = [b["job_id"] for b in bookings]
+    other_ids: list[str] = []
     for b in bookings:
-        job = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
+        if b.get("payment_status") == "paid":
+            other_ids.append(b["driver_id"] if user["role"] == "customer" else b["customer_id"])
+    jobs = await db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0}).to_list(len(job_ids) or 1)
+    jobs_map = {j["id"]: j for j in jobs}
+    users = await db.users.find(
+        {"id": {"$in": other_ids}}, {"_id": 0, "password_hash": 0}
+    ).to_list(len(other_ids) or 1) if other_ids else []
+    users_map = {u["id"]: u for u in users}
+    for b in bookings:
         include_private = b.get("payment_status") == "paid"
+        job = jobs_map.get(b["job_id"])
         b["job"] = public_job(job, include_private=include_private) if job else None
         if include_private:
             other_id = b["driver_id"] if user["role"] == "customer" else b["customer_id"]
-            other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0})
+            other = users_map.get(other_id)
             b["other_party"] = user_to_public(other) if other else None
     return bookings
 
