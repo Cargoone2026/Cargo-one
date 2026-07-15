@@ -1,0 +1,204 @@
+{
+  "app_name": "Cargo One",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A modern, premium, and professional logistics marketplace with bold typography, high-contrast layouts, and frictionless Uber-style interactions.",
+  "color": {
+    "light": {
+      "surface": "#FFFFFF",
+      "surfaceSecondary": "#F4F4F4",
+      "surfaceTertiary": "#E5E7EB",
+      "surfaceInverse": "#111111",
+      "onSurface": "#111111",
+      "onSurfaceSecondary": "#6B7280",
+      "onSurfaceTertiary": "#4B5563",
+      "onSurfaceInverse": "#FFFFFF",
+      "brand": "#D62828",
+      "brandPrimary": "#D62828",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#FF6A00",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#FEE2E2",
+      "onBrandTertiary": "#991B1B",
+      "success": "#16A34A",
+      "onSuccess": "#FFFFFF",
+      "warning": "#F59E0B",
+      "onWarning": "#FFFFFF",
+      "error": "#DC2626",
+      "onError": "#FFFFFF",
+      "info": "#3B82F6",
+      "onInfo": "#FFFFFF",
+      "border": "#E5E7EB",
+      "borderStrong": "#D1D5DB",
+      "divider": "#F3F4F6"
+    },
+    "dark": {
+      "surface": "#111111",
+      "surfaceSecondary": "#1C1C1E",
+      "surfaceTertiary": "#2C2C2E",
+      "surfaceInverse": "#FFFFFF",
+      "onSurface": "#FFFFFF",
+      "onSurfaceSecondary": "#A1A1AA",
+      "onSurfaceTertiary": "#D4D4D8",
+      "onSurfaceInverse": "#111111",
+      "brand": "#D62828",
+      "brandPrimary": "#D62828",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#FF6A00",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#450A0A",
+      "onBrandTertiary": "#FECACA",
+      "success": "#22C55E",
+      "onSuccess": "#000000",
+      "warning": "#FBBF24",
+      "onWarning": "#000000",
+      "error": "#EF4444",
+      "onError": "#FFFFFF",
+      "info": "#60A5FA",
+      "onInfo": "#000000",
+      "border": "#2C2C2E",
+      "borderStrong": "#3F3F46",
+      "divider": "#1F1F22"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous iOS-native padding around content. Avoid dense edge-to-edge layouts unless it's a full-width map or hero image. Maintain structural breathing room for a premium feel.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use on bottom sheet drag handles and headers (especially over the map).",
+      "Use on sticky primary CTAs over scrolling lists.",
+      "Use on floating action buttons (FABs) and pinned map controls (e.g., location reset)."
+    ],
+    "dont's": [
+      "Do not use on regular list rows, form fields, or standard feed cards.",
+      "Do not blur entire screens."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Customer Home / Dashboard",
+      "purpose": "A launchpad to post jobs quickly, track active shipments, and view recent messages.",
+      "states": {
+        "loading": "Centered spinner with a skeleton of the primary quick-action cards.",
+        "empty": "Illustration of a pristine empty box + 'No active shipments' + 'Post a Job' primary CTA.",
+        "error": "Readable error message + Retry button centered on screen."
+      },
+      "layout": "Scrollable layout with a large 'Post a Job' hero card (glass over a photo backdrop or strong brand-tinted card). Below it, a horizontal scrolling list of 'Active Bookings' (cards with high-contrast status pills), followed by 'Recent Messages' rows."
+    },
+    {
+      "name": "Post a Job (Wizard)",
+      "purpose": "Step-by-step frictionless flow for customers to input freight details, photos, and pick a quote type.",
+      "states": {
+        "loading": "Spinner during address validation or photo upload.",
+        "empty": "N/A",
+        "error": "Inline validation text under failed inputs."
+      },
+      "layout": "Clean single-column form per step. Sticky primary CTA pinned to the bottom (above keyboard). Large touch targets for category picker grids. Pill-shaped segmented controls for Fixed Price vs. Bidding."
+    },
+    {
+      "name": "Driver Job Feed",
+      "purpose": "A browseable feed for drivers to find nearby jobs with clear filtering and quick bidding access.",
+      "states": {
+        "loading": "Card skeletons showing the layout of job rows.",
+        "empty": "Illustration of an empty warehouse + 'No jobs in your area' + 'Expand search radius' CTA.",
+        "error": "Readable error message + Retry button centered on screen."
+      },
+      "layout": "A search/filter bar pinned at the top. The rest is a vertical ListView of job cards. Cards use bold typography for distance and payout (e.g., £150 / 12 mi). Tags for vehicle requirements. 'Bid' or 'Accept' buttons directly on the card."
+    },
+    {
+      "name": "Live Map Tracking (Customer & Driver)",
+      "purpose": "Uber-style real-time tracking of the delivery progress with clear ETA and status.",
+      "states": {
+        "loading": "Pulsing map placeholder or spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-screen map covering the entire safe area. A `@gorhom/bottom-sheet` sits over the bottom third of the screen, housing booking status, driver ETA, vehicle info, and 'Contact'/'Chat' actions. Floating buttons for map re-centering. Route is drawn with a bold dashed stroke."
+    },
+    {
+      "name": "Admin Dashboard",
+      "purpose": "Command center for admins to approve users, resolve disputes, and manage payments.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "Empty state illustration + 'No pending actions'.",
+        "error": "Standard error + retry."
+      },
+      "layout": "Utility-focused vertical layout. Top row of metric cards (Total Users, Pending Approvals, Disputed Jobs). Below, segmented tabs (Drivers, Users, Jobs) housing lists of actionable rows with status indicators."
+    }
+  ],
+  "images": {
+    "hero_van": {
+      "url": "https://images.unsplash.com/photo-1620455800201-7f00aeef12ed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxjYXJnbyUyMGRlbGl2ZXJ5JTIwdmFufGVufDB8fHx8MTc4NDEzNjI1MHww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1601467995997-ac1ae9a8fff4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxjYXJnbyUyMGRlbGl2ZXJ5JTIwdmFufGVufDB8fHx8MTc4NDEzNjI1MHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Cargo delivery van with back doors open"
+    },
+    "empty_warehouse": {
+      "url": "https://images.unsplash.com/photo-1726866672851-5b99c837603c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxNzV8MHwxfHNlYXJjaHwxfHxmcmVpZ2h0JTIwbG9naXN0aWNzJTIwd2FyZWhvdXNlfGVufDB8fHx8MTc4NDEzNjI1MHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Aerial view of a shipping and warehouse yard"
+    },
+    "empty_box": {
+      "url": "https://images.unsplash.com/photo-1573376670329-0261ea9fde97?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGNhcmRib2FyZCUyMGJveCUyMGlzb2xhdGVkfGVufDB8fHx8MTc4NDEzNjI1MHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty cardboard box isolated"
+    }
+  },
+  "haptics": {
+    "primary_button_press": "impactMedium",
+    "tab_change": "selection",
+    "job_accepted_or_bid_placed": "notificationSuccess",
+    "bottom_sheet_snap": "impactLight",
+    "status_toggle": "impactLight",
+    "error_state": "notificationError"
+  },
+  "instructions_to_main_agent": [
+    "Follow the '1 iOS-Native Clean' personality closely. Generous padding, crisp readability, and modern rounded pill shapes for primary interactive elements.",
+    "Implement a unified color theme but ensure high-contrast typography, mimicking the premium 'Uber' feel with stark Black, sharp Red, and Orange accents.",
+    "For the live map screen, the map must sit at the root z-index covering the full screen. All overlays (header, bottom sheet, FABs) must float above it. Use `@gorhom/bottom-sheet` for the draggable tracking details.",
+    "Sticky primary CTAs (e.g., 'Post a Job', 'Accept Bid', 'Pay Deposit') should sit at the bottom of the screen inside a `KeyboardAvoidingView` outside the ScrollView, often backed by a glass blur.",
+    "Always apply a dark-to-transparent vertical gradient scrim behind text that sits over images (like the Customer dashboard hero card).",
+    "All touch targets must be at least 44x44pt. Use `hitSlop` if visual buttons are smaller.",
+    "Render text using `Plus Jakarta Sans` for a geometric, modern look. Keep font weights capped at 500 max.",
+    "Driver 'Job Feed' cards should be list items that immediately surface actionable data (Price, Distance, Vehicle type). Bid/Accept actions should be instantly accessible.",
+    "Use Phosphor icons consistently across the app. Ensure a single weight (e.g., 'regular' or 'fill') is used per screen, aside from tab bar active states.",
+    "Build Proof of Delivery (POD) features with robust fallback error states if camera/GPS fails."
+  ]
+}
