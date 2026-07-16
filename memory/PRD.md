@@ -73,6 +73,16 @@ Tabs: Dashboard, Users, Drivers, Jobs, Settings
 
 ## Known Limitations
 - Google Maps API key not integrated (uses Leaflet + OSM as no-key alternative)
-- Push notifications not implemented (planned)
+- Push notifications not implemented (deferred until native build ready)
 - POD photos & signature drawing stubbed (submits with text notes + GPS only)
 - Driver document upload UI is stub (backend endpoint pending)
+
+## RC1 — Marketing Website (June 2026)
+- Public marketing site inside the same Expo app: `/`, `/how-it-works`, `/services`, `/business`, `/drivers`, `/trust-safety`, `/faq`, `/contact`, `/about`.
+- Reusable components in `src/components/marketing/` (Hero, Section, FeatureCard, MarketingHeader, MarketingFooter, CookieBanner, AppStoreButtons, SEO).
+- SEO: per-page `<title>`, description, OG/Twitter tags, canonical URL, JSON-LD organisation schema, GA4 + GSC verification via `EXPO_PUBLIC_GA_ID` / `EXPO_PUBLIC_GSC_TOKEN`. `public/sitemap.xml` + `public/robots.txt`.
+- Contact form + newsletter subscribe endpoints (public); admin listing endpoints protected.
+- Cookie consent banner with `AsyncStorage` persistence; hidden on native.
+- GDPR delete-account now scrubs denormalised names on jobs, bids, reviews, messages.
+- Header shows "Go to App" if user is authenticated so marketing browsing does not lock users out of their dashboard.
+
