@@ -267,6 +267,40 @@ async def push_notification(user_id: str, title: str, body: str, data: Optional[
 
 
 # ---------------------------------------------------------------------------
+# Deposit bands
+# ---------------------------------------------------------------------------
+
+
+class DepositBandIn(BaseModel):
+    min_price: float
+    max_price: Optional[float] = None  # None => infinity
+    deposit_amount: float
+    enabled: bool = True
+    label: Optional[str] = None
+
+
+async def calculate_deposit(price: float) -> float:
+    """Find the first enabled band matching price. Fallback to DEPOSIT_PERCENTAGE."""
+    bands = await db.deposit_bands.find({"enabled": True}, {"_id": 0}) \
+                                    .sort("min_price", 1).to_list(200)
+    for b in bands:
+        min_p = float(b.get("min_price", 0))
+        max_p = b.get("max_price")
+        if price >= min_p and (max_p is None or price <= float(max_p)):
+            return round(float(b["deposit_amount"]), 2)
+    return round(price * DEPOSIT_PERCENTAGE, 2)
+
+
+async def preview_deposit(price: float) -> dict:
+    deposit = await calculate_deposit(price)
+    return {
+        "total_price": round(price, 2),
+        "deposit_amount": deposit,
+        "balance_due": round(price - deposit, 2),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
 
@@ -544,7 +578,7 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         return {k: v for k, v in existing.items() if k != "_id"}
 
     price = float(job["accepted_price"])
-    deposit = round(price * DEPOSIT_PERCENTAGE, 2)
+    deposit = await calculate_deposit(price)
     booking = {
         "id": new_id(),
         "job_id": job_id,
@@ -1028,6 +1062,83 @@ async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
 
 
 # ---------------------------------------------------------------------------
+# Deposit Bands (admin CRUD + public read + preview)
+# ---------------------------------------------------------------------------
+
+
+@api.get("/deposit-bands")
+async def list_active_bands(user: dict = Depends(get_current_user)):
+    """Any authenticated user can read active bands (for checkout preview)."""
+    bands = await db.deposit_bands.find({"enabled": True}, {"_id": 0}) \
+                                    .sort("min_price", 1).to_list(200)
+    return bands
+
+
+@api.get("/deposit-bands/preview")
+async def preview_deposit_route(price: float, user: dict = Depends(get_current_user)):
+    if price < 0:
+        raise HTTPException(status_code=400, detail="Invalid price")
+    return await preview_deposit(price)
+
+
+@api.get("/admin/deposit-bands")
+async def admin_list_bands(user: dict = Depends(require_role("admin"))):
+    bands = await db.deposit_bands.find({}, {"_id": 0}).sort("min_price", 1).to_list(500)
+    return bands
+
+
+@api.post("/admin/deposit-bands")
+async def admin_create_band(payload: DepositBandIn,
+                             user: dict = Depends(require_role("admin"))):
+    if payload.min_price < 0 or payload.deposit_amount < 0:
+        raise HTTPException(status_code=400, detail="Values must be non-negative")
+    if payload.max_price is not None and payload.max_price <= payload.min_price:
+        raise HTTPException(status_code=400, detail="max_price must be > min_price")
+    doc = {
+        "id": new_id(),
+        "min_price": float(payload.min_price),
+        "max_price": float(payload.max_price) if payload.max_price is not None else None,
+        "deposit_amount": float(payload.deposit_amount),
+        "enabled": bool(payload.enabled),
+        "label": payload.label,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.deposit_bands.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api.put("/admin/deposit-bands/{band_id}")
+async def admin_update_band(band_id: str, payload: DepositBandIn,
+                             user: dict = Depends(require_role("admin"))):
+    if payload.min_price < 0 or payload.deposit_amount < 0:
+        raise HTTPException(status_code=400, detail="Values must be non-negative")
+    if payload.max_price is not None and payload.max_price <= payload.min_price:
+        raise HTTPException(status_code=400, detail="max_price must be > min_price")
+    patch = {
+        "min_price": float(payload.min_price),
+        "max_price": float(payload.max_price) if payload.max_price is not None else None,
+        "deposit_amount": float(payload.deposit_amount),
+        "enabled": bool(payload.enabled),
+        "label": payload.label,
+        "updated_at": now_iso(),
+    }
+    res = await db.deposit_bands.update_one({"id": band_id}, {"$set": patch})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Band not found")
+    updated = await db.deposit_bands.find_one({"id": band_id}, {"_id": 0})
+    return updated
+
+
+@api.delete("/admin/deposit-bands/{band_id}")
+async def admin_delete_band(band_id: str, user: dict = Depends(require_role("admin"))):
+    res = await db.deposit_bands.delete_one({"id": band_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Band not found")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 
@@ -1037,9 +1148,9 @@ async def root():
     return {"app": "Cargo One", "version": "1.0.0", "status": "ok"}
 
 
-# Seed admin
+# Seed admin + default deposit bands
 @app.on_event("startup")
-async def seed_admin():
+async def seed_startup():
     if not await db.users.find_one({"role": "admin"}):
         admin = {
             "id": new_id(),
@@ -1056,6 +1167,27 @@ async def seed_admin():
         }
         await db.users.insert_one(admin)
         logger.info("Seeded default admin: admin@cargoone.com / admin123")
+
+    if await db.deposit_bands.count_documents({}) == 0:
+        defaults = [
+            {"label": "Tier 1", "min_price": 0, "max_price": 100, "deposit_amount": 10},
+            {"label": "Tier 2", "min_price": 100.01, "max_price": 300, "deposit_amount": 25},
+            {"label": "Tier 3", "min_price": 300.01, "max_price": 750, "deposit_amount": 50},
+            {"label": "Tier 4", "min_price": 750.01, "max_price": 1500, "deposit_amount": 100},
+            {"label": "Tier 5", "min_price": 1500.01, "max_price": None, "deposit_amount": 150},
+        ]
+        for d in defaults:
+            await db.deposit_bands.insert_one({
+                "id": new_id(),
+                "min_price": d["min_price"],
+                "max_price": d["max_price"],
+                "deposit_amount": d["deposit_amount"],
+                "enabled": True,
+                "label": d["label"],
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+        logger.info("Seeded default deposit bands")
 
 
 @app.on_event("shutdown")

@@ -1,0 +1,44 @@
+{
+  "summary": "Backend testing complete for the configurable Booking Deposit Bands feature. Created /app/backend/tests/test_deposit_bands.py with 24 focused pytest cases; ALL 24 PASSED (100%). Verified: (a) 5 default bands seeded on startup with the exact min/max/deposit values (£0-100→£10, £100.01-300→£25, £300.01-750→£50, £750.01-1500→£100, £1500.01+→£150) all enabled; (b) GET /api/deposit-bands returns only enabled bands sorted ascending by min_price and requires auth; (c) GET /api/deposit-bands/preview?price=X returns {total_price, deposit_amount, balance_due} correctly for boundary values 50, 100, 100.01, 500, 1200, 5000 and rejects negative price with 400; (d) admin CRUD works end-to-end (create → verify via admin list → PUT update → DELETE → 404 on repeat delete) and returns the updated document; (e) admin list includes DISABLED bands while public list excludes them; (f) validation returns 400 for max<=min, negative min, negative deposit; max_price=null is accepted; PUT on unknown id returns 404; (g) POST /api/bookings correctly uses calculate_deposit(price) - fixed jobs at £500, £1200, £50 produce deposit_amount 50/100/10 and balance_due 450/1100/40 respectively; (h) RBAC: non-admin (customer) gets 403 on GET/POST/PUT/DELETE /api/admin/deposit-bands and unauthenticated request gets 403 on public /deposit-bands; (i) Fallback path: with all bands disabled in Mongo, /deposit-bands returns [], preview and booking creation at £700 fall back to DEPOSIT_PERCENTAGE=0.10 giving deposit=70 balance=630. State restored after fallback test.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/deposit-bands (unauthenticated)", "issue": "Returns 403 (RBAC layer) rather than 401 when Authorization header is missing. Not a bug per se - just note that FastAPI's HTTPBearer default is auto_error and produces 403 here; either 401 or 403 is acceptable for MVP."},
+      {"endpoint": "POST /api/admin/deposit-bands", "issue": "No overlap detection between bands - admin can create overlapping ranges (e.g. two enabled bands both covering £100-£200). calculate_deposit picks the first match by min_price ASC which is deterministic but could confuse admins. Consider warning/rejecting overlaps."},
+      {"endpoint": "GET /api/deposit-bands/preview", "issue": "Very large float price is accepted without upper bound; not exploitable but consider a sanity cap for admin UX."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_deposit_bands.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/deposit_bands_results.xml"
+  ],
+  "action_items": [
+    "Optional: add validation to prevent overlapping enabled bands so calculate_deposit is unambiguous.",
+    "Optional: expose the fallback DEPOSIT_PERCENTAGE in the admin UI so it's visible what happens if all bands are disabled.",
+    "server.py has grown to 1207 lines - still exceeds the 700-line guideline; consider splitting deposit-bands router into a separate module."
+  ],
+  "critical_code_review_comments": [
+    "calculate_deposit(price) is async and re-queries the DB on every booking/preview call. For an MVP this is fine, but at scale consider caching enabled bands in-process with TTL.",
+    "Band matching uses `price >= min_p and (max_p is None or price <= max_p)` which correctly handles seed boundaries (100 falls in Tier 1, 100.01 in Tier 2).",
+    "Both POST and PUT admin handlers reject max_price <= min_price and negative values consistently.",
+    "Startup seeder is idempotent (guarded by count_documents==0) - good, no duplicates on restart.",
+    "MongoDB _id correctly excluded via projections in all deposit-band endpoints.",
+    "Still using deprecated FastAPI @app.on_event('startup')/('shutdown') - noted in previous iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_deposit_bands.py (created)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Per-run test users test_dep_cust_* and test_dep_drv_* (approved via admin) and 4 fixed test jobs at £500, £1200, £50, £700 with their bookings. Temporary admin bands with min_price 99999/100000/200000/999999 are created and cleaned up within each test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Deposit-bands regression suite at /app/backend/tests/test_deposit_bands.py runs in ~7s. Fallback test uses direct pymongo update_many to flip 'enabled' to False on all bands, then restores using the pre-test snapshot in a finally block - do not interrupt this test mid-run. If it fails you may need to re-enable bands manually: `db.deposit_bands.update_many({}, {'$set': {'enabled': True}})`. Backend uses EXPO_PUBLIC_BACKEND_URL as base URL. Admin creds: admin@cargoone.com / admin123. The public /deposit-bands endpoint returns 403 (not 401) for missing auth due to HTTPBearer default.",
+  "rca_of_issue": "N/A - feature is working end-to-end. No production bugs found. calculate_deposit correctly overrides the legacy DEPOSIT_PERCENTAGE flat-rate for the three requested price points (£500→£50, £1200→£100, £50→£10) and gracefully falls back to 10% only when no enabled bands match."
+}

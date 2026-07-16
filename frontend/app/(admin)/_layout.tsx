@@ -56,6 +56,7 @@ export default function AdminTabs() {
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="deposit-bands" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button } from "@/src/components/Button";
@@ -9,6 +10,7 @@ import { colors, font, radius, spacing, weight } from "@/src/theme";
 
 export default function AdminSettings() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   if (!user) return null;
 
   return (
@@ -26,8 +28,14 @@ export default function AdminSettings() {
         </View>
 
         <View style={styles.section}>
+          <Row
+            icon="pricetags-outline"
+            label="Booking deposit bands"
+            onPress={() => router.push("/(admin)/deposit-bands")}
+            testID="settings-deposit-bands"
+          />
           <Row icon="megaphone-outline" label="Homepage banners" />
-          <Row icon="pricetags-outline" label="Job categories" />
+          <Row icon="pricetag-outline" label="Job categories" />
           <Row icon="gift-outline" label="Promo codes" />
           <Row icon="help-circle-outline" label="FAQs" />
         </View>
@@ -46,15 +54,15 @@ export default function AdminSettings() {
   );
 }
 
-function Row({ icon, label }: any) {
+function Row({ icon, label, onPress, testID }: any) {
   return (
-    <View style={styles.row}>
+    <Pressable style={styles.row} onPress={onPress} testID={testID}>
       <View style={styles.rowIcon}>
         <Ionicons name={icon} size={20} color={colors.text} />
       </View>
       <Text style={styles.rowLabel}>{label}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-    </View>
+    </Pressable>
   );
 }
 

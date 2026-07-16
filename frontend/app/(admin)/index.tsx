@@ -111,6 +111,21 @@ export default function AdminDashboard() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
           </Pressable>
+
+          <Pressable
+            style={styles.actionRow}
+            onPress={() => router.push("/(admin)/deposit-bands")}
+            testID="admin-deposit-bands"
+          >
+            <View style={[styles.actionIcon, { backgroundColor: "#F0FDF4" }]}>
+              <Ionicons name="pricetags" size={22} color={colors.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actionTitle}>Booking deposit bands</Text>
+              <Text style={styles.actionSub}>Configure deposit tiers by job value</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </Pressable>
         </View>
       </ScrollView>
     </View>
