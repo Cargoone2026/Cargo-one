@@ -1,0 +1,57 @@
+{
+  "summary": "Phase 2.2 Trust & Delivery backend tested. 14/21 tests pass (66.7%). CRITICAL BUG: `user_to_public()` in server.py (lines 213-226) never computes/returns the `verified_driver` field, never includes `profile_photo`, and never includes `review_count`. This causes: (a) verified_driver is missing from /users/{id}/profile responses, (b) bid list enrichment `b['verified_driver'] = bool(d and d.get('verified_driver'))` always evaluates to False even after a driver completes a job with docs approved, (c) /auth/me returns profile_photo=None even after profile_photo doc upload sets user.profile_photo. Document upload flow, admin review flow, POD photos+signature, review with photos, and all no-regression endpoints work. Deprecated packages: none detected in backend.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/users/{user_id}/profile & GET /api/jobs/{id}/bids & GET /api/auth/me",
+        "issue": "user_to_public() (server.py:213-226) does NOT include the `verified_driver` field or compute it. Spec requires: verified_driver = (role=='driver' AND documents_verified AND status=='active' AND total_jobs>=1). Currently the key is absent from every response that goes through user_to_public(). Impact: public_profile response has no verified_driver key; bid list `verified_driver` flag (server.py:777) is always False because d.get('verified_driver') is None on the enriched dict.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "GET /api/auth/me / GET /api/users/{id}/profile",
+        "issue": "user_to_public() does NOT include `profile_photo` in returned dict. After POST /api/users/me/documents with doc_type='profile_photo', db.users is updated with profile_photo (server.py:491), but /auth/me (response_model=UserPublic) coerces missing key to None. Add `\"profile_photo\": user.get(\"profile_photo\")` to user_to_public().",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "GET /api/users/{user_id}/profile",
+        "issue": "user_to_public() does not include `review_count` (spec explicitly requires it in public profile). Field is stored on user doc after reviews (server.py:1278) but never surfaced.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/bookings/{id}/complete",
+        "issue": "Endpoint allows completion without checking booking is in pod_uploaded / delivered state and without checking deposit was actually paid. Increments driver.total_jobs unconditionally, which can inflate the verified_driver signal."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase22_trust_delivery.py",
+    "/app/test_reports/pytest/phase22_results.xml"
+  ],
+  "action_items": [
+    "Fix user_to_public() in /app/backend/server.py: (1) add computed field `verified_driver` = (user.role=='driver' and user.get('documents_verified') and user.get('status')=='active' and user.get('total_jobs',0)>=1); (2) add `profile_photo`: user.get('profile_photo'); (3) add `review_count`: user.get('review_count', 0).",
+    "Optionally set response_model=UserPublic on /users/{user_id}/profile so Pydantic coerces missing keys and enforces schema (currently returns raw dict).",
+    "Consider guarding POST /bookings/{id}/complete to require booking.status in ('pod_uploaded','delivered') and payment_status=='paid' before incrementing total_jobs."
+  ],
+  "critical_code_review_comments": [
+    "user_to_public (server.py:213-226) is out of sync with UserPublic Pydantic model — missing profile_photo, verified_driver, review_count. This is the single root cause of 7/21 test failures.",
+    "Bid enrichment (server.py:770-778) reads verified_driver off the enriched public dict which itself doesn't set the key — always False. Should compute verified_driver from the raw user doc.",
+    "server.py is 1530 lines — consider splitting into routers (auth, docs, jobs, bookings, admin) for maintainability (>700 line guideline)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase22_trust_delivery.py (new)"
+  ],
+  "success_rate": {"backend": "66.7% (14/21)", "frontend": "N/A"},
+  "seed_data_creation": "Test data created via /auth/register (prefixed test_driver_/test_customer_/TEST_ jobs). No cleanup performed — safe as test-scoped uuids.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After user_to_public() is patched to include verified_driver (computed), profile_photo, and review_count, rerun `pytest /app/backend/tests/test_phase22_trust_delivery.py -v`. All 21 tests should pass. Note the test suite creates a persistent driver_ctx/customer_ctx per module and reuses them across classes — order matters (docs must be approved before verified_driver=True tests).",
+  "rca_of_issue": "Root cause: `user_to_public(user)` returns a dict with a fixed set of keys and does NOT (a) compute the derived verified_driver flag defined in the Pydantic UserPublic model, nor (b) forward profile_photo/review_count stored on the user document. Fix by extending the dict returned in user_to_public with: verified_driver = (u.role=='driver' and u.get('documents_verified') and u.get('status')=='active' and u.get('total_jobs',0)>=1); profile_photo = u.get('profile_photo'); review_count = u.get('review_count', 0). Reproduction: register driver, upload+approve all 6 docs, complete one booking, GET /api/users/{driver_id}/profile → response has no `verified_driver` key. Mitigation: apply the 3-line patch above."
+}

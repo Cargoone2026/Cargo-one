@@ -91,8 +91,11 @@ class UserPublic(BaseModel):
     status: str = "active"  # active | pending | suspended
     rating: float = 5.0
     total_jobs: int = 0
+    review_count: int = 0
     vehicle: Optional[dict] = None
+    profile_photo: Optional[str] = None
     documents_verified: bool = False
+    verified_driver: bool = False
     created_at: str
 
 
@@ -156,6 +159,7 @@ class PODUpload(BaseModel):
 class ReviewCreate(BaseModel):
     rating: int  # 1-5
     comment: Optional[str] = None
+    photos: list[str] = Field(default_factory=list)  # base64 attachments
 
 
 # ---------------------------------------------------------------------------
@@ -410,12 +414,155 @@ async def me(user: dict = Depends(get_current_user)):
 
 @api.put("/auth/me")
 async def update_me(update: dict, user: dict = Depends(get_current_user)):
-    allowed = {"name", "phone", "vehicle"}
+    allowed = {"name", "phone", "vehicle", "profile_photo"}
     patch = {k: v for k, v in update.items() if k in allowed}
     if patch:
         await db.users.update_one({"id": user["id"]}, {"$set": patch})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
     return user_to_public(updated)
+
+
+# ---------------------------------------------------------------------------
+# Public profile (visible to other users pre-deposit for driver selection)
+# ---------------------------------------------------------------------------
+
+
+@api.get("/users/{user_id}/profile")
+async def public_profile(user_id: str, requester: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not u:
+        raise HTTPException(status_code=404, detail="Not found")
+    pub = user_to_public(u)
+    reviews = await db.reviews.find({"target_id": user_id}, {"_id": 0}) \
+                                .sort("created_at", -1).to_list(10)
+    completed = await db.bookings.count_documents(
+        {"driver_id": user_id, "status": "completed"} if u["role"] == "driver"
+        else {"customer_id": user_id, "status": "completed"},
+    )
+    pub["reviews"] = reviews
+    pub["completed_bookings"] = completed
+    return pub
+
+
+# ---------------------------------------------------------------------------
+# Driver documents (verification)
+# ---------------------------------------------------------------------------
+
+
+REQUIRED_DOC_TYPES = {
+    "driving_licence", "insurance", "vehicle_registration",
+    "vehicle_photos", "profile_photo", "proof_of_address",
+}
+
+
+class DocumentUpload(BaseModel):
+    doc_type: str
+    base64: str
+    filename: Optional[str] = None
+    expiry_date: Optional[str] = None  # ISO date
+
+
+@api.post("/users/me/documents")
+async def upload_document(payload: DocumentUpload, user: dict = Depends(get_current_user)):
+    if payload.doc_type not in REQUIRED_DOC_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid doc_type: {payload.doc_type}")
+    if not payload.base64:
+        raise HTTPException(status_code=400, detail="base64 required")
+    # Only one active doc per type per user — soft delete previous (keep audit trail)
+    await db.documents.update_many(
+        {"user_id": user["id"], "doc_type": payload.doc_type, "active": True},
+        {"$set": {"active": False, "replaced_at": now_iso()}},
+    )
+    doc = {
+        "id": new_id(),
+        "user_id": user["id"],
+        "doc_type": payload.doc_type,
+        "base64": payload.base64,
+        "filename": payload.filename,
+        "expiry_date": payload.expiry_date,
+        "status": "pending",
+        "rejection_reason": None,
+        "active": True,
+        "uploaded_at": now_iso(),
+    }
+    await db.documents.insert_one(doc)
+    # Set profile_photo shortcut
+    if payload.doc_type == "profile_photo":
+        await db.users.update_one({"id": user["id"]}, {"$set": {"profile_photo": payload.base64}})
+    await _recompute_documents_verified(user["id"])
+    return {k: v for k, v in doc.items() if k not in ("_id", "base64")}
+
+
+@api.get("/users/me/documents")
+async def my_documents(user: dict = Depends(get_current_user)):
+    docs = await db.documents.find(
+        {"user_id": user["id"], "active": True}, {"_id": 0, "base64": 0},
+    ).sort("uploaded_at", -1).to_list(50)
+    # Include required list so client can render slots even if empty
+    return {"required": sorted(REQUIRED_DOC_TYPES), "documents": docs}
+
+
+@api.get("/users/me/documents/{doc_id}")
+async def my_document_content(doc_id: str, user: dict = Depends(get_current_user)):
+    doc = await db.documents.find_one(
+        {"id": doc_id, "user_id": user["id"]}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    return doc
+
+
+async def _recompute_documents_verified(user_id: str):
+    """Mark user documents_verified when every required doc is approved."""
+    approved_types = set()
+    async for d in db.documents.find(
+        {"user_id": user_id, "active": True, "status": "approved"}, {"_id": 0, "doc_type": 1},
+    ):
+        approved_types.add(d["doc_type"])
+    all_approved = REQUIRED_DOC_TYPES.issubset(approved_types)
+    await db.users.update_one(
+        {"id": user_id}, {"$set": {"documents_verified": all_approved}},
+    )
+    # If it just became approved and driver was pending, activate
+    if all_approved:
+        await db.users.update_one(
+            {"id": user_id, "status": "pending"}, {"$set": {"status": "active"}},
+        )
+
+
+class DocReview(BaseModel):
+    action: str  # approve | reject
+    reason: Optional[str] = None
+
+
+@api.get("/admin/documents/{user_id}")
+async def admin_user_documents(user_id: str, _: dict = Depends(require_role("admin"))):
+    docs = await db.documents.find(
+        {"user_id": user_id, "active": True}, {"_id": 0},
+    ).sort("uploaded_at", -1).to_list(50)
+    return docs
+
+
+@api.post("/admin/documents/{doc_id}/review")
+async def admin_review_document(doc_id: str, payload: DocReview,
+                                 _: dict = Depends(require_role("admin"))):
+    if payload.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="action must be approve|reject")
+    doc = await db.documents.find_one({"id": doc_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    new_status = "approved" if payload.action == "approve" else "rejected"
+    await db.documents.update_one(
+        {"id": doc_id},
+        {"$set": {"status": new_status, "rejection_reason": payload.reason,
+                   "reviewed_at": now_iso()}},
+    )
+    await _recompute_documents_verified(doc["user_id"])
+    title = "Document approved" if new_status == "approved" else "Document rejected"
+    body = (f"Your {doc['doc_type'].replace('_', ' ')} was {new_status}."
+            + (f" Reason: {payload.reason}" if payload.reason else ""))
+    await push_notification(doc["user_id"], title, body, {"doc_id": doc_id})
+    return {"ok": True, "status": new_status}
 
 
 # ---------------------------------------------------------------------------
@@ -619,6 +766,16 @@ async def list_bids(job_id: str, user: dict = Depends(get_current_user)):
     if user["role"] == "customer" and job["customer_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not your job")
     bids = await db.bids.find({"job_id": job_id}, {"_id": 0}).sort("amount", 1).to_list(200)
+    # Enrich with driver verified status
+    driver_ids = list({b["driver_id"] for b in bids})
+    drivers = await db.users.find(
+        {"id": {"$in": driver_ids}}, {"_id": 0, "password_hash": 0},
+    ).to_list(len(driver_ids) or 1) if driver_ids else []
+    dmap = {d["id"]: user_to_public(d) for d in drivers}
+    for b in bids:
+        d = dmap.get(b["driver_id"])
+        b["verified_driver"] = bool(d and d.get("verified_driver"))
+        b["total_jobs"] = d.get("total_jobs", 0) if d else 0
     return bids
 
 
@@ -1105,6 +1262,8 @@ async def create_review(booking_id: str, payload: ReviewCreate,
         "target_id": target_id,
         "rating": max(1, min(5, payload.rating)),
         "comment": payload.comment,
+        "photos": payload.photos,
+        "verified_delivery": True,
         "created_at": now_iso(),
     }
     await db.reviews.insert_one(doc)

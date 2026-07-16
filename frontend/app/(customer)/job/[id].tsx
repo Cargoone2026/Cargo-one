@@ -174,7 +174,15 @@ export default function CustomerJobDetail() {
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.bidName}>Driver #{b.driver_id.slice(0, 6)}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.bidName}>Driver #{b.driver_id.slice(0, 6)}</Text>
+                        {b.verified_driver && (
+                          <View style={styles.verifiedMini} testID={`verified-${b.id}`}>
+                            <Ionicons name="shield-checkmark" size={10} color="#fff" />
+                            <Text style={styles.verifiedMiniText}>VERIFIED</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.bidMeta}>
                         <Ionicons name="star" size={12} color={colors.accent} />
                         <Text style={styles.bidMetaText}>{Number(b.driver_rating).toFixed(1)}</Text>
@@ -281,6 +289,12 @@ const styles = StyleSheet.create({
   bidMetaText: { fontSize: font.sm, color: colors.textSecondary },
   bidAmount: { fontSize: font.xl, fontWeight: weight.bold, color: colors.text },
   bidMsg: { fontSize: font.base, color: colors.textSecondary, marginTop: spacing.sm },
+  verifiedMini: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  verifiedMiniText: { color: "#fff", fontSize: 9, fontWeight: weight.bold, letterSpacing: 0.5 },
   acceptedBox: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg,
     backgroundColor: "#F0FDF4", borderRadius: radius.md,

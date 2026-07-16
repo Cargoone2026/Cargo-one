@@ -58,6 +58,7 @@ export default function DriverTabs() {
       />
       <Tabs.Screen name="job/[id]" options={{ href: null }} />
       <Tabs.Screen name="booking/[id]" options={{ href: null }} />
+      <Tabs.Screen name="documents" options={{ href: null }} />
     </Tabs>
   );
 }

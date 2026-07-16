@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -21,6 +23,7 @@ import { api } from "@/src/api/client";
 import { Button } from "@/src/components/Button";
 import { Input } from "@/src/components/Input";
 import MapView from "@/src/components/MapView";
+import { SignaturePad } from "@/src/components/SignaturePad";
 import { StatusPill } from "@/src/components/StatusPill";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
@@ -48,6 +51,8 @@ export default function DriverBookingDetail() {
   const [updating, setUpdating] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [podNotes, setPodNotes] = useState("");
+  const [podPhotos, setPodPhotos] = useState<string[]>([]);
+  const [podSignature, setPodSignature] = useState<string | null>(null);
   const [podSubmitting, setPodSubmitting] = useState(false);
   const locWatchRef = useRef<Location.LocationSubscription | null>(null);
 
@@ -144,8 +149,30 @@ export default function DriverBookingDetail() {
     }
   }
 
+  async function addPhoto(useCamera: boolean) {
+    try {
+      const permReq = useCamera
+        ? ImagePicker.requestCameraPermissionsAsync
+        : ImagePicker.requestMediaLibraryPermissionsAsync;
+      const perm = await permReq();
+      if (!perm.granted) return;
+      const launcher = useCamera
+        ? ImagePicker.launchCameraAsync
+        : ImagePicker.launchImageLibraryAsync;
+      const res = await launcher({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.[0]?.base64) return;
+      const b64 = `data:image/jpeg;base64,${res.assets[0].base64}`;
+      setPodPhotos((prev) => [...prev, b64]);
+    } catch { /* ignore */ }
+  }
+
   async function uploadPOD() {
     if (!id) return;
+    if (podPhotos.length === 0 || !podSignature) return;
     setPodSubmitting(true);
     try {
       let lat: number | undefined, lng: number | undefined;
@@ -157,8 +184,8 @@ export default function DriverBookingDetail() {
       await api(`/bookings/${id}/pod`, {
         method: "POST",
         body: {
-          photos: [],
-          signature: "customer-signed",
+          photos: podPhotos,
+          signature: podSignature,
           notes: podNotes || "Delivered as agreed.",
           lat,
           lng,
@@ -423,24 +450,58 @@ export default function DriverBookingDetail() {
             </View>
           ) : (
             <View>
-              <View style={styles.podPlaceholder}>
-                <Ionicons name="camera" size={40} color={colors.textTertiary} />
-                <Text style={styles.podPlaceholderText}>Add signature & photos (auto-attached on submit)</Text>
+              <Text style={styles.podStepTitle}>1. Take delivery photos</Text>
+              <View style={styles.photoGrid}>
+                {podPhotos.map((p, i) => (
+                  <View key={i} style={styles.photoThumb}>
+                    <Image source={{ uri: p }} style={styles.photoImg} />
+                    <Pressable
+                      style={styles.photoRm}
+                      onPress={() => setPodPhotos((prev) => prev.filter((_, ix) => ix !== i))}
+                      testID={`pod-remove-photo-${i}`}
+                    >
+                      <Ionicons name="close" size={14} color="#fff" />
+                    </Pressable>
+                  </View>
+                ))}
+                <View style={styles.photoAddRow}>
+                  <Pressable style={styles.photoAdd} onPress={() => addPhoto(true)} testID="pod-add-photo-camera">
+                    <Ionicons name="camera" size={26} color={colors.text} />
+                    <Text style={styles.photoAddText}>Camera</Text>
+                  </Pressable>
+                  <Pressable style={styles.photoAdd} onPress={() => addPhoto(false)} testID="pod-add-photo-library">
+                    <Ionicons name="images" size={26} color={colors.text} />
+                    <Text style={styles.photoAddText}>Library</Text>
+                  </Pressable>
+                </View>
               </View>
+
+              <Text style={styles.podStepTitle}>2. Customer signature</Text>
+              <SignaturePad onChange={setPodSignature} height={200} />
+
+              <Text style={styles.podStepTitle}>3. Delivery notes</Text>
               <Input
-                label="Delivery notes"
                 value={podNotes}
                 onChangeText={setPodNotes}
-                placeholder="e.g. Left at reception"
+                placeholder="e.g. Left with reception"
                 multiline
                 numberOfLines={3}
                 style={{ minHeight: 80, textAlignVertical: "top" }}
                 testID="pod-notes-input"
               />
+
+              <View style={styles.podChecklist}>
+                <ChecklistItem ok={podPhotos.length > 0} label={`Photos (${podPhotos.length})`} />
+                <ChecklistItem ok={!!podSignature} label="Signature captured" />
+                <ChecklistItem ok label="GPS auto-captured" />
+                <ChecklistItem ok label="Timestamped" />
+              </View>
+
               <Button
                 title="Submit Proof of Delivery"
                 onPress={uploadPOD}
                 loading={podSubmitting}
+                disabled={podPhotos.length === 0 || !podSignature}
                 testID="submit-pod-button"
               />
             </View>
@@ -470,6 +531,19 @@ function fmtDur(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <View style={styles.checkRow}>
+      <Ionicons
+        name={ok ? "checkmark-circle" : "ellipse-outline"}
+        size={18}
+        color={ok ? colors.success : colors.textTertiary}
+      />
+      <Text style={[styles.checkText, !ok && { color: colors.textSecondary }]}>{label}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -580,4 +654,27 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   podPlaceholderText: { color: colors.textSecondary, textAlign: "center" },
+  podStepTitle: {
+    fontSize: font.sm, color: colors.textSecondary, fontWeight: weight.semibold,
+    textTransform: "uppercase", letterSpacing: 0.6, marginTop: spacing.lg, marginBottom: spacing.sm,
+  },
+  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  photoThumb: { width: 88, height: 88, borderRadius: radius.md, overflow: "hidden", position: "relative" },
+  photoImg: { width: "100%", height: "100%" },
+  photoRm: {
+    position: "absolute", top: 4, right: 4, width: 22, height: 22,
+    borderRadius: 11, backgroundColor: colors.error, alignItems: "center", justifyContent: "center",
+  },
+  photoAddRow: { flexDirection: "row", gap: spacing.sm },
+  photoAdd: {
+    width: 88, height: 88, borderRadius: radius.md, borderWidth: 2, borderStyle: "dashed",
+    borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", gap: 4,
+  },
+  photoAddText: { fontSize: font.sm, color: colors.text, fontWeight: weight.medium },
+  podChecklist: {
+    padding: spacing.md, backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+    gap: spacing.xs, marginVertical: spacing.md,
+  },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  checkText: { fontSize: font.base, color: colors.text },
 });

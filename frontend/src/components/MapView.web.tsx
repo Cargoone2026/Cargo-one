@@ -1,6 +1,5 @@
 import React from "react";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { StyleSheet, View } = require("react-native");
+import { StyleSheet, View } from "react-native";
 
 type Point = { lat: number; lng: number; label?: string };
 

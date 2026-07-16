@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -276,7 +277,15 @@ export default function BookingDetail() {
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.partyName}>{b.other_party.name}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <Text style={styles.partyName}>{b.other_party.name}</Text>
+                  {b.other_party.verified_driver && (
+                    <View style={styles.partyVerified} testID="party-verified">
+                      <Ionicons name="shield-checkmark" size={10} color="#fff" />
+                      <Text style={styles.partyVerifiedText}>VERIFIED</Text>
+                    </View>
+                  )}
+                </View>
                 <View style={styles.partyMeta}>
                   <Ionicons name="star" size={12} color={colors.accent} />
                   <Text style={styles.partyMetaText}>
@@ -398,21 +407,38 @@ export default function BookingDetail() {
                   <Text style={styles.podTs}>{new Date(pod.created_at).toLocaleString()}</Text>
                 </View>
               </View>
+              {pod.photos && pod.photos.length > 0 && (
+                <View style={styles.podDetail}>
+                  <Text style={styles.podLabel}>Photos ({pod.photos.length})</Text>
+                  <View style={styles.podPhotoGrid}>
+                    {pod.photos.map((p: string, i: number) => (
+                      <Image key={i} source={{ uri: p }} style={styles.podPhoto} />
+                    ))}
+                  </View>
+                </View>
+              )}
+              {pod.signature ? (
+                <View style={styles.podDetail}>
+                  <Text style={styles.podLabel}>Customer signature</Text>
+                  {pod.signature.startsWith("data:") ? (
+                    <Image
+                      source={{ uri: pod.signature }}
+                      style={{ width: "100%", height: 120, resizeMode: "contain", backgroundColor: "#fff" }}
+                    />
+                  ) : (
+                    <Text style={styles.podValue}>Signed ✓</Text>
+                  )}
+                </View>
+              ) : null}
               {pod.notes ? (
                 <View style={styles.podDetail}>
                   <Text style={styles.podLabel}>Driver notes</Text>
                   <Text style={styles.podValue}>{pod.notes}</Text>
                 </View>
               ) : null}
-              {pod.signature ? (
-                <View style={styles.podDetail}>
-                  <Text style={styles.podLabel}>Signature</Text>
-                  <Text style={styles.podValue}>Signed by customer ✓</Text>
-                </View>
-              ) : null}
               {pod.lat ? (
                 <View style={styles.podDetail}>
-                  <Text style={styles.podLabel}>GPS</Text>
+                  <Text style={styles.podLabel}>GPS · {new Date(pod.created_at).toLocaleString()}</Text>
                   <Text style={styles.podValue}>{pod.lat.toFixed(5)}, {pod.lng?.toFixed(5)}</Text>
                 </View>
               ) : null}
@@ -498,6 +524,11 @@ const styles = StyleSheet.create({
   },
   partyAvatarText: { color: "#fff", fontSize: font.xl, fontWeight: weight.bold },
   partyName: { fontSize: font.lg, fontWeight: weight.semibold, color: colors.text },
+  partyVerified: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill,
+  },
+  partyVerifiedText: { color: "#fff", fontSize: 9, fontWeight: weight.bold, letterSpacing: 0.5 },
   partyMeta: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginTop: 2 },
   partyMetaText: { fontSize: font.sm, color: colors.textSecondary },
   partyPhone: { fontSize: font.base, color: colors.brand, fontWeight: weight.semibold, marginTop: 4 },
@@ -560,4 +591,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase", letterSpacing: 0.6, marginBottom: spacing.xs,
   },
   podValue: { fontSize: font.base, color: colors.text, lineHeight: 20 },
+  podPhotoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+  podPhoto: { width: 100, height: 100, borderRadius: radius.md, backgroundColor: colors.bgSecondary },
 });
