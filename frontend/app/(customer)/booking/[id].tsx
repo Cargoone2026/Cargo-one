@@ -68,6 +68,23 @@ export default function BookingDetail() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Auto-refresh tracking every 12s when booking is en route
+  useEffect(() => {
+    if (!b || b.payment_status !== "paid") return;
+    const active = ["deposit_paid", "confirmed", "travelling", "arrived",
+                     "collected", "on_route"].includes(b.status);
+    if (!active) return;
+    const iv = setInterval(async () => {
+      try {
+        const t = await api(`/tracking/${id}`);
+        setTracking(t);
+      } catch {
+        // silent
+      }
+    }, 12000);
+    return () => clearInterval(iv);
+  }, [b, id]);
+
   // Poll payment status after return from Stripe
   useEffect(() => {
     if (payment !== "success" || !session_id) return;
@@ -201,11 +218,34 @@ export default function BookingDetail() {
                   ? { lat: job.dropoff_lat, lng: job.dropoff_lng, label: "Dropoff" }
                   : undefined
               }
-              driver={tracking?.last_location}
+              driver={
+                tracking?.last_location
+                  ? { ...tracking.last_location, heading: tracking?.heading ?? undefined }
+                  : undefined
+              }
               trail={tracking?.trail}
               height={220}
             />
           </View>
+
+          {tracking?.eta_minutes != null && (
+            <View style={styles.etaBar} testID="tracking-eta">
+              <View style={styles.etaChip}>
+                <Ionicons name="time" size={16} color={colors.brand} />
+                <View>
+                  <Text style={styles.etaValue}>{fmtDur(tracking.eta_minutes)}</Text>
+                  <Text style={styles.etaLabel}>ETA to {tracking.target === "pickup" ? "pickup" : "you"}</Text>
+                </View>
+              </View>
+              <View style={styles.etaChip}>
+                <Ionicons name="navigate" size={16} color={colors.accent} />
+                <View>
+                  <Text style={styles.etaValue}>{tracking.remaining_miles} mi</Text>
+                  <Text style={styles.etaLabel}>Remaining</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           <View style={styles.routeBox}>
             <View style={styles.routeItem}>
@@ -411,6 +451,13 @@ function SumRow({ label, value, highlight }: { label: string; value: string; hig
   );
 }
 
+function fmtDur(mins: number): string {
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -418,6 +465,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
   },
   headerTitle: { fontSize: font.lg, fontWeight: weight.semibold, color: colors.text },
+  etaBar: {
+    flexDirection: "row", gap: spacing.md, padding: spacing.md,
+    backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+  },
+  etaChip: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  etaValue: { fontSize: font.lg, fontWeight: weight.bold, color: colors.text, letterSpacing: -0.3 },
+  etaLabel: { fontSize: font.sm, color: colors.textSecondary },
   tabs: {
     flexDirection: "row", marginHorizontal: spacing.xl, backgroundColor: colors.bgSecondary,
     borderRadius: radius.pill, padding: 4,

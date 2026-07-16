@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,25 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
+import { AddressAutocomplete, PlaceResult } from "@/src/components/AddressAutocomplete";
 import { Button } from "@/src/components/Button";
 import { Input } from "@/src/components/Input";
+import MapView from "@/src/components/MapView";
 import { CATEGORIES, colors, font, radius, spacing, weight } from "@/src/theme";
-
-// Preset UK city coordinates for demo (no Google API needed for MVP)
-const CITIES: Record<string, { lat: number; lng: number }> = {
-  London: { lat: 51.5074, lng: -0.1278 },
-  Manchester: { lat: 53.4808, lng: -2.2426 },
-  Birmingham: { lat: 52.4862, lng: -1.8904 },
-  Liverpool: { lat: 53.4084, lng: -2.9916 },
-  Leeds: { lat: 53.8008, lng: -1.5491 },
-  Bristol: { lat: 51.4545, lng: -2.5879 },
-  Glasgow: { lat: 55.8642, lng: -4.2518 },
-  Edinburgh: { lat: 55.9533, lng: -3.1883 },
-  Cardiff: { lat: 51.4816, lng: -3.1791 },
-  Newcastle: { lat: 54.9783, lng: -1.6178 },
-  Sheffield: { lat: 53.3811, lng: -1.4701 },
-  Nottingham: { lat: 52.9548, lng: -1.1581 },
-};
 
 export default function PostJob() {
   const params = useLocalSearchParams<{ category?: string }>();
@@ -40,10 +26,12 @@ export default function PostJob() {
   const [category, setCategory] = useState(params.category || "furniture");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [pickupTown, setPickupTown] = useState("London");
-  const [pickupAddress, setPickupAddress] = useState("");
-  const [dropoffTown, setDropoffTown] = useState("Manchester");
-  const [dropoffAddress, setDropoffAddress] = useState("");
+  const [pickup, setPickup] = useState<PlaceResult | null>(null);
+  const [dropoff, setDropoff] = useState<PlaceResult | null>(null);
+  const [quote, setQuote] = useState<{
+    distance_miles: number; duration_minutes: number;
+    suggested_price: number; vehicle: string;
+  } | null>(null);
   const [weight_kg, setWeight] = useState("");
   const [dimensions, setDimensions] = useState("");
   const [collectionDate, setCollectionDate] = useState("");
@@ -54,8 +42,26 @@ export default function PostJob() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Live quote whenever route changes
+  useEffect(() => {
+    if (!pickup || !dropoff) { setQuote(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const q: any = await api(
+          `/quote/estimate?pickup_lat=${pickup.lat}&pickup_lng=${pickup.lng}` +
+          `&dropoff_lat=${dropoff.lat}&dropoff_lng=${dropoff.lng}&category=${category}`,
+        );
+        if (!cancelled) setQuote(q);
+      } catch {
+        if (!cancelled) setQuote(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pickup, dropoff, category]);
+
   const canNext1 = category && title.trim();
-  const canNext2 = pickupTown && dropoffTown && pickupAddress.trim() && dropoffAddress.trim();
+  const canNext2 = !!pickup && !!dropoff;
   const canNext3 = collectionDate && deliveryDate;
   const canSubmit =
     pricingType === "bidding"
@@ -64,23 +70,25 @@ export default function PostJob() {
 
   async function submit() {
     setErr(null);
+    if (!pickup || !dropoff) {
+      setErr("Please choose pickup and delivery addresses");
+      return;
+    }
     setLoading(true);
     try {
-      const pu = CITIES[pickupTown] || CITIES.London;
-      const dt = CITIES[dropoffTown] || CITIES.Manchester;
       const body: any = {
         title: title.trim(),
         category,
         description: description.trim(),
         photos: [],
-        pickup_address: pickupAddress.trim(),
-        pickup_town: pickupTown,
-        pickup_lat: pu.lat,
-        pickup_lng: pu.lng,
-        dropoff_address: dropoffAddress.trim(),
-        dropoff_town: dropoffTown,
-        dropoff_lat: dt.lat,
-        dropoff_lng: dt.lng,
+        pickup_address: pickup.formatted_address,
+        pickup_town: pickup.town || pickup.formatted_address.split(",").pop()?.trim() || "",
+        pickup_lat: pickup.lat,
+        pickup_lng: pickup.lng,
+        dropoff_address: dropoff.formatted_address,
+        dropoff_town: dropoff.town || dropoff.formatted_address.split(",").pop()?.trim() || "",
+        dropoff_lat: dropoff.lat,
+        dropoff_lng: dropoff.lng,
         weight_kg: weight_kg ? Number(weight_kg) : null,
         dimensions: dimensions || null,
         collection_date: collectionDate,
@@ -172,53 +180,41 @@ export default function PostJob() {
           {step === 2 && (
             <View>
               <Text style={styles.title}>Route</Text>
-              <Text style={styles.sub}>Pickup and delivery locations.</Text>
+              <Text style={styles.sub}>Search pickup and delivery addresses.</Text>
 
-              <Text style={styles.label}>Pickup town</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {Object.keys(CITIES).map((t) => (
-                  <Pressable
-                    key={t}
-                    onPress={() => setPickupTown(t)}
-                    style={[styles.chip, pickupTown === t && styles.chipActive]}
-                    testID={`pickup-town-${t}`}
-                  >
-                    <Text style={[styles.chipText, pickupTown === t && styles.chipTextActive]}>
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <Input
+              <AddressAutocomplete
                 label="Pickup address"
-                value={pickupAddress}
-                onChangeText={setPickupAddress}
-                placeholder="Street, postcode"
-                testID="postjob-pickup-input"
+                value={pickup}
+                placeholder="Search for pickup address"
+                onSelect={setPickup}
+                testID="pickup-address-picker"
+              />
+              <AddressAutocomplete
+                label="Delivery address"
+                value={dropoff}
+                placeholder="Search for delivery address"
+                onSelect={setDropoff}
+                testID="dropoff-address-picker"
               />
 
-              <Text style={styles.label}>Delivery town</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {Object.keys(CITIES).map((t) => (
-                  <Pressable
-                    key={t}
-                    onPress={() => setDropoffTown(t)}
-                    style={[styles.chip, dropoffTown === t && styles.chipActive]}
-                    testID={`dropoff-town-${t}`}
-                  >
-                    <Text style={[styles.chipText, dropoffTown === t && styles.chipTextActive]}>
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <Input
-                label="Delivery address"
-                value={dropoffAddress}
-                onChangeText={setDropoffAddress}
-                placeholder="Street, postcode"
-                testID="postjob-dropoff-input"
-              />
+              {pickup && dropoff && (
+                <View style={styles.routePreview} testID="route-preview">
+                  <View style={styles.mapPreview}>
+                    <MapView
+                      pickup={{ lat: pickup.lat, lng: pickup.lng, label: "Pickup" }}
+                      dropoff={{ lat: dropoff.lat, lng: dropoff.lng, label: "Dropoff" }}
+                      height={180}
+                    />
+                  </View>
+                  {quote && (
+                    <View style={styles.quoteRow}>
+                      <QuoteStat label="Distance" value={`${quote.distance_miles} mi`} icon="navigate" />
+                      <QuoteStat label="Est. time" value={fmtDur(quote.duration_minutes)} icon="time" />
+                      <QuoteStat label="Vehicle" value={quote.vehicle} icon="car-sport" />
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           )}
 
@@ -368,6 +364,25 @@ export default function PostJob() {
   );
 }
 
+function QuoteStat({ label, value, icon }: { label: string; value: string; icon: any }) {
+  return (
+    <View style={styles.quoteStat}>
+      <View style={styles.quoteStatIcon}>
+        <Ionicons name={icon} size={16} color={colors.text} />
+      </View>
+      <Text style={styles.quoteStatValue}>{value}</Text>
+      <Text style={styles.quoteStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function fmtDur(mins: number): string {
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -381,6 +396,16 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   title: { fontSize: 26, fontWeight: weight.bold, color: colors.text, letterSpacing: -0.4 },
   sub: { fontSize: font.base, color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.xl },
+  routePreview: { marginTop: spacing.md, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  mapPreview: { height: 180 },
+  quoteRow: { flexDirection: "row", padding: spacing.md, gap: spacing.sm, backgroundColor: colors.bg },
+  quoteStat: { flex: 1, alignItems: "center", gap: 2 },
+  quoteStatIcon: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bgSecondary,
+    alignItems: "center", justifyContent: "center", marginBottom: spacing.xs,
+  },
+  quoteStatValue: { fontSize: font.base, fontWeight: weight.bold, color: colors.text },
+  quoteStatLabel: { fontSize: 11, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 },
   label: {
     fontSize: font.sm, color: colors.textSecondary, fontWeight: weight.medium,
     textTransform: "uppercase", letterSpacing: 0.6, marginBottom: spacing.sm, marginTop: spacing.sm,

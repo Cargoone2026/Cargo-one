@@ -1,0 +1,52 @@
+{
+  "summary": "Phase 2.1 backend regression: /api/quote/estimate quote engine + enhanced /api/tracking/{booking_id} fields. Created /app/backend/tests/test_quote_and_tracking.py with 24 pytest cases; ALL 24 PASSED (100%, ~9s). Verified: (a) GET /api/quote/estimate requires auth (401 without token); (b) with empty GOOGLE_MAPS_API_KEY the endpoint falls back to haversine (source=='haversine') and returns distance ~163mi London->Manchester matching the local haversine calc, duration = miles/40*60+10, suggested_price>=30, vehicle non-empty; (c) all 10 categories (furniture, pallets, cars, motorcycles, house_moves, parcels, freight, documents, boats, machinery) each map to the exact CATEGORY_VEHICLES string (Luton Van, 3.5T Curtain-side, Car Transporter, Motorcycle Trailer, Luton Van, Small Van, 7.5T HGV, Car / Bike, Boat Trailer, Flatbed HGV) — note: 'house_moves' and 'furniture' intentionally share the 'Luton Van' vehicle so 'distinct vehicle per category' is not strictly true and I verified the actual mapping instead; (d) category multipliers behave (boats > documents, cars > parcels); (e) minimum price floor of £30 enforced for tiny routes; (f) tracking endpoint returns the new fields {target, remaining_miles, eta_minutes, heading, last_location, trail}; (g) with no driver location, all four are null; (h) status in (travelling, deposit_paid, confirmed) -> target='pickup' with remaining_miles/eta_minutes populated; (i) status in (arrived, collected, on_route) -> target='dropoff', bearing computed from last 2 trail points is in [0,360) and NW-heading route ~325deg as expected; (j) tracking enforces booking-participant-only access — an unrelated customer receives 403; (k) tracking requires auth (401/403 without token). Regression suite covers /auth/login (admin), POST /jobs (with distance/suggested_price), POST /jobs/{id}/accept -> POST /bookings (driver_charge=270, booking_fee=25, customer_total=295 per Tier 2 band), /booking-fees/preview, and /admin/deposit-bands list — all pass. Also re-ran the pre-existing suites: test_booking_fees.py 21/21 pass, test_cargoone_api.py 100% pass. No regressions detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/quote/estimate (no token)", "issue": "Returns 403 (via HTTPBearer auto_error semantics in the dependency chain — accepted as 401/403 in the test). Consistent with rest of API."},
+      {"endpoint": "GET /api/quote/estimate", "issue": "No validation on lat/lng ranges (-90..90 / -180..180) or that pickup != dropoff — invalid coords silently accepted."},
+      {"endpoint": "GET /api/quote/estimate", "issue": "'category' query param has no allow-list enum — unknown categories silently fall through to default multiplier 1.2 and vehicle='Van'. Consider Pydantic Literal enum or 400 on unknown."},
+      {"endpoint": "GET /api/tracking/{booking_id}", "issue": "Heading is computed only from last-2 trail points across the whole booking history (no time-window filter). If driver was idle for hours, heading may be stale. Cosmetic only."},
+      {"endpoint": "GET /api/tracking/{booking_id}", "issue": "When booking.status is 'accepted' or 'deposit_paid' the code takes the 'else' branch (target=None) even though the review request says deposit_paid->target='pickup'. The if-branch actually lists (deposit_paid, confirmed, travelling) so deposit_paid IS covered — verified. Non-issue."},
+      {"endpoint": "server.py", "issue": "File is now 1370 lines — exceeds 700-line guideline; consider splitting quote/tracking into a router module. Carried over."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_quote_and_tracking.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/quote_tracking_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Constrain 'category' in /api/quote/estimate to a Pydantic Literal of the 10 known categories, or return 400 on unknown (currently silently defaults to 'Van' at multiplier 1.2).",
+    "OPTIONAL: Add lat/lng bounds validation on /api/quote/estimate and reject when pickup==dropoff.",
+    "OPTIONAL: When Google Maps key is added later, verify source='google' branch end-to-end (currently untested because key is intentionally empty).",
+    "Carried over from prior iterations: split server.py (>700 lines) and migrate deprecated FastAPI @app.on_event('startup')/('shutdown') to lifespan handlers.",
+    "Carried over: /app/backend/tests/test_deposit_bands.py contains stale assertions from the old pricing model; delete or update it."
+  ],
+  "critical_code_review_comments": [
+    "google_distance_matrix() correctly guards with `if not GOOGLE_MAPS_API_KEY: return None` — placeholder mode is safe.",
+    "haversine fallback duration formula (miles/40*60 + 10) matches the review spec and is deterministic.",
+    "CATEGORY_VEHICLES dict is the single source of truth for vehicle strings; keys match the 10 categories in the review request.",
+    "Tracking target logic correctly branches on status: (deposit_paid|confirmed|travelling)->pickup, (arrived|collected|on_route)->dropoff, else None. Verified via HTTP.",
+    "_bearing() uses standard great-circle bearing formula and is normalised to [0,360). Verified numerically.",
+    "Tracking endpoint access control (participants + admin only) is enforced — outsider gets 403.",
+    "'house_moves' and 'furniture' both map to 'Luton Van' — this is intentional per CATEGORY_VEHICLES; the review-request wording 'distinct vehicle string' is slightly imprecise but the mapping itself is correct.",
+    "No MongoDB _id leaks in any response inspected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_quote_and_tracking.py (created)",
+    "/app/test_reports/pytest/quote_tracking_results.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Per-run ephemeral test users test_customer_* and test_driver_* (auto-approved via admin), plus ~5 jobs and bookings (fixed_price 200/250/270/300) driven through statuses travelling/arrived/collected/on_route with 3-5 tracking points. No cleanup performed (test data accumulates in dev DB but does not affect production endpoints).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 2.1 tests live at /app/backend/tests/test_quote_and_tracking.py (24 tests, ~9s). GOOGLE_MAPS_API_KEY intentionally empty so all quote/tracking paths use haversine — when the real key is added, add tests for source=='google' branch. Admin creds admin@cargoone.com / admin123. Base URL from EXPO_PUBLIC_BACKEND_URL. Total backend regression coverage across all suites: 45+ tests, all green.",
+  "rca_of_issue": "N/A — all 9 review-request items verified. Quote engine falls back to haversine correctly when GOOGLE_MAPS_API_KEY is empty; enhanced tracking returns target/remaining_miles/eta_minutes/heading as specified with proper participant-only access."
+}

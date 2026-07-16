@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -75,22 +76,35 @@ export default function DriverBookingDetail() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // GPS tracking while on route
+  // GPS tracking while on route - only push when meaningful movement detected
   useEffect(() => {
     if (!b || !id) return;
-    const shouldTrack = ["travelling", "collected", "on_route"].includes(b.status);
+    const shouldTrack = ["travelling", "arrived", "collected", "on_route"].includes(b.status);
+    let lastPushed: { lat: number; lng: number; t: number } | null = null;
     async function startTracking() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
         locWatchRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 50 },
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 10000,       // check every 10s
+            distanceInterval: 25,      // OS-level filter
+          },
           async (loc) => {
+            const lat = loc.coords.latitude;
+            const lng = loc.coords.longitude;
+            const now = Date.now();
+            // Only POST if moved >= 30m OR >= 45s elapsed
+            if (lastPushed) {
+              const dLat = (lat - lastPushed.lat) * 111_000;
+              const dLng = (lng - lastPushed.lng) * 111_000 * Math.cos((lat * Math.PI) / 180);
+              const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+              if (dist < 30 && now - lastPushed.t < 45000) return;
+            }
             try {
-              await api(`/tracking/${id}`, {
-                method: "POST",
-                body: { lat: loc.coords.latitude, lng: loc.coords.longitude },
-              });
+              await api(`/tracking/${id}`, { method: "POST", body: { lat, lng } });
+              lastPushed = { lat, lng, t: now };
             } catch {
               // silent
             }
@@ -216,11 +230,39 @@ export default function DriverBookingDetail() {
             <MapView
               pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: "Pickup" }}
               dropoff={{ lat: job.dropoff_lat, lng: job.dropoff_lng, label: "Dropoff" }}
-              driver={tracking?.last_location}
+              driver={
+                tracking?.last_location
+                  ? { ...tracking.last_location, heading: tracking?.heading ?? undefined }
+                  : undefined
+              }
               trail={tracking?.trail}
               height={220}
             />
           </View>
+
+          {tracking?.target && (
+            <View style={styles.navBar}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.navLabel}>Heading to {tracking.target}</Text>
+                <Text style={styles.navValue}>
+                  {tracking.eta_minutes ? `${fmtDur(tracking.eta_minutes)} · ` : ""}
+                  {tracking.remaining_miles} mi remaining
+                </Text>
+              </View>
+              <Pressable
+                style={styles.navBtn}
+                onPress={() => openInMaps(
+                  tracking.target === "pickup"
+                    ? { lat: job.pickup_lat, lng: job.pickup_lng }
+                    : { lat: job.dropoff_lat, lng: job.dropoff_lng },
+                )}
+                testID="navigate-in-maps"
+              >
+                <Ionicons name="navigate" size={18} color="#fff" />
+                <Text style={styles.navBtnText}>Navigate</Text>
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.routeBox}>
             <View style={styles.routeItem}>
@@ -409,6 +451,27 @@ export default function DriverBookingDetail() {
   );
 }
 
+function openInMaps(target: { lat: number; lng: number }) {
+  const { lat, lng } = target;
+  // Prefer Google Maps on both platforms (universal link)
+  const url = Platform.select({
+    ios: `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+    default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+  });
+  // Fall back to https://maps if the Google app isn't installed
+  Linking.canOpenURL(url!).then((ok) => {
+    if (ok) Linking.openURL(url!);
+    else Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+  });
+}
+
+function fmtDur(mins: number): string {
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -416,6 +479,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
   },
   headerTitle: { fontSize: font.lg, fontWeight: weight.semibold, color: colors.text },
+  navBar: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md,
+    backgroundColor: colors.text, borderRadius: radius.md,
+  },
+  navLabel: { color: "rgba(255,255,255,0.6)", fontSize: font.sm, textTransform: "capitalize" },
+  navValue: { color: "#fff", fontSize: font.lg, fontWeight: weight.bold, marginTop: 2 },
+  navBtn: {
+    flexDirection: "row", alignItems: "center", gap: spacing.xs,
+    backgroundColor: colors.brand, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  navBtnText: { color: "#fff", fontSize: font.base, fontWeight: weight.bold },
   tabs: {
     flexDirection: "row", marginHorizontal: spacing.xl, backgroundColor: colors.bgSecondary,
     borderRadius: radius.pill, padding: 4,

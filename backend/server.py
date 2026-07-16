@@ -267,6 +267,57 @@ async def push_notification(user_id: str, title: str, body: str, data: Optional[
 
 
 # ---------------------------------------------------------------------------
+# Quote Engine (Google Distance Matrix when key set, haversine fallback)
+# ---------------------------------------------------------------------------
+
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip().strip('"')
+
+# Category → suggested vehicle + speed multiplier for haversine → driving mins
+CATEGORY_VEHICLES = {
+    "furniture": "Luton Van",
+    "pallets": "3.5T Curtain-side",
+    "cars": "Car Transporter",
+    "motorcycles": "Motorcycle Trailer",
+    "house_moves": "Luton Van",
+    "parcels": "Small Van",
+    "freight": "7.5T HGV",
+    "documents": "Car / Bike",
+    "boats": "Boat Trailer",
+    "machinery": "Flatbed HGV",
+}
+
+
+async def google_distance_matrix(origin: tuple[float, float],
+                                  dest: tuple[float, float]) -> Optional[dict]:
+    """Return {distance_meters, duration_seconds} or None on failure."""
+    if not GOOGLE_MAPS_API_KEY:
+        return None
+    import httpx  # local import to avoid startup cost when unused
+    url = "https://maps.googleapis.com/maps/api/distancematrix/json"
+    params = {
+        "origins": f"{origin[0]},{origin[1]}",
+        "destinations": f"{dest[0]},{dest[1]}",
+        "mode": "driving",
+        "units": "imperial",
+        "key": GOOGLE_MAPS_API_KEY,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.get(url, params=params)
+            data = r.json()
+        row = data["rows"][0]["elements"][0]
+        if row.get("status") != "OK":
+            return None
+        return {
+            "distance_meters": row["distance"]["value"],
+            "duration_seconds": row["duration"]["value"],
+        }
+    except Exception:
+        logger.exception("Google Distance Matrix failed")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Deposit bands
 # ---------------------------------------------------------------------------
 
@@ -407,6 +458,44 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
 async def my_jobs(user: dict = Depends(require_role("customer"))):
     jobs = await db.jobs.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return jobs
+
+
+@api.get("/quote/estimate")
+async def quote_estimate(pickup_lat: float, pickup_lng: float,
+                          dropoff_lat: float, dropoff_lng: float,
+                          category: str = "furniture",
+                          user: dict = Depends(get_current_user)):
+    """Estimate distance, duration, vehicle & suggested price for a route."""
+    # Try Google Distance Matrix first
+    gmaps = await google_distance_matrix(
+        (pickup_lat, pickup_lng), (dropoff_lat, dropoff_lng),
+    )
+    if gmaps:
+        distance_miles = round(gmaps["distance_meters"] / 1609.34, 1)
+        duration_minutes = round(gmaps["duration_seconds"] / 60, 0)
+        source = "google"
+    else:
+        distance_miles = round(
+            haversine_miles(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng), 1,
+        )
+        # Assume 40 mph avg on mixed roads + 10 min buffer
+        duration_minutes = round((distance_miles / 40.0) * 60 + 10, 0)
+        source = "haversine"
+
+    category_mult = {
+        "furniture": 1.2, "pallets": 1.4, "cars": 2.0, "motorcycles": 1.5,
+        "house_moves": 1.6, "parcels": 1.0, "freight": 1.8, "documents": 0.8,
+        "boats": 2.5, "machinery": 2.2,
+    }.get(category, 1.2)
+    suggested_price = round(max(30, distance_miles * 1.5 * category_mult), 2)
+    vehicle = CATEGORY_VEHICLES.get(category, "Van")
+    return {
+        "distance_miles": distance_miles,
+        "duration_minutes": duration_minutes,
+        "suggested_price": suggested_price,
+        "vehicle": vehicle,
+        "source": source,
+    }
 
 
 @api.get("/jobs/nearby")
@@ -823,10 +912,64 @@ async def get_tracking(booking_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
     trail = await db.tracking.find({"booking_id": booking_id}, {"_id": 0}) \
                              .sort("created_at", 1).to_list(500)
+
+    # Compute ETA + remaining distance if we have driver location + a job target
+    eta_minutes: Optional[float] = None
+    remaining_miles: Optional[float] = None
+    heading: Optional[float] = None
+    target: Optional[str] = None
+    loc = b.get("last_location")
+    if loc:
+        job = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
+        if job:
+            # Determine which stop the driver is heading to based on booking status
+            status = b.get("status")
+            if status in ("deposit_paid", "confirmed", "travelling"):
+                dest_lat, dest_lng = job["pickup_lat"], job["pickup_lng"]
+                target = "pickup"
+            elif status in ("arrived", "collected", "on_route"):
+                dest_lat, dest_lng = job["dropoff_lat"], job["dropoff_lng"]
+                target = "dropoff"
+            else:
+                dest_lat, dest_lng = job["dropoff_lat"], job["dropoff_lng"]
+                target = None
+            if target:
+                remaining_miles = round(
+                    haversine_miles(loc["lat"], loc["lng"], dest_lat, dest_lng), 1,
+                )
+                # Try Google Distance Matrix for a more accurate ETA
+                gm = await google_distance_matrix(
+                    (loc["lat"], loc["lng"]), (dest_lat, dest_lng),
+                )
+                if gm:
+                    remaining_miles = round(gm["distance_meters"] / 1609.34, 1)
+                    eta_minutes = round(gm["duration_seconds"] / 60, 0)
+                else:
+                    eta_minutes = round((remaining_miles / 40.0) * 60 + 5, 0)
+
+    # Compute heading from last two points
+    if len(trail) >= 2:
+        a, c = trail[-2], trail[-1]
+        heading = _bearing(a["lat"], a["lng"], c["lat"], c["lng"])
+
     return {
-        "last_location": b.get("last_location"),
+        "last_location": loc,
         "trail": trail,
+        "target": target,
+        "remaining_miles": remaining_miles,
+        "eta_minutes": eta_minutes,
+        "heading": heading,
     }
+
+
+def _bearing(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Bearing in degrees (0 = north)."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    lam = math.radians(lng2 - lng1)
+    x = math.sin(lam) * math.cos(phi2)
+    y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(lam)
+    return (math.degrees(math.atan2(x, y)) + 360) % 360
 
 
 # ---------------------------------------------------------------------------
