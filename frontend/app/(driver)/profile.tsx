@@ -79,6 +79,24 @@ export default function DriverProfile() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          <Pressable
+            style={styles.docRow}
+            onPress={() => router.push("/settings")}
+            testID="driver-open-settings"
+          >
+            <View style={styles.docIcon}>
+              <Ionicons name="settings" size={20} color={colors.text} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.docLabel}>App settings & Legal</Text>
+              <Text style={styles.docSub}>Terms, Privacy, Support, Delete account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </Pressable>
+        </View>
+
         <View style={{ padding: spacing.xl }}>
           <Button title="Log out" variant="outline" onPress={logout} testID="driver-logout" />
         </View>

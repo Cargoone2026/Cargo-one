@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "@/src/api/client";
 import { Button } from "@/src/components/Button";
 import MapView from "@/src/components/MapView";
+import { ReviewModal } from "@/src/components/ReviewModal";
 import { StatusPill } from "@/src/components/StatusPill";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
@@ -42,6 +43,7 @@ export default function BookingDetail() {
   const [loading, setLoading] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
+  const [showReview, setShowReview] = useState(false);
   const pollRef = useRef<any>(null);
 
   const load = useCallback(async () => {
@@ -349,7 +351,26 @@ export default function BookingDetail() {
               testID="complete-booking-button"
             />
           )}
+
+          {paid && b.status === "completed" && b.other_party && (
+            <Button
+              title="Leave a review"
+              onPress={() => setShowReview(true)}
+              variant="secondary"
+              testID="leave-review-button"
+            />
+          )}
         </ScrollView>
+      )}
+
+      {b.other_party && (
+        <ReviewModal
+          visible={showReview}
+          bookingId={b.id}
+          targetName={b.other_party.name}
+          onClose={() => setShowReview(false)}
+          onSubmitted={load}
+        />
       )}
 
       {paid && tab === "chat" && (

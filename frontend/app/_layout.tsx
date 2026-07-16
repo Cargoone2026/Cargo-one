@@ -56,6 +56,9 @@ export default function RootLayout() {
             <Stack.Screen name="(customer)" />
             <Stack.Screen name="(driver)" />
             <Stack.Screen name="(admin)" />
+            <Stack.Screen name="driver-profile/[id]" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="settings/index" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="settings/[slug]" options={{ animation: "slide_from_right" }} />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>

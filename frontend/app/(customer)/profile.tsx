@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +10,7 @@ import { colors, font, radius, spacing, weight } from "@/src/theme";
 
 export default function Profile() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   if (!user) return null;
 
   return (
@@ -36,9 +38,10 @@ export default function Profile() {
         </View>
 
         <View style={styles.section}>
-          <Row icon="help-circle-outline" label="Help & Support" testID="profile-help" />
-          <Row icon="document-text-outline" label="Terms & Privacy" testID="profile-terms" />
-          <Row icon="information-circle-outline" label="About Cargo One" testID="profile-about" />
+          <Row icon="settings-outline" label="Settings" testID="profile-settings" onPress={() => router.push("/settings")} />
+          <Row icon="help-circle-outline" label="Help & Support" testID="profile-help" onPress={() => router.push("/settings/support")} />
+          <Row icon="document-text-outline" label="Terms & Privacy" testID="profile-terms" onPress={() => router.push("/settings/terms")} />
+          <Row icon="information-circle-outline" label="About Cargo One" testID="profile-about" onPress={() => router.push("/settings/about")} />
         </View>
 
         <View style={{ padding: spacing.xl }}>
@@ -54,9 +57,9 @@ export default function Profile() {
   );
 }
 
-function Row({ icon, label, testID }: { icon: any; label: string; testID: string }) {
+function Row({ icon, label, testID, onPress }: { icon: any; label: string; testID: string; onPress?: () => void }) {
   return (
-    <Pressable style={styles.row} testID={testID}>
+    <Pressable style={styles.row} testID={testID} onPress={onPress}>
       <View style={styles.rowIcon}>
         <Ionicons name={icon} size={20} color={colors.text} />
       </View>

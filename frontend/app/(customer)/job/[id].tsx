@@ -166,7 +166,12 @@ export default function CustomerJobDetail() {
               </View>
             ) : (
               bids.map((b) => (
-                <View key={b.id} style={styles.bidCard} testID={`bid-card-${b.id}`}>
+                <Pressable
+                  key={b.id}
+                  style={styles.bidCard}
+                  onPress={() => router.push(`/driver-profile/${b.driver_id}`)}
+                  testID={`bid-card-${b.id}`}
+                >
                   <View style={styles.bidHead}>
                     <View style={styles.bidAvatar}>
                       <Text style={styles.bidAvatarText}>
@@ -202,7 +207,7 @@ export default function CustomerJobDetail() {
                     testID={`accept-bid-${b.id}`}
                     style={{ marginTop: spacing.sm }}
                   />
-                </View>
+                </Pressable>
               ))
             )}
           </View>

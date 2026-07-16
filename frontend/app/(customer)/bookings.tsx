@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +24,7 @@ export default function Bookings() {
   const [items, setItems] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,11 +44,27 @@ export default function Bookings() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const active = items.filter((b) => !["completed", "cancelled"].includes(b.status));
-  const past = items.filter((b) => ["completed", "cancelled"].includes(b.status));
-  const openJobs = jobs.filter((j) => j.status === "posted");
+  const display = useMemo(() => {
+    const active = items.filter((b) => !["completed", "cancelled"].includes(b.status));
+    const past = items.filter((b) => ["completed", "cancelled"].includes(b.status));
+    const openJobs = jobs.filter((j) => j.status === "posted");
+    const raw = tab === "active"
+      ? [...active, ...openJobs.map((j) => ({ ...j, _isJob: true }))]
+      : past;
+    const q = search.trim().toLowerCase();
+    if (!q) return raw;
+    return raw.filter((it: any) => {
+      const title = (it._isJob ? it.title : it.job?.title) || "";
+      const pu = (it._isJob ? it.pickup_town : it.job?.pickup_town) || "";
+      const drop = (it._isJob ? it.dropoff_town : it.job?.dropoff_town) || "";
+      return title.toLowerCase().includes(q) ||
+             pu.toLowerCase().includes(q) || drop.toLowerCase().includes(q);
+    });
+  }, [items, jobs, tab, search]);
 
-  const display = tab === "active" ? [...active, ...openJobs.map((j) => ({ ...j, _isJob: true }))] : past;
+  const activeCount = items.filter((b) => !["completed", "cancelled"].includes(b.status)).length +
+                       jobs.filter((j) => j.status === "posted").length;
+  const pastCount = items.filter((b) => ["completed", "cancelled"].includes(b.status)).length;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -60,7 +78,7 @@ export default function Bookings() {
           testID="bookings-active-tab"
         >
           <Text style={[styles.tabText, tab === "active" && styles.tabTextActive]}>
-            Active ({active.length + openJobs.length})
+            Active ({activeCount})
           </Text>
         </Pressable>
         <Pressable
@@ -69,9 +87,26 @@ export default function Bookings() {
           testID="bookings-past-tab"
         >
           <Text style={[styles.tabText, tab === "past" && styles.tabTextActive]}>
-            Past ({past.length})
+            Past ({pastCount})
           </Text>
         </Pressable>
+      </View>
+
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color={colors.textSecondary} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search bookings, pickup, delivery..."
+          placeholderTextColor={colors.textTertiary}
+          style={styles.searchInput}
+          testID="bookings-search"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")} hitSlop={8} testID="bookings-search-clear">
+            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+          </Pressable>
+        )}
       </View>
 
       <FlatList
@@ -138,6 +173,15 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.text },
   tabText: { color: colors.textSecondary, fontSize: font.base, fontWeight: weight.medium },
   tabTextActive: { color: "#fff" },
+  searchBox: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    marginHorizontal: spacing.xl, marginBottom: spacing.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+  },
+  searchInput: {
+    flex: 1, fontSize: font.base, color: colors.text, paddingVertical: 0,
+  },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.md },
   empty: { alignItems: "center", paddingVertical: spacing.xxxl, gap: spacing.sm },
   emptyTitle: { fontSize: font.lg, fontWeight: weight.semibold, color: colors.text, marginTop: spacing.md },

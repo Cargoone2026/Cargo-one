@@ -1,24 +1,45 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Cargo One",
+    "slug": "cargo-one",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "cargoone",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.cargoonepreview.szw3x4"
+      "bundleIdentifier": "com.emergent.cargoonepreview.szw3x4",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take proof of delivery photos and vehicle photos",
+        "NSPhotoLibraryUsageDescription": "Attach photos to job posts, POD and reviews",
+        "NSPhotoLibraryAddUsageDescription": "Save proof of delivery photos to your library",
+        "NSLocationWhenInUseUsageDescription": "Share your live location for delivery tracking",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep drivers on route so customers see live ETA",
+        "NSMicrophoneUsageDescription": "Add voice notes to delivery updates",
+        "UIBackgroundModes": ["location", "fetch"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#111111"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.cargoonepreview.szw3x4"
+      "package": "com.emergent.cargoonepreview.szw3x4",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,11 +54,36 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#111111"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Cargo One to attach photos to your deliveries",
+          "cameraPermission": "Allow Cargo One to capture proof of delivery"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cargo One uses your location to share live ETAs"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#D62828"
+        }
+      ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

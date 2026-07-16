@@ -41,6 +41,12 @@ export default function AdminSettings() {
         </View>
 
         <View style={styles.section}>
+          <Row
+            icon="settings-outline"
+            label="App settings & Legal"
+            onPress={() => router.push("/settings")}
+            testID="admin-open-settings"
+          />
           <Row icon="stats-chart-outline" label="Reports & Analytics" />
           <Row icon="alert-circle-outline" label="Disputes" />
           <Row icon="notifications-outline" label="Push notifications" />

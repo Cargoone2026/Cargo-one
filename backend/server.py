@@ -422,6 +422,23 @@ async def me(user: dict = Depends(get_current_user)):
     return user_to_public(user)
 
 
+@api.post("/auth/me/delete")
+async def delete_me(user: dict = Depends(get_current_user)):
+    """Soft-delete: anonymise personal data, suspend account. Booking records retained."""
+    patch = {
+        "email": f"deleted+{user['id']}@cargoone.internal",
+        "name": "Deleted user",
+        "phone": None,
+        "profile_photo": None,
+        "status": "suspended",
+        "deleted_at": now_iso(),
+    }
+    await db.users.update_one({"id": user["id"]}, {"$set": patch})
+    await db.documents.delete_many({"user_id": user["id"]})
+    await db.notifications.delete_many({"user_id": user["id"]})
+    return {"ok": True}
+
+
 @api.put("/auth/me")
 async def update_me(update: dict, user: dict = Depends(get_current_user)):
     allowed = {"name", "phone", "vehicle", "profile_photo"}

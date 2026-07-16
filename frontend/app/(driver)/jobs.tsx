@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -13,16 +13,18 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
-import { colors, font, radius, spacing, weight } from "@/src/theme";
+import { CATEGORIES, colors, font, radius, spacing, weight } from "@/src/theme";
 
 const RADII = [10, 20, 40, 75, 250];
+type PricingFilter = "all" | "fixed" | "bidding";
 
 export default function DriverJobs() {
   const router = useRouter();
   const [jobs, setJobs] = useState<any[]>([]);
   const [radius_, setRadius] = useState(75);
   const [loading, setLoading] = useState(false);
-  const [category] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [pricing, setPricing] = useState<PricingFilter>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,7 +40,13 @@ export default function DriverJobs() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const filtered = category ? jobs.filter((j) => j.category === category) : jobs;
+  const filtered = useMemo(() => {
+    return jobs.filter((j) => {
+      if (category && j.category !== category) return false;
+      if (pricing !== "all" && j.pricing_type !== pricing) return false;
+      return true;
+    });
+  }, [jobs, category, pricing]);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -57,8 +65,45 @@ export default function DriverJobs() {
               style={[styles.chip, radius_ === r && styles.chipActive]}
               testID={`radius-${r}`}
             >
-              <Text style={[styles.chipText, radius_ === r && styles.chipTextActive]}>
-                {r} mi
+              <Text style={[styles.chipText, radius_ === r && styles.chipTextActive]}>{r} mi</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Text style={[styles.filterLabel, { marginTop: spacing.sm }]}>Pricing</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          {(["all", "fixed", "bidding"] as PricingFilter[]).map((p) => (
+            <Pressable
+              key={p}
+              onPress={() => setPricing(p)}
+              style={[styles.chip, pricing === p && styles.chipActive]}
+              testID={`pricing-filter-${p}`}
+            >
+              <Text style={[styles.chipText, pricing === p && styles.chipTextActive]}>
+                {p === "all" ? "All" : p === "fixed" ? "Fixed price" : "Open to bids"}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Text style={[styles.filterLabel, { marginTop: spacing.sm }]}>Category</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          <Pressable
+            onPress={() => setCategory(null)}
+            style={[styles.chip, category === null && styles.chipActive]}
+            testID="cat-all"
+          >
+            <Text style={[styles.chipText, category === null && styles.chipTextActive]}>All</Text>
+          </Pressable>
+          {CATEGORIES.map((c) => (
+            <Pressable
+              key={c.id}
+              onPress={() => setCategory(category === c.id ? null : c.id)}
+              style={[styles.chip, category === c.id && styles.chipActive]}
+              testID={`cat-${c.id}`}
+            >
+              <Text style={[styles.chipText, category === c.id && styles.chipTextActive]}>
+                {c.label}
               </Text>
             </Pressable>
           ))}
