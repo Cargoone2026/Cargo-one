@@ -424,10 +424,14 @@ async def me(user: dict = Depends(get_current_user)):
 
 @api.post("/auth/me/delete")
 async def delete_me(user: dict = Depends(get_current_user)):
-    """Soft-delete: anonymise personal data, suspend account. Booking records retained."""
+    """Soft-delete: anonymise personal data, suspend account. Booking records retained.
+    GDPR data scrubbing: also anonymises the user's display name across historical
+    bookings, jobs, bids, reviews and messages so PII is not visible to other parties."""
+    anon_email = f"deleted+{user['id']}@cargoone.internal"
+    anon_name = "Deleted user"
     patch = {
-        "email": f"deleted+{user['id']}@cargoone.internal",
-        "name": "Deleted user",
+        "email": anon_email,
+        "name": anon_name,
         "phone": None,
         "profile_photo": None,
         "status": "suspended",
@@ -436,6 +440,22 @@ async def delete_me(user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": patch})
     await db.documents.delete_many({"user_id": user["id"]})
     await db.notifications.delete_many({"user_id": user["id"]})
+    # Anonymise denormalised name fields across the platform
+    await db.jobs.update_many(
+        {"customer_id": user["id"]}, {"$set": {"customer_name": anon_name}}
+    )
+    await db.jobs.update_many(
+        {"assigned_driver_id": user["id"]}, {"$set": {"assigned_driver_name": anon_name}}
+    )
+    await db.bids.update_many(
+        {"driver_id": user["id"]}, {"$set": {"driver_name": anon_name}}
+    )
+    await db.reviews.update_many(
+        {"from_id": user["id"]}, {"$set": {"from_name": anon_name}}
+    )
+    await db.messages.update_many(
+        {"sender_id": user["id"]}, {"$set": {"sender_name": anon_name}}
+    )
     return {"ok": True}
 
 
@@ -1486,6 +1506,70 @@ async def admin_delete_band(band_id: str, user: dict = Depends(require_role("adm
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Band not found")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Public marketing endpoints (contact form + newsletter)
+# ---------------------------------------------------------------------------
+
+
+class ContactMessage(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    topic: Optional[str] = "support"
+    message: str
+
+
+class NewsletterSignup(BaseModel):
+    email: EmailStr
+    source: Optional[str] = "website"
+
+
+@api.post("/contact")
+async def submit_contact(payload: ContactMessage):
+    if len(payload.message.strip()) < 10 or len(payload.name.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Please provide your name and a longer message.")
+    doc = {
+        "id": new_id(),
+        "name": payload.name.strip(),
+        "email": payload.email.lower(),
+        "phone": payload.phone,
+        "topic": (payload.topic or "support").strip().lower(),
+        "message": payload.message.strip(),
+        "status": "new",
+        "created_at": now_iso(),
+    }
+    await db.contact_messages.insert_one(doc)
+    logger.info("Contact form submission: %s (%s)", doc["email"], doc["topic"])
+    return {"ok": True}
+
+
+@api.post("/newsletter/subscribe")
+async def newsletter_subscribe(payload: NewsletterSignup):
+    existing = await db.newsletter_subscribers.find_one({"email": payload.email.lower()})
+    if existing:
+        return {"ok": True, "already_subscribed": True}
+    await db.newsletter_subscribers.insert_one({
+        "id": new_id(),
+        "email": payload.email.lower(),
+        "source": payload.source or "website",
+        "confirmed": False,
+        "created_at": now_iso(),
+    })
+    return {"ok": True}
+
+
+@api.get("/admin/contact-messages")
+async def admin_contact_messages(_: dict = Depends(require_role("admin"))):
+    msgs = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return msgs
+
+
+@api.get("/admin/newsletter-subscribers")
+async def admin_newsletter_subs(_: dict = Depends(require_role("admin"))):
+    subs = await db.newsletter_subscribers.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return subs
 
 
 # ---------------------------------------------------------------------------

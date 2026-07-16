@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /(customer)/
+Disallow: /(driver)/
+Disallow: /(admin)/
+Disallow: /settings/
+
+Sitemap: https://cargoone.co.uk/sitemap.xml

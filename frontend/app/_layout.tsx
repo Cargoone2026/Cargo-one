@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -11,6 +11,19 @@ import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
+// Public marketing routes accessible without authentication (web + native)
+const PUBLIC_SEGMENTS = new Set([
+  "(marketing)",
+  "how-it-works",
+  "services",
+  "business",
+  "drivers",
+  "trust-safety",
+  "faq",
+  "contact",
+  "about",
+]);
+
 function Gate() {
   const { user, loading } = useAuth();
   const segments = useSegments();
@@ -18,15 +31,27 @@ function Gate() {
 
   useEffect(() => {
     if (loading) return;
-    const inAuth = segments[0] === "(auth)";
-    const inCustomer = segments[0] === "(customer)";
-    const inDriver = segments[0] === "(driver)";
-    const inAdmin = segments[0] === "(admin)";
+    const first = segments[0] as string | undefined;
+    const inAuth = first === "(auth)";
+    const inMarketing = first === "(marketing)" || PUBLIC_SEGMENTS.has(first || "");
+    const inCustomer = first === "(customer)";
+    const inDriver = first === "(driver)";
+    const inAdmin = first === "(admin)";
+    const inSettings = first === "settings"; // legal/privacy pages accessible during marketing
+    const inDriverProfile = first === "driver-profile";
 
     if (!user) {
-      if (!inAuth) router.replace("/(auth)/welcome");
+      // On web: default to marketing site. On native: default to auth welcome.
+      const publicOK = inAuth || inMarketing || inSettings || inDriverProfile;
+      if (publicOK) return;
+      if (Platform.OS === "web") router.replace("/(marketing)");
+      else router.replace("/(auth)/welcome");
       return;
     }
+
+    // Authed users on marketing pages: allow them to browse; do not force-redirect.
+    if (inMarketing || inSettings || inDriverProfile) return;
+
     // Redirect by role
     if (user.role === "customer" && !inCustomer) router.replace("/(customer)");
     else if (user.role === "driver" && !inDriver) router.replace("/(driver)");
@@ -52,6 +77,7 @@ export default function RootLayout() {
           <Gate />
           <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
             <Stack.Screen name="index" />
+            <Stack.Screen name="(marketing)" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(customer)" />
             <Stack.Screen name="(driver)" />
