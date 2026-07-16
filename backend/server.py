@@ -211,6 +211,13 @@ def require_role(*roles: str):
 
 
 def user_to_public(user: dict) -> dict:
+    # Verified Driver = all docs approved (documents_verified) AND active AND ≥1 completed job
+    verified_driver = bool(
+        user.get("role") == "driver"
+        and user.get("documents_verified")
+        and user.get("status") == "active"
+        and (user.get("total_jobs") or 0) >= 1
+    )
     return {
         "id": user["id"],
         "email": user["email"],
@@ -220,8 +227,11 @@ def user_to_public(user: dict) -> dict:
         "status": user.get("status", "active"),
         "rating": user.get("rating", 5.0),
         "total_jobs": user.get("total_jobs", 0),
+        "review_count": user.get("review_count", 0),
         "vehicle": user.get("vehicle"),
+        "profile_photo": user.get("profile_photo"),
         "documents_verified": user.get("documents_verified", False),
+        "verified_driver": verified_driver,
         "created_at": user.get("created_at", now_iso()),
     }
 
