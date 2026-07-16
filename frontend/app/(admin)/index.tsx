@@ -121,8 +121,8 @@ export default function AdminDashboard() {
               <Ionicons name="pricetags" size={22} color={colors.success} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.actionTitle}>Booking deposit bands</Text>
-              <Text style={styles.actionSub}>Configure deposit tiers by job value</Text>
+              <Text style={styles.actionTitle}>Booking Fee Bands</Text>
+              <Text style={styles.actionSub}>Configure Cargo One&apos;s fee tiers by driver charge</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
           </Pressable>

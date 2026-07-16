@@ -266,16 +266,20 @@ export default function DriverBookingDetail() {
 
           <View style={styles.summary}>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>Total earning</Text>
-              <Text style={styles.sumValueBig}>£{Number(b.total_price).toFixed(2)}</Text>
+              <Text style={styles.sumLabel}>Your bid (you receive)</Text>
+              <Text style={styles.sumValueBig}>£{Number(b.driver_charge ?? b.balance_due).toFixed(2)}</Text>
             </View>
             <View style={styles.sumRow}>
-              <Text style={styles.sumLabel}>Cargo One deposit (already collected)</Text>
-              <Text style={styles.sumValue}>−£{Number(b.deposit_amount).toFixed(2)}</Text>
+              <Text style={styles.sumLabel}>Cargo One Booking Fee (collected via Stripe)</Text>
+              <Text style={styles.sumValue}>£{Number(b.booking_fee ?? b.deposit_amount).toFixed(2)}</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Customer pays total</Text>
+              <Text style={styles.sumValue}>£{Number(b.total_price).toFixed(2)}</Text>
             </View>
             <View style={[styles.sumRow, styles.sumTotal]}>
-              <Text style={styles.sumLabelStrong}>You collect from customer</Text>
-              <Text style={styles.sumTotalValue}>£{Number(b.balance_due).toFixed(2)}</Text>
+              <Text style={styles.sumLabelStrong}>You collect from customer on delivery</Text>
+              <Text style={styles.sumTotalValue}>£{Number(b.driver_charge ?? b.balance_due).toFixed(2)}</Text>
             </View>
           </View>
 

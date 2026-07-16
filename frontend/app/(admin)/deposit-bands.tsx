@@ -137,7 +137,7 @@ export default function DepositBandsScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} testID="bands-back">
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Deposit Bands</Text>
+        <Text style={styles.headerTitle}>Booking Fee Bands</Text>
         <Pressable onPress={openCreate} hitSlop={12} testID="bands-add-button">
           <Ionicons name="add" size={26} color={colors.brand} />
         </Pressable>
@@ -153,7 +153,7 @@ export default function DepositBandsScreen() {
             <View style={styles.intro}>
               <Ionicons name="information-circle" size={22} color={colors.info} />
               <Text style={styles.introText}>
-                Configure booking deposit tiers. During checkout, the first enabled band matching the job price is applied.
+                Configure Cargo One&apos;s booking fee tiers. The fee is added on top of the driver&apos;s bid; the first enabled band matching the driver&apos;s charge is applied.
               </Text>
             </View>
 
@@ -161,7 +161,7 @@ export default function DepositBandsScreen() {
               <Text style={styles.calcTitle}>Live Preview</Text>
               <View style={styles.calcRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.calcLabel}>Job value (£)</Text>
+                  <Text style={styles.calcLabel}>Driver charge (£)</Text>
                   <View style={styles.calcInputWrap}>
                     <Input
                       value={previewPrice}
@@ -185,15 +185,21 @@ export default function DepositBandsScreen() {
               {previewResult && (
                 <View style={styles.calcResult}>
                   <View style={styles.calcResultRow}>
-                    <Text style={styles.calcResultLabel}>Deposit due now</Text>
-                    <Text style={styles.calcResultDeposit}>
-                      £{Number(previewResult.deposit_amount).toFixed(2)}
+                    <Text style={styles.calcResultLabel}>Driver receives</Text>
+                    <Text style={styles.calcResultBalance}>
+                      £{Number(previewResult.driver_charge ?? previewResult.balance_due).toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.calcResultRow}>
-                    <Text style={styles.calcResultLabel}>Balance to driver on delivery</Text>
+                    <Text style={styles.calcResultLabel}>Cargo One Booking Fee</Text>
+                    <Text style={styles.calcResultDeposit}>
+                      £{Number(previewResult.booking_fee ?? previewResult.deposit_amount).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={[styles.calcResultRow, { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)", paddingTop: 8 }]}>
+                    <Text style={styles.calcResultLabel}>Customer pays total</Text>
                     <Text style={styles.calcResultBalance}>
-                      £{Number(previewResult.balance_due).toFixed(2)}
+                      £{Number(previewResult.customer_total ?? previewResult.total_price).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -231,7 +237,7 @@ export default function DepositBandsScreen() {
             </View>
             <View style={styles.bandFoot}>
               <View>
-                <Text style={styles.depositLabel}>Deposit</Text>
+                <Text style={styles.depositLabel}>Booking Fee</Text>
                 <Text style={styles.depositValue}>£{item.deposit_amount.toFixed(2)}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />

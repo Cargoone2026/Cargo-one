@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +32,11 @@ export default function DriverJobDetail() {
   const [eta, setEta] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [feePreview, setFeePreview] = useState<{
+    driver_charge: number;
+    booking_fee: number;
+    customer_total: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -45,6 +50,25 @@ export default function DriverJobDetail() {
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Live booking-fee preview while typing (or from job.fixed_price for fixed jobs)
+  useEffect(() => {
+    const dc = Number(bidAmount) || Number(job?.fixed_price);
+    if (!dc || Number.isNaN(dc) || dc <= 0) {
+      setFeePreview(null);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r: any = await api(`/booking-fees/preview?driver_charge=${dc}`);
+        if (!cancelled) setFeePreview(r);
+      } catch {
+        if (!cancelled) setFeePreview(null);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [bidAmount, job?.fixed_price]);
 
   async function accept() {
     setErr(null);
@@ -180,7 +204,10 @@ export default function DriverJobDetail() {
 
           {!pendingApproval && job.status === "posted" && job.pricing_type === "bidding" && (
             <View style={styles.bidBox}>
-              <Text style={styles.bidBoxTitle}>Submit your bid</Text>
+              <Text style={styles.bidBoxTitle}>Enter Your Bid</Text>
+              <Text style={styles.bidBoxHint}>
+                This is what you&apos;ll receive after the delivery. Cargo One&apos;s booking fee is added on top.
+              </Text>
               <Input
                 label="Your bid (£)"
                 value={bidAmount}
@@ -189,6 +216,30 @@ export default function DriverJobDetail() {
                 placeholder="150"
                 testID="driver-bid-amount"
               />
+
+              {feePreview && (
+                <View style={styles.breakdown} testID="bid-breakdown">
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Your Bid</Text>
+                    <Text style={styles.breakdownDriver}>
+                      £{feePreview.driver_charge.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Cargo One Booking Fee</Text>
+                    <Text style={styles.breakdownFee}>
+                      £{feePreview.booking_fee.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={[styles.breakdownRow, styles.breakdownTotalRow]}>
+                    <Text style={styles.breakdownTotalLabel}>Customer Pays</Text>
+                    <Text style={styles.breakdownTotal}>
+                      £{feePreview.customer_total.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               <Input
                 label="ETA (hours, optional)"
                 value={eta}
@@ -219,9 +270,27 @@ export default function DriverJobDetail() {
 
           {!pendingApproval && job.status === "posted" && job.pricing_type === "fixed" && (
             <View>
+              <View style={styles.acceptFixed}>
+                <View style={styles.acceptRow}>
+                  <Text style={styles.acceptLabel}>You&apos;ll receive</Text>
+                  <Text style={styles.acceptDriver}>£{Number(job.fixed_price).toFixed(2)}</Text>
+                </View>
+                {feePreview && (
+                  <>
+                    <View style={styles.acceptRow}>
+                      <Text style={styles.acceptLabel}>Cargo One Booking Fee (customer pays)</Text>
+                      <Text style={styles.acceptFee}>£{feePreview.booking_fee.toFixed(2)}</Text>
+                    </View>
+                    <View style={[styles.acceptRow, { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm }]}>
+                      <Text style={styles.acceptLabel}>Customer pays total</Text>
+                      <Text style={styles.acceptTotal}>£{feePreview.customer_total.toFixed(2)}</Text>
+                    </View>
+                  </>
+                )}
+              </View>
               {err ? <Text style={styles.err}>{err}</Text> : null}
               <Button
-                title={`Accept for £${job.fixed_price}`}
+                title={`Accept — Earn £${Number(job.fixed_price).toFixed(0)}`}
                 onPress={accept}
                 loading={submitting}
                 testID="driver-accept-fixed"
@@ -272,6 +341,27 @@ const styles = StyleSheet.create({
   },
   warningText: { flex: 1, fontSize: font.base, color: colors.text },
   bidBox: { padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
-  bidBoxTitle: { fontSize: font.lg, fontWeight: weight.bold, color: colors.text, marginBottom: spacing.sm },
+  bidBoxTitle: { fontSize: font.lg, fontWeight: weight.bold, color: colors.text },
+  bidBoxHint: { fontSize: font.sm, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 18 },
+  breakdown: {
+    padding: spacing.md, backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+    gap: spacing.sm, marginBottom: spacing.sm,
+  },
+  breakdownRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  breakdownLabel: { fontSize: font.base, color: colors.textSecondary },
+  breakdownDriver: { fontSize: font.lg, color: colors.text, fontWeight: weight.bold },
+  breakdownFee: { fontSize: font.base, color: colors.brand, fontWeight: weight.semibold },
+  breakdownTotalRow: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  breakdownTotalLabel: { fontSize: font.base, color: colors.text, fontWeight: weight.semibold },
+  breakdownTotal: { fontSize: font.xl, color: colors.success, fontWeight: weight.bold },
+  acceptFixed: {
+    padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.bgSecondary,
+    gap: spacing.sm, marginBottom: spacing.md,
+  },
+  acceptRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  acceptLabel: { fontSize: font.base, color: colors.textSecondary, flex: 1, marginRight: spacing.sm },
+  acceptDriver: { fontSize: font.xxl, color: colors.text, fontWeight: weight.bold, letterSpacing: -0.3 },
+  acceptFee: { fontSize: font.base, color: colors.brand, fontWeight: weight.semibold },
+  acceptTotal: { fontSize: font.xl, color: colors.success, fontWeight: weight.bold },
   err: { color: colors.error, marginBottom: spacing.sm },
 });

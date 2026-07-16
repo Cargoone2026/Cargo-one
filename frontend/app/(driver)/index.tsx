@@ -33,7 +33,7 @@ export default function DriverHome() {
   const activeBookings = mine.filter((b) => !["completed", "cancelled"].includes(b.status));
   const earningsMonth = mine
     .filter((b) => b.status === "completed")
-    .reduce((acc, b) => acc + Number(b.total_price), 0);
+    .reduce((acc, b) => acc + Number(b.driver_charge ?? b.balance_due ?? 0), 0);
 
   const pendingApproval = user?.status === "pending";
 

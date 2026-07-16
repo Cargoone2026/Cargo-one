@@ -279,24 +279,33 @@ class DepositBandIn(BaseModel):
     label: Optional[str] = None
 
 
-async def calculate_deposit(price: float) -> float:
-    """Find the first enabled band matching price. Fallback to DEPOSIT_PERCENTAGE."""
+async def calculate_booking_fee(driver_charge: float) -> float:
+    """Find the first enabled band matching driver_charge. Fallback to DEPOSIT_PERCENTAGE."""
     bands = await db.deposit_bands.find({"enabled": True}, {"_id": 0}) \
                                     .sort("min_price", 1).to_list(200)
     for b in bands:
         min_p = float(b.get("min_price", 0))
         max_p = b.get("max_price")
-        if price >= min_p and (max_p is None or price <= float(max_p)):
+        if driver_charge >= min_p and (max_p is None or driver_charge <= float(max_p)):
             return round(float(b["deposit_amount"]), 2)
-    return round(price * DEPOSIT_PERCENTAGE, 2)
+    return round(driver_charge * DEPOSIT_PERCENTAGE, 2)
 
 
-async def preview_deposit(price: float) -> dict:
-    deposit = await calculate_deposit(price)
+# Back-compat alias (used by earlier code paths)
+calculate_deposit = calculate_booking_fee
+
+
+async def preview_deposit(driver_charge: float) -> dict:
+    """Return pricing breakdown for a given driver_charge."""
+    fee = await calculate_booking_fee(driver_charge)
     return {
-        "total_price": round(price, 2),
-        "deposit_amount": deposit,
-        "balance_due": round(price - deposit, 2),
+        "driver_charge": round(driver_charge, 2),
+        "booking_fee": fee,
+        "customer_total": round(driver_charge + fee, 2),
+        # Legacy field names kept for backwards compat with older clients:
+        "total_price": round(driver_charge + fee, 2),
+        "deposit_amount": fee,
+        "balance_due": round(driver_charge, 2),
     }
 
 
@@ -577,16 +586,19 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
     if existing:
         return {k: v for k, v in existing.items() if k != "_id"}
 
-    price = float(job["accepted_price"])
-    deposit = await calculate_deposit(price)
+    driver_charge = float(job["accepted_price"])
+    booking_fee = await calculate_booking_fee(driver_charge)
+    customer_total = round(driver_charge + booking_fee, 2)
     booking = {
         "id": new_id(),
         "job_id": job_id,
         "customer_id": job["customer_id"],
         "driver_id": job["assigned_driver_id"],
-        "total_price": price,
-        "deposit_amount": deposit,
-        "balance_due": round(price - deposit, 2),
+        "driver_charge": driver_charge,
+        "booking_fee": booking_fee,
+        "total_price": customer_total,          # what customer pays overall
+        "deposit_amount": booking_fee,          # what customer pays now (Stripe)
+        "balance_due": driver_charge,           # what customer pays driver on delivery
         "status": "accepted",  # pending deposit
         "payment_status": "pending",
         "stripe_session_id": None,
@@ -1079,6 +1091,15 @@ async def preview_deposit_route(price: float, user: dict = Depends(get_current_u
     if price < 0:
         raise HTTPException(status_code=400, detail="Invalid price")
     return await preview_deposit(price)
+
+
+@api.get("/booking-fees/preview")
+async def preview_booking_fee_route(driver_charge: float,
+                                     user: dict = Depends(get_current_user)):
+    """Preview the booking fee + customer total for a given driver bid."""
+    if driver_charge < 0:
+        raise HTTPException(status_code=400, detail="Invalid driver_charge")
+    return await preview_deposit(driver_charge)
 
 
 @api.get("/admin/deposit-bands")

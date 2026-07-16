@@ -28,8 +28,8 @@ export default function Earnings() {
     const upcoming = bookings.filter((b) =>
       ["deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route", "delivered", "pod_uploaded"].includes(b.status),
     );
-    const total = completed.reduce((a, b) => a + Number(b.total_price), 0);
-    const pending = upcoming.reduce((a, b) => a + Number(b.balance_due), 0);
+    const total = completed.reduce((a, b) => a + Number(b.driver_charge ?? b.balance_due ?? 0), 0);
+    const pending = upcoming.reduce((a, b) => a + Number(b.driver_charge ?? b.balance_due ?? 0), 0);
     return { total, pending, completed: completed.length, upcoming: upcoming.length };
   }, [bookings]);
 
@@ -76,7 +76,7 @@ export default function Earnings() {
                 {new Date(b.completed_at || b.created_at).toLocaleDateString()}
               </Text>
             </View>
-            <Text style={styles.historyAmount}>+£{Number(b.total_price).toFixed(0)}</Text>
+            <Text style={styles.historyAmount}>+£{Number(b.driver_charge ?? b.balance_due ?? 0).toFixed(0)}</Text>
           </View>
         ))}
         {bookings.filter((b) => b.status === "completed").length === 0 && (

@@ -304,23 +304,33 @@ export default function PostJob() {
               </View>
 
               {pricingType === "fixed" ? (
-                <Input
-                  label="Fixed price (£)"
-                  value={fixedPrice}
-                  onChangeText={setFixedPrice}
-                  placeholder="e.g. 150"
-                  keyboardType="numeric"
-                  testID="postjob-fixed-price"
-                />
+                <View>
+                  <Input
+                    label="Driver charge (£)"
+                    value={fixedPrice}
+                    onChangeText={setFixedPrice}
+                    placeholder="e.g. 150"
+                    keyboardType="numeric"
+                    testID="postjob-fixed-price"
+                  />
+                  <Text style={styles.hint}>
+                    This is the amount the driver receives. Cargo One&apos;s booking fee is added on top at checkout.
+                  </Text>
+                </View>
               ) : (
-                <Input
-                  label="Max budget (£, optional)"
-                  value={maxBudget}
-                  onChangeText={setMaxBudget}
-                  placeholder="e.g. 250"
-                  keyboardType="numeric"
-                  testID="postjob-max-budget"
-                />
+                <View>
+                  <Input
+                    label="Max driver charge (£, optional)"
+                    value={maxBudget}
+                    onChangeText={setMaxBudget}
+                    placeholder="e.g. 250"
+                    keyboardType="numeric"
+                    testID="postjob-max-budget"
+                  />
+                  <Text style={styles.hint}>
+                    Drivers will bid what they want to receive. Cargo One&apos;s booking fee is added on top at checkout.
+                  </Text>
+                </View>
               )}
 
               <View style={styles.notice}>
@@ -405,6 +415,7 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, color: colors.text, fontSize: font.base, lineHeight: 20 },
   err: { color: colors.error, marginTop: spacing.md },
+  hint: { fontSize: font.sm, color: colors.textSecondary, marginTop: -8, marginBottom: spacing.md, lineHeight: 18 },
   foot: {
     paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.lg,
     borderTopWidth: 1, borderTopColor: colors.divider, backgroundColor: colors.bg,

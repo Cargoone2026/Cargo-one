@@ -61,8 +61,8 @@ export default function MyJobs() {
             </View>
             <View style={styles.foot}>
               <View>
-                <Text style={styles.priceLabel}>Earning</Text>
-                <Text style={styles.price}>£{Number(item.total_price).toFixed(0)}</Text>
+                <Text style={styles.priceLabel}>Your earning</Text>
+                <Text style={styles.price}>£{Number(item.driver_charge ?? item.total_price).toFixed(0)}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
             </View>

@@ -30,7 +30,7 @@ export default function AdminSettings() {
         <View style={styles.section}>
           <Row
             icon="pricetags-outline"
-            label="Booking deposit bands"
+            label="Booking Fee Bands"
             onPress={() => router.push("/(admin)/deposit-bands")}
             testID="settings-deposit-bands"
           />

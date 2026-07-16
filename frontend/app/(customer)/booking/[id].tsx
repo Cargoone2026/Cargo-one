@@ -256,13 +256,29 @@ export default function BookingDetail() {
           )}
 
           <View style={styles.summary}>
-            <SumRow label="Total price" value={`£${Number(b.total_price).toFixed(0)}`} />
             <SumRow
-              label="Deposit"
-              value={`£${Number(b.deposit_amount).toFixed(2)}`}
-              highlight={!paid}
+              label="Driver Charge"
+              value={`£${Number(b.driver_charge ?? b.balance_due).toFixed(2)}`}
             />
-            <SumRow label="Balance to driver on delivery" value={`£${Number(b.balance_due).toFixed(2)}`} />
+            <SumRow
+              label="Cargo One Booking Fee"
+              value={`£${Number(b.booking_fee ?? b.deposit_amount).toFixed(2)}`}
+            />
+            <View style={styles.sumDivider} />
+            <SumRow
+              label="Total Booking Price"
+              value={`£${Number(b.total_price).toFixed(2)}`}
+              highlight
+            />
+            <View style={styles.sumDivider} />
+            <SumRow
+              label="Pay Now (Booking Fee)"
+              value={`£${Number(b.booking_fee ?? b.deposit_amount).toFixed(2)}`}
+            />
+            <SumRow
+              label="Pay Driver On Delivery"
+              value={`£${Number(b.driver_charge ?? b.balance_due).toFixed(2)}`}
+            />
           </View>
 
           {!paid && (
@@ -271,7 +287,7 @@ export default function BookingDetail() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.payBoxTitle}>Contact & chat locked</Text>
                 <Text style={styles.payBoxText}>
-                  Pay the £{Number(b.deposit_amount).toFixed(2)} deposit to unlock driver details, exact addresses, and chat.
+                  Pay the £{Number(b.booking_fee ?? b.deposit_amount).toFixed(2)} booking fee to unlock driver details, exact addresses, and chat. The remaining £{Number(b.driver_charge ?? b.balance_due).toFixed(2)} is paid directly to the driver on delivery.
                 </Text>
               </View>
             </View>
@@ -375,7 +391,7 @@ export default function BookingDetail() {
       {!paid && (
         <View style={styles.foot}>
           <Button
-            title={`Pay £${Number(b.deposit_amount).toFixed(2)} Deposit`}
+            title={`Pay £${Number(b.booking_fee ?? b.deposit_amount).toFixed(2)} Booking Fee`}
             onPress={payDeposit}
             loading={payLoading}
             testID="pay-deposit-button"
@@ -436,6 +452,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   summary: { padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  sumDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.xs },
   sumRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingVertical: spacing.sm,

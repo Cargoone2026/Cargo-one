@@ -1,0 +1,48 @@
+{
+  "summary": "Backend-only regression for the updated Cargo One booking-fee pricing model. Created /app/backend/tests/test_booking_fees.py with 21 pytest cases; ALL 21 PASSED (100%). Verified: (a) GET /api/booking-fees/preview?driver_charge=270 returns {driver_charge:270, booking_fee:25, customer_total:295} AND legacy {total_price:295, deposit_amount:25, balance_due:270}; (b) negative driver_charge rejected with 400; (c) missing auth returns 401/403; (d) preview correctness across all 5 tiers (charge=50→fee=10, 100→10, 100.01→25, 500→50, 1200→100, 3000→150) with customer_total = driver_charge + booking_fee; (e) legacy alias GET /api/deposit-bands/preview?price=270 returns byte-identical payload to /booking-fees/preview (backwards compat proven); (f) fixed_price=270 booking creates driver_charge=270/booking_fee=25/total_price=295/deposit_amount=25/balance_due=270 with cross-field invariants deposit_amount==booking_fee and balance_due==driver_charge and total_price==driver_charge+booking_fee; (g) bidding flow for bids 500, 50, 1200, 3000 all produce the exact expected fees (50/10/100/150) and customer totals (550/60/1300/3150); (h) POST /api/bookings/{id}/deposit persists a payment_transactions row with amount == booking_fee (£50), NOT customer_total (£550) — Stripe charge is correct; (i) with all bands disabled, both preview and booking fall back to DEPOSIT_PERCENTAGE=0.10 applied to driver_charge (driver_charge=700 → booking_fee=70, customer_total=770); state fully restored after fallback test; (j) admin CRUD /api/admin/deposit-bands (list/create/update/delete) and public GET /api/deposit-bands (enabled-only, sorted) unchanged. Also re-ran the previous suite /app/backend/tests/test_deposit_bands.py: 14 pass, 10 fail — every failure is a STALE test assertion from the old pricing model (expected total_price==price, balance_due==price-deposit). No production bugs; the assertions are simply out of date after the intended semantics change and should be replaced by the new test_booking_fees.py.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/deposit-bands (missing auth)", "issue": "Returns 403 rather than 401 due to FastAPI HTTPBearer default; carried over from prior iteration, either is acceptable."},
+      {"endpoint": "GET /api/booking-fees/preview", "issue": "No upper bound on driver_charge float; no functional impact but consider a sanity cap for admin UX."},
+      {"endpoint": "POST /api/admin/deposit-bands", "issue": "Overlap detection still absent between enabled bands (carried over)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_booking_fees.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/booking_fees_results.xml"
+  ],
+  "action_items": [
+    "Replace or delete /app/backend/tests/test_deposit_bands.py — its 10 failing cases assert the OLD semantics (fee deducted from customer total). The new suite test_booking_fees.py fully supersedes it. Keeping both will cause noisy CI failures.",
+    "Optional: consider exposing DEPOSIT_PERCENTAGE fallback value in the admin UI so it's clear what happens when all bands are disabled.",
+    "server.py is 1228 lines — still exceeds the 700-line guideline; consider splitting the booking-fees / bands router into a submodule."
+  ],
+  "critical_code_review_comments": [
+    "calculate_booking_fee(driver_charge) correctly matches on driver_charge (not customer total). Band boundaries confirmed: 100→Tier1(10), 100.01→Tier2(25).",
+    "calculate_deposit is a proper alias of calculate_booking_fee — no drift.",
+    "preview_deposit returns BOTH new and legacy field names in one payload, keeping older clients working.",
+    "Booking creation in POST /api/bookings correctly stores driver_charge, booking_fee, plus legacy total_price/deposit_amount/balance_due where deposit_amount==booking_fee and balance_due==driver_charge.",
+    "Stripe checkout session amount is booking['deposit_amount'] which equals the booking_fee — payment amount is correct at £50 for a £500 driver bid, not the full £550.",
+    "Fallback to DEPOSIT_PERCENTAGE (0.10) is applied to driver_charge, not to a fabricated customer total — consistent with the new semantics.",
+    "MongoDB _id excluded via projections throughout deposit-bands and booking endpoints — good.",
+    "Deprecated FastAPI @app.on_event('startup')/('shutdown') still used (carried over from prior iterations).",
+    "The stale test file test_deposit_bands.py should be deleted; it references the old pricing model."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_booking_fees.py (created)",
+    "/app/test_reports/pytest/booking_fees_results.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (21/21 new booking-fee suite); legacy suite 14/24 pass — remaining 10 are stale assertions for the OLD pricing model", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Per-run test users test_bf_cust_* and test_bf_drv_* (auto-approved via admin) and 15 test jobs+bookings across fixed (270, 500, 700) and bidding (50, 500, 1200, 3000) flows. Temporary admin bands at min_price 500000/999999 created and cleaned up. Fallback test snapshots enabled bands, disables all, and restores them in a finally block.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Booking-fee regression suite lives at /app/backend/tests/test_booking_fees.py (~9s, 21 tests, all pass). Semantics: driver_charge=driver's bid, booking_fee=platform fee added ON TOP, customer_total=driver_charge+booking_fee. Legacy fields kept: total_price=customer_total, deposit_amount=booking_fee, balance_due=driver_charge. Stripe checkout charges deposit_amount (=booking_fee) only. The old /app/backend/tests/test_deposit_bands.py contains stale assertions from the previous pricing model and should be removed. Admin creds: admin@cargoone.com / admin123. Base URL from EXPO_PUBLIC_BACKEND_URL in conftest.py.",
+  "rca_of_issue": "N/A - all 13 review-request items verified end-to-end. Booking-fee model works exactly as specified: fee is calculated FROM the driver bid, added ON TOP, Stripe collects only the fee, and legacy fields are preserved for backwards compatibility."
+}
