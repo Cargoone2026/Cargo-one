@@ -15,11 +15,11 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   vehicles:            U("photo-1552519507-da3b142c6e3d"),    // luxury car
   motorcycles:         U("photo-1558981806-ec527fa84c39"),    // motorcycle side profile
   caravans:            U("photo-1523987355523-c7b5b0dd90a7"), // touring caravan pitched
-  static_caravans:     U("photo-1533228876829-65c94e7b5025"), // static caravan / mobile home
+  static_caravans:     U("photo-1750698242388-51627cb26a4c"), // static caravans on a holiday park
   shipping_containers: U("photo-1494412651409-8963ce7935a7"), // stacked shipping containers
-  machinery:           U("photo-1586528116493-a029325540fa"), // industrial machinery / plant
+  machinery:           U("photo-1649807533255-bbc9c9fb7d77"), // yellow excavator / plant machinery
   pallets:             U("photo-1553413077-190dd305871c"),    // warehouse pallets & racking
-  boats:               U("photo-1544551763-46a013bb70d5"),    // sailing boat on water
+  boats:               U("photo-1559385301-0187cb6eff46"),    // luxury motor yacht
   office_moves:        U("photo-1497366216548-37526070297c"), // modern office
   building_materials:  U("photo-1503387762-592deb58ef4e"),    // bricks & building supplies
   parcels:             U("photo-1587293852726-70cdb56c2866"), // stack of parcels/boxes
