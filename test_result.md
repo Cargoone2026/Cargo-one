@@ -245,3 +245,23 @@ agent_communication:
     -agent: "testing"
     -message: "Iteration 9 (Wave 2 regression) complete. Backend smoke suite /app/backend/tests/test_wave2_smoke.py — 5/5 green (root, admin login, register customer, deposit-bands, booking-fees preview). Frontend: (a) react-dom-19 fix VERIFIED — marketing / at 1440x900 loads cleanly, NO LogBox overlay, NO 'Failed to set an indexed property'. (b) Admin portal at 1440x900: SideRail (CARGO ONE, Admin portal, Dashboard/Users/Drivers/Jobs/Booking Fees/Settings, active state red, Public site + Settings footer, user row + logout icon) renders; no bottom tab bar; clicking Users navigates to /users and marks it active. (c) Admin portal at 390x844: SideRail hidden, bottom tablist visible. (d) Logout icon in SideRail logs out and redirects to /. (e) Login card centered at ~412px (spec ≤460), Register card at ~452px (spec ≤500). (f) Footer newsletter POST /api/newsletter/subscribe returns 200. HOWEVER, one HIGH-priority regression path found: /drivers URL is a route-group collision — both app/(admin)/drivers.tsx and app/(marketing)/drivers.tsx claim '/drivers'. Expo-router resolves it to (admin)/drivers.tsx which fetches admin data without a token, throwing 'Uncaught Error — Missing token' as a full-screen red LogBox for any unauthenticated visitor. See /app/test_reports/iteration_9.json for RCA + fix guidance. Also noted a warning 'No route named \"index\" exists in nested children' from the root Stack layout. Retest needed after main agent renames the conflicting file."
 
+
+# RC1 Wave 2 — Post-testing fixes (route collision + stray Stack.Screen)
+
+frontend:
+  - task: "Fix /drivers route collision (marketing vs admin)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(admin)/manage-drivers.tsx (renamed from drivers.tsx), (admin)/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Renamed (admin)/drivers.tsx -> (admin)/manage-drivers.tsx so the public /drivers URL cleanly resolves to the marketing Become-a-Driver page. Updated Tabs.Screen name and SideRail NAV href accordingly. Also removed the stale <Stack.Screen name=\"index\" /> reference from root layout (index.tsx was deleted earlier this phase). Manually verified: /drivers renders marketing (no auth), /manage-drivers renders admin panel with sidebar active state."
+
+agent_communication:
+    -agent: "main"
+    -message: "Applied testing agent's Wave 2 fixes: renamed (admin)/drivers to manage-drivers to eliminate the URL collision, removed the phantom Stack.Screen name='index' reference. Manually verified both /drivers (marketing) and /manage-drivers (admin) work with no LogBox errors. Ready to re-run wave 2 regression testing if desired, or move to next task."
+

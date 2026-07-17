@@ -76,7 +76,6 @@ export default function RootLayout() {
         <AuthProvider>
           <Gate />
           <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
-            <Stack.Screen name="index" />
             <Stack.Screen name="(marketing)" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(customer)" />

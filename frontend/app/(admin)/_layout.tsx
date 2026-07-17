@@ -10,7 +10,7 @@ import { colors } from "@/src/theme";
 const NAV: SideRailItem[] = [
   { label: "Dashboard", href: "/(admin)", icon: "grid" },
   { label: "Users", href: "/(admin)/users", icon: "people" },
-  { label: "Drivers", href: "/(admin)/drivers", icon: "car-sport" },
+  { label: "Drivers", href: "/(admin)/manage-drivers", icon: "car-sport" },
   { label: "Jobs", href: "/(admin)/jobs", icon: "cube" },
   { label: "Booking Fees", href: "/(admin)/deposit-bands", icon: "pricetags" },
   { label: "Settings", href: "/(admin)/profile", icon: "settings" },
@@ -40,7 +40,7 @@ export default function AdminTabs() {
         >
           <Tabs.Screen name="index" options={{ title: "Dashboard", tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} /> }} />
           <Tabs.Screen name="users" options={{ title: "Users", tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} /> }} />
-          <Tabs.Screen name="drivers" options={{ title: "Drivers", tabBarIcon: ({ color, size }) => <Ionicons name="car-sport" size={size} color={color} /> }} />
+          <Tabs.Screen name="manage-drivers" options={{ title: "Drivers", tabBarIcon: ({ color, size }) => <Ionicons name="car-sport" size={size} color={color} /> }} />
           <Tabs.Screen name="jobs" options={{ title: "Jobs", tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} /> }} />
           <Tabs.Screen name="profile" options={{ title: "Settings", tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} /> }} />
           <Tabs.Screen name="deposit-bands" options={{ href: null }} />
