@@ -2430,10 +2430,13 @@ async def shutdown():
 
 app.include_router(api)
 
+_cors_origins_raw = os.environ.get("CORS_ORIGINS", "*").strip()
+_cors_origins = ["*"] if _cors_origins_raw == "*" else [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
