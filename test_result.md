@@ -141,6 +141,31 @@ backend:
         -agent: "main"
         -comment: "Extended POST /api/auth/me/delete: after anonymising the user record, also updates denormalised name fields to 'Deleted user' across jobs (customer_name & assigned_driver_name), bids (driver_name), reviews (from_name), and messages (sender_name)."
 
+  - task: "Cross-portal search endpoint GET /api/search"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/search_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New unified search endpoint. Accepts q (query), scope (all|marketing|catalog|jobs), limit. Returns grouped results {pages, categories, vehicles, capabilities, jobs, users}. Public (no auth). If Authorization header is present the endpoint decodes it (uses payload.user_id from JWT — same key used elsewhere) and adds role-scoped jobs (customers→own, drivers→posted+assigned, admin→all) and, for admin, users search. New helper module search_service.py holds scoring/formatting logic."
+
+  - task: "Driver dashboard aggregate GET /api/driver/dashboard"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New driver-role endpoint returning: user {id,name,status,rating,review_count}; fleet {count,active_count,capabilities[],vehicles[]}; earnings {today,week,month,all_time,completed_count}; bids {active,accepted}; jobs {nearby_count,active_count,upcoming_count,upcoming[]}; verification {docs_verified,docs_pending,docs_rejected,account_status}. Uses ISO date parsing on completed_at/updated_at/created_at to bucket earnings."
+
+
 frontend:
   - task: "Marketing website — home, how-it-works, services, business, drivers, trust-safety, faq, contact, about pages"
     implemented: true
@@ -461,10 +486,63 @@ frontend:
         -agent: "main"
         -comment: "Driver can view/add/edit/delete their vehicles. Editor modal has vehicle-type picker, reg/make/model/year/payload, internal L×W×H, insurance/MOT expiry (highlights if <60 days), full capabilities picker (chip toggle), default toggle. Fleet cards show capability chips + expiry warnings."
 
+  - task: "Global Search Modal + Marketing/Customer/Driver/Admin integrations"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/GlobalSearchModal.tsx, frontend/src/components/marketing/MarketingHeader.tsx, frontend/app/(customer)/index.tsx, frontend/app/(driver)/index.tsx, frontend/app/(admin)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Reusable modal component with debounced (250ms) queries to /api/search, grouped results (Categories/Vehicles/Capabilities/Jobs/Users/Pages), empty-state suggestions, cancel button, keyboard-friendly. Search icon added to MarketingHeader, customer home header, driver home header, and admin console header. Customer home also has a large search pill above the hero for one-tap access."
+
+  - task: "Driver Home v2 — six sections (Fleet, Upcoming Jobs, Earnings, Active Bids, Ratings, Vehicle Status)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(driver)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Complete rewrite of driver home. Calls new /api/driver/dashboard on focus. Six cards: Earnings (today/week/month/all-time + completion count), Fleet Summary (count/active/capabilities + first 3 vehicles + reg + status pill), Upcoming Jobs (top 3 confirmed with route + driver_charge), Active Bids (pending/accepted/nearby-jobs mini stats), Rating (avg rating + stars + review count) and Vehicle & Document Status (verified/pending/rejected doc counts + account status). Pending-approval warning card at top navigates to /documents. Pull-to-refresh."
+
+  - task: "Driver Jobs — Enhanced filters (search, sort, price range, capabilities)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(driver)/jobs.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added a search bar (title/description/pickup/dropoff/postcode). New sort chips: Nearest / Newest / Highest £ / Shortest job. Advanced-filters panel (toggle icon shows count badge when filters are active) with Radius chips (kept), Pricing chips (all/fixed/bidding), Price Range min/max inputs (£), Category chips (kept), Required Capability chips (multi-select). 'Reset all filters' link when any filter active. Header count now shows 'X of Y'."
+
+  - task: "Admin Users & Jobs — inline search filters"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(admin)/users.tsx, frontend/app/(admin)/jobs.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Both admin pages now have a search bar above the list that filters client-side by name/email/id (users) or title/route/category/customer/status (jobs). Empty-state text updates to 'No matching …' when the search excludes all rows. Header count switched to 'X of Y'."
+
+
 agent_communication:
     -agent: "main"
     -message: "Wave 3 Phase 2 core built. Please test the new backend endpoints thoroughly and confirm existing endpoints (auth/jobs/bids/bookings/deposit/wave-3-phase-1 catalog) still work unchanged. Also validate: (1) capabilities CRUD + duplicate-key 400; (2) driver fleet CRUD with unique registration per driver + is_default idempotency; (3) recommender rejects unknown capabilities correctly; (4) analytics overview returns all 5 top-level sections with the exact keys listed above; (5) featured toggle propagates."
 
     -agent: "testing"
     -message: "Wave 3 Phase 2 BACKEND testing COMPLETE — 14/14 pytest tests PASSED against http://localhost:8001. File: /app/backend/tests/test_wave3_phase2.py (JUnit: /app/test_reports/pytest/wave3_phase2_results.xml).\n\nCoverage:\n  1) Capabilities catalog — public GET returns exactly 21 active items with correct schema (id/key/name/description/icon/order/active/featured). include_inactive=true works. Admin GET requires admin (driver → 403). POST auto-generates key from name (verified 'test_w3p2_cap_<hex>'). Duplicate POST → 400. PUT {active:false, featured:true} reflected; disabled row hidden from default public GET but visible with include_inactive=true. DELETE removes it.\n  2) Featured flag — 15 categories have featured=true after startup seed (>= 10 required). All vehicles carry a boolean featured. Admin PUT toggling {featured:false} on a category reflected on next public GET (restored afterwards). Same behaviour verified for vehicles.\n  3) Driver fleet CRUD — Fresh driver starts with empty list. POST lwb_van/AB<rand> XYZ returns id + server-set driver_id + inferred vehicle_type_name='Long Wheel Base Van' + capabilities persisted. Duplicate registration for same driver → 400. Unknown vehicle_type_key → 400. Second POST with is_default=true flips first vehicle's is_default to false (verified via GET). PUT updates capabilities/photos/mot_expiry reflected. DELETE returns 200.\n  4) Enhanced recommender — required_capabilities=['tail_lift'] hard-filters recommendations (every returned vehicle has tail_lift in capabilities OR features), all carry a non-empty `reason`, and only the first has is_best_match=true. required_capabilities=['nonexistent_cap'] returns 200 with recommendations=[] (no crash). Baseline call (no required_capabilities) still populates reason on every rec.\n  5) Admin analytics overview — GET /api/admin/analytics/overview returns 200 with all 5 top-level sections (marketplace, categories, drivers, customers, operational) and every required sub-key. All list fields (top_requested, top_vehicles, top_capabilities, top_routes, revenue_by_category, revenue_by_vehicle, top_rated, highest_earning, most_active, customers.most_active) are arrays. Non-admin JWT (driver) → 403.\n\nNo issues found. Wave 3 Phase 2 backend endpoints are all green and ready for frontend integration."
+
+    -agent: "main"
+    -message: "Wave 3 Phase B (increment 1) built.\n\nBackend additions (please test):\n  1) GET /api/search — public if no auth; when JWT is sent it also returns role-scoped jobs and (admin only) users. JWT payload uses `user_id` (NOT `sub`). Query params: q, scope (all|marketing|catalog|jobs), limit. Response shape: {query, total, pages[], categories[], vehicles[], capabilities[], jobs[], users[]}.\n  2) GET /api/driver/dashboard — driver role required. Returns aggregate stats (user, fleet, earnings, bids, jobs, verification). Earnings are bucketed today/week/month/all-time using completed_at || updated_at || created_at ISO strings.\n\nNo existing endpoints have been touched.\n\nCredentials for tests:\n  - admin@cargoone.com / admin123\n  - driver1@cargoone.com / driver123 (status: pending)\n  - cust1@cargoone.com / cust1234 (customer)\n\nPlease run BACKEND-ONLY testing focused on:\n  A) /api/search — no-token public results, token-scoped users search (admin should see users; customers should NOT); q='' behaviour (returns default page suggestions), scope=marketing filters out jobs/users. Verify handling of malformed JWT (should silently fall back to public results, not crash).\n  B) /api/driver/dashboard — 200 with driver JWT; 403 with admin/customer JWTs; schema completeness; earnings.completed_count reflects DB.\n  C) Regression sanity — /api/jobs/nearby, /api/catalog/*, /api/admin/stats, /api/auth/login still return 200 (do not need deep coverage, just confirm nothing broke)."
+
 

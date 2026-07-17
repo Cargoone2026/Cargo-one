@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
@@ -10,6 +10,7 @@ import { colors, font, radius, spacing, weight } from "@/src/theme";
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,17 +29,53 @@ export default function AdminUsers() {
     load();
   }
 
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((u) =>
+      `${u.name || ""} ${u.email || ""} ${u.id || ""}`.toLowerCase().includes(term),
+    );
+  }, [users, q]);
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Customers</Text>
-        <Text style={styles.count}>{users.length} total</Text>
+        <Text style={styles.count}>{filtered.length} of {users.length}</Text>
+      </View>
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textSecondary} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Search by name, email or ID…"
+            placeholderTextColor={colors.textTertiary}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+            testID="admin-users-search"
+          />
+          {q.length > 0 && (
+            <Pressable onPress={() => setQ("")} testID="admin-users-search-clear">
+              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+            </Pressable>
+          )}
+        </View>
       </View>
       <FlatList
-        data={users}
+        data={filtered}
         keyExtractor={(u) => u.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.brand} />}
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", padding: spacing.xxxl, gap: spacing.sm }}>
+            <Ionicons name="people-outline" size={40} color={colors.textTertiary} />
+            <Text style={{ color: colors.textSecondary }}>
+              {q ? "No matching customers." : "No customers yet."}
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <View style={styles.card} testID={`admin-user-${item.id}`}>
             <View style={styles.avatar}>
@@ -80,6 +117,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 30, fontWeight: weight.bold, color: colors.text, letterSpacing: -0.5 },
   count: { fontSize: font.sm, color: colors.textSecondary },
+  searchWrap: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
+  searchBar: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: Platform.OS === "ios" ? 10 : 6,
+  },
+  searchInput: {
+    flex: 1, color: colors.text, fontSize: font.base, padding: 0,
+    ...(Platform.OS === "web" ? ({ outlineWidth: 0, outlineStyle: "none" } as any) : {}),
+  },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.md },
   card: {
     flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,

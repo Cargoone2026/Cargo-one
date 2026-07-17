@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
@@ -11,6 +11,7 @@ import { colors, font, radius, spacing, weight } from "@/src/theme";
 export default function AdminJobs() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -24,21 +25,51 @@ export default function AdminJobs() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return jobs;
+    return jobs.filter((j) =>
+      `${j.title || ""} ${j.pickup_town || ""} ${j.dropoff_town || ""} ${j.category || ""} ${j.customer_name || ""} ${j.status || ""}`
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [jobs, q]);
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>All Jobs</Text>
-        <Text style={styles.count}>{jobs.length} total</Text>
+        <Text style={styles.count}>{filtered.length} of {jobs.length}</Text>
+      </View>
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textSecondary} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="Search title, route, category, customer…"
+            placeholderTextColor={colors.textTertiary}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+            testID="admin-jobs-search"
+          />
+          {q.length > 0 && (
+            <Pressable onPress={() => setQ("")} testID="admin-jobs-search-clear">
+              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+            </Pressable>
+          )}
+        </View>
       </View>
       <FlatList
-        data={jobs}
+        data={filtered}
         keyExtractor={(j) => j.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.brand} />}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={48} color={colors.textTertiary} />
-            <Text style={styles.emptyText}>No jobs posted yet.</Text>
+            <Text style={styles.emptyText}>{q ? "No matching jobs." : "No jobs posted yet."}</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -46,7 +77,7 @@ export default function AdminJobs() {
             <View style={styles.head}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.jobTitle}>{item.title}</Text>
-                <Text style={styles.jobCat}>{item.category.replace("_", " ")} · {item.pricing_type}</Text>
+                <Text style={styles.jobCat}>{(item.category || "").replace(/_/g, " ")} · {item.pricing_type}</Text>
               </View>
               <StatusPill status={item.status} />
             </View>
@@ -76,6 +107,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 30, fontWeight: weight.bold, color: colors.text, letterSpacing: -0.5 },
   count: { fontSize: font.sm, color: colors.textSecondary },
+  searchWrap: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
+  searchBar: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: Platform.OS === "ios" ? 10 : 6,
+  },
+  searchInput: {
+    flex: 1, color: colors.text, fontSize: font.base, padding: 0,
+    ...(Platform.OS === "web" ? ({ outlineWidth: 0, outlineStyle: "none" } as any) : {}),
+  },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.md },
   empty: { alignItems: "center", padding: spacing.xxxl, gap: spacing.md },
   emptyText: { color: colors.textSecondary },

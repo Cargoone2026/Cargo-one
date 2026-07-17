@@ -3,6 +3,7 @@ import { Link, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { GlobalSearchModal } from "@/src/components/GlobalSearchModal";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
 
@@ -23,6 +24,7 @@ export function MarketingHeader() {
   const { user } = useAuth();
   const { isMobile, isTablet } = useResponsive();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const showMenuIcon = isMobile || isTablet;
 
   const goToApp = () => {
@@ -61,6 +63,14 @@ export function MarketingHeader() {
         )}
 
         <View style={styles.ctaRow}>
+          <Pressable
+            onPress={() => setSearchOpen(true)}
+            style={styles.iconBtn}
+            testID="marketing-search-open"
+            accessibilityLabel="Search Cargo One"
+          >
+            <Ionicons name="search" size={22} color={colors.text} />
+          </Pressable>
           {!showMenuIcon && !user && (
             <Pressable
               onPress={() => router.push("/(auth)/login")}
@@ -118,6 +128,13 @@ export function MarketingHeader() {
           </Pressable>
         </View>
       )}
+
+      <GlobalSearchModal
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        scope="all"
+        placeholder="Search categories, vehicles, pages…"
+      />
     </View>
   );
 }

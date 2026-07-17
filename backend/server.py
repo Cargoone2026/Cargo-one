@@ -24,6 +24,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
+from search_service import (
+    build_capability_results,
+    build_category_results,
+    build_marketing_results,
+    build_vehicle_results,
+)
 from service_catalog import (
     CATEGORY_SEED,
     LEGACY_CATEGORY_MAP,
@@ -1855,6 +1861,125 @@ async def admin_delete_capability(cap_id: str, _: dict = Depends(require_role("a
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Global cross-portal search — powers the search UI on the marketing site,
+# customer, driver and admin portals.
+# ---------------------------------------------------------------------------
+
+
+@api.get("/search")
+async def global_search(
+    q: str = "",
+    scope: str = "all",  # all | marketing | catalog | jobs
+    limit: int = 6,
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    """Unified search across marketing pages, categories, vehicles, capabilities
+    and (for authenticated users) jobs / bookings depending on their role.
+    Returns grouped results — the frontend renders each group in a section.
+    """
+    q_norm = (q or "").strip()
+
+    # Fetch small catalog data (cached implicitly by MongoDB indexes).
+    categories = await db.service_categories.find({"active": True}, {"_id": 0}).sort("order", 1).to_list(200)
+    vehicles = await db.vehicle_types.find({"active": True}, {"_id": 0}).sort("order", 1).to_list(200)
+    capabilities = await db.vehicle_capabilities.find({"active": True}, {"_id": 0}).sort("order", 1).to_list(200)
+
+    results: dict[str, list[dict]] = {"pages": [], "categories": [], "vehicles": [], "capabilities": [], "jobs": [], "users": []}
+
+    if scope in ("all", "marketing"):
+        results["pages"] = build_marketing_results(q_norm, limit=limit)
+
+    if scope in ("all", "catalog", "marketing"):
+        results["categories"] = build_category_results(q_norm, categories, limit=limit)
+        results["vehicles"] = build_vehicle_results(q_norm, vehicles, limit=limit)
+        results["capabilities"] = build_capability_results(q_norm, capabilities, limit=limit)
+
+    # Auth-required scopes — resolve the token if present (but don't require it).
+    user: Optional[dict] = None
+    if creds and creds.credentials:
+        try:
+            payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            user = await db.users.find_one({"id": payload.get("user_id")})
+        except Exception:
+            user = None
+
+    if q_norm and user and scope in ("all", "jobs"):
+        # Role-scoped job search
+        query_regex = {"$regex": q_norm.replace("$", r"\$"), "$options": "i"}
+        or_clause = [
+            {"title": query_regex},
+            {"description": query_regex},
+            {"pickup_town": query_regex},
+            {"dropoff_town": query_regex},
+            {"pickup_postcode": query_regex},
+            {"dropoff_postcode": query_regex},
+            {"category": query_regex},
+        ]
+        base_query: dict = {"$or": or_clause}
+        if user["role"] == "customer":
+            base_query["customer_id"] = user["id"]
+        elif user["role"] == "driver":
+            # Drivers only see posted jobs or their own assigned bookings
+            base_query["$and"] = [{"$or": [{"status": "posted"}, {"assigned_driver_id": user["id"]}]}]
+        # admin sees everything
+
+        docs = await db.jobs.find(base_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        results["jobs"] = [
+            {
+                "kind": "job",
+                "id": d.get("id"),
+                "title": d.get("title") or "Untitled job",
+                "subtitle": f"{d.get('pickup_town', '?')} → {d.get('dropoff_town', '?')} · {d.get('status', '')}",
+                "category": d.get("category"),
+                "status": d.get("status"),
+                "role_target": user["role"],
+                "href": _job_href_for(user["role"], d.get("id")),
+            }
+            for d in docs
+        ]
+
+    # Admin: also search users by name / email
+    if q_norm and user and user.get("role") == "admin" and scope in ("all", "jobs"):
+        u_regex = {"$regex": q_norm.replace("$", r"\$"), "$options": "i"}
+        users = await db.users.find(
+            {"$or": [{"name": u_regex}, {"email": u_regex}, {"id": u_regex}]},
+            {"_id": 0, "password_hash": 0},
+        ).limit(limit).to_list(limit)
+        results["users"] = [
+            {
+                "kind": "user",
+                "id": u.get("id"),
+                "title": u.get("name") or u.get("email"),
+                "subtitle": f"{u.get('role', '')} · {u.get('email', '')}",
+                "role": u.get("role"),
+                "href": _user_href_for_admin(u.get("id")),
+            }
+            for u in users
+        ]
+
+    total = sum(len(v) for v in results.values())
+    return {"query": q_norm, "total": total, **results}
+
+
+def _job_href_for(role: str, job_id: Optional[str]) -> str:
+    if not job_id:
+        return "/"
+    if role == "customer":
+        return f"/(customer)/job/{job_id}"
+    if role == "driver":
+        return f"/(driver)/job/{job_id}"
+    if role == "admin":
+        return f"/(admin)/jobs?id={job_id}"
+    return "/"
+
+
+def _user_href_for_admin(user_id: Optional[str]) -> str:
+    if not user_id:
+        return "/(admin)/users"
+    return f"/(admin)/users?id={user_id}"
+
+
 # ---- Driver vehicle profiles (fleet management) ----
 
 class DriverVehicleUpsert(BaseModel):
@@ -1965,6 +2090,157 @@ async def delete_driver_vehicle(veh_id: str, user: dict = Depends(require_role("
     if r.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return {"ok": True}
+
+
+# ---- Driver dashboard aggregate ----
+
+@api.get("/driver/dashboard")
+async def driver_dashboard(user: dict = Depends(require_role("driver"))):
+    """Aggregated snapshot for the Driver home screen — fleet, upcoming jobs,
+    earnings breakdown (today/week/month/all-time), active bids, rating
+    stats and vehicle-verification status."""
+    now = datetime.now(timezone.utc)
+    start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Week starts Monday
+    start_week = start_day.replace(day=start_day.day - start_day.weekday()) if start_day.weekday() > 0 else start_day
+    start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Fleet
+    fleet_docs = await db.driver_vehicles.find({"driver_id": user["id"]}).to_list(50)
+    fleet_active = [f for f in fleet_docs if f.get("status") == "active"]
+    fleet_caps_flat: set[str] = set()
+    for f in fleet_docs:
+        for c in (f.get("capabilities") or []):
+            fleet_caps_flat.add(c)
+
+    # Bookings — all belonging to this driver
+    bookings = await db.bookings.find({"driver_id": user["id"]}).to_list(500)
+    upcoming = []
+    completed = []
+    active = []
+    for b in bookings:
+        b.pop("_id", None)
+        st = b.get("status")
+        if st == "completed":
+            completed.append(b)
+        elif st in ("cancelled",):
+            pass
+        elif st in ("deposit_paid", "confirmed"):
+            upcoming.append(b)
+        else:
+            active.append(b)
+
+    def _earned(bs: list[dict]) -> float:
+        s = 0.0
+        for b in bs:
+            s += float(b.get("driver_charge") or b.get("balance_due") or 0)
+        return s
+
+    def _completed_since(cutoff: datetime) -> list[dict]:
+        out = []
+        for b in completed:
+            ts = b.get("completed_at") or b.get("updated_at") or b.get("created_at")
+            if not ts:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if isinstance(ts, str) else ts
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if dt >= cutoff:
+                    out.append(b)
+            except Exception:
+                continue
+        return out
+
+    earnings = {
+        "today": round(_earned(_completed_since(start_day)), 2),
+        "week": round(_earned(_completed_since(start_week)), 2),
+        "month": round(_earned(_completed_since(start_month)), 2),
+        "all_time": round(_earned(completed), 2),
+        "completed_count": len(completed),
+    }
+
+    # Bids
+    active_bids = await db.bids.find(
+        {"driver_id": user["id"], "status": {"$in": ["pending", "outbid"]}}
+    ).to_list(200)
+    accepted_bids = await db.bids.count_documents({"driver_id": user["id"], "status": "accepted"})
+
+    # Ratings
+    reviews = await db.reviews.find({"driver_id": user["id"]}).to_list(500)
+    if reviews:
+        avg = sum(float(r.get("rating", 0)) for r in reviews) / len(reviews)
+    else:
+        avg = float(user.get("rating") or 5.0)
+
+    # Docs / verification snapshot
+    docs = await db.driver_documents.find({"user_id": user["id"]}).to_list(50)
+    docs_verified = sum(1 for d in docs if d.get("status") == "approved")
+    docs_pending = sum(1 for d in docs if d.get("status") in (None, "pending", "submitted"))
+    docs_rejected = sum(1 for d in docs if d.get("status") == "rejected")
+
+    # Nearby posted-job count (radius 75 default)
+    posted = await db.jobs.find({"status": "posted"}, {"_id": 0, "id": 1}).to_list(1000)
+    nearby_count = len(posted)  # driver home also filters by radius using /jobs/nearby
+
+    # Enrich upcoming with the job snippet
+    upcoming.sort(key=lambda b: b.get("created_at", ""))
+    enriched_upcoming: list[dict] = []
+    for b in upcoming[:5]:
+        j = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0})
+        enriched_upcoming.append({
+            "id": b.get("id"),
+            "job_id": b.get("job_id"),
+            "status": b.get("status"),
+            "total_price": b.get("total_price"),
+            "driver_charge": b.get("driver_charge"),
+            "pickup_town": (j or {}).get("pickup_town"),
+            "dropoff_town": (j or {}).get("dropoff_town"),
+            "title": (j or {}).get("title"),
+            "requested_pickup_at": (j or {}).get("requested_pickup_at"),
+        })
+
+    return {
+        "user": {
+            "id": user["id"],
+            "name": user.get("name"),
+            "status": user.get("status"),
+            "rating": round(avg, 2),
+            "review_count": len(reviews),
+        },
+        "fleet": {
+            "count": len(fleet_docs),
+            "active_count": len(fleet_active),
+            "capabilities": sorted(fleet_caps_flat),
+            "vehicles": [
+                {
+                    "id": f.get("id"),
+                    "vehicle_type_name": f.get("vehicle_type_name"),
+                    "registration": f.get("registration"),
+                    "status": f.get("status"),
+                    "is_default": bool(f.get("is_default")),
+                }
+                for f in fleet_docs
+            ],
+        },
+        "earnings": earnings,
+        "bids": {
+            "active": len(active_bids),
+            "accepted": accepted_bids,
+        },
+        "jobs": {
+            "nearby_count": nearby_count,
+            "active_count": len(active),
+            "upcoming_count": len(upcoming),
+            "upcoming": enriched_upcoming,
+        },
+        "verification": {
+            "docs_verified": docs_verified,
+            "docs_pending": docs_pending,
+            "docs_rejected": docs_rejected,
+            "account_status": user.get("status"),
+        },
+    }
 
 
 # ---- Admin analytics ----

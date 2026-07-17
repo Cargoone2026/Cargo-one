@@ -5,6 +5,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
+import { GlobalSearchModal } from "@/src/components/GlobalSearchModal";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
 
@@ -13,6 +14,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,8 +38,18 @@ export default function AdminDashboard() {
             <Text style={styles.title}>Admin Console</Text>
             <Text style={styles.sub}>Welcome, {user?.name}</Text>
           </View>
-          <View style={styles.logoBadge}>
-            <Ionicons name="shield-checkmark" size={22} color="#fff" />
+          <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
+            <Pressable
+              onPress={() => setSearchOpen(true)}
+              style={styles.searchBtn}
+              testID="admin-search-open"
+              accessibilityLabel="Search"
+            >
+              <Ionicons name="search" size={20} color="#fff" />
+            </Pressable>
+            <View style={styles.logoBadge}>
+              <Ionicons name="shield-checkmark" size={22} color="#fff" />
+            </View>
           </View>
         </View>
       </SafeAreaView>
@@ -128,6 +140,13 @@ export default function AdminDashboard() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <GlobalSearchModal
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        scope="all"
+        placeholder="Search users, jobs, categories…"
+      />
     </View>
   );
 }
@@ -156,6 +175,10 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 44, height: 44, borderRadius: 12, backgroundColor: colors.brand,
     alignItems: "center", justifyContent: "center",
+  },
+  searchBtn: {
+    width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.md },
   metricRow: { flexDirection: "row", gap: spacing.md },

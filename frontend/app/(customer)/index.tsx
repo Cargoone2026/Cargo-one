@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { StatusPill } from "@/src/components/StatusPill";
+import { GlobalSearchModal } from "@/src/components/GlobalSearchModal";
 import { api } from "@/src/api/client";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, font, radius, shadow, spacing, weight } from "@/src/theme";
@@ -24,6 +25,7 @@ export default function CustomerHome() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -59,14 +61,24 @@ export default function CustomerHome() {
             <Text style={styles.hello}>Hey {user?.name?.split(" ")[0] || "there"} 👋</Text>
             <Text style={styles.slogan}>Ship Anything. Anywhere.</Text>
           </View>
-          <Pressable
-            style={styles.notifBtn}
-            onPress={() => router.push("/(customer)/messages")}
-            testID="notifications-button"
-          >
-            <Ionicons name="notifications-outline" size={22} color={colors.text} />
-            {notes.filter((n) => !n.read).length > 0 && <View style={styles.notifDot} />}
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <Pressable
+              style={styles.notifBtn}
+              onPress={() => setSearchOpen(true)}
+              testID="customer-search-button"
+              accessibilityLabel="Search"
+            >
+              <Ionicons name="search" size={22} color={colors.text} />
+            </Pressable>
+            <Pressable
+              style={styles.notifBtn}
+              onPress={() => router.push("/(customer)/messages")}
+              testID="notifications-button"
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.text} />
+              {notes.filter((n) => !n.read).length > 0 && <View style={styles.notifDot} />}
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -74,6 +86,16 @@ export default function CustomerHome() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.brand} />}
       >
+        {/* Search prompt */}
+        <Pressable
+          onPress={() => setSearchOpen(true)}
+          style={styles.searchPill}
+          testID="customer-search-pill"
+        >
+          <Ionicons name="search" size={18} color={colors.textSecondary} />
+          <Text style={styles.searchPillText}>Search categories, vehicles or jobs…</Text>
+        </Pressable>
+
         {/* Hero Post Job */}
         <Pressable
           onPress={() => router.push("/(customer)/post-job")}
@@ -194,6 +216,13 @@ export default function CustomerHome() {
           ))}
         </View>
       </ScrollView>
+
+      <GlobalSearchModal
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        scope="all"
+        placeholder="Search categories, vehicles or your jobs…"
+      />
     </View>
   );
 }
@@ -218,6 +247,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
   },
   scroll: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.md },
+  searchPill: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    backgroundColor: colors.bgSecondary, borderRadius: radius.md,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  searchPillText: { color: colors.textSecondary, fontSize: font.base, flex: 1 },
   hero: { height: 200, borderRadius: radius.lg, overflow: "hidden", ...shadow.md },
   heroBg: { flex: 1, justifyContent: "flex-end" },
   heroContent: { padding: spacing.xl, gap: spacing.sm },

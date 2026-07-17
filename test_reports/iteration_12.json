@@ -1,0 +1,54 @@
+{
+  "summary": "Wave 3 Phase B (increment 1) backend testing complete. Ran 19 pytest cases covering GET /api/search (public, driver, customer, admin, malformed JWT, scope=marketing) and GET /api/driver/dashboard (schema + RBAC for driver/customer/admin), plus regression checks for auth/login, catalog endpoints, admin/stats and jobs/nearby. ALL 19 TESTS PASSED. However, a critical code review uncovered two real bugs in the driver dashboard aggregation that the schema-only tests do not catch: it queries the wrong collection/field names, so review-based rating and documents-verification counts are always empty for drivers. Reporting to main agent for a fix.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/driver/dashboard",
+        "issue": "Bug in review lookup: server.py:2170 queries db.reviews with {'driver_id': user['id']} but reviews are stored with 'target_id' (see server.py:1357 & 1367). As a result the dashboard's user.rating always falls back to the stored value and user.review_count is always 0 regardless of how many reviews the driver has received.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "GET /api/driver/dashboard",
+        "issue": "Bug in documents lookup: server.py:2177 queries db.driver_documents but driver uploads are actually inserted into db.documents (see server.py:549). Consequently verification.docs_verified / docs_pending / docs_rejected are always 0 on the dashboard, even when the driver has uploaded/approved docs.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/driver/dashboard",
+        "issue": "Week-start calc (server.py:2105) uses `start_day.replace(day=start_day.day - start_day.weekday())`. This raises ValueError when the current day-of-month is less than or equal to the weekday index (e.g. Tue 1st of a month => day=0). Use `start_day - timedelta(days=start_day.weekday())` instead."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave3_phaseB_search_and_driver_dashboard.py",
+    "/app/test_reports/pytest/wave3_phaseB_results.xml"
+  ],
+  "action_items": [
+    "Fix server.py:2170 — change `{'driver_id': user['id']}` to `{'target_id': user['id']}` so driver rating & review_count reflect real reviews.",
+    "Fix server.py:2177 — change collection name from `db.driver_documents` to `db.documents` so verification counts on the dashboard aggregate real driver documents.",
+    "Fix server.py:2105 week-start calc to use `start_day - timedelta(days=start_day.weekday())` to avoid ValueError near month boundaries.",
+    "Consider adding an integration-style test that seeds a review + driver doc for driver1 and asserts these fields propagate through /api/driver/dashboard."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2719 lines — continues to grow; consider splitting driver/admin/search routes into their own modules (search_service.py is already a good start).",
+    "/api/search uses regex over 7+ text fields on every query with $or; add MongoDB text indexes on jobs.title/description/pickup_town/dropoff_town/category to keep this performant at scale.",
+    "In /api/search the users lookup regex is also applied to `id` (UUID) which will only match if the query is a UUID substring — fine but worth noting.",
+    "Driver dashboard bookings query does not project fields; on large drivers this will load all booking fields into memory (500 doc cap). Consider a projection."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave3_phaseB_search_and_driver_dashboard.py (new)"
+  ],
+  "success_rate": {"backend": "100% (19/19 tests passed)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No new seed data created. Used existing seeded users (admin@cargoone.com, driver1@cargoone.com, cust1@cargoone.com).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Existing pytest file at /app/backend/tests/test_wave3_phaseB_search_and_driver_dashboard.py covers /api/search & /api/driver/dashboard. After the two collection/field fixes on driver dashboard, add an assertion that verifies review_count and verification.docs_verified reflect seeded data. BASE_URL resolved via EXPO_PUBLIC_BACKEND_URL (frontend/.env sets that; EXPO_BACKEND_URL is not set in this environment).",
+  "rca_of_issue": "Two mismatched collection/field names in /api/driver/dashboard: (1) reviews are inserted with target_id but the dashboard filters by driver_id, so it never finds them; (2) documents are inserted into db.documents but the dashboard reads db.driver_documents, so all verification counts stay at 0. Root cause: aggregation code was written against a different naming convention than the rest of the codebase. Reproduction: log in as driver1, approve their docs via admin, complete a booking + leave a review targeting driver1, then GET /api/driver/dashboard — user.review_count and verification.docs_verified will still be 0. Mitigation: update the two queries to use the correct collection and field names."
+}
