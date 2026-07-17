@@ -360,3 +360,111 @@ agent_communication:
     -agent: "testing"
     -message: "Iteration 10 (Wave 3 backend) — 14/14 PASSED. Test file: /app/backend/tests/test_wave3_catalog.py, JUnit: /app/test_reports/pytest/wave3_results.xml. Coverage: (a) GET /api/catalog/categories returns exactly 26 items, ordered by 'order', all active, full schema (id/key/name/description/icon/order/active/default_vehicles/typical_weight_kg/typical_volume_m3). (b) GET /api/catalog/vehicles returns exactly 16 items, ordered, full schema (max_weight_kg/max_volume_m3/features). (c) include_inactive=true still returns all 26. (d) POST /api/catalog/recommend-vehicle: parcels+5kg → motorcycle_courier first, 4 ranked items with correct labels {Best value ⭐, Roomier option, Larger alternative, Extra capacity} and is_best_match only on first; house_removals+1500kg+22m³+loading_help → tail-lift vehicle in top ranks; machinery_plant+6000kg+forklift → hiab_crane/flatbed in top 3; documents → motorcycle_courier first; unknown key → 404 'Unknown or inactive category'; dims 1×0.5×0.3 → computed_volume_m3 == 0.15. (e) Admin CRUD: list returns ≥26, create with valid unique key returns doc with id + timestamps, duplicate key → 400, PUT order+active=false reflected on GET, public GET hides disabled row while include_inactive=true still lists it, DELETE returns 200 and row is gone — same cycle green for vehicles. (f) GET /api/quote/estimate with legacy 'furniture' → category_key normalized to 'furniture_delivery' with vehicle label populated; 'shipping_containers' + 5000kg + 30m³ → vehicle in {Hiab Crane Vehicle, Articulated HGV, Flatbed Truck} and price strictly greater than baseline (weight+volume bump verified). No blockers, no minor issues. Legacy-job auto-migration (item 5 in the request) was NOT tested because it triggers on backend startup and Wave 3 test scope explicitly says 'skip if restart isn't possible' — main agent can verify by inserting a doc with category='furniture' directly, restarting backend, and checking legacy_category is set. Fixture note: /api/auth/login returns 'access_token' (not 'token') — tests handle both keys."
 
+
+# RC1 Wave 3 Phase 2 — Capabilities, Driver Fleet & Analytics
+
+backend:
+  - task: "Vehicle capabilities catalog"
+    implemented: true
+    working: "NA"
+    file: "backend/vehicle_capabilities.py, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New `vehicle_capabilities` collection seeded with 21 items. Public GET /api/catalog/capabilities. Admin CRUD at /api/admin/catalog/capabilities. Featured flag supported."
+
+  - task: "Featured flags on categories & vehicles"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added `featured` field to categories & vehicles. 15 categories auto-marked featured on first seed. Admin PUT supports toggling."
+
+  - task: "Driver vehicle fleet CRUD"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New `driver_vehicles` collection. GET/POST/PUT/DELETE /api/driver/vehicles (driver auth). Fields: vehicle_type_key + registration (unique per driver) + make/model/year, payload_kg, internal dims, capabilities[], insurance_expiry, mot_expiry, photos[] (base64), is_default. Enforces unique registration per driver, only one default."
+
+  - task: "Enhanced recommender — required_capabilities + reason"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "POST /api/catalog/recommend-vehicle now accepts required_capabilities[] (hard-filter) and distance_miles. Each recommendation now includes a human `reason` string explaining suitability."
+
+  - task: "Admin analytics endpoint"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GET /api/admin/analytics/overview returns marketplace (jobs/completion/revenue), categories (top requested/vehicles/capabilities/routes/revenue splits), drivers (total/verified/top rated/highest earning/most active), customers (total/repeat/most active/avg rating), operational (avg winning bid/distance/time/booking value)."
+
+frontend:
+  - task: "Admin Catalogue Management UI"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(admin)/catalog.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Tabbed screen (Categories / Vehicles / Capabilities). Each row supports reorder ↑↓, featured toggle, active toggle, edit modal, delete. Editor modal covers name/key/description/icon/order + type-specific fields (typicals for categories, max weight/volume for vehicles)."
+
+  - task: "Admin Analytics Dashboard"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(admin)/analytics.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Comprehensive KPI grid + Top-lists. Sections: Marketplace / Revenue / Categories & Vehicles / Drivers / Customers / Operational. Pull-to-refresh."
+
+  - task: "Driver Fleet Management UI"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(driver)/fleet.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Driver can view/add/edit/delete their vehicles. Editor modal has vehicle-type picker, reg/make/model/year/payload, internal L×W×H, insurance/MOT expiry (highlights if <60 days), full capabilities picker (chip toggle), default toggle. Fleet cards show capability chips + expiry warnings."
+
+agent_communication:
+    -agent: "main"
+    -message: "Wave 3 Phase 2 core built. Please test the new backend endpoints thoroughly and confirm existing endpoints (auth/jobs/bids/bookings/deposit/wave-3-phase-1 catalog) still work unchanged. Also validate: (1) capabilities CRUD + duplicate-key 400; (2) driver fleet CRUD with unique registration per driver + is_default idempotency; (3) recommender rejects unknown capabilities correctly; (4) analytics overview returns all 5 top-level sections with the exact keys listed above; (5) featured toggle propagates."
+
+    -agent: "testing"
+    -message: "Wave 3 Phase 2 BACKEND testing COMPLETE — 14/14 pytest tests PASSED against http://localhost:8001. File: /app/backend/tests/test_wave3_phase2.py (JUnit: /app/test_reports/pytest/wave3_phase2_results.xml).\n\nCoverage:\n  1) Capabilities catalog — public GET returns exactly 21 active items with correct schema (id/key/name/description/icon/order/active/featured). include_inactive=true works. Admin GET requires admin (driver → 403). POST auto-generates key from name (verified 'test_w3p2_cap_<hex>'). Duplicate POST → 400. PUT {active:false, featured:true} reflected; disabled row hidden from default public GET but visible with include_inactive=true. DELETE removes it.\n  2) Featured flag — 15 categories have featured=true after startup seed (>= 10 required). All vehicles carry a boolean featured. Admin PUT toggling {featured:false} on a category reflected on next public GET (restored afterwards). Same behaviour verified for vehicles.\n  3) Driver fleet CRUD — Fresh driver starts with empty list. POST lwb_van/AB<rand> XYZ returns id + server-set driver_id + inferred vehicle_type_name='Long Wheel Base Van' + capabilities persisted. Duplicate registration for same driver → 400. Unknown vehicle_type_key → 400. Second POST with is_default=true flips first vehicle's is_default to false (verified via GET). PUT updates capabilities/photos/mot_expiry reflected. DELETE returns 200.\n  4) Enhanced recommender — required_capabilities=['tail_lift'] hard-filters recommendations (every returned vehicle has tail_lift in capabilities OR features), all carry a non-empty `reason`, and only the first has is_best_match=true. required_capabilities=['nonexistent_cap'] returns 200 with recommendations=[] (no crash). Baseline call (no required_capabilities) still populates reason on every rec.\n  5) Admin analytics overview — GET /api/admin/analytics/overview returns 200 with all 5 top-level sections (marketplace, categories, drivers, customers, operational) and every required sub-key. All list fields (top_requested, top_vehicles, top_capabilities, top_routes, revenue_by_category, revenue_by_vehicle, top_rated, highest_earning, most_active, customers.most_active) are arrays. Non-admin JWT (driver) → 403.\n\nNo issues found. Wave 3 Phase 2 backend endpoints are all green and ready for frontend integration."
+

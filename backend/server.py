@@ -30,6 +30,7 @@ from service_catalog import (
     VEHICLE_SEED,
     recommend_vehicles,
 )
+from vehicle_capabilities import CAPABILITY_SEED
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
@@ -1586,11 +1587,19 @@ class VehicleRecommendRequest(BaseModel):
     item_count: Optional[int] = None
     needs_forklift: Optional[bool] = False
     needs_loading_help: Optional[bool] = False
+    required_capabilities: Optional[list[str]] = None
+    distance_miles: Optional[float] = None
 
 
 @api.post("/catalog/recommend-vehicle")
 async def recommend_vehicle(payload: VehicleRecommendRequest):
-    """Rule-based multi-vehicle recommendation for the 'Not Sure' path."""
+    """Rule-based multi-vehicle recommendation for the 'Not Sure' path.
+
+    Considers category, weight, volume, item count, loading equipment needs,
+    distance and any explicitly required capabilities (e.g. refrigerated, hiab_crane).
+    Returns up to 4 ranked vehicles with `recommendation_label`, `is_best_match`
+    and a human-readable `reason` explaining why the vehicle was suggested.
+    """
     cat = await db.service_categories.find_one({"key": payload.category_key, "active": True})
     if not cat:
         raise HTTPException(status_code=404, detail="Unknown or inactive category")
@@ -1599,6 +1608,14 @@ async def recommend_vehicle(payload: VehicleRecommendRequest):
     volume = payload.volume_m3
     if not volume and all(v is not None for v in [payload.dimensions_l_m, payload.dimensions_w_m, payload.dimensions_h_m]):
         volume = float(payload.dimensions_l_m) * float(payload.dimensions_w_m) * float(payload.dimensions_h_m)
+
+    # Filter by required capabilities before ranking (hard filter)
+    req_caps = set(payload.required_capabilities or [])
+    if req_caps:
+        vehicles = [
+            v for v in vehicles
+            if req_caps.issubset(set((v.get("capabilities") or []) + (v.get("features") or [])))
+        ]
 
     ranked = recommend_vehicles(
         vehicles,
@@ -1610,10 +1627,28 @@ async def recommend_vehicle(payload: VehicleRecommendRequest):
         needs_loading_help=bool(payload.needs_loading_help),
         limit=4,
     )
+
+    # Attach a human-readable reason
+    labels = ["best-value fit for your load", "roomier alternative with spare capacity",
+              "larger vehicle if you have more to move", "extra capacity if you're unsure"]
+    out = []
+    for i, v in enumerate(ranked):
+        reasons = []
+        if v.get("capabilities") and req_caps and req_caps.intersection(set(v["capabilities"])):
+            reasons.append("supports required capabilities")
+        if payload.needs_loading_help and ("tail_lift" in (v.get("capabilities") or []) or "tail_lift" in (v.get("features") or [])):
+            reasons.append("has tail-lift for loading assistance")
+        if payload.needs_forklift and ("hiab_crane" in (v.get("capabilities") or []) or "crane" in (v.get("features") or [])):
+            reasons.append("hiab crane on board")
+        reasons.append(labels[i] if i < len(labels) else "alternative choice")
+        clean = _clean_doc(dict(v))
+        clean["reason"] = "; ".join(reasons)
+        out.append(clean)
+
     return {
         "category": _clean_doc(cat),
         "computed_volume_m3": volume,
-        "recommendations": [_clean_doc(dict(v)) for v in ranked],
+        "recommendations": out,
     }
 
 
@@ -1626,6 +1661,7 @@ class CategoryUpsert(BaseModel):
     icon: Optional[str] = "cube"
     order: Optional[int] = 0
     active: Optional[bool] = True
+    featured: Optional[bool] = False
     default_vehicles: Optional[list[str]] = None
     typical_weight_kg: Optional[float] = None
     typical_volume_m3: Optional[float] = None
@@ -1650,6 +1686,7 @@ async def admin_create_category(payload: CategoryUpsert, _: dict = Depends(requi
         "icon": (payload.icon or "cube").strip(),
         "order": int(payload.order or 0),
         "active": bool(payload.active),
+        "featured": bool(payload.featured),
         "default_vehicles": payload.default_vehicles or [],
         "typical_weight_kg": payload.typical_weight_kg,
         "typical_volume_m3": payload.typical_volume_m3,
@@ -1663,7 +1700,7 @@ async def admin_create_category(payload: CategoryUpsert, _: dict = Depends(requi
 @api.put("/admin/catalog/categories/{cat_id}")
 async def admin_update_category(cat_id: str, payload: CategoryUpsert, _: dict = Depends(require_role("admin"))):
     update: dict = {"updated_at": now_iso()}
-    for field in ("name", "description", "icon", "order", "active", "default_vehicles", "typical_weight_kg", "typical_volume_m3"):
+    for field in ("name", "description", "icon", "order", "active", "featured", "default_vehicles", "typical_weight_kg", "typical_volume_m3"):
         val = getattr(payload, field, None)
         if val is not None:
             update[field] = val
@@ -1691,9 +1728,11 @@ class VehicleUpsert(BaseModel):
     icon: Optional[str] = "car"
     order: Optional[int] = 0
     active: Optional[bool] = True
+    featured: Optional[bool] = False
     max_weight_kg: Optional[float] = 0
     max_volume_m3: Optional[float] = None
     features: Optional[list[str]] = None
+    capabilities: Optional[list[str]] = None
 
 
 @api.get("/admin/catalog/vehicles")
@@ -1715,9 +1754,11 @@ async def admin_create_vehicle(payload: VehicleUpsert, _: dict = Depends(require
         "icon": (payload.icon or "car").strip(),
         "order": int(payload.order or 0),
         "active": bool(payload.active),
+        "featured": bool(payload.featured),
         "max_weight_kg": payload.max_weight_kg or 0,
         "max_volume_m3": payload.max_volume_m3,
         "features": payload.features or [],
+        "capabilities": payload.capabilities or [],
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
@@ -1728,7 +1769,7 @@ async def admin_create_vehicle(payload: VehicleUpsert, _: dict = Depends(require
 @api.put("/admin/catalog/vehicles/{veh_id}")
 async def admin_update_vehicle(veh_id: str, payload: VehicleUpsert, _: dict = Depends(require_role("admin"))):
     update: dict = {"updated_at": now_iso()}
-    for field in ("name", "description", "icon", "order", "active", "max_weight_kg", "max_volume_m3", "features"):
+    for field in ("name", "description", "icon", "order", "active", "featured", "max_weight_kg", "max_volume_m3", "features", "capabilities"):
         val = getattr(payload, field, None)
         if val is not None:
             update[field] = val
@@ -1745,6 +1786,438 @@ async def admin_delete_vehicle(veh_id: str, _: dict = Depends(require_role("admi
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return {"ok": True}
+
+
+# ---- Public + admin vehicle capabilities catalogue ----
+
+class CapabilityUpsert(BaseModel):
+    key: Optional[str] = None
+    name: str
+    description: Optional[str] = ""
+    icon: Optional[str] = "checkmark-circle"
+    order: Optional[int] = 0
+    active: Optional[bool] = True
+    featured: Optional[bool] = False
+
+
+@api.get("/catalog/capabilities")
+async def list_capabilities(include_inactive: bool = False):
+    q = {} if include_inactive else {"active": True}
+    docs = await db.vehicle_capabilities.find(q).sort("order", 1).to_list(200)
+    return [_clean_doc(d) for d in docs]
+
+
+@api.get("/admin/catalog/capabilities")
+async def admin_list_capabilities(_: dict = Depends(require_role("admin"))):
+    docs = await db.vehicle_capabilities.find({}).sort("order", 1).to_list(200)
+    return [_clean_doc(d) for d in docs]
+
+
+@api.post("/admin/catalog/capabilities")
+async def admin_create_capability(payload: CapabilityUpsert, _: dict = Depends(require_role("admin"))):
+    key = (payload.key or payload.name.lower().replace(" ", "_")).strip()
+    if await db.vehicle_capabilities.find_one({"key": key}):
+        raise HTTPException(status_code=400, detail=f"Capability with key '{key}' already exists")
+    doc = {
+        "id": new_id(),
+        "key": key,
+        "name": payload.name.strip(),
+        "description": (payload.description or "").strip(),
+        "icon": (payload.icon or "checkmark-circle").strip(),
+        "order": int(payload.order or 0),
+        "active": bool(payload.active),
+        "featured": bool(payload.featured),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.vehicle_capabilities.insert_one(doc)
+    return _clean_doc(doc)
+
+
+@api.put("/admin/catalog/capabilities/{cap_id}")
+async def admin_update_capability(cap_id: str, payload: CapabilityUpsert, _: dict = Depends(require_role("admin"))):
+    update = {"updated_at": now_iso()}
+    for f in ("name", "description", "icon", "order", "active", "featured"):
+        v = getattr(payload, f, None)
+        if v is not None:
+            update[f] = v
+    result = await db.vehicle_capabilities.update_one({"id": cap_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Capability not found")
+    return _clean_doc(await db.vehicle_capabilities.find_one({"id": cap_id}))
+
+
+@api.delete("/admin/catalog/capabilities/{cap_id}")
+async def admin_delete_capability(cap_id: str, _: dict = Depends(require_role("admin"))):
+    result = await db.vehicle_capabilities.delete_one({"id": cap_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Capability not found")
+    return {"ok": True}
+
+
+# ---- Driver vehicle profiles (fleet management) ----
+
+class DriverVehicleUpsert(BaseModel):
+    vehicle_type_key: str
+    registration: str
+    make: Optional[str] = ""
+    model: Optional[str] = ""
+    year: Optional[int] = None
+    payload_kg: Optional[float] = None
+    max_weight_kg: Optional[float] = None
+    internal_length_m: Optional[float] = None
+    internal_width_m: Optional[float] = None
+    internal_height_m: Optional[float] = None
+    capabilities: Optional[list[str]] = None
+    insurance_expiry: Optional[str] = None
+    mot_expiry: Optional[str] = None
+    photos: Optional[list[str]] = None  # base64 data URLs (S3/CDN in future — see photo_url helpers)
+    is_default: Optional[bool] = False
+
+
+def _photo_url(photo: str) -> str:
+    """Abstraction so future migration to S3/R2 is transparent.
+    Currently returns the base64 data URL unchanged. In future, if `photo`
+    looks like an s3://, http:// or storage-backed key, we can rewrite it here."""
+    return photo
+
+
+@api.get("/driver/vehicles")
+async def list_driver_vehicles(user: dict = Depends(require_role("driver"))):
+    docs = await db.driver_vehicles.find({"driver_id": user["id"]}).sort("created_at", 1).to_list(50)
+    for d in docs:
+        d.pop("_id", None)
+        if d.get("photos"):
+            d["photos"] = [_photo_url(p) for p in d["photos"]]
+    return docs
+
+
+@api.post("/driver/vehicles")
+async def create_driver_vehicle(payload: DriverVehicleUpsert, user: dict = Depends(require_role("driver"))):
+    vt = await db.vehicle_types.find_one({"key": payload.vehicle_type_key, "active": True})
+    if not vt:
+        raise HTTPException(status_code=400, detail="Unknown or inactive vehicle_type_key")
+    reg = payload.registration.strip().upper()
+    if not reg:
+        raise HTTPException(status_code=400, detail="Registration is required")
+    # Enforce unique registration per driver
+    if await db.driver_vehicles.find_one({"driver_id": user["id"], "registration": reg}):
+        raise HTTPException(status_code=400, detail="You already registered this vehicle")
+
+    if payload.is_default:
+        await db.driver_vehicles.update_many({"driver_id": user["id"]}, {"$set": {"is_default": False}})
+
+    doc = {
+        "id": new_id(),
+        "driver_id": user["id"],
+        "vehicle_type_key": payload.vehicle_type_key,
+        "vehicle_type_name": vt.get("name"),
+        "registration": reg,
+        "make": (payload.make or "").strip(),
+        "model": (payload.model or "").strip(),
+        "year": payload.year,
+        "payload_kg": payload.payload_kg,
+        "max_weight_kg": payload.max_weight_kg or vt.get("max_weight_kg"),
+        "internal_length_m": payload.internal_length_m,
+        "internal_width_m": payload.internal_width_m,
+        "internal_height_m": payload.internal_height_m,
+        "capabilities": payload.capabilities or [],
+        "insurance_expiry": payload.insurance_expiry,
+        "mot_expiry": payload.mot_expiry,
+        "photos": payload.photos or [],
+        "is_default": bool(payload.is_default),
+        "status": "active",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.driver_vehicles.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.put("/driver/vehicles/{veh_id}")
+async def update_driver_vehicle(veh_id: str, payload: DriverVehicleUpsert, user: dict = Depends(require_role("driver"))):
+    existing = await db.driver_vehicles.find_one({"id": veh_id, "driver_id": user["id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    update = {"updated_at": now_iso()}
+    if payload.is_default:
+        await db.driver_vehicles.update_many({"driver_id": user["id"]}, {"$set": {"is_default": False}})
+    for f in ("vehicle_type_key", "make", "model", "year", "payload_kg", "max_weight_kg",
+              "internal_length_m", "internal_width_m", "internal_height_m", "capabilities",
+              "insurance_expiry", "mot_expiry", "photos", "is_default"):
+        v = getattr(payload, f, None)
+        if v is not None:
+            update[f] = v
+    if payload.vehicle_type_key:
+        vt = await db.vehicle_types.find_one({"key": payload.vehicle_type_key})
+        if vt:
+            update["vehicle_type_name"] = vt.get("name")
+    await db.driver_vehicles.update_one({"id": veh_id}, {"$set": update})
+    d = await db.driver_vehicles.find_one({"id": veh_id})
+    d.pop("_id", None)
+    return d
+
+
+@api.delete("/driver/vehicles/{veh_id}")
+async def delete_driver_vehicle(veh_id: str, user: dict = Depends(require_role("driver"))):
+    r = await db.driver_vehicles.delete_one({"id": veh_id, "driver_id": user["id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    return {"ok": True}
+
+
+# ---- Admin analytics ----
+
+@api.get("/admin/analytics/overview")
+async def analytics_overview(_: dict = Depends(require_role("admin"))):
+    """Marketplace + operational + categories + drivers + customers snapshots."""
+    jobs_col = db.jobs
+    bookings_col = db.bookings
+    reviews_col = db.reviews
+    bids_col = db.bids
+    users_col = db.users
+
+    # ---- Marketplace headline metrics ----
+    jobs_posted     = await jobs_col.count_documents({})
+    jobs_completed  = await jobs_col.count_documents({"status": "completed"})
+    jobs_cancelled  = await jobs_col.count_documents({"status": "cancelled"})
+    jobs_active     = await jobs_col.count_documents({"status": {"$in": ["open", "assigned", "in_progress"]}})
+    completion_rate = round((jobs_completed / jobs_posted * 100) if jobs_posted else 0, 1)
+
+    # ---- Revenue (Booking-fee = platform revenue; driver charge = pass-through) ----
+    revenue_agg = await bookings_col.aggregate([
+        {"$group": {
+            "_id": None,
+            "total_customer": {"$sum": {"$ifNull": ["$customer_total", 0]}},
+            "total_driver":   {"$sum": {"$ifNull": ["$driver_charge", 0]}},
+            "total_fee":      {"$sum": {"$ifNull": ["$booking_fee", 0]}},
+            "count":          {"$sum": 1},
+        }},
+    ]).to_list(1)
+    revenue = revenue_agg[0] if revenue_agg else {"total_customer": 0, "total_driver": 0, "total_fee": 0, "count": 0}
+
+    avg_booking_value = round(revenue["total_customer"] / revenue["count"], 2) if revenue["count"] else 0
+
+    # ---- Categories: most requested, revenue by category ----
+    top_cats = await jobs_col.aggregate([
+        {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]).to_list(20)
+    # Enrich with names
+    cat_docs = {c["key"]: c for c in await db.service_categories.find({}).to_list(200)}
+    top_categories = [
+        {
+            "key": r["_id"],
+            "name": cat_docs.get(r["_id"], {}).get("name", r["_id"]),
+            "count": r["count"],
+        }
+        for r in top_cats if r["_id"]
+    ]
+
+    # Revenue by category (via bookings joined to jobs)
+    revenue_by_cat_raw = await bookings_col.aggregate([
+        {"$lookup": {"from": "jobs", "localField": "job_id", "foreignField": "id", "as": "job"}},
+        {"$unwind": "$job"},
+        {"$group": {
+            "_id": "$job.category",
+            "customer_total": {"$sum": {"$ifNull": ["$customer_total", 0]}},
+            "booking_fee":    {"$sum": {"$ifNull": ["$booking_fee", 0]}},
+            "count":          {"$sum": 1},
+        }},
+        {"$sort": {"customer_total": -1}},
+    ]).to_list(50)
+    revenue_by_category = [
+        {
+            "key": r["_id"],
+            "name": cat_docs.get(r["_id"], {}).get("name", r["_id"] or "—"),
+            "count": r["count"],
+            "customer_total": round(r["customer_total"], 2),
+            "booking_fee": round(r["booking_fee"], 2),
+        }
+        for r in revenue_by_cat_raw if r["_id"]
+    ]
+
+    # Revenue by vehicle type
+    veh_docs = {v["key"]: v for v in await db.vehicle_types.find({}).to_list(200)}
+    revenue_by_veh_raw = await bookings_col.aggregate([
+        {"$lookup": {"from": "jobs", "localField": "job_id", "foreignField": "id", "as": "job"}},
+        {"$unwind": "$job"},
+        {"$group": {
+            "_id": "$job.vehicle_required",
+            "customer_total": {"$sum": {"$ifNull": ["$customer_total", 0]}},
+            "booking_fee":    {"$sum": {"$ifNull": ["$booking_fee", 0]}},
+            "count":          {"$sum": 1},
+        }},
+        {"$sort": {"customer_total": -1}},
+    ]).to_list(50)
+    revenue_by_vehicle = [
+        {
+            "key": r["_id"],
+            "name": veh_docs.get(r["_id"], {}).get("name", r["_id"] or "—"),
+            "count": r["count"],
+            "customer_total": round(r["customer_total"], 2),
+            "booking_fee": round(r["booking_fee"], 2),
+        }
+        for r in revenue_by_veh_raw if r["_id"]
+    ]
+
+    # Most requested vehicle types (from jobs.vehicle_required)
+    top_veh = await jobs_col.aggregate([
+        {"$match": {"vehicle_required": {"$ne": None}}},
+        {"$group": {"_id": "$vehicle_required", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]).to_list(20)
+    top_vehicles = [
+        {"key": r["_id"], "name": veh_docs.get(r["_id"], {}).get("name", r["_id"]), "count": r["count"]}
+        for r in top_veh if r["_id"]
+    ]
+
+    # Most requested capabilities (from driver_vehicles.capabilities via top jobs)
+    top_caps_raw = await db.driver_vehicles.aggregate([
+        {"$unwind": "$capabilities"},
+        {"$group": {"_id": "$capabilities", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]).to_list(20)
+    cap_docs = {c["key"]: c for c in await db.vehicle_capabilities.find({}).to_list(200)}
+    top_capabilities = [
+        {"key": r["_id"], "name": cap_docs.get(r["_id"], {}).get("name", r["_id"]), "count": r["count"]}
+        for r in top_caps_raw
+    ]
+
+    # Top routes (pickup_town → dropoff_town)
+    top_routes_raw = await jobs_col.aggregate([
+        {"$match": {"pickup_town": {"$ne": None}, "dropoff_town": {"$ne": None}}},
+        {"$group": {"_id": {"from": "$pickup_town", "to": "$dropoff_town"}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]).to_list(20)
+    top_routes = [
+        {"from": r["_id"]["from"], "to": r["_id"]["to"], "count": r["count"]}
+        for r in top_routes_raw
+    ]
+
+    # ---- Drivers ----
+    total_drivers    = await users_col.count_documents({"role": "driver"})
+    verified_drivers = await users_col.count_documents({"role": "driver", "documents_verified": True})
+    top_drivers_raw = await users_col.find({"role": "driver"}).sort([("rating", -1), ("total_jobs", -1)]).limit(10).to_list(10)
+    top_rated_drivers = [
+        {"id": d["id"], "name": d.get("name"), "rating": d.get("rating") or 0, "total_jobs": d.get("total_jobs") or 0}
+        for d in top_drivers_raw
+    ]
+
+    highest_earning_raw = await bookings_col.aggregate([
+        {"$group": {"_id": "$driver_id", "earnings": {"$sum": {"$ifNull": ["$driver_charge", 0]}}, "jobs": {"$sum": 1}}},
+        {"$sort": {"earnings": -1}},
+        {"$limit": 10},
+    ]).to_list(10)
+    driver_lookup = {u["id"]: u for u in await users_col.find({"role": "driver"}).to_list(1000)}
+    highest_earning_drivers = [
+        {
+            "id": r["_id"],
+            "name": (driver_lookup.get(r["_id"]) or {}).get("name", "Unknown"),
+            "earnings": round(r["earnings"], 2),
+            "jobs": r["jobs"],
+        }
+        for r in highest_earning_raw if r["_id"]
+    ]
+
+    most_active_raw = await bookings_col.aggregate([
+        {"$group": {"_id": "$driver_id", "jobs": {"$sum": 1}}},
+        {"$sort": {"jobs": -1}},
+        {"$limit": 10},
+    ]).to_list(10)
+    most_active_drivers = [
+        {"id": r["_id"], "name": (driver_lookup.get(r["_id"]) or {}).get("name", "Unknown"), "jobs": r["jobs"]}
+        for r in most_active_raw if r["_id"]
+    ]
+
+    # ---- Customers ----
+    total_customers = await users_col.count_documents({"role": "customer"})
+    active_customers_raw = await jobs_col.aggregate([
+        {"$group": {"_id": "$customer_id", "jobs": {"$sum": 1}}},
+        {"$sort": {"jobs": -1}},
+        {"$limit": 10},
+    ]).to_list(10)
+    customer_lookup = {u["id"]: u for u in await users_col.find({"role": "customer"}).to_list(2000)}
+    most_active_customers = [
+        {
+            "id": r["_id"],
+            "name": (customer_lookup.get(r["_id"]) or {}).get("name", "Unknown"),
+            "jobs": r["jobs"],
+        }
+        for r in active_customers_raw if r["_id"]
+    ]
+    repeat_customers = sum(1 for c in active_customers_raw if c["jobs"] > 1)
+    avg_customer_rating_agg = await reviews_col.aggregate([
+        {"$lookup": {"from": "users", "localField": "to_id", "foreignField": "id", "as": "to"}},
+        {"$unwind": "$to"},
+        {"$match": {"to.role": "customer"}},
+        {"$group": {"_id": None, "avg": {"$avg": "$rating"}}},
+    ]).to_list(1)
+    avg_customer_rating = round(avg_customer_rating_agg[0]["avg"], 2) if avg_customer_rating_agg else None
+
+    # ---- Operational ----
+    winning_bids_agg = await bids_col.aggregate([
+        {"$match": {"status": "accepted"}},
+        {"$group": {"_id": None, "avg": {"$avg": "$amount"}, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    avg_winning_bid = round(winning_bids_agg[0]["avg"], 2) if winning_bids_agg else 0
+
+    dist_time_agg = await bookings_col.aggregate([
+        {"$lookup": {"from": "jobs", "localField": "job_id", "foreignField": "id", "as": "job"}},
+        {"$unwind": "$job"},
+        {"$group": {"_id": None,
+                    "avg_distance": {"$avg": {"$ifNull": ["$job.distance_miles", 0]}},
+                    "avg_time":     {"$avg": {"$ifNull": ["$job.duration_minutes", 0]}}}},
+    ]).to_list(1)
+    avg_distance = round(dist_time_agg[0]["avg_distance"], 1) if dist_time_agg else 0
+    avg_time = round(dist_time_agg[0]["avg_time"], 0) if dist_time_agg else 0
+
+    return {
+        "marketplace": {
+            "jobs_posted": jobs_posted,
+            "jobs_completed": jobs_completed,
+            "jobs_cancelled": jobs_cancelled,
+            "jobs_active": jobs_active,
+            "completion_rate": completion_rate,
+            "customer_revenue_total": round(revenue["total_customer"], 2),
+            "driver_revenue_total":   round(revenue["total_driver"], 2),
+            "platform_fee_revenue":   round(revenue["total_fee"], 2),
+            "bookings_total": revenue["count"],
+        },
+        "categories": {
+            "top_requested": top_categories,
+            "top_vehicles":  top_vehicles,
+            "top_capabilities": top_capabilities,
+            "top_routes":    top_routes,
+            "revenue_by_category": revenue_by_category,
+            "revenue_by_vehicle":  revenue_by_vehicle,
+        },
+        "drivers": {
+            "total": total_drivers,
+            "verified": verified_drivers,
+            "verification_rate": round(verified_drivers / total_drivers * 100, 1) if total_drivers else 0,
+            "top_rated": top_rated_drivers,
+            "highest_earning": highest_earning_drivers,
+            "most_active": most_active_drivers,
+        },
+        "customers": {
+            "total": total_customers,
+            "repeat": repeat_customers,
+            "most_active": most_active_customers,
+            "avg_customer_rating": avg_customer_rating,
+        },
+        "operational": {
+            "avg_winning_bid": avg_winning_bid,
+            "avg_delivery_distance_miles": avg_distance,
+            "avg_delivery_time_minutes": avg_time,
+            "avg_booking_value": avg_booking_value,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1862,7 +2335,13 @@ async def seed_startup():
             })
         logger.info("Seeded default deposit bands")
 
-    # Seed service categories (idempotent per key)
+    # Seed service categories (idempotent per key). Mark first 15 as featured for the homepage.
+    featured_cats = {
+        "house_removals", "furniture_delivery", "cars_vehicles", "motorcycles",
+        "caravans", "static_caravans", "shipping_containers", "boats_marine",
+        "machinery_plant", "pallets", "freight", "building_materials",
+        "office_commercial", "same_day_express", "parcels",
+    }
     for idx, seed in enumerate(CATEGORY_SEED):
         if not await db.service_categories.find_one({"key": seed["key"]}):
             await db.service_categories.insert_one({
@@ -1873,15 +2352,22 @@ async def seed_startup():
                 "icon": seed.get("icon", "cube"),
                 "order": idx,
                 "active": True,
+                "featured": seed["key"] in featured_cats,
                 "default_vehicles": seed.get("default_vehicles", []),
                 "typical_weight_kg": seed.get("typical_weight_kg"),
                 "typical_volume_m3": seed.get("typical_volume_m3"),
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
             })
+        else:
+            # Ensure featured flag exists on legacy docs (idempotent update)
+            await db.service_categories.update_one(
+                {"key": seed["key"], "featured": {"$exists": False}},
+                {"$set": {"featured": seed["key"] in featured_cats}},
+            )
     logger.info("Ensured %d service categories seeded", len(CATEGORY_SEED))
 
-    # Seed vehicle types (idempotent per key)
+    # Seed vehicle types (idempotent per key). Map default features → capabilities.
     for idx, seed in enumerate(VEHICLE_SEED):
         if not await db.vehicle_types.find_one({"key": seed["key"]}):
             await db.vehicle_types.insert_one({
@@ -1892,13 +2378,38 @@ async def seed_startup():
                 "icon": seed.get("icon", "car"),
                 "order": idx,
                 "active": True,
+                "featured": False,
                 "max_weight_kg": seed.get("max_weight_kg", 0),
                 "max_volume_m3": seed.get("max_volume_m3"),
                 "features": seed.get("features", []),
+                # Bootstrap capabilities from features so old data continues to match
+                "capabilities": seed.get("features", []),
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
             })
+        else:
+            await db.vehicle_types.update_one(
+                {"key": seed["key"], "capabilities": {"$exists": False}},
+                {"$set": {"capabilities": seed.get("features", []), "featured": False}},
+            )
     logger.info("Ensured %d vehicle types seeded", len(VEHICLE_SEED))
+
+    # Seed vehicle capabilities (idempotent per key)
+    for idx, seed in enumerate(CAPABILITY_SEED):
+        if not await db.vehicle_capabilities.find_one({"key": seed["key"]}):
+            await db.vehicle_capabilities.insert_one({
+                "id": new_id(),
+                "key": seed["key"],
+                "name": seed["name"],
+                "description": seed.get("description", ""),
+                "icon": seed.get("icon", "checkmark-circle"),
+                "order": idx,
+                "active": True,
+                "featured": False,
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+    logger.info("Ensured %d vehicle capabilities seeded", len(CAPABILITY_SEED))
 
     # Auto-migrate legacy job categories → new category keys
     migrated = 0

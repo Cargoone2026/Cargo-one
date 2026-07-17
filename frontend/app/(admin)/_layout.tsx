@@ -9,9 +9,11 @@ import { colors } from "@/src/theme";
 
 const NAV: SideRailItem[] = [
   { label: "Dashboard", href: "/(admin)", icon: "grid" },
+  { label: "Analytics", href: "/(admin)/analytics", icon: "bar-chart" },
   { label: "Users", href: "/(admin)/users", icon: "people" },
   { label: "Drivers", href: "/(admin)/manage-drivers", icon: "car-sport" },
   { label: "Jobs", href: "/(admin)/jobs", icon: "cube" },
+  { label: "Catalogue", href: "/(admin)/catalog", icon: "library" },
   { label: "Booking Fees", href: "/(admin)/deposit-bands", icon: "pricetags" },
   { label: "Settings", href: "/(admin)/profile", icon: "settings" },
 ];
@@ -44,6 +46,8 @@ export default function AdminTabs() {
           <Tabs.Screen name="jobs" options={{ title: "Jobs", tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} /> }} />
           <Tabs.Screen name="profile" options={{ title: "Settings", tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} /> }} />
           <Tabs.Screen name="deposit-bands" options={{ href: null }} />
+          <Tabs.Screen name="catalog" options={{ href: null }} />
+          <Tabs.Screen name="analytics" options={{ href: null }} />
         </Tabs>
       </View>
     </View>

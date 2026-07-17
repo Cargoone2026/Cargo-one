@@ -11,6 +11,7 @@ const NAV: SideRailItem[] = [
   { label: "Home", href: "/(driver)", icon: "home" },
   { label: "Nearby Jobs", href: "/(driver)/jobs", icon: "compass" },
   { label: "My Jobs", href: "/(driver)/my-jobs", icon: "cube" },
+  { label: "My Fleet", href: "/(driver)/fleet", icon: "car-sport" },
   { label: "Earnings", href: "/(driver)/earnings", icon: "wallet" },
   { label: "Documents", href: "/(driver)/documents", icon: "document-text" },
   { label: "Profile", href: "/(driver)/profile", icon: "person" },
@@ -46,6 +47,7 @@ export default function DriverTabs() {
           <Tabs.Screen name="job/[id]" options={{ href: null }} />
           <Tabs.Screen name="booking/[id]" options={{ href: null }} />
           <Tabs.Screen name="documents" options={{ href: null }} />
+          <Tabs.Screen name="fleet" options={{ href: null }} />
         </Tabs>
       </View>
     </View>
