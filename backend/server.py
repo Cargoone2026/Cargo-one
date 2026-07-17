@@ -2101,8 +2101,9 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
     stats and vehicle-verification status."""
     now = datetime.now(timezone.utc)
     start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Week starts Monday
-    start_week = start_day.replace(day=start_day.day - start_day.weekday()) if start_day.weekday() > 0 else start_day
+    # Week starts Monday — use timedelta so we don't overflow the month boundary.
+    from datetime import timedelta as _td
+    start_week = start_day - _td(days=start_day.weekday())
     start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     # Fleet
@@ -2166,15 +2167,15 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
     ).to_list(200)
     accepted_bids = await db.bids.count_documents({"driver_id": user["id"], "status": "accepted"})
 
-    # Ratings
-    reviews = await db.reviews.find({"driver_id": user["id"]}).to_list(500)
+    # Ratings — reviews are stored with target_id (the reviewee)
+    reviews = await db.reviews.find({"target_id": user["id"]}).to_list(500)
     if reviews:
         avg = sum(float(r.get("rating", 0)) for r in reviews) / len(reviews)
     else:
         avg = float(user.get("rating") or 5.0)
 
-    # Docs / verification snapshot
-    docs = await db.driver_documents.find({"user_id": user["id"]}).to_list(50)
+    # Docs / verification snapshot — docs live in the `documents` collection
+    docs = await db.documents.find({"user_id": user["id"]}).to_list(50)
     docs_verified = sum(1 for d in docs if d.get("status") == "approved")
     docs_pending = sum(1 for d in docs if d.get("status") in (None, "pending", "submitted"))
     docs_rejected = sum(1 for d in docs if d.get("status") == "rejected")
