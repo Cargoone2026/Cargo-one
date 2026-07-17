@@ -5,9 +5,10 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native
 
 import { AppStoreButtons } from "@/src/components/marketing/AppStoreButtons";
 import { useResponsive } from "@/src/components/marketing/breakpoints";
+import { CardImage } from "@/src/components/marketing/CardImage";
 import { FeatureCard } from "@/src/components/marketing/FeatureCard";
 import { Hero } from "@/src/components/marketing/Hero";
-import { IMG } from "@/src/components/marketing/images";
+import { CATEGORY_IMAGES, IMG } from "@/src/components/marketing/images";
 import { Section } from "@/src/components/marketing/Section";
 import { SEO } from "@/src/components/marketing/SEO";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
@@ -20,21 +21,21 @@ const STATS = [
 ];
 
 const CATEGORIES = [
-  { icon: "home-outline",    label: "House Moves",     image: IMG.cardHouse   },
-  { icon: "bed-outline",     label: "Furniture",       image: IMG.cardHouse   },
-  { icon: "car-sport-outline", label: "Vehicles",      image: IMG.cardVehicle },
-  { icon: "bicycle-outline", label: "Motorcycles",     image: IMG.cardMoto    },
-  { icon: "car-outline",     label: "Caravans",        image: IMG.cardVehicle },
-  { icon: "home",            label: "Static Caravans", image: IMG.cardHouse   },
-  { icon: "cube",            label: "Shipping Containers", image: IMG.cardPallet },
-  { icon: "construct-outline", label: "Machinery",     image: IMG.cardFreight },
-  { icon: "albums-outline",  label: "Pallets",         image: IMG.cardPallet  },
-  { icon: "boat-outline",    label: "Boats",           image: IMG.cardFreight },
-  { icon: "briefcase-outline", label: "Office Moves",  image: IMG.cardTeam    },
-  { icon: "hammer-outline",  label: "Building Materials", image: IMG.cardFreight },
-  { icon: "cube-outline",    label: "Parcels",         image: IMG.cardParcel  },
-  { icon: "layers-outline",  label: "Freight",         image: IMG.cardFreight },
-  { icon: "flash-outline",   label: "Same Day",        image: IMG.cardApp     },
+  { icon: "home-outline",       label: "House Moves",          image: CATEGORY_IMAGES.house_moves         },
+  { icon: "bed-outline",        label: "Furniture",            image: CATEGORY_IMAGES.furniture           },
+  { icon: "car-sport-outline",  label: "Vehicles",             image: CATEGORY_IMAGES.vehicles            },
+  { icon: "bicycle-outline",    label: "Motorcycles",          image: CATEGORY_IMAGES.motorcycles         },
+  { icon: "car-outline",        label: "Caravans",             image: CATEGORY_IMAGES.caravans            },
+  { icon: "home",               label: "Static Caravans",      image: CATEGORY_IMAGES.static_caravans     },
+  { icon: "cube",               label: "Shipping Containers",  image: CATEGORY_IMAGES.shipping_containers },
+  { icon: "construct-outline",  label: "Machinery",            image: CATEGORY_IMAGES.machinery           },
+  { icon: "albums-outline",     label: "Pallets",              image: CATEGORY_IMAGES.pallets             },
+  { icon: "boat-outline",       label: "Boats",                image: CATEGORY_IMAGES.boats               },
+  { icon: "briefcase-outline",  label: "Office Moves",         image: CATEGORY_IMAGES.office_moves        },
+  { icon: "hammer-outline",     label: "Building Materials",   image: CATEGORY_IMAGES.building_materials  },
+  { icon: "cube-outline",       label: "Parcels",              image: CATEGORY_IMAGES.parcels             },
+  { icon: "layers-outline",     label: "Freight",              image: CATEGORY_IMAGES.freight             },
+  { icon: "flash-outline",      label: "Same Day",             image: CATEGORY_IMAGES.same_day            },
 ];
 
 export default function Home() {
@@ -143,7 +144,7 @@ export default function Home() {
               style={styles.catCard}
               onPress={() => router.push("/services")}
             >
-              <Image source={{ uri: c.image }} style={styles.catImage} />
+              <CardImage uri={c.image} style={styles.catImage} testID={`home-cat-${c.label}`} />
               <View style={styles.catOverlay} />
               <View style={styles.catInner}>
                 <Ionicons name={c.icon as any} size={22} color="#fff" />

@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useResponsive } from "@/src/components/marketing/breakpoints";
+import { CardImage } from "@/src/components/marketing/CardImage";
 import { Hero } from "@/src/components/marketing/Hero";
-import { IMG } from "@/src/components/marketing/images";
+import { CATEGORY_IMAGES, IMG } from "@/src/components/marketing/images";
 import { Section } from "@/src/components/marketing/Section";
 import { SEO } from "@/src/components/marketing/SEO";
 import { colors, font, radius, spacing, weight } from "@/src/theme";
@@ -13,31 +14,31 @@ import { colors, font, radius, spacing, weight } from "@/src/theme";
 import { SectionHeading } from "./index";
 
 const SERVICES = [
-  { icon: "home-outline",         title: "House Removals",              body: "Full or part-house moves, studio to 5-bed. 2-man crews, packing service and insured drivers.",         tag: "Studio to 5-bed",     image: IMG.cardHouse },
-  { icon: "bed-outline",          title: "Furniture Delivery",          body: "Single sofas, wardrobes, beds and dining sets — kerbside or in-room placement.",                     tag: "Any item",             image: IMG.cardHouse },
-  { icon: "cube-outline",         title: "Single Items",                body: "One-off items that are too big for a parcel courier but too small for a van hire.",                  tag: "Awkward items",        image: IMG.cardParcel },
-  { icon: "cube",                 title: "Parcels & Packages",          body: "Small parcels, next-day priorities, fragile items — same-day and scheduled options.",                tag: "From £5",              image: IMG.cardParcel },
-  { icon: "document-text-outline",title: "Documents",                   body: "Same-hour secure document couriers on bikes with chain-of-custody logs.",                            tag: "Same-hour",            image: IMG.cardApp },
-  { icon: "albums-outline",       title: "Pallets",                     body: "UK, Euro or oversized pallets. Tail-lift loading, chilled or ambient. 1 to 26 pallets.",             tag: "1–26 pallets",         image: IMG.cardPallet },
-  { icon: "layers-outline",       title: "Freight",                     body: "Full and part-load freight across the UK — 7.5T, 18T and 44T HGV options.",                          tag: "Up to 26T",            image: IMG.cardFreight },
-  { icon: "bicycle-outline",      title: "Motorcycles & Scooters",      body: "Insured trailer transport for bikes, mopeds and scooters. Chocks and straps included.",              tag: "Any bike",             image: IMG.cardMoto },
-  { icon: "car-sport-outline",    title: "Cars & Vehicles",             body: "Recovery, dealer transfers, private sales — covered transporters, flatbeds and driven collections.", tag: "UK & Europe",          image: IMG.cardVehicle },
-  { icon: "car-outline",          title: "Vans",                        body: "Van transport up to 3.5T — dealer-to-dealer, breakdown recovery, private sale collection.",          tag: "Up to 3.5T",           image: IMG.cardVehicle },
-  { icon: "construct-outline",    title: "Machinery & Plant",           body: "Construction and industrial machinery on flatbeds and hiab-crane vehicles.",                          tag: "Heavy plant",          image: IMG.cardFreight },
-  { icon: "leaf-outline",         title: "Agricultural Equipment",      body: "Tractors, implements and farm machinery — insured, permitted and abnormal-load ready.",              tag: "Farm & rural",         image: IMG.cardFreight },
-  { icon: "hammer-outline",       title: "Building Materials",          body: "Bricks, timber, plasterboard and aggregates — flatbed and curtain-side options.",                    tag: "Trade & DIY",          image: IMG.cardFreight },
-  { icon: "boat-outline",         title: "Boats & Marine Transport",    body: "Boats, jet-skis and marine trailers — with UK & European delivery options.",                        tag: "Marine",               image: IMG.cardFreight },
-  { icon: "cube",                 title: "Shipping Containers",         body: "20ft and 40ft shipping containers — hiab-crane loading and unloading available.",                    tag: "20 / 40 ft",           image: IMG.cardPallet },
-  { icon: "car",                  title: "Caravans",                    body: "Touring caravans — collection, delivery and storage relocation across the UK.",                     tag: "Touring caravans",     image: IMG.cardVehicle },
-  { icon: "home",                 title: "Static Caravans",             body: "Static caravan and park-home relocation with abnormal-load permits and escorts.",                   tag: "Park homes",           image: IMG.cardHouse },
-  { icon: "flower-outline",       title: "Garden & Outdoor Items",      body: "Hot tubs, sheds, playhouses, garden furniture and outdoor equipment.",                                tag: "Outdoor & garden",     image: IMG.cardHouse },
-  { icon: "briefcase-outline",    title: "Office & Commercial Moves",   body: "Office relocations, retail store fit-outs and exhibition logistics with weekend crews.",             tag: "Commercial",           image: IMG.cardTeam },
-  { icon: "storefront-outline",   title: "Retail & Business Deliveries",body: "Retail replenishment, wholesale drops and B2B deliveries with priority SLAs.",                       tag: "B2B",                  image: IMG.cardTeam },
-  { icon: "megaphone-outline",    title: "Event Equipment",             body: "AV kit, staging and exhibition equipment — weekend and out-of-hours crews.",                         tag: "Events",               image: IMG.cardTeam },
-  { icon: "pricetags-outline",    title: "Auction & Marketplace",       body: "eBay, Facebook Marketplace and live auction house collections — verified pickup notes.",             tag: "Auctions",             image: IMG.cardParcel },
-  { icon: "flash-outline",        title: "Same Day / Express",          body: "Urgent same-hour and same-day dedicated runs — priority-matched drivers.",                            tag: "Same-day",             image: IMG.cardApp },
-  { icon: "map-outline",          title: "Long Distance UK",            body: "300+ mile UK routes, overnight and next-day scheduled deliveries.",                                   tag: "Nationwide",           image: IMG.cardFreight },
-  { icon: "diamond-outline",      title: "Fragile & High Value",        body: "Art, antiques, glass, medical and high-value goods — climate-controlled options available.",         tag: "White-glove",          image: IMG.cardApp },
+  { icon: "home-outline",         title: "House Removals",              body: "Full or part-house moves, studio to 5-bed. 2-man crews, packing service and insured drivers.",         tag: "Studio to 5-bed",     image: CATEGORY_IMAGES.house_moves },
+  { icon: "bed-outline",          title: "Furniture Delivery",          body: "Single sofas, wardrobes, beds and dining sets — kerbside or in-room placement.",                     tag: "Any item",             image: CATEGORY_IMAGES.furniture },
+  { icon: "cube-outline",         title: "Single Items",                body: "One-off items that are too big for a parcel courier but too small for a van hire.",                  tag: "Awkward items",        image: CATEGORY_IMAGES.single_items },
+  { icon: "cube",                 title: "Parcels & Packages",          body: "Small parcels, next-day priorities, fragile items — same-day and scheduled options.",                tag: "From £5",              image: CATEGORY_IMAGES.parcels },
+  { icon: "document-text-outline",title: "Documents",                   body: "Same-hour secure document couriers on bikes with chain-of-custody logs.",                            tag: "Same-hour",            image: CATEGORY_IMAGES.documents },
+  { icon: "albums-outline",       title: "Pallets",                     body: "UK, Euro or oversized pallets. Tail-lift loading, chilled or ambient. 1 to 26 pallets.",             tag: "1–26 pallets",         image: CATEGORY_IMAGES.pallets },
+  { icon: "layers-outline",       title: "Freight",                     body: "Full and part-load freight across the UK — 7.5T, 18T and 44T HGV options.",                          tag: "Up to 26T",            image: CATEGORY_IMAGES.freight },
+  { icon: "bicycle-outline",      title: "Motorcycles & Scooters",      body: "Insured trailer transport for bikes, mopeds and scooters. Chocks and straps included.",              tag: "Any bike",             image: CATEGORY_IMAGES.motorcycles },
+  { icon: "car-sport-outline",    title: "Cars & Vehicles",             body: "Recovery, dealer transfers, private sales — covered transporters, flatbeds and driven collections.", tag: "UK & Europe",          image: CATEGORY_IMAGES.vehicles },
+  { icon: "car-outline",          title: "Vans",                        body: "Van transport up to 3.5T — dealer-to-dealer, breakdown recovery, private sale collection.",          tag: "Up to 3.5T",           image: CATEGORY_IMAGES.vans },
+  { icon: "construct-outline",    title: "Machinery & Plant",           body: "Construction and industrial machinery on flatbeds and hiab-crane vehicles.",                          tag: "Heavy plant",          image: CATEGORY_IMAGES.machinery },
+  { icon: "leaf-outline",         title: "Agricultural Equipment",      body: "Tractors, implements and farm machinery — insured, permitted and abnormal-load ready.",              tag: "Farm & rural",         image: CATEGORY_IMAGES.agricultural },
+  { icon: "hammer-outline",       title: "Building Materials",          body: "Bricks, timber, plasterboard and aggregates — flatbed and curtain-side options.",                    tag: "Trade & DIY",          image: CATEGORY_IMAGES.building_materials },
+  { icon: "boat-outline",         title: "Boats & Marine Transport",    body: "Boats, jet-skis and marine trailers — with UK & European delivery options.",                        tag: "Marine",               image: CATEGORY_IMAGES.boats },
+  { icon: "cube",                 title: "Shipping Containers",         body: "20ft and 40ft shipping containers — hiab-crane loading and unloading available.",                    tag: "20 / 40 ft",           image: CATEGORY_IMAGES.shipping_containers },
+  { icon: "car",                  title: "Caravans",                    body: "Touring caravans — collection, delivery and storage relocation across the UK.",                     tag: "Touring caravans",     image: CATEGORY_IMAGES.caravans },
+  { icon: "home",                 title: "Static Caravans",             body: "Static caravan and park-home relocation with abnormal-load permits and escorts.",                   tag: "Park homes",           image: CATEGORY_IMAGES.static_caravans },
+  { icon: "flower-outline",       title: "Garden & Outdoor Items",      body: "Hot tubs, sheds, playhouses, garden furniture and outdoor equipment.",                                tag: "Outdoor & garden",     image: CATEGORY_IMAGES.garden_outdoor },
+  { icon: "briefcase-outline",    title: "Office & Commercial Moves",   body: "Office relocations, retail store fit-outs and exhibition logistics with weekend crews.",             tag: "Commercial",           image: CATEGORY_IMAGES.office_moves },
+  { icon: "storefront-outline",   title: "Retail & Business Deliveries",body: "Retail replenishment, wholesale drops and B2B deliveries with priority SLAs.",                       tag: "B2B",                  image: CATEGORY_IMAGES.retail_business },
+  { icon: "megaphone-outline",    title: "Event Equipment",             body: "AV kit, staging and exhibition equipment — weekend and out-of-hours crews.",                         tag: "Events",               image: CATEGORY_IMAGES.event_equipment },
+  { icon: "pricetags-outline",    title: "Auction & Marketplace",       body: "eBay, Facebook Marketplace and live auction house collections — verified pickup notes.",             tag: "Auctions",             image: CATEGORY_IMAGES.auction_marketplace },
+  { icon: "flash-outline",        title: "Same Day / Express",          body: "Urgent same-hour and same-day dedicated runs — priority-matched drivers.",                            tag: "Same-day",             image: CATEGORY_IMAGES.same_day },
+  { icon: "map-outline",          title: "Long Distance UK",            body: "300+ mile UK routes, overnight and next-day scheduled deliveries.",                                   tag: "Nationwide",           image: CATEGORY_IMAGES.long_distance_uk },
+  { icon: "diamond-outline",      title: "Fragile & High Value",        body: "Art, antiques, glass, medical and high-value goods — climate-controlled options available.",         tag: "White-glove",          image: CATEGORY_IMAGES.fragile_high_value },
 ];
 
 export default function Services() {
@@ -65,7 +66,7 @@ export default function Services() {
           {SERVICES.map((s) => (
             <View key={s.title} style={styles.card}>
               <View style={styles.imageWrap}>
-                <Image source={{ uri: s.image }} style={styles.image} />
+                <CardImage uri={s.image} style={styles.image} testID={`svc-${s.title}`} />
                 <View style={styles.tag}>
                   <Text style={styles.tagText}>{s.tag}</Text>
                 </View>
