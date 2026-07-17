@@ -265,3 +265,98 @@ agent_communication:
     -agent: "main"
     -message: "Applied testing agent's Wave 2 fixes: renamed (admin)/drivers to manage-drivers to eliminate the URL collision, removed the phantom Stack.Screen name='index' reference. Manually verified both /drivers (marketing) and /manage-drivers (admin) work with no LogBox errors. Ready to re-run wave 2 regression testing if desired, or move to next task."
 
+
+# RC1 Wave 3 — Dynamic Service Categories & Vehicle Catalogue
+
+backend:
+  - task: "Service categories & vehicle types collections + seed"
+    implemented: true
+    working: "NA"
+    file: "backend/service_catalog.py, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Two new collections `service_categories` (26 items) and `vehicle_types` (16 items) auto-seeded on startup. Legacy job categories auto-migrated to the new taxonomy via LEGACY_CATEGORY_MAP."
+
+  - task: "Public catalog endpoints"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GET /api/catalog/categories, GET /api/catalog/vehicles, POST /api/catalog/recommend-vehicle. All public (no auth). Recommender takes category_key + optional weight/volume/dims/count/forklift/loading and returns 4 ranked vehicles with recommendation_label + is_best_match."
+
+  - task: "Admin CRUD for categories & vehicles"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GET/POST /api/admin/catalog/categories, PUT/DELETE /api/admin/catalog/categories/{id}; same for vehicles. Admin-only. Allows enable/disable, reorder via `order`, edit name/desc/icon/typicals/features/default_vehicles."
+
+  - task: "Enhanced /api/quote/estimate — dynamic category lookup"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Endpoint now maps NEW category slugs via LEGACY_CATEGORY_MAP and reads recommended vehicle from the db (default_vehicles[0]). Optional weight_kg & volume_m3 params bump the price on heavier loads."
+
+frontend:
+  - task: "Post Job — 5-step flow with dynamic categories, vehicle picker, Not-Sure recommender & quote summary"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(customer)/post-job.tsx, frontend/src/hooks/useCatalog.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "5 steps: (1) Service Category (25+ categories, fetched from API), (2) Route with live quote, (3) Details (weight/dims/item count/forklift toggle/loading help toggle/dates), (4) Vehicle picker (16 vehicles + Not-Sure card that reveals up to 4 ranked recommendations), (5) Pricing + Quote Summary card (service/vehicle/distance/journey time/driver charge/booking fee/total). Bidding vs Fixed-price banner text also shown. Live booking-fee preview from /api/booking-fees/preview."
+
+  - task: "Marketing home + services page — new 25-item category grid"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(marketing)/index.tsx, services.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Home 'What We Move' expanded to 15 cards; Services page enumerates all 25 category types with description + icon + tag."
+
+  - task: "Driver jobs filter — dynamic category chips"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(driver)/jobs.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Category filter chips now fetched via useCategories() with graceful fallback to legacy CATEGORIES constant during load."
+
+agent_communication:
+    -agent: "main"
+    -message: "Wave 3 Phase 1 complete: dynamic service categories (26) + vehicle catalogue (16) + rule-based multi-vehicle recommender + rewritten Post Job 5-step flow with quote summary. Please test: (1) /api/catalog/categories and /vehicles return 26 & 16 items; (2) recommend-vehicle with various category + weight combos returns ranked results with recommendation_label; (3) admin CRUD for both catalogs; (4) legacy job auto-migration (jobs with old slugs like 'furniture' get category updated to 'furniture_delivery' with legacy_category kept for audit); (5) quote/estimate accepts new slugs; (6) admin can NOT be tricked by duplicate keys."
+    -agent: "testing"
+    -message: "Iteration 10 (Wave 3 backend) — 14/14 PASSED. Test file: /app/backend/tests/test_wave3_catalog.py, JUnit: /app/test_reports/pytest/wave3_results.xml. Coverage: (a) GET /api/catalog/categories returns exactly 26 items, ordered by 'order', all active, full schema (id/key/name/description/icon/order/active/default_vehicles/typical_weight_kg/typical_volume_m3). (b) GET /api/catalog/vehicles returns exactly 16 items, ordered, full schema (max_weight_kg/max_volume_m3/features). (c) include_inactive=true still returns all 26. (d) POST /api/catalog/recommend-vehicle: parcels+5kg → motorcycle_courier first, 4 ranked items with correct labels {Best value ⭐, Roomier option, Larger alternative, Extra capacity} and is_best_match only on first; house_removals+1500kg+22m³+loading_help → tail-lift vehicle in top ranks; machinery_plant+6000kg+forklift → hiab_crane/flatbed in top 3; documents → motorcycle_courier first; unknown key → 404 'Unknown or inactive category'; dims 1×0.5×0.3 → computed_volume_m3 == 0.15. (e) Admin CRUD: list returns ≥26, create with valid unique key returns doc with id + timestamps, duplicate key → 400, PUT order+active=false reflected on GET, public GET hides disabled row while include_inactive=true still lists it, DELETE returns 200 and row is gone — same cycle green for vehicles. (f) GET /api/quote/estimate with legacy 'furniture' → category_key normalized to 'furniture_delivery' with vehicle label populated; 'shipping_containers' + 5000kg + 30m³ → vehicle in {Hiab Crane Vehicle, Articulated HGV, Flatbed Truck} and price strictly greater than baseline (weight+volume bump verified). No blockers, no minor issues. Legacy-job auto-migration (item 5 in the request) was NOT tested because it triggers on backend startup and Wave 3 test scope explicitly says 'skip if restart isn't possible' — main agent can verify by inserting a doc with category='furniture' directly, restarting backend, and checking legacy_category is set. Fixture note: /api/auth/login returns 'access_token' (not 'token') — tests handle both keys."
+

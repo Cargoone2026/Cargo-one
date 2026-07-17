@@ -14,12 +14,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "@/src/api/client";
 import { CATEGORIES, colors, font, radius, spacing, weight } from "@/src/theme";
+import { useCategories } from "@/src/hooks/useCatalog";
 
 const RADII = [10, 20, 40, 75, 250];
 type PricingFilter = "all" | "fixed" | "bidding";
 
 export default function DriverJobs() {
   const router = useRouter();
+  const { data: catalogCategories } = useCategories();
   const [jobs, setJobs] = useState<any[]>([]);
   const [radius_, setRadius] = useState(75);
   const [loading, setLoading] = useState(false);
@@ -95,15 +97,15 @@ export default function DriverJobs() {
           >
             <Text style={[styles.chipText, category === null && styles.chipTextActive]}>All</Text>
           </Pressable>
-          {CATEGORIES.map((c) => (
+          {(catalogCategories.length > 0 ? catalogCategories : CATEGORIES.map((c) => ({ key: c.id, name: c.label }))).map((c: any) => (
             <Pressable
-              key={c.id}
-              onPress={() => setCategory(category === c.id ? null : c.id)}
-              style={[styles.chip, category === c.id && styles.chipActive]}
-              testID={`cat-${c.id}`}
+              key={c.key || c.id}
+              onPress={() => setCategory(category === (c.key || c.id) ? null : (c.key || c.id))}
+              style={[styles.chip, category === (c.key || c.id) && styles.chipActive]}
+              testID={`cat-${c.key || c.id}`}
             >
-              <Text style={[styles.chipText, category === c.id && styles.chipTextActive]}>
-                {c.label}
+              <Text style={[styles.chipText, category === (c.key || c.id) && styles.chipTextActive]}>
+                {c.name || c.label}
               </Text>
             </Pressable>
           ))}

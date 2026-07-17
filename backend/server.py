@@ -23,6 +23,13 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
+
+from service_catalog import (
+    CATEGORY_SEED,
+    LEGACY_CATEGORY_MAP,
+    VEHICLE_SEED,
+    recommend_vehicles,
+)
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
@@ -107,7 +114,7 @@ class TokenResponse(BaseModel):
 
 class JobCreate(BaseModel):
     title: str
-    category: str  # furniture, pallets, cars, motorcycles, house_moves, parcels, freight, documents, boats, machinery
+    category: str  # See /api/catalog/categories for current list (dynamic)
     description: str
     photos: list[str] = Field(default_factory=list)  # base64 or URLs
     pickup_address: str
@@ -657,7 +664,9 @@ async def my_jobs(user: dict = Depends(require_role("customer"))):
 @api.get("/quote/estimate")
 async def quote_estimate(pickup_lat: float, pickup_lng: float,
                           dropoff_lat: float, dropoff_lng: float,
-                          category: str = "furniture",
+                          category: str = "furniture_delivery",
+                          weight_kg: Optional[float] = None,
+                          volume_m3: Optional[float] = None,
                           user: dict = Depends(get_current_user)):
     """Estimate distance, duration, vehicle & suggested price for a route."""
     # Try Google Distance Matrix first
@@ -676,18 +685,50 @@ async def quote_estimate(pickup_lat: float, pickup_lng: float,
         duration_minutes = round((distance_miles / 40.0) * 60 + 10, 0)
         source = "haversine"
 
+    # Category multipliers keyed by NEW slugs. Fall back to legacy map, then to 1.2.
     category_mult = {
-        "furniture": 1.2, "pallets": 1.4, "cars": 2.0, "motorcycles": 1.5,
-        "house_moves": 1.6, "parcels": 1.0, "freight": 1.8, "documents": 0.8,
-        "boats": 2.5, "machinery": 2.2,
-    }.get(category, 1.2)
-    suggested_price = round(max(30, distance_miles * 1.5 * category_mult), 2)
-    vehicle = CATEGORY_VEHICLES.get(category, "Van")
+        # Light / same-day
+        "documents": 0.8, "parcels": 1.0, "same_day_express": 1.2,
+        # Standard
+        "furniture_delivery": 1.2, "single_items": 1.1, "auction_marketplace": 1.2,
+        "garden_outdoor": 1.2, "retail_business": 1.2, "office_commercial": 1.4,
+        "house_removals": 1.6, "long_distance_uk": 1.3,
+        # Freight & pallets
+        "pallets": 1.4, "freight": 1.8, "event_equipment": 1.5,
+        # Heavy / specialist
+        "motorcycles": 1.5, "cars_vehicles": 2.0, "vans": 2.0,
+        "machinery_plant": 2.2, "agricultural": 2.2, "building_materials": 1.8,
+        "boats_marine": 2.5, "shipping_containers": 2.6,
+        "caravans": 2.0, "static_caravans": 3.0, "fragile_high_value": 1.8,
+        "other": 1.2,
+    }
+    # Support legacy category slugs gracefully
+    normalized = LEGACY_CATEGORY_MAP.get(category, category)
+    mult = category_mult.get(normalized, 1.2)
+    suggested_price = round(max(30, distance_miles * 1.5 * mult), 2)
+
+    # Look up the category doc + pick the first default vehicle as the recommendation
+    cat_doc = await db.service_categories.find_one({"key": normalized, "active": True})
+    vehicle_label = "Van"
+    if cat_doc:
+        default_keys = cat_doc.get("default_vehicles") or []
+        if default_keys:
+            veh = await db.vehicle_types.find_one({"key": default_keys[0], "active": True})
+            if veh:
+                vehicle_label = veh.get("name") or vehicle_label
+
+    # Adjust price if the customer has hinted at volume/weight
+    if weight_kg and weight_kg > 500:
+        suggested_price = round(suggested_price * (1 + min(2.0, weight_kg / 3000.0)), 2)
+    if volume_m3 and volume_m3 > 10:
+        suggested_price = round(suggested_price * (1 + min(1.5, volume_m3 / 40.0)), 2)
+
     return {
         "distance_miles": distance_miles,
         "duration_minutes": duration_minutes,
         "suggested_price": suggested_price,
-        "vehicle": vehicle,
+        "vehicle": vehicle_label,
+        "category_key": normalized,
         "source": source,
     }
 
@@ -1509,6 +1550,204 @@ async def admin_delete_band(band_id: str, user: dict = Depends(require_role("adm
 
 
 # ---------------------------------------------------------------------------
+# Service categories & vehicle types
+# ---------------------------------------------------------------------------
+
+
+def _clean_doc(d: dict) -> dict:
+    """Strip Mongo _id before returning."""
+    d.pop("_id", None)
+    return d
+
+
+@api.get("/catalog/categories")
+async def list_categories(include_inactive: bool = False):
+    """Public — list service categories (active only, ordered)."""
+    q = {} if include_inactive else {"active": True}
+    docs = await db.service_categories.find(q).sort("order", 1).to_list(500)
+    return [_clean_doc(d) for d in docs]
+
+
+@api.get("/catalog/vehicles")
+async def list_vehicles(include_inactive: bool = False):
+    """Public — list vehicle types (active only, ordered)."""
+    q = {} if include_inactive else {"active": True}
+    docs = await db.vehicle_types.find(q).sort("order", 1).to_list(500)
+    return [_clean_doc(d) for d in docs]
+
+
+class VehicleRecommendRequest(BaseModel):
+    category_key: str
+    weight_kg: Optional[float] = None
+    volume_m3: Optional[float] = None
+    dimensions_l_m: Optional[float] = None
+    dimensions_w_m: Optional[float] = None
+    dimensions_h_m: Optional[float] = None
+    item_count: Optional[int] = None
+    needs_forklift: Optional[bool] = False
+    needs_loading_help: Optional[bool] = False
+
+
+@api.post("/catalog/recommend-vehicle")
+async def recommend_vehicle(payload: VehicleRecommendRequest):
+    """Rule-based multi-vehicle recommendation for the 'Not Sure' path."""
+    cat = await db.service_categories.find_one({"key": payload.category_key, "active": True})
+    if not cat:
+        raise HTTPException(status_code=404, detail="Unknown or inactive category")
+    vehicles = await db.vehicle_types.find({"active": True}).sort("order", 1).to_list(200)
+
+    volume = payload.volume_m3
+    if not volume and all(v is not None for v in [payload.dimensions_l_m, payload.dimensions_w_m, payload.dimensions_h_m]):
+        volume = float(payload.dimensions_l_m) * float(payload.dimensions_w_m) * float(payload.dimensions_h_m)
+
+    ranked = recommend_vehicles(
+        vehicles,
+        cat,
+        weight_kg=payload.weight_kg,
+        volume_m3=volume,
+        item_count=payload.item_count,
+        needs_forklift=bool(payload.needs_forklift),
+        needs_loading_help=bool(payload.needs_loading_help),
+        limit=4,
+    )
+    return {
+        "category": _clean_doc(cat),
+        "computed_volume_m3": volume,
+        "recommendations": [_clean_doc(dict(v)) for v in ranked],
+    }
+
+
+# ---- Admin CRUD (categories) ----
+
+class CategoryUpsert(BaseModel):
+    key: Optional[str] = None
+    name: str
+    description: Optional[str] = ""
+    icon: Optional[str] = "cube"
+    order: Optional[int] = 0
+    active: Optional[bool] = True
+    default_vehicles: Optional[list[str]] = None
+    typical_weight_kg: Optional[float] = None
+    typical_volume_m3: Optional[float] = None
+
+
+@api.get("/admin/catalog/categories")
+async def admin_list_categories(_: dict = Depends(require_role("admin"))):
+    docs = await db.service_categories.find({}).sort("order", 1).to_list(500)
+    return [_clean_doc(d) for d in docs]
+
+
+@api.post("/admin/catalog/categories")
+async def admin_create_category(payload: CategoryUpsert, _: dict = Depends(require_role("admin"))):
+    key = (payload.key or payload.name.lower().replace(" ", "_")).strip()
+    if await db.service_categories.find_one({"key": key}):
+        raise HTTPException(status_code=400, detail=f"Category with key '{key}' already exists")
+    doc = {
+        "id": new_id(),
+        "key": key,
+        "name": payload.name.strip(),
+        "description": (payload.description or "").strip(),
+        "icon": (payload.icon or "cube").strip(),
+        "order": int(payload.order or 0),
+        "active": bool(payload.active),
+        "default_vehicles": payload.default_vehicles or [],
+        "typical_weight_kg": payload.typical_weight_kg,
+        "typical_volume_m3": payload.typical_volume_m3,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.service_categories.insert_one(doc)
+    return _clean_doc(doc)
+
+
+@api.put("/admin/catalog/categories/{cat_id}")
+async def admin_update_category(cat_id: str, payload: CategoryUpsert, _: dict = Depends(require_role("admin"))):
+    update: dict = {"updated_at": now_iso()}
+    for field in ("name", "description", "icon", "order", "active", "default_vehicles", "typical_weight_kg", "typical_volume_m3"):
+        val = getattr(payload, field, None)
+        if val is not None:
+            update[field] = val
+    result = await db.service_categories.update_one({"id": cat_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    updated = await db.service_categories.find_one({"id": cat_id})
+    return _clean_doc(updated)
+
+
+@api.delete("/admin/catalog/categories/{cat_id}")
+async def admin_delete_category(cat_id: str, _: dict = Depends(require_role("admin"))):
+    result = await db.service_categories.delete_one({"id": cat_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"ok": True}
+
+
+# ---- Admin CRUD (vehicles) ----
+
+class VehicleUpsert(BaseModel):
+    key: Optional[str] = None
+    name: str
+    description: Optional[str] = ""
+    icon: Optional[str] = "car"
+    order: Optional[int] = 0
+    active: Optional[bool] = True
+    max_weight_kg: Optional[float] = 0
+    max_volume_m3: Optional[float] = None
+    features: Optional[list[str]] = None
+
+
+@api.get("/admin/catalog/vehicles")
+async def admin_list_vehicles(_: dict = Depends(require_role("admin"))):
+    docs = await db.vehicle_types.find({}).sort("order", 1).to_list(500)
+    return [_clean_doc(d) for d in docs]
+
+
+@api.post("/admin/catalog/vehicles")
+async def admin_create_vehicle(payload: VehicleUpsert, _: dict = Depends(require_role("admin"))):
+    key = (payload.key or payload.name.lower().replace(" ", "_")).strip()
+    if await db.vehicle_types.find_one({"key": key}):
+        raise HTTPException(status_code=400, detail=f"Vehicle with key '{key}' already exists")
+    doc = {
+        "id": new_id(),
+        "key": key,
+        "name": payload.name.strip(),
+        "description": (payload.description or "").strip(),
+        "icon": (payload.icon or "car").strip(),
+        "order": int(payload.order or 0),
+        "active": bool(payload.active),
+        "max_weight_kg": payload.max_weight_kg or 0,
+        "max_volume_m3": payload.max_volume_m3,
+        "features": payload.features or [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.vehicle_types.insert_one(doc)
+    return _clean_doc(doc)
+
+
+@api.put("/admin/catalog/vehicles/{veh_id}")
+async def admin_update_vehicle(veh_id: str, payload: VehicleUpsert, _: dict = Depends(require_role("admin"))):
+    update: dict = {"updated_at": now_iso()}
+    for field in ("name", "description", "icon", "order", "active", "max_weight_kg", "max_volume_m3", "features"):
+        val = getattr(payload, field, None)
+        if val is not None:
+            update[field] = val
+    result = await db.vehicle_types.update_one({"id": veh_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    updated = await db.vehicle_types.find_one({"id": veh_id})
+    return _clean_doc(updated)
+
+
+@api.delete("/admin/catalog/vehicles/{veh_id}")
+async def admin_delete_vehicle(veh_id: str, _: dict = Depends(require_role("admin"))):
+    result = await db.vehicle_types.delete_one({"id": veh_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Public marketing endpoints (contact form + newsletter)
 # ---------------------------------------------------------------------------
 
@@ -1582,7 +1821,7 @@ async def root():
     return {"app": "Cargo One", "version": "1.0.0", "status": "ok"}
 
 
-# Seed admin + default deposit bands
+# Seed admin + default deposit bands + service categories + vehicle types
 @app.on_event("startup")
 async def seed_startup():
     if not await db.users.find_one({"role": "admin"}):
@@ -1622,6 +1861,55 @@ async def seed_startup():
                 "updated_at": now_iso(),
             })
         logger.info("Seeded default deposit bands")
+
+    # Seed service categories (idempotent per key)
+    for idx, seed in enumerate(CATEGORY_SEED):
+        if not await db.service_categories.find_one({"key": seed["key"]}):
+            await db.service_categories.insert_one({
+                "id": new_id(),
+                "key": seed["key"],
+                "name": seed["name"],
+                "description": seed.get("description", ""),
+                "icon": seed.get("icon", "cube"),
+                "order": idx,
+                "active": True,
+                "default_vehicles": seed.get("default_vehicles", []),
+                "typical_weight_kg": seed.get("typical_weight_kg"),
+                "typical_volume_m3": seed.get("typical_volume_m3"),
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+    logger.info("Ensured %d service categories seeded", len(CATEGORY_SEED))
+
+    # Seed vehicle types (idempotent per key)
+    for idx, seed in enumerate(VEHICLE_SEED):
+        if not await db.vehicle_types.find_one({"key": seed["key"]}):
+            await db.vehicle_types.insert_one({
+                "id": new_id(),
+                "key": seed["key"],
+                "name": seed["name"],
+                "description": seed.get("description", ""),
+                "icon": seed.get("icon", "car"),
+                "order": idx,
+                "active": True,
+                "max_weight_kg": seed.get("max_weight_kg", 0),
+                "max_volume_m3": seed.get("max_volume_m3"),
+                "features": seed.get("features", []),
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            })
+    logger.info("Ensured %d vehicle types seeded", len(VEHICLE_SEED))
+
+    # Auto-migrate legacy job categories → new category keys
+    migrated = 0
+    for old_key, new_key in LEGACY_CATEGORY_MAP.items():
+        result = await db.jobs.update_many(
+            {"category": old_key},
+            {"$set": {"category": new_key, "legacy_category": old_key}},
+        )
+        migrated += result.modified_count
+    if migrated:
+        logger.info("Migrated %d legacy job categories to new taxonomy", migrated)
 
 
 @app.on_event("shutdown")

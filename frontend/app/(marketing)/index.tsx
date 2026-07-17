@@ -20,12 +20,21 @@ const STATS = [
 ];
 
 const CATEGORIES = [
-  { icon: "cube-outline", label: "Parcels", image: IMG.cardParcel },
-  { icon: "albums-outline", label: "Pallets", image: IMG.cardPallet },
-  { icon: "home-outline", label: "House Moves", image: IMG.cardHouse },
-  { icon: "car-sport-outline", label: "Vehicles", image: IMG.cardVehicle },
-  { icon: "boat-outline", label: "Freight", image: IMG.cardFreight },
-  { icon: "bicycle-outline", label: "Motorcycles", image: IMG.cardMoto },
+  { icon: "home-outline",    label: "House Moves",     image: IMG.cardHouse   },
+  { icon: "bed-outline",     label: "Furniture",       image: IMG.cardHouse   },
+  { icon: "car-sport-outline", label: "Vehicles",      image: IMG.cardVehicle },
+  { icon: "bicycle-outline", label: "Motorcycles",     image: IMG.cardMoto    },
+  { icon: "car-outline",     label: "Caravans",        image: IMG.cardVehicle },
+  { icon: "home",            label: "Static Caravans", image: IMG.cardHouse   },
+  { icon: "cube",            label: "Shipping Containers", image: IMG.cardPallet },
+  { icon: "construct-outline", label: "Machinery",     image: IMG.cardFreight },
+  { icon: "albums-outline",  label: "Pallets",         image: IMG.cardPallet  },
+  { icon: "boat-outline",    label: "Boats",           image: IMG.cardFreight },
+  { icon: "briefcase-outline", label: "Office Moves",  image: IMG.cardTeam    },
+  { icon: "hammer-outline",  label: "Building Materials", image: IMG.cardFreight },
+  { icon: "cube-outline",    label: "Parcels",         image: IMG.cardParcel  },
+  { icon: "layers-outline",  label: "Freight",         image: IMG.cardFreight },
+  { icon: "flash-outline",   label: "Same Day",        image: IMG.cardApp     },
 ];
 
 export default function Home() {
