@@ -167,7 +167,14 @@ export default function Register() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xxxl },
+  scroll: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxxl,
+    width: "100%",
+    maxWidth: 500,
+    marginHorizontal: "auto",
+  },
   back: { alignSelf: "flex-start", marginBottom: spacing.lg, padding: spacing.xs },
   title: { fontSize: 32, fontWeight: weight.bold, color: colors.text, letterSpacing: -0.5 },
   sub: { fontSize: font.lg, color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.xl },

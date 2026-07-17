@@ -1,0 +1,58 @@
+{
+  "summary": "RC1 Wave 2 regression: backend smoke (5/5 endpoints) PASSED; the react-dom-19 crash flagged in the review is FIXED on the marketing home at 1440px — NO LogBox / 'Failed to set an indexed property' / 'Uncaught Error' overlay. Admin portal desktop sidebar + mobile tab bar behavior verified end-to-end (login, nav item active state, users navigation, logout). Auth cards centered on desktop (login 412px, register 452px). Newsletter subscribe posts to /api/newsletter/subscribe → 200. BUT: the /drivers URL resolves to app/(admin)/drivers.tsx instead of app/(marketing)/drivers.tsx (route-group collision), so hitting the marketing 'Drivers' link surfaces a distinct 'Missing token' Uncaught-Error LogBox overlay. This is a critical, user-visible regression path (independent of the react-dom-19 fix).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Marketing /drivers route",
+        "issue": "Both /(admin)/drivers.tsx and /(marketing)/drivers.tsx exist. Because expo-router strips group parens, the URL '/drivers' is ambiguous and resolves to the admin file (loaded via src/api/client.ts fetch that requires a token). Result: red LogBox overlay 'Uncaught Error — Missing token' appears when an unauthenticated visitor clicks the header 'Drivers' link. Marketing 'Drivers' page is effectively unreachable.",
+        "testID": "n/a",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Root Stack layout warning",
+        "issue": "Console warning: 'No route named \"index\" exists in nested children'. Indicates the app/_layout.tsx Stack is trying to declare or default-navigate to a screen named 'index' at the root level that does not exist (only route groups + settings/driver-profile exist at root). Non-blocking but noisy on every page load.",
+        "testID": "n/a",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Marketing header → /drivers",
+        "issue": "Clicking the 'Drivers' link in the marketing header opens the admin drivers screen which calls /api/admin/drivers without a JWT and throws in src/api/client.ts:43 → shown as a red LogBox overlay.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "react-native-web deprecated props",
+        "issue": "Console warnings on every page: 'shadow* style props are deprecated. Use \"boxShadow\"' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking but should be migrated in a future pass."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave2_smoke.py",
+    "/app/test_reports/pytest/wave2_smoke.xml"
+  ],
+  "action_items": [
+    "Fix /drivers route collision. Options: (a) rename app/(admin)/drivers.tsx to a distinct URL (e.g. app/(admin)/manage-drivers.tsx and update SideRail admin nav 'Drivers' href to '/(admin)/manage-drivers'), or (b) rename app/(marketing)/drivers.tsx to /for-drivers and update marketing nav links. Prefer option (a) to keep the public URL /drivers marketing-facing (SEO-friendly).",
+    "Also audit for other cross-group URL collisions (customer /profile vs driver /profile vs admin /profile all resolve to /profile — currently masked because auth gating steers each role to their group, but the same 'first group wins' rule may bite again).",
+    "Investigate the 'No route named \"index\" exists in nested children' Stack warning in app/_layout.tsx — either add a placeholder <Stack.Screen name=\"index\" /> or drop the reference.",
+    "Optional cleanup: migrate deprecated shadow* / pointerEvents style props to boxShadow / style.pointerEvents (react-native-web deprecation warnings)."
+  ],
+  "critical_code_review_comments": [
+    "SideRail at src/components/portal/SideRail.tsx uses router.push() instead of Link asChild (as noted in the Wave 2 changelog) — confirmed working, no react-dom-19 regressions observed at 1440px.",
+    "AdminTabs (_layout.tsx) hides the tab bar via `tabBar={isWebDesktop ? () => null : undefined}` — verified: [role=tablist] absent at 1440×900 and present at 390×844.",
+    "usePortalLayout hook correctly toggles isWebDesktop at width>=1024 in the browsers I tested."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave2_smoke.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "~85% — 1 critical route collision on /drivers"},
+  "seed_data_creation": "Created 2 test customer accounts via /api/auth/register (test_wave2_*@example.com) and one newsletter subscription (newsletter_*@example.com). Data prefixed for easy cleanup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Wave 2 react-dom-19 fix confirmed working on marketing / at 1440×900 — no LogBox overlay. Admin portal sidebar+tab responsiveness verified. Register card 452px, Login card 412px. Backend smoke suite lives at /app/backend/tests/test_wave2_smoke.py (5 tests, all green). Outstanding issue for main agent: /drivers URL collides between (admin) and (marketing) groups — resolves to (admin) and crashes for unauthenticated users. After main agent renames one of the routes, retest by (1) unauth GET /drivers should render marketing content (no LogBox), (2) logged-in admin sidebar 'Drivers' should still navigate to the admin driver list. Also worth double-checking (customer|driver|admin)/profile similarly do not collide with any marketing/settings path.",
+  "rca_of_issue": "REPRO for /drivers crash: open incognito → https://cargo-one-preview.preview.emergentagent.com/drivers → red LogBox 'Uncaught Error — Missing token' at src/api/client.ts:43, call stack shows 'load app/(admin)/drivers.tsx:18:20'. Root cause: expo-router route groups ('(admin)', '(marketing)') are stripped from the URL, so both app/(admin)/drivers.tsx and app/(marketing)/drivers.tsx claim '/drivers' — expo-router picks the first alphabetically ('(admin)'). Fix by renaming one of the two files so their public URLs differ."
+}

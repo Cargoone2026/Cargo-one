@@ -199,3 +199,49 @@ agent_communication:
     -agent: "testing"
     -message: "Iteration 8 backend testing complete. Wrote /app/backend/tests/test_contact_newsletter_gdpr.py with 11 test cases covering: (1) POST /api/contact — happy path with persistence check via GET /api/admin/contact-messages, 400 on short message, 400 on short name, 422 on invalid email, admin-only guard on listing; (2) POST /api/newsletter/subscribe — happy path, idempotent duplicate (already_subscribed=true), 422 on invalid email, admin-only guard on subscriber listing; (3) POST /api/auth/me/delete — full flow: registered customer 'John Test' + driver 'Jane Driver', admin-approved driver, customer posted bidding job, driver bid, customer accepted bid, customer created booking. Pre-delete verified jobs.customer_name='John Test', jobs.assigned_driver_name='Jane Driver', bids.driver_name='Jane Driver'. Post customer-delete verified user record anonymised (email starts with 'deleted+', name='Deleted user', status='suspended') and jobs.customer_name='Deleted user'. Post driver-delete verified jobs.assigned_driver_name='Deleted user' and bids.driver_name='Deleted user' (queried via admin). All 11/11 tests passed. No issues found. Results: /app/test_reports/pytest/iter8_results.xml. Detailed report: /app/test_reports/iteration_8.json."
 
+
+# RC1 Wave 2 — Responsive Portals + Auth Polish
+
+frontend:
+  - task: "Responsive web portal layouts with desktop sidebar"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(customer)/_layout.tsx, (driver)/_layout.tsx, (admin)/_layout.tsx, src/components/portal/SideRail.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added SideRail component (240px dark sidebar) shown on WEB when width >= 1024. Contains brand, role label, nav items with active state, footer links (Public site, Settings), and user info + logout. Bottom tab bar is hidden on desktop via tabBar prop. Native + narrow web still use bottom tabs. Main content area capped at 1200px. NOTE: SideRail intentionally uses router.push() instead of Link asChild — Link asChild wrapping styled Pressables triggered a react-dom-19 CSSStyleDeclaration error that breaks the entire app."
+
+  - task: "Auth screens polished for desktop (centered card)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(auth)/login.tsx, register.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Login capped to 460px max-width, centered horizontally. Register capped to 500px. Improves desktop presentation without altering mobile experience."
+
+  - task: "Backend + marketing regression check after portal layout changes"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, frontend/app/(marketing)/*.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "No backend changes. No marketing changes. Need regression check that marketing pages, auth flow, deposit calculations, job/bid/booking APIs still work end-to-end."
+
+agent_communication:
+    -agent: "main"
+    -message: "RC1 Wave 2 progress: responsive desktop sidebar added to all 3 portals with proper active states; mobile tab bar preserved. Auth screens (login/register) centered on desktop. Fixed a critical react-dom-19 crash caused by Link asChild + array style props inside portal sidebar (replaced with router.push). Please: (1) regression-test the marketing site and auth flow (login/register/logout) still work; (2) verify the customer/driver/admin portals render correctly on desktop 1440px and mobile 390px; (3) confirm existing backend endpoints unchanged and still passing."
+    -agent: "testing"
+    -message: "Iteration 9 (Wave 2 regression) complete. Backend smoke suite /app/backend/tests/test_wave2_smoke.py — 5/5 green (root, admin login, register customer, deposit-bands, booking-fees preview). Frontend: (a) react-dom-19 fix VERIFIED — marketing / at 1440x900 loads cleanly, NO LogBox overlay, NO 'Failed to set an indexed property'. (b) Admin portal at 1440x900: SideRail (CARGO ONE, Admin portal, Dashboard/Users/Drivers/Jobs/Booking Fees/Settings, active state red, Public site + Settings footer, user row + logout icon) renders; no bottom tab bar; clicking Users navigates to /users and marks it active. (c) Admin portal at 390x844: SideRail hidden, bottom tablist visible. (d) Logout icon in SideRail logs out and redirects to /. (e) Login card centered at ~412px (spec ≤460), Register card at ~452px (spec ≤500). (f) Footer newsletter POST /api/newsletter/subscribe returns 200. HOWEVER, one HIGH-priority regression path found: /drivers URL is a route-group collision — both app/(admin)/drivers.tsx and app/(marketing)/drivers.tsx claim '/drivers'. Expo-router resolves it to (admin)/drivers.tsx which fetches admin data without a token, throwing 'Uncaught Error — Missing token' as a full-screen red LogBox for any unauthenticated visitor. See /app/test_reports/iteration_9.json for RCA + fix guidance. Also noted a warning 'No route named \"index\" exists in nested children' from the root Stack layout. Retest needed after main agent renames the conflicting file."
+
