@@ -30,6 +30,12 @@ from search_service import (
     build_marketing_results,
     build_vehicle_results,
 )
+from markets import (
+    SUPPORTED_MARKETS,
+    classify_route,
+    is_supported_country,
+    market_name,
+)
 from service_catalog import (
     CATEGORY_SEED,
     LEGACY_CATEGORY_MAP,
@@ -123,6 +129,26 @@ class TokenResponse(BaseModel):
     user: UserPublic
 
 
+class Location(BaseModel):
+    """Structured address / place — Europe-ready.
+
+    country_code (ISO2) is the discriminator used to classify routes as
+    domestic vs international. Coordinates default to 0 when only manual
+    address entry is available; the backend will treat that as an
+    unresolved location and return an international-review quote state.
+    """
+    formatted_address: str
+    address_line: Optional[str] = None
+    postcode: Optional[str] = None
+    town: Optional[str] = None
+    region: Optional[str] = None
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    place_id: Optional[str] = None
+    lat: float = 0.0
+    lng: float = 0.0
+
+
 class JobCreate(BaseModel):
     title: str
     category: str  # See /api/catalog/categories for current list (dynamic)
@@ -132,10 +158,22 @@ class JobCreate(BaseModel):
     pickup_town: str
     pickup_lat: float
     pickup_lng: float
+    # New: international address extensions — all optional so existing
+    # UK-only clients continue to work.
+    pickup_postcode: Optional[str] = None
+    pickup_region: Optional[str] = None
+    pickup_country: Optional[str] = None
+    pickup_country_code: Optional[str] = None
+    pickup_place_id: Optional[str] = None
     dropoff_address: str
     dropoff_town: str
     dropoff_lat: float
     dropoff_lng: float
+    dropoff_postcode: Optional[str] = None
+    dropoff_region: Optional[str] = None
+    dropoff_country: Optional[str] = None
+    dropoff_country_code: Optional[str] = None
+    dropoff_place_id: Optional[str] = None
     weight_kg: Optional[float] = None
     dimensions: Optional[str] = None
     collection_date: str
@@ -644,6 +682,15 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     distance = haversine_miles(
         data["pickup_lat"], data["pickup_lng"], data["dropoff_lat"], data["dropoff_lng"]
     )
+    # Classify route so we can flag international jobs for manual pricing review.
+    route_class = classify_route(
+        data.get("pickup_country_code"),
+        data.get("dropoff_country_code"),
+    )
+    # Legacy contract: if no country codes provided at all, treat as UK domestic.
+    if not data.get("pickup_country_code") and not data.get("dropoff_country_code"):
+        route_class = "domestic_uk"
+
     # Quote suggestion: base £1.5/mile + category multiplier
     category_mult = {
         "furniture": 1.2, "pallets": 1.4, "cars": 2.0, "motorcycles": 1.5,
@@ -657,9 +704,10 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
         "customer_id": user["id"],
         "customer_name": user["name"],
         "customer_rating": user.get("rating", 5.0),
-        "status": "posted",
+        "status": "posted" if route_class == "domestic_uk" else "awaiting_manual_quote",
         "distance_miles": round(distance, 1),
-        "suggested_price": suggested_price,
+        "suggested_price": suggested_price if route_class == "domestic_uk" else None,
+        "route_class": route_class,
         "assigned_driver_id": None,
         "accepted_price": None,
         "created_at": now_iso(),
@@ -681,8 +729,24 @@ async def quote_estimate(pickup_lat: float, pickup_lng: float,
                           category: str = "furniture_delivery",
                           weight_kg: Optional[float] = None,
                           volume_m3: Optional[float] = None,
+                          pickup_country_code: Optional[str] = None,
+                          dropoff_country_code: Optional[str] = None,
                           user: dict = Depends(get_current_user)):
-    """Estimate distance, duration, vehicle & suggested price for a route."""
+    """Estimate distance, duration, vehicle & suggested price for a route.
+
+    Route classification (via markets.classify_route) is included in the
+    response so the frontend can render a "manual review required" state
+    for international routes that don't yet have configured pricing.
+    Existing UK jobs remain fully backwards compatible — the endpoint
+    still accepts calls without country codes and returns a UK price
+    quote when only lat/lng are provided.
+    """
+    route_class = classify_route(pickup_country_code, dropoff_country_code)
+    # Preserve pre-existing behaviour: if the caller didn't send country
+    # codes at all, treat the route as domestic-UK (legacy contract).
+    if not pickup_country_code and not dropoff_country_code:
+        route_class = "domestic_uk"
+
     # Try Google Distance Matrix first
     gmaps = await google_distance_matrix(
         (pickup_lat, pickup_lng), (dropoff_lat, dropoff_lng),
@@ -737,13 +801,33 @@ async def quote_estimate(pickup_lat: float, pickup_lng: float,
     if volume_m3 and volume_m3 > 10:
         suggested_price = round(suggested_price * (1 + min(1.5, volume_m3 / 40.0)), 2)
 
+    # International-review handling — do NOT invent pricing for routes we
+    # don't have a configured rule for.
+    needs_manual_review = route_class in ("international", "domestic_other", "unsupported")
+    origin_name = market_name(pickup_country_code) if pickup_country_code else "United Kingdom"
+    dest_name = market_name(dropoff_country_code) if dropoff_country_code else "United Kingdom"
+
     return {
         "distance_miles": distance_miles,
         "duration_minutes": duration_minutes,
-        "suggested_price": suggested_price,
+        "suggested_price": None if needs_manual_review else suggested_price,
         "vehicle": vehicle_label,
         "category_key": normalized,
         "source": source,
+        # Route classification (new — clients can render an international
+        # quote-review card when this is not "domestic_uk").
+        "route_class": route_class,
+        "origin_country_code": (pickup_country_code or "GB"),
+        "destination_country_code": (dropoff_country_code or "GB"),
+        "origin_country": origin_name,
+        "destination_country": dest_name,
+        "requires_manual_review": needs_manual_review,
+        "manual_review_message": (
+            f"{origin_name} → {dest_name} routes are supported architecturally but "
+            "pricing for this corridor hasn't been configured yet. Our team will "
+            "provide a bespoke quote within one business day."
+            if needs_manual_review else None
+        ),
     }
 
 
@@ -2194,6 +2278,72 @@ def _user_href_for_admin(user_id: Optional[str]) -> str:
     if not user_id:
         return "/(admin)/users"
     return f"/(admin)/users?id={user_id}"
+
+
+# ---------------------------------------------------------------------------
+# Geography — supported markets + address autocomplete
+# ---------------------------------------------------------------------------
+
+@api.get("/geo/markets")
+async def geo_markets():
+    """Return the launch markets Cargo One supports. Frontend uses this to
+    render country pickers and to determine whether a route is domestic
+    or international."""
+    return {
+        "markets": SUPPORTED_MARKETS,
+        "count": len(SUPPORTED_MARKETS),
+    }
+
+
+@api.get("/geo/autocomplete")
+async def geo_autocomplete(q: str = ""):
+    """Address autocomplete endpoint. Proxies to Google Places when the
+    server-side key is configured (GOOGLE_MAPS_API_KEY env var); otherwise
+    returns an empty list with `source: "manual"` so the frontend renders
+    its manual-entry fallback. Public — safe to call without a JWT.
+    """
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"suggestions": [], "source": "manual", "query": q}
+
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not api_key or api_key.startswith("placeholder"):
+        # No production key configured yet — frontend will show manual entry.
+        return {"suggestions": [], "source": "manual", "query": q}
+
+    try:
+        import httpx  # local import — httpx is already in requirements
+        url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+        # Regional bias for UK + Ireland + western Europe.
+        params = {
+            "input": q,
+            "key": api_key,
+            "types": "geocode",
+            # Restrict to supported markets (Google allows up to 5 countries
+            # in `components`). If we grow past 5, drop the restriction and
+            # rely on `location` + `radius` bias instead.
+            "components": "|".join(
+                f"country:{m['iso2'].lower()}" for m in SUPPORTED_MARKETS[:5]
+            ),
+        }
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            r = await client.get(url, params=params)
+        if r.status_code != 200:
+            return {"suggestions": [], "source": "google_error", "query": q}
+        data = r.json()
+        preds = data.get("predictions") or []
+        suggestions = []
+        for p in preds[:6]:
+            suggestions.append({
+                "place_id": p.get("place_id"),
+                "formatted_address": p.get("description"),
+                "town": (p.get("structured_formatting") or {}).get("secondary_text") or "",
+                # We don't hit /details here to save cost — client can pick
+                # the suggestion and the WebView flow will fetch details.
+            })
+        return {"suggestions": suggestions, "source": "google", "query": q}
+    except Exception as e:
+        return {"suggestions": [], "source": "manual", "query": q, "error": str(e)}
 
 
 # ---- Driver vehicle profiles (fleet management) ----

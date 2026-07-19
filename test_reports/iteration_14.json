@@ -1,0 +1,40 @@
+{
+  "summary": "Wave 3 Pre-Launch Increment B backend verified. Created /app/backend/tests/test_wave3_prelaunch_B_international_routes.py with 15 tests covering GET /api/geo/markets (16 markets, GB-only pricing_configured=true), GET /api/geo/autocomplete (short-query + no-Google-key manual fallback, public), GET /api/quote/estimate (UK->UK domestic priced, GB->IE international requires_manual_review with 'United Kingdom' + 'Republic of Ireland' in message, FR->FR domestic_other requires review, legacy no-country-code defaults to domestic_uk with price, CN dropoff unsupported requires review, requires_auth), and POST /api/jobs (UK-only -> status=posted/route_class=domestic_uk; GB->IE with all new address fields -> status=awaiting_manual_quote/route_class=international with pickup_postcode/country/country_code/place_id and dropoff_* all round-tripping via GET /api/jobs/{id}). All 15 new tests pass. Regression: all 41 pre-existing tests in test_wave3_phaseB_search_and_driver_dashboard.py (19) + test_wave3_prelaunch_A_driver_verification.py (22) still pass. Total 56/56.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wave3_prelaunch_B_international_routes.py",
+    "/app/test_reports/pytest/wave3_prelaunchB_results.xml",
+    "/app/test_reports/pytest/wave3_prelaunchB_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:2298 geo_autocomplete correctly treats both empty and 'placeholder…' Google keys as unconfigured -> returns {suggestions:[], source:'manual'}. Public — no auth dependency. Good.",
+    "server.py:744-748 quote_estimate preserves legacy contract: when neither country code is supplied, route_class is forced to 'domestic_uk' regardless of what classify_route would have said (which returns 'unsupported' for empty codes). Prevents silent breakage of existing UK clients.",
+    "server.py:686-692 create_job mirrors the same legacy-fallback logic, so UK-only POST /api/jobs bodies continue to persist with status='posted' and route_class='domestic_uk'.",
+    "server.py:707-710 status/suggested_price gating is coupled to route_class == 'domestic_uk' — international/domestic_other/unsupported all correctly persist as 'awaiting_manual_quote' with suggested_price=null.",
+    "server.py:313 public_job returns all extra keys from the stored doc (only strips _id, and pickup_/dropoff_address when not private), so the new pickup_postcode/pickup_country/pickup_country_code/pickup_place_id (and dropoff_*) fields automatically round-trip via GET /api/jobs/{id} without any schema changes. Confirmed by test.",
+    "server.py:2287 geo_markets returns the raw SUPPORTED_MARKETS list — matches spec (16 entries, GB pricing_configured=true, all others false).",
+    "markets.classify_route correctly handles unsupported ISO2 (e.g. 'CN') by returning 'unsupported', which flows through to requires_manual_review=true."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wave3_prelaunch_B_international_routes.py (new)",
+    "/app/test_reports/pytest/wave3_prelaunchB_results.xml (new)",
+    "/app/test_reports/pytest/wave3_prelaunchB_regression.xml (new)",
+    "/app/test_reports/iteration_14.json (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15 new + 41/41 regression = 56/56)", "frontend": "N/A (skipped per request)"},
+  "seed_data_creation": "Two TEST_-prefixed jobs are created by TestJobsIntlAddressing (one UK-only, one GB->IE). Both persist in db.jobs and are not cleaned up because the app has no delete-job endpoint for customers; this matches the pattern used by prior wave3 test suites. All test jobs are prefixed with 'TEST_intl_' in their title for easy identification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "GOOGLE_MAPS_API_KEY in /app/backend/.env is empty string, which makes /api/geo/autocomplete return source='manual' for all real queries. If a future increment configures a real key, the autocomplete tests here will still pass (they only assert on the short-query and no-key branches) but a new test should be added to exercise the Google path with a mock. Also: TestJobsIntlAddressing does not clean up its two test jobs (no customer-delete endpoint exists); consider adding a fixture that queries and marks them once such an endpoint lands.",
+  "rca_of_issue": "N/A — no defects found. All Increment B endpoints behave per spec and legacy UK contract is preserved."
+}

@@ -33,9 +33,14 @@ const NOT_SURE_KEY = "__not_sure__";
 type Quote = {
   distance_miles: number;
   duration_minutes: number;
-  suggested_price: number;
+  suggested_price: number | null;
   vehicle: string;
   category_key: string;
+  route_class?: "domestic_uk" | "domestic_other" | "international" | "unsupported";
+  requires_manual_review?: boolean;
+  manual_review_message?: string | null;
+  origin_country?: string;
+  destination_country?: string;
 };
 
 type FeePreview = {
@@ -116,6 +121,8 @@ export default function PostJob() {
           `dropoff_lng=${dropoff.lng}`,
           `category=${encodeURIComponent(categoryKey)}`,
         ];
+        if (pickup.country_code) parts.push(`pickup_country_code=${pickup.country_code}`);
+        if (dropoff.country_code) parts.push(`dropoff_country_code=${dropoff.country_code}`);
         if (weightKg) parts.push(`weight_kg=${weightKg}`);
         const vol = volumeFromDims(lengthM, widthM, heightM);
         if (vol) parts.push(`volume_m3=${vol}`);
@@ -222,10 +229,20 @@ export default function PostJob() {
         pickup_town: pickup.town || pickup.formatted_address.split(",").pop()?.trim() || "",
         pickup_lat: pickup.lat,
         pickup_lng: pickup.lng,
+        pickup_postcode: pickup.postcode || null,
+        pickup_region: pickup.region || null,
+        pickup_country: pickup.country || null,
+        pickup_country_code: pickup.country_code || null,
+        pickup_place_id: pickup.place_id || null,
         dropoff_address: dropoff.formatted_address,
         dropoff_town: dropoff.town || dropoff.formatted_address.split(",").pop()?.trim() || "",
         dropoff_lat: dropoff.lat,
         dropoff_lng: dropoff.lng,
+        dropoff_postcode: dropoff.postcode || null,
+        dropoff_region: dropoff.region || null,
+        dropoff_country: dropoff.country || null,
+        dropoff_country_code: dropoff.country_code || null,
+        dropoff_place_id: dropoff.place_id || null,
         weight_kg: weightKg ? Number(weightKg) : null,
         dimensions: [lengthM, widthM, heightM].filter(Boolean).join("×") || null,
         collection_date: collectionDate,
@@ -350,7 +367,21 @@ export default function PostJob() {
                       height={180}
                     />
                   </View>
-                  {quote && (
+                  {quote?.requires_manual_review && (
+                    <View style={styles.intlBanner} testID="intl-route-banner">
+                      <Ionicons name="airplane" size={20} color={colors.warning} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.intlTitle}>
+                          International route: {quote.origin_country} → {quote.destination_country}
+                        </Text>
+                        <Text style={styles.intlBody}>
+                          {quote.manual_review_message ||
+                            "Our team will provide a bespoke quote within one business day."}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {quote && !quote.requires_manual_review && (
                     <View style={styles.quoteRow}>
                       <QuoteStat label="Distance" value={`${quote.distance_miles} mi`} icon="navigate" />
                       <QuoteStat label="Est. time" value={fmtDur(quote.duration_minutes)} icon="time" />
@@ -801,6 +832,13 @@ const styles = StyleSheet.create({
   },
   quoteStatValue: { fontSize: font.base, fontWeight: weight.bold, color: colors.text },
   quoteStatLabel: { fontSize: 11, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 },
+  intlBanner: {
+    flexDirection: "row", gap: spacing.sm, alignItems: "flex-start",
+    padding: spacing.md, backgroundColor: colors.warningBg,
+    borderTopWidth: 1, borderTopColor: colors.warning,
+  },
+  intlTitle: { fontSize: font.base, fontWeight: weight.bold, color: colors.text },
+  intlBody: { fontSize: font.sm, color: colors.text, marginTop: 4, lineHeight: 18 },
 
   vehList: { gap: spacing.sm },
   vehCard: {
