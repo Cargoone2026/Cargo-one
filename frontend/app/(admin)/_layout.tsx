@@ -48,6 +48,7 @@ export default function AdminTabs() {
           <Tabs.Screen name="deposit-bands" options={{ href: null }} />
           <Tabs.Screen name="catalog" options={{ href: null }} />
           <Tabs.Screen name="analytics" options={{ href: null }} />
+          <Tabs.Screen name="driver/[id]" options={{ href: null }} />
         </Tabs>
       </View>
     </View>

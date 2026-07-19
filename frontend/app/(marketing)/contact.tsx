@@ -76,50 +76,70 @@ export default function Contact() {
       />
 
       <Section bg="#fff">
-        <View style={[styles.split, isMobile && { flexDirection: "column" }]}>
-          {/* Contact info */}
-          <View style={{ flex: 1, gap: spacing.lg }}>
-            <View>
-              <Text style={styles.eyebrow}>REACH US</Text>
-              <Text style={styles.head}>Choose your channel</Text>
+        {submitted ? (
+          <View style={styles.submittedWrap}>
+            <View style={styles.thanks}>
+              <Ionicons name="checkmark-circle" size={64} color={colors.success} />
+              <Text style={styles.thanksTitle}>Message sent</Text>
+              <Text style={styles.thanksBody}>
+                Thanks! One of our team will reply within 24 hours.
+              </Text>
+              <Pressable
+                onPress={() => setSubmitted(false)}
+                style={styles.sendAnotherBtn}
+                testID="contact-send-another"
+              >
+                <Ionicons name="mail" size={16} color={colors.brand} />
+                <Text style={styles.sendAnotherText}>Send another message</Text>
+              </Pressable>
             </View>
-            <View style={styles.channelList}>
-              {[
-                { icon: "mail", title: "Email", body: "hello@cargoone.co.uk", tag: "Reply within 24h" },
-                { icon: "call", title: "Phone", body: "+44 800 111 000", tag: "24/7 support line" },
-                { icon: "location", title: "Head office", body: "Cargo One Ltd, 1 Fleet Street, London EC4A 1AA", tag: "By appointment" },
-                { icon: "headset", title: "Emergency line", body: "For safety incidents in progress", tag: "+44 800 111 999" },
-              ].map((c) => (
-                <View key={c.title} style={styles.channelCard}>
-                  <View style={styles.channelIcon}>
-                    <Ionicons name={c.icon as any} size={22} color={colors.brand} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.channelTitle}>{c.title}</Text>
-                    <Text style={styles.channelBody}>{c.body}</Text>
-                    <Text style={styles.channelTag}>{c.tag}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Form */}
-          <View style={{ flex: 1, gap: spacing.md }}>
-            <View>
-              <Text style={styles.eyebrow}>SEND US A MESSAGE</Text>
-              <Text style={styles.head}>We’ll get back to you</Text>
-            </View>
-
-            {submitted ? (
-              <View style={styles.thanks}>
-                <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-                <Text style={styles.thanksTitle}>Message sent</Text>
-                <Text style={styles.thanksBody}>
-                  Thanks! One of our team will reply to you within 24 hours.
+            {/* Keep the emergency line visible for urgent scenarios */}
+            <View style={styles.emergencyBox}>
+              <Ionicons name="headset" size={20} color={colors.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emergencyTitle}>Emergency line</Text>
+                <Text style={styles.emergencyBody}>
+                  For safety incidents in progress, call{" "}
+                  <Text style={{ fontWeight: weight.bold }}>+44 800 111 999</Text> — 24/7.
                 </Text>
               </View>
-            ) : (
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.split, isMobile && { flexDirection: "column" }]}>
+            {/* Contact info */}
+            <View style={{ flex: 1, gap: spacing.lg }}>
+              <View>
+                <Text style={styles.eyebrow}>REACH US</Text>
+                <Text style={styles.head}>Choose your channel</Text>
+              </View>
+              <View style={styles.channelList}>
+                {[
+                  { icon: "mail", title: "Email", body: "hello@cargoone.co.uk", tag: "Reply within 24h" },
+                  { icon: "call", title: "Phone", body: "+44 800 111 000", tag: "24/7 support line" },
+                  { icon: "location", title: "Head office", body: "Cargo One Ltd, 1 Fleet Street, London EC4A 1AA", tag: "By appointment" },
+                  { icon: "headset", title: "Emergency line", body: "For safety incidents in progress", tag: "+44 800 111 999" },
+                ].map((c) => (
+                  <View key={c.title} style={styles.channelCard}>
+                    <View style={styles.channelIcon}>
+                      <Ionicons name={c.icon as any} size={22} color={colors.brand} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.channelTitle}>{c.title}</Text>
+                      <Text style={styles.channelBody}>{c.body}</Text>
+                      <Text style={styles.channelTag}>{c.tag}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Form */}
+            <View style={{ flex: 1, gap: spacing.md }}>
+              <View>
+                <Text style={styles.eyebrow}>SEND US A MESSAGE</Text>
+                <Text style={styles.head}>We’ll get back to you</Text>
+              </View>
               <View style={styles.formCard}>
                 <View style={{ flexDirection: "row", gap: spacing.md, flexWrap: "wrap" as any }}>
                   <View style={{ flex: 1, minWidth: 220 }}>
@@ -209,9 +229,9 @@ export default function Contact() {
                   We’ll never share your details with third parties.
                 </Text>
               </View>
-            )}
+            </View>
           </View>
-        </View>
+        )}
       </Section>
 
       <Section bg={colors.bgSecondary}>
@@ -311,12 +331,32 @@ const styles = StyleSheet.create({
   thanks: {
     backgroundColor: colors.successBg,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    padding: spacing.xxl,
     alignItems: "center",
     gap: spacing.sm,
+    width: "100%",
+    maxWidth: 560,
   },
-  thanksTitle: { fontSize: font.xl, fontWeight: weight.bold, color: colors.text },
+  thanksTitle: { fontSize: font.xxl, fontWeight: weight.bold, color: colors.text, textAlign: "center" },
   thanksBody: { fontSize: font.base, color: colors.text, textAlign: "center", maxWidth: 400 },
+  submittedWrap: {
+    alignItems: "center", gap: spacing.lg, width: "100%",
+  },
+  sendAnotherBtn: {
+    flexDirection: "row", alignItems: "center", gap: spacing.xs,
+    marginTop: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+    borderRadius: radius.pill, backgroundColor: "#fff",
+    borderWidth: 1, borderColor: colors.brand,
+  },
+  sendAnotherText: { color: colors.brand, fontWeight: weight.bold, fontSize: font.base },
+  emergencyBox: {
+    flexDirection: "row", gap: spacing.sm, alignItems: "flex-start",
+    backgroundColor: colors.errorBg, borderRadius: radius.md,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.error,
+    maxWidth: 560, width: "100%",
+  },
+  emergencyTitle: { fontSize: font.base, fontWeight: weight.bold, color: colors.text },
+  emergencyBody: { fontSize: font.sm, color: colors.text, marginTop: 2, lineHeight: 18 },
 
   officeRow: { flexDirection: "row", gap: spacing.lg, flexWrap: "wrap" as any, justifyContent: "center" },
   officeCard: {

@@ -102,7 +102,7 @@ class UserPublic(BaseModel):
     name: str
     phone: Optional[str] = None
     role: str
-    status: str = "active"  # active | pending | suspended
+    status: str = "active"  # active | pending | changes_requested | suspended
     rating: float = 5.0
     total_jobs: int = 0
     review_count: int = 0
@@ -111,6 +111,10 @@ class UserPublic(BaseModel):
     documents_verified: bool = False
     verified_driver: bool = False
     created_at: str
+    # Driver verification workflow — surfaced so the driver can see admin feedback
+    changes_requested_reason: Optional[str] = None
+    changes_requested_doc_types: Optional[list[str]] = None
+    suspension_reason: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -247,6 +251,9 @@ def user_to_public(user: dict) -> dict:
         "documents_verified": user.get("documents_verified", False),
         "verified_driver": verified_driver,
         "created_at": user.get("created_at", now_iso()),
+        "changes_requested_reason": user.get("changes_requested_reason"),
+        "changes_requested_doc_types": user.get("changes_requested_doc_types"),
+        "suspension_reason": user.get("suspension_reason"),
     }
 
 
@@ -1444,18 +1451,227 @@ async def admin_list_users(role: Optional[str] = None,
 
 
 @api.post("/admin/users/{user_id}/approve")
-async def admin_approve(user_id: str, user: dict = Depends(require_role("admin"))):
-    await db.users.update_one({"id": user_id}, {"$set": {"status": "active",
-                                                          "documents_verified": True}})
+async def admin_approve(user_id: str, actor: dict = Depends(require_role("admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    entry = {
+        "id": new_id(),
+        "action": "approve",
+        "by_admin_id": actor["id"],
+        "by_admin_name": actor.get("name"),
+        "reason": None,
+        "at": now_iso(),
+        "previous_status": target.get("status"),
+    }
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {"status": "active", "documents_verified": True},
+            "$push": {"verification_history": entry},
+        },
+    )
     await push_notification(user_id, "You're approved!",
                              "Your driver account is approved. You can now accept jobs.")
     return {"ok": True}
 
 
+class AdminUserActionPayload(BaseModel):
+    reason: Optional[str] = None
+    doc_types: Optional[list[str]] = None  # Optional list of doc_types to request changes for
+
+
 @api.post("/admin/users/{user_id}/suspend")
-async def admin_suspend(user_id: str, user: dict = Depends(require_role("admin"))):
-    await db.users.update_one({"id": user_id}, {"$set": {"status": "suspended"}})
+async def admin_suspend(
+    user_id: str,
+    payload: Optional[AdminUserActionPayload] = None,
+    actor: dict = Depends(require_role("admin")),
+):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    reason = (payload.reason if payload else None) or None
+    entry = {
+        "id": new_id(),
+        "action": "suspend",
+        "by_admin_id": actor["id"],
+        "by_admin_name": actor.get("name"),
+        "reason": reason,
+        "at": now_iso(),
+        "previous_status": target.get("status"),
+    }
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {"status": "suspended", "suspension_reason": reason},
+            "$push": {"verification_history": entry},
+        },
+    )
+    if target.get("role") == "driver":
+        await push_notification(
+            user_id,
+            "Account suspended",
+            f"Your Cargo One driver account has been suspended.{(' Reason: ' + reason) if reason else ''}",
+        )
     return {"ok": True}
+
+
+@api.post("/admin/users/{user_id}/request-changes")
+async def admin_request_changes(
+    user_id: str,
+    payload: AdminUserActionPayload,
+    actor: dict = Depends(require_role("admin")),
+):
+    """Soft-reject a driver's verification and ask them to resubmit specific
+    documents. Sets user.status = 'changes_requested' and stores the admin's
+    reason + document list on the user record so the driver can see exactly
+    what needs to change and re-upload only what's required."""
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") != "driver":
+        raise HTTPException(status_code=400, detail="request-changes only applies to drivers")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Please provide a reason (10+ characters)")
+    doc_types = payload.doc_types or []
+    entry = {
+        "id": new_id(),
+        "action": "request_changes",
+        "by_admin_id": actor["id"],
+        "by_admin_name": actor.get("name"),
+        "reason": reason,
+        "doc_types": doc_types,
+        "at": now_iso(),
+        "previous_status": target.get("status"),
+    }
+    # Also mark the individual documents as rejected (with the reason) so the
+    # driver's document list shows what needs to change and _recompute won't
+    # auto-flip them back to active until re-uploaded.
+    if doc_types:
+        await db.documents.update_many(
+            {"user_id": user_id, "doc_type": {"$in": doc_types}, "active": True},
+            {"$set": {"status": "rejected", "rejection_reason": reason, "reviewed_at": now_iso()}},
+        )
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "status": "changes_requested",
+                "changes_requested_reason": reason,
+                "changes_requested_doc_types": doc_types,
+                "documents_verified": False,
+            },
+            "$push": {"verification_history": entry},
+        },
+    )
+    await push_notification(
+        user_id,
+        "Changes requested",
+        f"Please review and re-upload your documents. {reason}",
+        {"doc_types": doc_types},
+    )
+    return {"ok": True}
+
+
+@api.post("/auth/me/resubmit-verification")
+async def driver_resubmit_verification(user: dict = Depends(get_current_user)):
+    """Driver marks their profile as ready for review again after uploading
+    updated docs. Only usable when status = changes_requested."""
+    if user.get("role") != "driver":
+        raise HTTPException(status_code=400, detail="Only drivers can resubmit verification")
+    if user.get("status") not in ("changes_requested",):
+        raise HTTPException(status_code=400, detail="Not currently in changes_requested state")
+    entry = {
+        "id": new_id(),
+        "action": "resubmit",
+        "by_admin_id": None,
+        "by_admin_name": None,
+        "reason": "Driver re-submitted after requested changes",
+        "at": now_iso(),
+        "previous_status": user.get("status"),
+    }
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {"status": "pending"},
+            "$unset": {"changes_requested_reason": "", "changes_requested_doc_types": ""},
+            "$push": {"verification_history": entry},
+        },
+    )
+    return {"ok": True, "status": "pending"}
+
+
+@api.get("/admin/drivers/{driver_id}")
+async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("admin"))):
+    """Full driver verification snapshot for the admin review screen.
+
+    Returns:
+      - user (profile fields + role + status + history)
+      - documents (active docs, base64 included so admin can preview)
+      - fleet (registered vehicles)
+      - stats (job counts + rating)
+    """
+    d = await db.users.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    if d.get("role") != "driver":
+        raise HTTPException(status_code=400, detail="Not a driver")
+
+    docs = await db.documents.find(
+        {"user_id": driver_id, "active": True}, {"_id": 0},
+    ).sort("uploaded_at", -1).to_list(50)
+    fleet = await db.driver_vehicles.find(
+        {"driver_id": driver_id}, {"_id": 0},
+    ).sort("created_at", 1).to_list(50)
+
+    # Stats
+    completed_bookings = await db.bookings.count_documents(
+        {"driver_id": driver_id, "status": "completed"}
+    )
+    active_bookings = await db.bookings.count_documents(
+        {"driver_id": driver_id, "status": {"$nin": ["completed", "cancelled"]}}
+    )
+    reviews = await db.reviews.find(
+        {"target_id": driver_id}, {"_id": 0}
+    ).to_list(500)
+    if reviews:
+        avg_rating = sum(float(r.get("rating", 0)) for r in reviews) / len(reviews)
+    else:
+        avg_rating = float(d.get("rating") or 5.0)
+
+    return {
+        "user": {
+            "id": d.get("id"),
+            "name": d.get("name"),
+            "email": d.get("email"),
+            "phone": d.get("phone"),
+            "role": d.get("role"),
+            "status": d.get("status"),
+            "profile_photo": d.get("profile_photo"),
+            "documents_verified": d.get("documents_verified"),
+            "verified_driver": d.get("verified_driver"),
+            "address": d.get("address"),
+            "address_line": d.get("address_line"),
+            "town": d.get("town"),
+            "postcode": d.get("postcode"),
+            "country": d.get("country"),
+            "country_code": d.get("country_code"),
+            "changes_requested_reason": d.get("changes_requested_reason"),
+            "changes_requested_doc_types": d.get("changes_requested_doc_types") or [],
+            "suspension_reason": d.get("suspension_reason"),
+            "verification_history": d.get("verification_history") or [],
+            "created_at": d.get("created_at"),
+        },
+        "documents": docs,
+        "fleet": fleet,
+        "stats": {
+            "completed_bookings": completed_bookings,
+            "active_bookings": active_bookings,
+            "rating": round(avg_rating, 2),
+            "review_count": len(reviews),
+        },
+    }
 
 
 @api.get("/admin/jobs")

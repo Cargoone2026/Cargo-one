@@ -83,6 +83,8 @@ export default function DriverHome() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const pending = user?.status === "pending";
+  const changesRequested = user?.status === "changes_requested";
+  const suspended = user?.status === "suspended";
   const earnings = dash.earnings || { today: 0, week: 0, month: 0, all_time: 0, completed_count: 0 };
   const bids = dash.bids || { active: 0, accepted: 0 };
   const fleet = dash.fleet || { count: 0, active_count: 0, capabilities: [], vehicles: [] };
@@ -90,6 +92,17 @@ export default function DriverHome() {
   const verify = dash.verification || { docs_verified: 0, docs_pending: 0, docs_rejected: 0 };
   const rating = dash.user?.rating ?? user?.rating ?? 5;
   const reviewCount = dash.user?.review_count ?? 0;
+  const changesReason = (user as any)?.changes_requested_reason || (dash as any)?.user?.changes_requested_reason;
+  const changesDocTypes: string[] = (user as any)?.changes_requested_doc_types || (dash as any)?.user?.changes_requested_doc_types || [];
+
+  const resubmit = useCallback(async () => {
+    try {
+      await api("/auth/me/resubmit-verification", { method: "POST" });
+      await load();
+    } catch {
+      // silent — the button will just remain
+    }
+  }, [load]);
 
   return (
     <View style={styles.root} testID="driver-home">
@@ -97,7 +110,15 @@ export default function DriverHome() {
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>Hi {user?.name?.split(" ")[0] || "there"}</Text>
-            <Text style={styles.slogan}>{pending ? "Complete verification to earn" : "Ready to earn today?"}</Text>
+            <Text style={styles.slogan}>
+              {suspended
+                ? "Account suspended — contact support"
+                : changesRequested
+                  ? "Action required — see below"
+                  : pending
+                    ? "Complete verification to earn"
+                    : "Ready to earn today?"}
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -109,9 +130,13 @@ export default function DriverHome() {
               <Ionicons name="search" size={20} color="#fff" />
             </Pressable>
             <View style={styles.headerBadge}>
-              <View style={[styles.dot, { backgroundColor: pending ? colors.warning : colors.success }]} />
+              <View style={[styles.dot, { backgroundColor:
+                suspended || changesRequested ? colors.error
+                : pending ? colors.warning
+                : colors.success
+              }]} />
               <Text style={styles.badgeText}>
-                {pending ? "Pending" : "Online"}
+                {suspended ? "Suspended" : changesRequested ? "Action needed" : pending ? "Pending" : "Online"}
               </Text>
             </View>
           </View>
@@ -133,6 +158,54 @@ export default function DriverHome() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
           </Pressable>
+        )}
+
+        {changesRequested && (
+          <View style={styles.changesCard}>
+            <View style={{ flexDirection: "row", gap: spacing.md, alignItems: "flex-start" }}>
+              <Ionicons name="alert-circle" size={22} color={colors.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.warningTitle}>Admin has requested changes</Text>
+                {changesReason ? (
+                  <Text style={styles.warningText}>{changesReason}</Text>
+                ) : null}
+                {changesDocTypes.length > 0 && (
+                  <Text style={[styles.warningText, { marginTop: 4 }]}>
+                    Please re-upload: {changesDocTypes.map((k) => k.replace(/_/g, " ")).join(", ")}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
+              <Pressable
+                onPress={() => router.push("/(driver)/documents")}
+                style={styles.changesPrimaryBtn}
+                testID="driver-changes-upload"
+              >
+                <Ionicons name="cloud-upload" size={16} color="#fff" />
+                <Text style={styles.changesPrimaryText}>Update documents</Text>
+              </Pressable>
+              <Pressable
+                onPress={resubmit}
+                style={styles.changesGhostBtn}
+                testID="driver-changes-resubmit"
+              >
+                <Text style={styles.changesGhostText}>Re-submit for review</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {suspended && (
+          <View style={styles.suspendedCard}>
+            <Ionicons name="ban" size={22} color={colors.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warningTitle}>Account suspended</Text>
+              <Text style={styles.warningText}>
+                Your driver account has been suspended. Contact support if you believe this is a mistake.
+              </Text>
+            </View>
+          </View>
         )}
 
         {/* --- Section 1: Earnings snapshot --- */}
@@ -411,6 +484,27 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,
     backgroundColor: "#FFFBEB", borderRadius: radius.md, borderWidth: 1, borderColor: "#FDE68A",
   },
+  changesCard: {
+    padding: spacing.lg,
+    backgroundColor: colors.errorBg, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.error,
+  },
+  suspendedCard: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,
+    backgroundColor: colors.errorBg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error,
+  },
+  changesPrimaryBtn: {
+    flexDirection: "row", alignItems: "center", gap: spacing.xs,
+    backgroundColor: colors.brand, paddingHorizontal: spacing.md, paddingVertical: 10,
+    borderRadius: radius.pill,
+  },
+  changesPrimaryText: { color: "#fff", fontWeight: weight.bold, fontSize: font.sm },
+  changesGhostBtn: {
+    flexDirection: "row", alignItems: "center", gap: spacing.xs,
+    paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.error,
+  },
+  changesGhostText: { color: colors.error, fontWeight: weight.bold, fontSize: font.sm },
   warningTitle: { fontSize: font.base, fontWeight: weight.bold, color: colors.text },
   warningText: { fontSize: font.sm, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
 

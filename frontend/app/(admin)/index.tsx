@@ -79,7 +79,7 @@ export default function AdminDashboard() {
         <View style={styles.section}>
           <Pressable
             style={styles.actionRow}
-            onPress={() => router.push("/(admin)/drivers")}
+            onPress={() => router.push("/(admin)/manage-drivers")}
             testID="admin-pending-approvals"
           >
             <View style={[styles.actionIcon, { backgroundColor: "#FEE2E2" }]}>

@@ -27,30 +27,63 @@ export default function AdminSettings() {
           </View>
         </View>
 
-        <View style={styles.section}>
+        {/* Working operational tools — every row leads to a real route */}
+        <Section title="Operations">
+          <Row
+            icon="bar-chart-outline"
+            label="Reports & Analytics"
+            sub="Marketplace, revenue, drivers, customers"
+            onPress={() => router.push("/(admin)/analytics")}
+            testID="settings-analytics"
+          />
+          <Row
+            icon="library-outline"
+            label="Service Catalogue"
+            sub="Categories, vehicles, capabilities"
+            onPress={() => router.push("/(admin)/catalog")}
+            testID="settings-catalog"
+          />
+          <Row
+            icon="car-sport-outline"
+            label="Manage drivers"
+            sub="Approve, review or suspend drivers"
+            onPress={() => router.push("/(admin)/manage-drivers")}
+            testID="settings-drivers"
+          />
+          <Row
+            icon="cube-outline"
+            label="All jobs"
+            sub="Marketplace moderation"
+            onPress={() => router.push("/(admin)/jobs")}
+            testID="settings-jobs"
+          />
           <Row
             icon="pricetags-outline"
             label="Booking Fee Bands"
+            sub="Tiered platform fees by driver charge"
             onPress={() => router.push("/(admin)/deposit-bands")}
             testID="settings-deposit-bands"
           />
-          <Row icon="megaphone-outline" label="Homepage banners" />
-          <Row icon="pricetag-outline" label="Job categories" />
-          <Row icon="gift-outline" label="Promo codes" />
-          <Row icon="help-circle-outline" label="FAQs" />
-        </View>
+        </Section>
 
-        <View style={styles.section}>
+        <Section title="Preferences & Legal">
           <Row
             icon="settings-outline"
             label="App settings & Legal"
+            sub="Version, terms, privacy, delete account"
             onPress={() => router.push("/settings")}
             testID="admin-open-settings"
           />
-          <Row icon="stats-chart-outline" label="Reports & Analytics" />
-          <Row icon="alert-circle-outline" label="Disputes" />
-          <Row icon="notifications-outline" label="Push notifications" />
-        </View>
+        </Section>
+
+        {/* Deferred items — clearly badged as Coming soon, non-navigating */}
+        <Section title="Coming soon">
+          <ComingRow icon="megaphone-outline" label="Homepage banners" />
+          <ComingRow icon="gift-outline" label="Promo codes" />
+          <ComingRow icon="help-circle-outline" label="FAQ management" />
+          <ComingRow icon="alert-circle-outline" label="Disputes" />
+          <ComingRow icon="notifications-outline" label="Push notifications" />
+        </Section>
 
         <View style={{ padding: spacing.xl }}>
           <Button title="Log out" variant="outline" onPress={logout} testID="admin-logout" />
@@ -60,15 +93,43 @@ export default function AdminSettings() {
   );
 }
 
-function Row({ icon, label, onPress, testID }: any) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Pressable style={styles.row} onPress={onPress} testID={testID}>
+    <View style={{ marginTop: spacing.md }}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  );
+}
+
+function Row({ icon, label, sub, onPress, testID }: {
+  icon: any; label: string; sub?: string; onPress?: () => void; testID?: string;
+}) {
+  return (
+    <Pressable style={styles.row} onPress={onPress} testID={testID} disabled={!onPress}>
       <View style={styles.rowIcon}>
         <Ionicons name={icon} size={20} color={colors.text} />
       </View>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
+      </View>
+      {onPress && <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />}
     </Pressable>
+  );
+}
+
+function ComingRow({ icon, label }: { icon: any; label: string }) {
+  return (
+    <View style={[styles.row, { opacity: 0.7 }]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.bgSecondary }]}>
+        <Ionicons name={icon} size={20} color={colors.textSecondary} />
+      </View>
+      <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={styles.soonPill}>
+        <Text style={styles.soonPillText}>Coming soon</Text>
+      </View>
+    </View>
   );
 }
 
@@ -84,8 +145,13 @@ const styles = StyleSheet.create({
   email: { fontSize: font.base, color: colors.textSecondary },
   badge: { backgroundColor: colors.brand, paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.pill },
   badgeText: { color: "#fff", fontSize: 11, fontWeight: weight.bold, letterSpacing: 1 },
-  section: {
-    marginHorizontal: spacing.xl, marginTop: spacing.md, backgroundColor: colors.bg,
+  sectionTitle: {
+    fontSize: font.sm, color: colors.textSecondary, fontWeight: weight.bold,
+    textTransform: "uppercase", letterSpacing: 0.8,
+    marginHorizontal: spacing.xl, marginBottom: spacing.sm,
+  },
+  sectionBody: {
+    marginHorizontal: spacing.xl, backgroundColor: colors.bg,
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden",
   },
   row: {
@@ -96,5 +162,11 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bgSecondary,
     alignItems: "center", justifyContent: "center",
   },
-  rowLabel: { flex: 1, fontSize: font.base, color: colors.text, fontWeight: weight.medium },
+  rowLabel: { fontSize: font.base, color: colors.text, fontWeight: weight.medium },
+  rowSub: { fontSize: font.sm, color: colors.textSecondary, marginTop: 2 },
+  soonPill: {
+    paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill,
+    backgroundColor: colors.bgSecondary,
+  },
+  soonPillText: { fontSize: 10, color: colors.textSecondary, fontWeight: weight.bold, letterSpacing: 0.4, textTransform: "uppercase" },
 });
