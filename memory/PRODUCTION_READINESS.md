@@ -64,13 +64,32 @@ commit real values to `.env.example` files in the repo.
 | :-------------------------------- | :------------------------ | :----------------- |
 | `MONGO_URL`                       | `backend/.env`            | ✅ (already configured) |
 | `DB_NAME`                         | `backend/.env`            | ✅ (already configured) |
-| `JWT_SECRET`                      | `backend/.env`            | ✅ (already configured) |
-| `STRIPE_SECRET_KEY`               | `backend/.env`            | ✅ (test key set)  |
-| `STRIPE_WEBHOOK_SECRET`           | `backend/.env`            | ✅ (test set)      |
+| `JWT_SECRET`                      | `backend/.env`            | **⚠️ Rotate — must NOT equal the committed placeholder** (SEC-003 guard fails startup if unrotated when `PRODUCTION_MODE=true`) |
+| `PRODUCTION_MODE`                 | `backend/.env`            | **⚠️ Set to `true` for production** — disables admin seed, enforces JWT rotation |
+| `ALLOW_INITIAL_ADMIN_SEED`        | `backend/.env`            | **⚠️ Set to `false` for production** |
+| `INITIAL_ADMIN_EMAIL`             | `backend/.env`            | Optional — used only during first-run seed |
+| `INITIAL_ADMIN_PASSWORD`          | `backend/.env`            | Optional — used only during first-run seed. Provisioning the first admin manually is safer. |
+| `STRIPE_SECRET_KEY`               | `backend/.env`            | ✅ (test key set) — swap for `sk_live_...` at cutover |
+| `STRIPE_WEBHOOK_SECRET`           | `backend/.env`            | ✅ (test set) — swap for `whsec_live_...` at cutover |
 | `GOOGLE_MAPS_API_KEY`             | `backend/.env`            | **⚠️ Add production key** |
 | `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | `frontend/.env`           | **⚠️ Add production key** |
 | `EXPO_PUBLIC_BACKEND_URL`         | `frontend/.env`           | ✅ (Emergent-managed) |
 | `EXPO_PACKAGER_*`                 | `frontend/.env`           | ✅ (Emergent-managed — DO NOT touch) |
+
+## 4a. Security audit remediation summary (pre-launch)
+
+| Finding    | Severity | Status |
+| :--------- | :------- | :----- |
+| SEC-001 — Self-register as admin | **CRITICAL** | ✅ **FIXED** — `/api/auth/register` now rejects `role="admin"`. Only `customer`/`driver` allowed. |
+| SEC-002 — Seeded admin `admin@cargoone.com/admin123` self-restoring | **CRITICAL** | ✅ **GATED** — Startup seed skipped when `PRODUCTION_MODE=true` OR `ALLOW_INITIAL_ADMIN_SEED=false`. Initial password read from `INITIAL_ADMIN_PASSWORD` env var when seeding is allowed. |
+| SEC-003 — Committed placeholder `JWT_SECRET` | **HIGH** | ✅ **GUARDED** — Backend refuses to start when `PRODUCTION_MODE=true` and `JWT_SECRET` still equals the committed placeholder. |
+| SEC-004 — Suspended accounts keep valid tokens | **MEDIUM** | ✅ **FIXED** — `get_current_user()` now rejects suspended users with 403. |
+| SEC-005 — Unbounded base64 uploads | **MEDIUM** | ⏳ **DOCUMENTED** — Add reverse-proxy body-size cap (e.g. 20 MB) via ingress. No code change required. |
+| CORS `*` + `allow_credentials=True`  | Low (hardening) | ⏳ **DOCUMENTED** — For a bearer-token API this is low risk. Consider explicit allowlist post-launch. |
+| No rate limiting on `/auth/login`    | Low (hardening) | ⏳ **DOCUMENTED** — Add Cloudflare / ingress rate limiting (recommended: 5 req/min per IP on /auth/login). |
+| `python-jose` unused dependency      | Low (hardening) | ✅ **REMOVED** from `requirements.txt`. |
+| 30-day JWT lifetime, no revocation   | Low (hardening) | ⏳ **DOCUMENTED** — Consider shortening + refresh flow post-launch. |
+
 
 ## 5. Domain-restriction checklist for the day of launch
 

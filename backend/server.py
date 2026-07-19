@@ -254,6 +254,13 @@ async def get_current_user(
     user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # SEC-004: suspended accounts must NOT retain valid sessions. Reject their
+    # tokens even if they haven't expired yet. `changes_requested` is allowed
+    # so drivers can still see their status page + resubmit; individual
+    # endpoints (driver dashboard, job accept, etc.) can add their own
+    # stricter checks where needed.
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="Account suspended") from None
     return user
 
 
@@ -443,8 +450,13 @@ async def register(payload: UserRegister):
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-    if payload.role not in ("customer", "driver", "admin"):
-        raise HTTPException(status_code=400, detail="Invalid role")
+    # SEC: only customer/driver may self-register. Admin accounts are provisioned
+    # out-of-band (see backend startup seed guarded by ALLOW_INITIAL_ADMIN_SEED).
+    if payload.role not in ("customer", "driver"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid role — only customer or driver accounts can be self-registered.",
+        )
 
     user = {
         "id": new_id(),
@@ -2940,14 +2952,36 @@ async def root():
 # Seed admin + default deposit bands + service categories + vehicle types
 @app.on_event("startup")
 async def seed_startup():
-    if not await db.users.find_one({"role": "admin"}):
+    # SEC-002 / SEC-003: In production the seed MUST be disabled (set
+    # ALLOW_INITIAL_ADMIN_SEED="false" and PRODUCTION_MODE="true") — admins
+    # should be provisioned out-of-band. When the seed IS allowed the
+    # initial password is taken from INITIAL_ADMIN_PASSWORD so we never
+    # ship a shared secret to production.
+    allow_seed = os.environ.get("ALLOW_INITIAL_ADMIN_SEED", "true").lower() != "false"
+    production_mode = os.environ.get("PRODUCTION_MODE", "false").lower() == "true"
+    committed_default_jwt = "cargo_one_super_secret_jwt_key_change_in_prod_2026"
+    if production_mode and JWT_SECRET == committed_default_jwt:
+        raise RuntimeError(
+            "SEC-003: JWT_SECRET is still the committed placeholder while "
+            "PRODUCTION_MODE=true. Refusing to start. Set a strong random "
+            "JWT_SECRET in the environment before launch."
+        )
+
+    if allow_seed and not production_mode and not await db.users.find_one({"role": "admin"}):
+        initial_password = os.environ.get("INITIAL_ADMIN_PASSWORD", "admin123")
+        if initial_password == "admin123":
+            logger.warning(
+                "SEC-002: seeding admin with default password 'admin123' — "
+                "OK for local/QA only. Set INITIAL_ADMIN_PASSWORD and "
+                "ALLOW_INITIAL_ADMIN_SEED=false before production launch.",
+            )
         admin = {
             "id": new_id(),
-            "email": "admin@cargoone.com",
+            "email": os.environ.get("INITIAL_ADMIN_EMAIL", "admin@cargoone.com"),
             "name": "Admin",
             "phone": "+441234567890",
             "role": "admin",
-            "password_hash": hash_password("admin123"),
+            "password_hash": hash_password(initial_password),
             "status": "active",
             "rating": 5.0,
             "total_jobs": 0,
@@ -2955,7 +2989,15 @@ async def seed_startup():
             "created_at": now_iso(),
         }
         await db.users.insert_one(admin)
-        logger.info("Seeded default admin: admin@cargoone.com / admin123")
+        logger.info("Seeded initial admin (dev/QA mode)")
+    elif production_mode:
+        # In prod, only warn — don't seed and don't fail if admin doesn't
+        # exist yet; operator provisions the first admin via a secure path.
+        if not await db.users.find_one({"role": "admin"}):
+            logger.warning(
+                "PRODUCTION_MODE=true and no admin user exists. Provision "
+                "the first admin manually via a secured process.",
+            )
 
     if await db.deposit_bands.count_documents({}) == 0:
         defaults = [
