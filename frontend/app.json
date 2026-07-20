@@ -18,7 +18,10 @@
         "NSLocationWhenInUseUsageDescription": "Share your live location for delivery tracking",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep drivers on route so customers see live ETA",
         "NSMicrophoneUsageDescription": "Add voice notes to delivery updates",
-        "UIBackgroundModes": ["location", "fetch"],
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },

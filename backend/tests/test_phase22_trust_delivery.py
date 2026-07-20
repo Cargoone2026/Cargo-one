@@ -12,7 +12,7 @@ import pytest
 
 BASE_URL = os.environ.get(
     "EXPO_PUBLIC_BACKEND_URL",
-    "https://cargo-one-preview.preview.emergentagent.com",
+    "https://cargo-port.preview.emergentagent.com",
 ).rstrip("/")
 
 TINY_PNG_B64 = (

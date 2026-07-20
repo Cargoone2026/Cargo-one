@@ -3,7 +3,7 @@
   "backend_issues": {
     "critical": [],
     "minor": [
-      {"endpoint": "POST /api/bookings/{id}/deposit", "issue": "success_url is hardcoded to preview URL (https://cargo-one-preview.preview.emergentagent.com) as default when origin_url not sent - fine for MVP but should be env-driven."},
+      {"endpoint": "POST /api/bookings/{id}/deposit", "issue": "success_url is hardcoded to preview URL (https://cargo-port.preview.emergentagent.com) as default when origin_url not sent - fine for MVP but should be env-driven."},
       {"endpoint": "GET /api/payments/status/{session_id}", "issue": "Auth required but no ownership/role check; any authenticated user with a session_id can query status. Consider restricting to the booking's customer."},
       {"endpoint": "POST /api/bookings/{id}/status", "issue": "Both driver and customer can advance status through any valid transition with no state-machine enforcement (e.g. customer could mark 'collected'). Acceptable for MVP but risky."},
       {"endpoint": "POST /api/bookings/{id}/review", "issue": "No duplicate-review guard; same reviewer can post multiple reviews for the same booking and each recomputes target rating."}

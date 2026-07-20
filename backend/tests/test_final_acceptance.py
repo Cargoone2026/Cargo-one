@@ -21,7 +21,7 @@ import requests
 BASE_URL = (
     os.environ.get("EXPO_BACKEND_URL")
     or os.environ.get("EXPO_PUBLIC_BACKEND_URL")
-    or "https://cargo-one-preview.preview.emergentagent.com"
+    or "https://cargo-port.preview.emergentagent.com"
 ).rstrip("/")
 
 ADMIN = {"email": "admin@cargoone.com", "password": "admin123"}
