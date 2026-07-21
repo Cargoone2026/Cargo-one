@@ -31,9 +31,17 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
+.env
+.env.*
+!.env.example
+*.env
 
 *token.json*
 *credentials.json*
+
+# Migration baselines — never commit; snapshots may contain proprietary code
+.baselines/
+/.baselines/
 
 # Logs and debug files
 npm-debug.log*
