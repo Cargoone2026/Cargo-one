@@ -100,14 +100,57 @@ data, deposit math or visual language.
 - Stripe deposit checkout via `window.location.href` + return-status polling.
 - Booking detail (status timeline, messaging, tracking, POD, reviews).
 
-### Phase 2 Stage 2B — Driver Portal  🟠 P1  (next up, requires user approval)
-- Driver dashboard, foreground `navigator.geolocation.watchPosition`,
-  `<input type="file" capture="environment">` POD upload, canvas
-  SignaturePad, earnings, fleet, profile.
+### Phase 2 Stage 2B — Driver Portal  ✅ COMPLETE (2026-02-21)
+- New portal primitive: `SignaturePad.jsx` — HTML5 `<canvas>` port of the
+  Expo SignaturePad with pointer/touch events; emits base64 PNG on lift.
+- Driver routes wired through `RequireRole role="driver"` +
+  `DriverLayout` + `PortalShell` (SideRail ≥1024px / BottomTabs <1024px)
+  with 6 items: Home / Available / My Jobs / Earnings / Fleet / Profile.
+- `pages/portal/driver/Dashboard.jsx` — status-aware header (pending /
+  changes-requested / suspended), warning cards with `POST
+  /api/auth/me/resubmit-verification`, earnings/fleet/upcoming/bids/rating/
+  verification sections, all fed from `GET /api/driver/dashboard`.
+- `pages/portal/driver/Jobs.jsx` — `GET /api/jobs/nearby?radius=N` with
+  search box, sort chips (nearest/newest/highest £/shortest job), radius
+  chips (10/20/40/75/250), pricing/category/capability advanced filters,
+  min/max price range, reset-all, refresh.
+- `pages/portal/driver/JobDetail.jsx` — pending-approval warning gate,
+  bidding form (`POST /api/jobs/:id/bids`) with live `/api/booking-fees/preview`
+  breakdown, or fixed-price accept (`POST /api/jobs/:id/accept`).
+- `pages/portal/driver/MyJobs.jsx` — `GET /api/bookings/mine`.
+- `pages/portal/driver/BookingDetail.jsx` — Overview/Chat/POD tabs (hidden
+  until `payment_status="paid"`). Foreground tracking via
+  `navigator.geolocation.watchPosition` posting to `/api/tracking/:id`
+  with a 30 m / 45 s throttle, denial/timeout error surfacing, auto-stop
+  on unmount + when status leaves active range. Status flow via `POST
+  /api/bookings/:id/status`. Chat via `GET/POST /api/bookings/:id/messages`.
+  POD via `<input type="file" accept="image/*" capture="environment">`
+  (camera) + library picker + `SignaturePad` + delivery notes + best-effort
+  GPS snapshot at submit → `POST /api/bookings/:id/pod`. Backend
+  authorisation always respected.
+- `pages/portal/driver/Earnings.jsx` — totals + pending + in-progress
+  computed client-side from `/api/bookings/mine` (backend remains
+  authoritative for the per-booking `driver_charge`).
+- `pages/portal/driver/Fleet.jsx` — vehicle CRUD via `/api/driver/vehicles`
+  with modal form (type / registration / make / model / year / payload /
+  capability chips / default toggle).
+- `pages/portal/driver/Documents.jsx` — `GET /api/users/me/documents`
+  drives the required list; `POST /api/users/me/documents` with
+  `{doc_type, base64}` for uploads, per-row status pills.
+- `pages/portal/driver/Profile.jsx` — verified-driver badge, status pill,
+  quick links, logout.
+- `App.js` wired for all 9 driver routes + `/driver/*` catchall to
+  Dashboard. `PortalStub` retained only for `/admin/*` until Stage 2C.
+- Frontend testing agent (`/app/test_reports/iteration_3.json`) — **zero
+  issues**. Session restoration, RBAC (customer→/driver redirects away),
+  every screen renders, all sensitive endpoints wired, zero
+  `maps.googleapis.com` requests, no `AIzaSy` key in DOM.
+- Backend regression re-run — exact baseline preserved: **221 passed / 16
+  failed / 8 errors / 1 skipped**.
 
-### Phase 2 Stage 2C — Admin Portal  🟠 P1
+### Phase 2 Stage 2C — Admin Portal  🟠 P1  (next up, requires user approval)
 - Approvals, catalog CRUD, deposit-band CRUD, user/driver management,
-  disputes.
+  disputes, contact-messages queue.
 
 ### Phase 3 — Production Hardening  🟢 P2
 - Attach `cargoone.co.uk` domain; add production restricted Google Maps
