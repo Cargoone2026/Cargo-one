@@ -4,27 +4,37 @@ import { ChevronLeft, Star, ShieldCheck, Truck, Calendar } from "lucide-react";
 import { api } from "@/lib/api";
 
 /**
- * Public driver reputation page — restores parity with the original
+ * Driver reputation page — restores parity with the original
  * Expo `app/driver-profile/[id].tsx`. Backend endpoint
- * `GET /api/users/:user_id/profile` already existed; was accidentally
- * omitted from the React Web migration. Restored in Phase 2D.
+ * `GET /api/users/:user_id/profile` requires an authenticated user
+ * (any role) and exposes safe public-facing reputation data (name,
+ * rating, review count, vehicle summary, review excerpts). This is
+ * the same in-app "view a driver's public profile" surface as the
+ * Expo source — accessible to any signed-in user, not to search
+ * engines. Was accidentally omitted from the React Web migration;
+ * restored in Phase 2D.
  *
- * Route: /driver-profile/:id (public — no auth wall so customers can
- * inspect a driver's reputation before accepting a bid).
+ * Route: /driver-profile/:id
  */
 export default function DriverProfilePublic() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [p, setP] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [needsAuth, setNeedsAuth] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    setNeedsAuth(false);
     try {
       const res = await api(`/users/${id}/profile`);
       setP(res);
-    } catch {
+    } catch (e) {
+      const msg = (e?.message || "").toLowerCase();
+      if (msg.includes("token") || msg.includes("401") || msg.includes("unauthor")) {
+        setNeedsAuth(true);
+      }
       setP(null);
     } finally {
       setLoading(false);
@@ -62,7 +72,32 @@ export default function DriverProfilePublic() {
         >
           <ChevronLeft className="h-5 w-5 text-[#111111]" />
         </button>
-        <p className="mt-6 text-[13px] text-[#DC2626]">Profile not found.</p>
+        {needsAuth ? (
+          <div className="mt-6" data-testid="dpp-signin-required">
+            <p className="text-[15px] font-semibold text-[#111111]">
+              Sign in to view driver profiles
+            </p>
+            <p className="mt-1 text-[13px] text-[#6B7280]">
+              Driver reputation pages are visible to signed-in Cargo One users.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/auth/login?next=${encodeURIComponent(
+                    `/driver-profile/${id}`,
+                  )}`,
+                )
+              }
+              data-testid="dpp-signin-cta"
+              className="mt-4 inline-flex items-center gap-1 rounded-full bg-[#D62828] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#B01F1F]"
+            >
+              Sign in
+            </button>
+          </div>
+        ) : (
+          <p className="mt-6 text-[13px] text-[#DC2626]">Profile not found.</p>
+        )}
       </div>
     );
   }
