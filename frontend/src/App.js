@@ -20,12 +20,14 @@ import Welcome from "@/pages/auth/Welcome";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 
-// Customer portal — Stage 2A-i
+// Customer portal — Stage 2A-i (foundation) + Stage 2A-ii (active workflows)
 import CustomerDashboard from "@/pages/portal/customer/Dashboard";
 import CustomerBookings from "@/pages/portal/customer/Bookings";
 import CustomerMessages from "@/pages/portal/customer/Messages";
 import CustomerProfile from "@/pages/portal/customer/Profile";
-import ComingNext from "@/pages/portal/customer/ComingNext";
+import CustomerPostJob from "@/pages/portal/customer/PostJob";
+import CustomerJobDetail from "@/pages/portal/customer/JobDetail";
+import CustomerBookingDetail from "@/pages/portal/customer/BookingDetail";
 
 // Driver / Admin portal stubs (Stages 2B / 2C)
 import { PortalStub } from "@/pages/portal/PortalStub";
@@ -82,30 +84,18 @@ export default function App() {
               path="/customer/profile"
               element={<Customer Page={CustomerProfile} />}
             />
-            {/* Stage 2A-ii placeholders — graceful landings so hero + cards work */}
+            {/* Stage 2A-ii — active workflows */}
             <Route
               path="/customer/post-job"
-              element={
-                <Customer
-                  Page={() => <ComingNext area="Post Job wizard" />}
-                />
-              }
+              element={<Customer Page={CustomerPostJob} />}
             />
             <Route
               path="/customer/booking/:id"
-              element={
-                <Customer
-                  Page={() => <ComingNext area="Booking detail" />}
-                />
-              }
+              element={<Customer Page={CustomerBookingDetail} />}
             />
             <Route
               path="/customer/job/:id"
-              element={
-                <Customer
-                  Page={() => <ComingNext area="Job detail" />}
-                />
-              }
+              element={<Customer Page={CustomerJobDetail} />}
             />
             {/* Catch any /customer/* not yet ported */}
             <Route

@@ -1,0 +1,33 @@
+{
+  "summary": "Stage 2A-ii Customer Portal active-workflows frontend smoke test complete. All 5 Post-Job wizard steps work end-to-end for both fixed-price and bidding jobs against the live preview backend: server-side /api/geo/autocomplete is called; manual address fallback commits with no Google Maps browser key; RouteMap SVG renders with route-preview; /api/quote/estimate is called live; step-3 date gating works; /api/catalog/recommend-vehicle is called for 'Not Sure' and 6 vehicles render; pricing-bidding-tab / pricing-fixed-tab toggle; /api/booking-fees/preview is called live and populates booking fee £25 + total £225 correctly for a £200 driver charge; POST /api/jobs succeeds and navigates to /customer/job/{id}. Job detail shows fixed-waiting for fixed-price posted job and bids-empty for bidding posted job; RouteMap renders. BookingDetail unpaid state renders booking-summary, deposit-locked-notice, pay-deposit-button; not-found state also handled. RBAC: unauth /customer/post-job redirects to /auth/login?next=%2Fcustomer%2Fpost-job. Session restoration via HttpOnly cookie works on reload; no JWT in localStorage/sessionStorage (only PostHog analytics keys). Zero requests to maps.googleapis.com (6 google hits were all fonts.googleapis.com Inter font stylesheet). No AIzaSy key exposed in DOM. Regression: /customer dashboard, /customer/bookings, /customer/messages, /customer/profile all load without errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingDetail", "issue": "payment-polling banner is unreachable when the booking id is invalid: the early 'Booking not found.' return at line ~189 renders before the polling banner (line ~230) can be shown. On the happy path (valid booking) this is fine, but a customer returning from Stripe to a booking whose GET fails (e.g. transient 5xx) will never see the 'Confirming your Stripe payment…' banner even though the polling useEffect is running.", "selector": "[data-testid=\"payment-polling\"]", "priority": "LOW"},
+      {"component": "AddressAutocomplete manual fallback", "issue": "When /api/geo/autocomplete returns zero suggestions and the user goes through manual entry, the committed address has lat=0, lng=0 (no client-side geocode). PostJob then calls /api/quote/estimate with pickup_lat=0&pickup_lng=0 and submits the job with pickup_lat=0. Backend currently accepts it, but the resulting quote/RouteMap is geographically meaningless. Consider a server-side geocode step on commit (POST /api/geo/geocode) or block submit when lat/lng are 0.", "selector": "[data-testid=\"address-save\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(MEDIUM) Geocode manual address commits server-side so pickup_lat/lng and dropoff_lat/lng aren't 0 — otherwise /api/quote/estimate and the persisted job carry (0,0) coordinates.",
+    "(LOW) Move the payment-polling banner above the 'Booking not found' early-return in BookingDetail so Stripe returns still show the confirmation state even if the initial GET failed."
+  ],
+  "critical_code_review_comments": [
+    "PostJob.jsx submit(): pickup.lat/lng may be 0 when suggestions returned nothing and user went manual — backend accepts but quote & map are meaningless. Recommend forcing at least a postcode-level geocode before commit.",
+    "BookingDetail.jsx line ~189: the not-found early return short-circuits payment-polling and paid-tabs UI. Consider rendering the header + payment-polling banner regardless of booking presence.",
+    "PostJob step-1 canNext1 = category + title trim only — description is optional (matches spec).",
+    "PostJob step-5 canSubmit only checks fixed_price>0 in fixed mode; bidding mode always submittable — matches spec.",
+    "acceptBid in JobDetail.jsx uses alert() for error surfacing — consider a toast/inline error for consistency with the rest of the portal.",
+    "AddressAutocomplete: pickSuggestion() does not carry through place_id/lat/lng from the /api/geo/autocomplete response into the form (only formatted_address + town). If the server returns lat/lng in suggestions they are dropped."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not_tested", "frontend": "~95% (14/15 scoped flows pass end-to-end; 2 low/medium issues noted; Stripe checkout redirect not exercised because no accepted booking exists yet without the Driver portal — main agent instruction acknowledged this)"},
+  "test_credentials": "Customer testcustomer@example.com / CustomerTest12345! from /app/memory/test_credentials.md — worked.",
+  "seed_data_creation": "Created 2 test jobs during flow: fixed-price 4af865af-ee64-4164-b062-79c45d9aba9f and bidding f508aa78-6964-49e4-afb5-3aafed5c0c9c. Both belong to testcustomer@example.com and are in 'posted' status. Safe to leave — they exercise fixed-waiting and bids-empty states respectively.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend testing skipped per instructions. Zero google-maps requests, no browser Google Maps key. Stripe checkout redirect NOT exercised because in Stage 2A-ii no bids arrive to accept (Driver portal not built yet) — main agent flagged this as OK. Two jobs already seeded (see seed_data_creation) if a follow-up test needs them. Preview URL: https://cargo-repo-bridge.preview.emergentagent.com.",
+  "rca of the issue": "N/A — no functional blockers. Two soft issues documented above."
+}
