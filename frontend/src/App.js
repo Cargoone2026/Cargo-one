@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
+import { CustomerLayout } from "@/layouts/CustomerLayout";
 
 // Marketing
 import Home from "@/pages/marketing/Home";
@@ -19,7 +20,14 @@ import Welcome from "@/pages/auth/Welcome";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 
-// Portal stubs — full portals arrive in the next Phase 2 stage
+// Customer portal — Stage 2A-i
+import CustomerDashboard from "@/pages/portal/customer/Dashboard";
+import CustomerBookings from "@/pages/portal/customer/Bookings";
+import CustomerMessages from "@/pages/portal/customer/Messages";
+import CustomerProfile from "@/pages/portal/customer/Profile";
+import ComingNext from "@/pages/portal/customer/ComingNext";
+
+// Driver / Admin portal stubs (Stages 2B / 2C)
 import { PortalStub } from "@/pages/portal/PortalStub";
 
 function Marketing({ Page }) {
@@ -27,6 +35,14 @@ function Marketing({ Page }) {
     <MarketingLayout>
       <Page />
     </MarketingLayout>
+  );
+}
+
+function Customer({ Page }) {
+  return (
+    <CustomerLayout>
+      <Page />
+    </CustomerLayout>
   );
 }
 
@@ -52,11 +68,52 @@ export default function App() {
             <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/register" element={<Register />} />
 
-            {/* Portal stubs (full screens ported in next stage) */}
+            {/* Customer portal — Stage 2A-i */}
+            <Route path="/customer" element={<Customer Page={CustomerDashboard} />} />
+            <Route
+              path="/customer/bookings"
+              element={<Customer Page={CustomerBookings} />}
+            />
+            <Route
+              path="/customer/messages"
+              element={<Customer Page={CustomerMessages} />}
+            />
+            <Route
+              path="/customer/profile"
+              element={<Customer Page={CustomerProfile} />}
+            />
+            {/* Stage 2A-ii placeholders — graceful landings so hero + cards work */}
+            <Route
+              path="/customer/post-job"
+              element={
+                <Customer
+                  Page={() => <ComingNext area="Post Job wizard" />}
+                />
+              }
+            />
+            <Route
+              path="/customer/booking/:id"
+              element={
+                <Customer
+                  Page={() => <ComingNext area="Booking detail" />}
+                />
+              }
+            />
+            <Route
+              path="/customer/job/:id"
+              element={
+                <Customer
+                  Page={() => <ComingNext area="Job detail" />}
+                />
+              }
+            />
+            {/* Catch any /customer/* not yet ported */}
             <Route
               path="/customer/*"
-              element={<PortalStub role="customer" title="Customer portal coming next" />}
+              element={<Customer Page={CustomerDashboard} />}
             />
+
+            {/* Driver / Admin portals — ported in later stages */}
             <Route
               path="/driver/*"
               element={<PortalStub role="driver" title="Driver portal coming next" />}

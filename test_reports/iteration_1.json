@@ -1,0 +1,31 @@
+{
+  "summary": "Stage 2A-i Customer Portal frontend smoke test complete. All required flows pass: unauth guard, customer login, dashboard (Hey Test / search pill / hero / quick-action cards / categories / empty-active-bookings), ComingNext placeholders for post-job and category deep-links, GlobalSearchModal open+ESC-close for both button and pill triggers, SideRail with 5 items on desktop, BottomTabs on mobile (390px), Bookings with active/past tab toggle + empty state + search input, Messages with empty state and marking-read scaffolding, Profile header + edit form + PUT /api/auth/me name save reflected in header, disabled rows carry 'Available in the next migration stage', logout ends session (cargoone_session HttpOnly cookie cleared, /customer redirects back to /auth/login), marketing pages and /auth/register regression OK. HttpOnly cargoone_session cookie is set with Secure+SameSite=Lax; no JWT in localStorage or sessionStorage (only PostHog analytics keys present).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CustomerMessages", "issue": "Compose box (messages-compose-disabled / messages-compose-send) only renders when a notification is selected. When inbox is empty (current seed customer state) the compose element is not present in the DOM, which fails a strict reading of the spec 'The compose box in Messages must be visible but DISABLED'. Consider always rendering the disabled compose footer with the 'Messaging actions will be enabled in the next migration stage.' copy, even when no thread is selected.", "selector": "[data-testid=\"messages-compose-disabled\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional/LOW) Always render the disabled compose footer in CustomerMessages so messages-compose-send + the 'Messaging actions will be enabled in the next migration stage.' copy are present in the empty-inbox state, matching the strict spec wording."
+  ],
+  "critical_code_review_comments": [
+    "Auth uses HttpOnly cookie via credentials: 'include' correctly; no JWT in localStorage confirmed at runtime.",
+    "RequireRole guard correctly redirects unauthenticated users with ?next=… and cross-role users to their own portal.",
+    "AuthContext.logout is idempotent and swallows errors — good.",
+    "Messages.jsx: markRead call is properly no-op on failure. Compose-disabled block is conditionally rendered inside the selected-thread branch — see UI bug note above.",
+    "SideRail includes an extra 'Settings' link (/settings) at the bottom rail that has no route defined in App.js — clicking it would fall through to the '*' catch-all → Navigate to '/'. Not a spec violation for Stage 2A-i but worth adding a stub or removing until Stage 2A-ii.",
+    "Dashboard 'notifications-button' bell links to /customer/messages — good UX, not in test scope but consistent."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not_tested", "frontend": "~99% (14/14 scoped flows pass; 1 minor spec deviation on empty-inbox compose visibility)"},
+  "test_credentials": "Customer testcustomer@example.com / CustomerTest12345! from /app/memory/test_credentials.md — worked.",
+  "seed_data_creation": "None. Seed customer confirmed to have 0 bookings and 0 notifications.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend testing intentionally skipped per review_request. Cookie name cargoone_session, HttpOnly=Secure=true, SameSite=Lax verified. Preview URL https://cargo-repo-bridge.preview.emergentagent.com. Only outstanding item is the low-priority empty-inbox compose visibility question in Messages.jsx.",
+  "rca of the issue": "N/A — no functional bugs blocking Stage 2A-i sign-off."
+}
