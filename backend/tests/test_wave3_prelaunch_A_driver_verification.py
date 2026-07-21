@@ -364,6 +364,9 @@ class TestDriverResubmit:
         assert r.status_code == 400
 
     def test_resubmit_401_missing_token(self, http):
+        # Test isolation: clear any residual session cookies so this call is
+        # truly unauthenticated (cookie-auth is now supported alongside Bearer).
+        http.cookies.clear()
         r = http.post(f"{BASE_URL}/api/auth/me/resubmit-verification", timeout=15)
         # FastAPI OAuth2/HTTPBearer returns 401 (or 403 if bearer not present depending on impl)
         assert r.status_code in (401, 403), f"expected 401/403 got {r.status_code}"
