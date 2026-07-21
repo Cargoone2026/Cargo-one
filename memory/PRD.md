@@ -148,9 +148,55 @@ data, deposit math or visual language.
 - Backend regression re-run — exact baseline preserved: **221 passed / 16
   failed / 8 errors / 1 skipped**.
 
-### Phase 2 Stage 2C — Admin Portal  🟠 P1  (next up, requires user approval)
-- Approvals, catalog CRUD, deposit-band CRUD, user/driver management,
-  disputes, contact-messages queue.
+### Phase 2 Stage 2C — Admin Portal  ✅ COMPLETE (2026-02-21)
+- Admin routes wired through `RequireRole role="admin"` + `AdminLayout` +
+  `PortalShell` (SideRail ≥1024px / BottomTabs <1024px) with 10 items:
+  Dashboard / Analytics / Users / Drivers / Jobs / Bookings / Catalog /
+  Fee Bands / Queues / Profile.
+- `pages/portal/admin/Dashboard.jsx` — dark "Admin Console" header, 6
+  metric cards (customers/drivers/jobs/active jobs/revenue GBP/paid
+  bookings) from `GET /api/admin/stats`, 6 action rows + integrated
+  `GlobalSearchModal`.
+- `pages/portal/admin/Analytics.jsx` — `GET /api/admin/analytics/overview`
+  rendered as Marketplace / Revenue / Categories & Vehicles / Drivers /
+  Customers / Operational KPI blocks with TopLists.
+- `pages/portal/admin/Users.jsx` — `GET /api/admin/users?role=customer`,
+  suspend flow via `POST /api/admin/users/:id/suspend` with reason prompt.
+- `pages/portal/admin/Drivers.jsx` — `GET /api/admin/users?role=driver`,
+  filter chips (pending / changes_requested / active / suspended / all),
+  search, per-row "Review application" CTA.
+- `pages/portal/admin/DriverDetail.jsx` — `GET /api/admin/drivers/:id`,
+  profile + stats + action bar (approve/request-changes/suspend),
+  document rows with preview/approve/reject via `POST
+  /api/admin/documents/:doc_id/review`, missing-documents warning
+  card, request-changes / suspend modals with reason ≥10 chars + doc-type
+  chips.
+- `pages/portal/admin/Jobs.jsx` — `GET /api/admin/jobs` with search.
+- `pages/portal/admin/Bookings.jsx` — `GET /api/admin/bookings` with
+  payment-status pill (beyond-Expo but source-backend-supported).
+- `pages/portal/admin/Catalog.jsx` — tabbed CRUD for
+  `/api/admin/catalog/categories|vehicles|capabilities` (create / edit /
+  toggle-active / reorder-via-PUT-swap / delete).
+- `pages/portal/admin/DepositBands.jsx` — `/api/admin/deposit-bands` CRUD
+  with live `/api/deposit-bands/preview` calculator.
+- `pages/portal/admin/Queues.jsx` — Contact + Newsletter operational
+  queues via `/api/admin/contact-messages` and
+  `/api/admin/newsletter-subscribers` (beyond-Expo but source-backend
+  supported).
+- `pages/portal/admin/Profile.jsx` — admin badge, logout via `POST
+  /api/auth/logout` clears HttpOnly cookie.
+- `App.js` wired for all 11 admin routes; `PortalStub` removed for admin.
+- Frontend testing agent (`/app/test_reports/iteration_4.json`) — **zero
+  issues** across 15 test buckets. Includes: catalog capability
+  CRUD (create+delete disposable row), deposit-band CRUD (create+delete
+  disposable row), request-changes / suspend modals, driver-detail
+  documents-missing card, RBAC checks (customer→/admin blocked, driver→
+  /admin blocked, unauth→/auth/login), zero `maps.googleapis.com`
+  requests, no `AIzaSy` key in DOM.
+- Backend regression re-run — exact baseline preserved: **221 passed / 16
+  failed / 8 errors / 1 skipped**.
+
+### Phase 3 — Production Hardening  🟢 P2  (do NOT auto-start)
 
 ### Phase 3 — Production Hardening  🟢 P2
 - Attach `cargoone.co.uk` domain; add production restricted Google Maps
