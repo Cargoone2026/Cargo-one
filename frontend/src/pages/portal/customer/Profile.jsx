@@ -196,26 +196,26 @@ export default function CustomerProfile() {
             Icon={Settings}
             label="Settings"
             testID="profile-settings"
-            onClick={() => navigate("/customer")}
-            subtitle="Portal preferences (basic)"
+            onClick={() => navigate("/settings")}
+            subtitle="Preferences, legal, account"
           />
           <Row
             Icon={HelpCircle}
             label="Help & Support"
             testID="profile-help"
-            onClick={() => navigate("/contact")}
+            onClick={() => navigate("/settings/support")}
           />
           <Row
             Icon={FileText}
             label="Terms & Privacy"
             testID="profile-terms"
-            onClick={() => navigate("/trust-safety")}
+            onClick={() => navigate("/settings/terms")}
           />
           <Row
             Icon={Info}
             label="About Cargo One"
             testID="profile-about"
-            onClick={() => navigate("/about")}
+            onClick={() => navigate("/settings/about")}
           />
         </section>
 

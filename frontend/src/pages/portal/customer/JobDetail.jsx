@@ -197,9 +197,14 @@ export default function CustomerJobDetail() {
                     data-testid={`bid-card-${b.id}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white">
+                      <Link
+                        to={`/driver-profile/${b.driver_id}`}
+                        data-testid={`bid-driver-link-${b.id}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white hover:opacity-90"
+                        aria-label="View driver profile"
+                      >
                         {(b.driver_name || "D")[0]?.toUpperCase()}
-                      </span>
+                      </Link>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <p className="text-[14px] font-semibold text-[#111111]">

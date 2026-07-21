@@ -15,6 +15,10 @@ import Contact from "@/pages/marketing/Contact";
 import TrustSafety from "@/pages/marketing/TrustSafety";
 import About from "@/pages/marketing/About";
 
+// Public app pages (no chrome)
+import Settings from "@/pages/Settings";
+import DriverProfilePublic from "@/pages/DriverProfilePublic";
+
 // Auth (no marketing chrome)
 import Welcome from "@/pages/auth/Welcome";
 import Login from "@/pages/auth/Login";
@@ -111,6 +115,11 @@ export default function App() {
             <Route path="/auth/welcome" element={<Welcome />} />
             <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/register" element={<Register />} />
+
+            {/* Settings hub + public driver profile (parity with Expo) */}
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/:slug" element={<Settings />} />
+            <Route path="/driver-profile/:id" element={<DriverProfilePublic />} />
 
             {/* Customer portal — Stage 2A-i */}
             <Route path="/customer" element={<Customer Page={CustomerDashboard} />} />

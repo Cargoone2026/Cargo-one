@@ -37,8 +37,8 @@ export default function AdminProfile() {
 
         <section className="mt-4 overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white">
           <Row Icon={Settings} label="Platform settings" subtitle="Managed via Catalog & Fee Bands screens" testID="admin-profile-settings" onClick={() => navigate("/admin/catalog")} />
-          <Row Icon={FileText} label="Terms &amp; Privacy" testID="admin-profile-terms" onClick={() => navigate("/trust-safety")} />
-          <Row Icon={HelpCircle} label="Support" testID="admin-profile-help" onClick={() => navigate("/contact")} />
+          <Row Icon={FileText} label="Terms &amp; Privacy" testID="admin-profile-terms" onClick={() => navigate("/settings/terms")} />
+          <Row Icon={HelpCircle} label="Support" testID="admin-profile-help" onClick={() => navigate("/settings/support")} />
         </section>
 
         <div className="mt-6">

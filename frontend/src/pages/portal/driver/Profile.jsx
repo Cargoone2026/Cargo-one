@@ -94,9 +94,9 @@ export default function DriverProfile() {
           <RowLink
             Icon={Settings}
             label="Account settings"
-            subtitle="Terms, Privacy, Support"
+            subtitle="Terms, Privacy, Support, Delete Account"
             testID="open-settings"
-            onClick={() => navigate("/trust-safety")}
+            onClick={() => navigate("/settings")}
           />
         </section>
 
