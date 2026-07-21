@@ -59,13 +59,48 @@ data, deposit math or visual language.
 - Frontend testing agent (`/app/test_reports/iteration_1.json`) — all flows
   pass, zero issues. HttpOnly cookie verified; no JWT in localStorage.
 
+### Phase 2 Stage 2A-ii — Customer active workflows  ✅ COMPLETE (2026-02-21)
+- New portal primitives: `RouteMap.jsx` (SVG-only; no browser Google Maps key),
+  `ReviewModal.jsx` (rating stars + base64 photo attachments).
+- New hook: `hooks/useCatalog.js` — 5-minute in-memory cache for categories,
+  vehicles, capabilities; `requestRecommendation()` posts to
+  `/api/catalog/recommend-vehicle`.
+- `pages/portal/customer/PostJob.jsx` — 5-step wizard: category+title →
+  route (AddressAutocomplete + live `/api/quote/estimate`) → cargo details
+  → vehicle selection ("Not sure" calls `/api/catalog/recommend-vehicle`)
+  → pricing (bidding|fixed) + live `/api/booking-fees/preview`. Submits to
+  `POST /api/jobs` and navigates to `/customer/job/{id}`.
+- `pages/portal/customer/JobDetail.jsx` — job info + RouteMap, bids list
+  with verified-driver badge, `Accept Bid` calls `POST /api/bids/{id}/accept`
+  then `POST /api/bookings { job_id }`. Fixed-price jobs show "Continue to
+  Payment" once accepted.
+- `pages/portal/customer/BookingDetail.jsx` — Overview / Chat / POD tabs
+  (tabs hidden until `payment_status==="paid"`). Unpaid state shows town
+  names only, deposit-locked notice, `Pay Booking Fee` footer button that
+  calls `POST /api/bookings/{id}/deposit` and does `window.location.href =
+  session.url`. Return handler polls `/api/payments/status/{session_id}`
+  every 2s (max ~20s) then reloads booking. Tracking polls every 12s while
+  status is en-route. Chat uses `GET/POST /api/bookings/{id}/messages`
+  (backend authorises payment). POD renders photos/signature/GPS.
+  Completion via `POST /api/bookings/{id}/complete`; ReviewModal posts to
+  `/api/bookings/{id}/review`.
+- App.js wired: `/customer/post-job`, `/customer/job/:id`,
+  `/customer/booking/:id`; `ComingNext` retired for customer.
+- Frontend testing agent (`/app/test_reports/iteration_2.json`) — every
+  wizard step + live API calls verified, zero issues. HttpOnly cookie
+  posture preserved; zero `maps.googleapis.com` requests; no `AIzaSy` key
+  in DOM.
+- Backend regression re-run (`EXPO_PUBLIC_BACKEND_URL` +
+  `TEST_ADMIN_PASSWORD` exported) — exact baseline preserved: **221 passed
+  / 16 failed / 8 errors / 1 skipped**.
+
 ### Phase 2 Stage 2A-ii — Customer active workflows  🔴 PENDING USER APPROVAL
 - Post Job wizard (catalog / vehicle / addresses / photos / suggested price).
 - Quote workflow, bid acceptance.
 - Stripe deposit checkout via `window.location.href` + return-status polling.
 - Booking detail (status timeline, messaging, tracking, POD, reviews).
 
-### Phase 2 Stage 2B — Driver Portal  🟠 P1
+### Phase 2 Stage 2B — Driver Portal  🟠 P1  (next up, requires user approval)
 - Driver dashboard, foreground `navigator.geolocation.watchPosition`,
   `<input type="file" capture="environment">` POD upload, canvas
   SignaturePad, earnings, fleet, profile.
