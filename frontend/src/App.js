@@ -29,6 +29,18 @@ import CustomerPostJob from "@/pages/portal/customer/PostJob";
 import CustomerJobDetail from "@/pages/portal/customer/JobDetail";
 import CustomerBookingDetail from "@/pages/portal/customer/BookingDetail";
 
+// Driver portal — Stage 2B
+import DriverDashboard from "@/pages/portal/driver/Dashboard";
+import DriverJobs from "@/pages/portal/driver/Jobs";
+import DriverJobDetail from "@/pages/portal/driver/JobDetail";
+import DriverMyJobs from "@/pages/portal/driver/MyJobs";
+import DriverBookingDetail from "@/pages/portal/driver/BookingDetail";
+import DriverEarnings from "@/pages/portal/driver/Earnings";
+import DriverFleet from "@/pages/portal/driver/Fleet";
+import DriverDocuments from "@/pages/portal/driver/Documents";
+import DriverProfile from "@/pages/portal/driver/Profile";
+import { DriverLayout } from "@/layouts/DriverLayout";
+
 // Driver / Admin portal stubs (Stages 2B / 2C)
 import { PortalStub } from "@/pages/portal/PortalStub";
 
@@ -45,6 +57,14 @@ function Customer({ Page }) {
     <CustomerLayout>
       <Page />
     </CustomerLayout>
+  );
+}
+
+function Driver({ Page }) {
+  return (
+    <DriverLayout>
+      <Page />
+    </DriverLayout>
   );
 }
 
@@ -103,11 +123,19 @@ export default function App() {
               element={<Customer Page={CustomerDashboard} />}
             />
 
-            {/* Driver / Admin portals — ported in later stages */}
-            <Route
-              path="/driver/*"
-              element={<PortalStub role="driver" title="Driver portal coming next" />}
-            />
+            {/* Driver portal — Stage 2B */}
+            <Route path="/driver" element={<Driver Page={DriverDashboard} />} />
+            <Route path="/driver/jobs" element={<Driver Page={DriverJobs} />} />
+            <Route path="/driver/job/:id" element={<Driver Page={DriverJobDetail} />} />
+            <Route path="/driver/my-jobs" element={<Driver Page={DriverMyJobs} />} />
+            <Route path="/driver/booking/:id" element={<Driver Page={DriverBookingDetail} />} />
+            <Route path="/driver/earnings" element={<Driver Page={DriverEarnings} />} />
+            <Route path="/driver/fleet" element={<Driver Page={DriverFleet} />} />
+            <Route path="/driver/documents" element={<Driver Page={DriverDocuments} />} />
+            <Route path="/driver/profile" element={<Driver Page={DriverProfile} />} />
+            <Route path="/driver/*" element={<Driver Page={DriverDashboard} />} />
+
+            {/* Admin portal — Stage 2C */}
             <Route
               path="/admin/*"
               element={<PortalStub role="admin" title="Admin portal coming next" />}
