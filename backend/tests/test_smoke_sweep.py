@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-import os
 NO-CODE-CHANGE regression smoke sweep after git housekeeping.
 Tests sections A-G as specified in the review request.
 """
 
+import os
 import requests
 import sys
 
