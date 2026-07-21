@@ -86,3 +86,7 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Lockfile hygiene — this project uses Yarn (yarn.lock is the source of truth).
+# Do not track or regenerate npm's package-lock.json inside the Expo frontend.
+frontend/package-lock.json
