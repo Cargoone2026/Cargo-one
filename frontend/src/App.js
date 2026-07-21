@@ -41,6 +41,20 @@ import DriverDocuments from "@/pages/portal/driver/Documents";
 import DriverProfile from "@/pages/portal/driver/Profile";
 import { DriverLayout } from "@/layouts/DriverLayout";
 
+// Admin portal — Stage 2C
+import AdminDashboard from "@/pages/portal/admin/Dashboard";
+import AdminAnalytics from "@/pages/portal/admin/Analytics";
+import AdminUsers from "@/pages/portal/admin/Users";
+import AdminDrivers from "@/pages/portal/admin/Drivers";
+import AdminDriverDetail from "@/pages/portal/admin/DriverDetail";
+import AdminJobs from "@/pages/portal/admin/Jobs";
+import AdminBookings from "@/pages/portal/admin/Bookings";
+import AdminCatalog from "@/pages/portal/admin/Catalog";
+import AdminDepositBands from "@/pages/portal/admin/DepositBands";
+import AdminQueues from "@/pages/portal/admin/Queues";
+import AdminProfile from "@/pages/portal/admin/Profile";
+import { AdminLayout } from "@/layouts/AdminLayout";
+
 // Driver / Admin portal stubs (Stages 2B / 2C)
 import { PortalStub } from "@/pages/portal/PortalStub";
 
@@ -65,6 +79,14 @@ function Driver({ Page }) {
     <DriverLayout>
       <Page />
     </DriverLayout>
+  );
+}
+
+function Admin({ Page }) {
+  return (
+    <AdminLayout>
+      <Page />
+    </AdminLayout>
   );
 }
 
@@ -136,10 +158,18 @@ export default function App() {
             <Route path="/driver/*" element={<Driver Page={DriverDashboard} />} />
 
             {/* Admin portal — Stage 2C */}
-            <Route
-              path="/admin/*"
-              element={<PortalStub role="admin" title="Admin portal coming next" />}
-            />
+            <Route path="/admin" element={<Admin Page={AdminDashboard} />} />
+            <Route path="/admin/analytics" element={<Admin Page={AdminAnalytics} />} />
+            <Route path="/admin/users" element={<Admin Page={AdminUsers} />} />
+            <Route path="/admin/drivers" element={<Admin Page={AdminDrivers} />} />
+            <Route path="/admin/driver/:id" element={<Admin Page={AdminDriverDetail} />} />
+            <Route path="/admin/jobs" element={<Admin Page={AdminJobs} />} />
+            <Route path="/admin/bookings" element={<Admin Page={AdminBookings} />} />
+            <Route path="/admin/catalog" element={<Admin Page={AdminCatalog} />} />
+            <Route path="/admin/deposit-bands" element={<Admin Page={AdminDepositBands} />} />
+            <Route path="/admin/queues" element={<Admin Page={AdminQueues} />} />
+            <Route path="/admin/profile" element={<Admin Page={AdminProfile} />} />
+            <Route path="/admin/*" element={<Admin Page={AdminDashboard} />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,21 @@
+{
+  "summary": "Stage 2C Admin Portal frontend E2E testing complete. All 15 test buckets from the review request passed. Admin login lands on /admin with HttpOnly cookie (no JWT in localStorage/sessionStorage). Dashboard renders admin-dashboard + Admin Console header + Welcome, Admin + 6 metric cards (Customers 452, Drivers 329, Total Jobs 349, Active Jobs 305, Revenue GBP 0.00, Paid Bookings 0). SideRail shows all 10 items. All 6 dashboard action rows navigate to correct routes. Search modal opens and calls /api/search on typing 2+ chars. Analytics renders all 6 sections (Marketplace/Revenue/Categories/Drivers/Customers/Operational) with zero JS errors. Users list renders 452 rows; search+clear work; suspend cancel does not fire API. Drivers list renders with all 5 filter chips (pending/changes_requested/active/suspended/all); search + review navigation OK. Driver Detail (testdriver@example.com id=3506677b-2008-4708-8e3f-a1cee03a6926, status=pending) renders admin-driver-detail, admin-approve-driver, admin-request-changes, admin-suspend-driver; admin-doc-missing warning card renders for 7 missing document types; admin-reason-modal-changes and admin-reason-modal-suspend both open. Jobs list renders 349 rows; search present. Bookings list renders 202 rows; search present. Catalog: created capability e2e_test_cap_stage2c via POST /api/admin/catalog/capabilities and deleted successfully (row disappeared). DepositBands: preview call fires on band-preview-price change; created E2E Test Band Stage 2C (id=238c9154-...) via POST /api/admin/deposit-bands and deleted successfully. Queues renders contact + newsletter tabs with 20 rows each. Profile header renders. Logout POSTs /api/auth/logout, redirects to /auth/login; revisiting /admin bounces to /auth/login (cookie cleared). Session restoration on reload works. RBAC: unauthenticated /admin/*/, /admin/users, /admin/driver/xxx, /admin/analytics all redirect to /auth/login. Customer visiting /admin is redirected to /customer. Driver visiting /admin is redirected to /driver. Zero requests to maps.googleapis.com. No AIzaSy key in DOM. Stage 2A+2B regression: customer and driver login and their portals render normally.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: The review request states testdriver@example.com has NO uploaded documents and expects only admin-doc-missing to render. In reality testdriver has 1 uploaded Driving Licence (status=pending_review) plus 7 missing types. Both admin-doc-driving_licence row (with Preview/Approve/Reject buttons) AND admin-doc-missing card render side-by-side. This is not a bug — the UI handles the mixed state correctly — but the request statement is slightly stale."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100%" },
+  "test_credentials": "Used credentials from /app/memory/test_credentials.md (admin/customer/driver). Not printed here.",
+  "seed_data_creation": "Created and DELETED disposable capability e2e_test_cap_stage2c and disposable deposit band E2E Test Band Stage 2C. No pre-existing rows touched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Stage 2C admin portal is fully green. testdriver@example.com id is 3506677b-2008-4708-8e3f-a1cee03a6926 and remains in 'pending' status (approve button was verified but NOT clicked, so no state change). All admin routes, RBAC, HttpOnly cookie posture, and CRUD flows for catalog capabilities + deposit bands are working end-to-end. GlobalSearchModal wired to /api/search. Portal Button component maps testID prop -> data-testid attribute (see /app/frontend/src/components/ui-portal/Button.jsx line 51)."
+}
