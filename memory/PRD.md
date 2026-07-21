@@ -196,6 +196,46 @@ data, deposit math or visual language.
 - Backend regression re-run — exact baseline preserved: **221 passed / 16
   failed / 8 errors / 1 skipped**.
 
+### Phase 2D — Full-System Acceptance &amp; Remediation  ✅ COMPLETE (2026-02-21)
+- Cross-role live E2E (Customer + Driver + Admin, disposable accounts)
+  passed end-to-end via `testing_agent_v3_fork` (`iteration_5.json`, zero
+  issues): Post Job wizard → job → admin driver approval → bid → accept
+  → booking → Stripe TEST redirect → return-URL polling → admin
+  visibility. RBAC, HttpOnly cookie posture, `maps.googleapis.com` zero
+  request count all confirmed.
+- **Source-parity gaps discovered and remediated:**
+  1. `Settings` hub (`/settings`, `/settings/:slug`) — omitted during
+     initial migration. Restored with parity to Expo
+     `app/settings/[slug].tsx` (Terms / Privacy / Cookies / About /
+     Support / Delete Account, versioning row).
+  2. **Delete Account** flow — completely unreachable from UI.
+     Restored via `POST /api/auth/me/delete` (pre-existing backend
+     contract).
+  3. **Public driver profile page** (`/driver-profile/:id`) — omitted.
+     Restored using `GET /api/users/:id/profile`. Endpoint requires
+     signed-in user (matches Expo source flow); unauthenticated hits
+     render a sign-in CTA (`dpp-signin-cta`) with `?next=` return path.
+  4. Customer/Driver/Admin Profile screens were pointing "Settings" /
+     "Terms &amp; Privacy" rows at marketing pages (`/trust-safety`,
+     `/about`). Re-pointed to the real Settings hub routes.
+  5. Customer Job Detail bid card avatar now links to
+     `/driver-profile/:driver_id` (parity with Expo).
+- Both follow-up defects surfaced by the exhaustive audit (missing
+  `Link` import in `JobDetail.jsx`, misleading "Profile not found" on
+  unauthenticated `/driver-profile/:id`) were fixed and **verified by
+  `bug_testing_agent`** with disposable seed data (`iteration_7.json`,
+  verdict: **fixed**, success rate 100/100%).
+- Historical 16F/8E baseline re-triaged (all A/B/C — pre-existing drift,
+  test-state cascade, and stale fixture wiring; **zero D-genuine
+  regressions**). Baseline preserved at each Phase 2D checkpoint.
+- Backend regression at Phase 2D close: **235 passed / 16 failed /
+  8 errors / 1 skipped** — +14 passes vs the historical baseline of
+  221/16/8/1. Investigation: E2E data created during Phase 2D
+  cross-role flow populated fixture records that unblocked
+  previously-empty result assertions in some tests. F/E/S unchanged
+  → **no new regressions**, small pass-count improvement is a fixture
+  data effect only.
+
 ### Phase 3 — Production Hardening  🟢 P2  (do NOT auto-start)
 
 ### Phase 3 — Production Hardening  🟢 P2
