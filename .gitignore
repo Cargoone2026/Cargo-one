@@ -87,6 +87,9 @@ credentials.json
 *.key
 .credentials
 
-# Lockfile hygiene — this project uses Yarn (yarn.lock is the source of truth).
-# Do not track or regenerate npm's package-lock.json inside the Expo frontend.
+# Lockfile hygiene — this repository does not track any JS/TS lockfile.
+# `package.json` pins `packageManager: yarn@1.22.22` for local installs, but
+# no lockfile is committed to git. Do not let npm's `package-lock.json`
+# creep into the tree (it was added accidentally by a fork-time bootstrap
+# on 2026-07-20 and removed the same day).
 frontend/package-lock.json
