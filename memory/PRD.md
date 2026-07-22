@@ -236,6 +236,34 @@ data, deposit math or visual language.
   → **no new regressions**, small pass-count improvement is a fixture
   data effect only.
 
+### Post-launch fix batch  ✅ COMPLETE (2026-02-21) — awaiting owner approval
+- 8 of 10 findings implemented + verified in preview
+  (`/app/test_reports/iteration_9.json`). Full report at
+  `/app/memory/POST_LAUNCH_FIX_BATCH_REPORT.md`.
+- Admin driver-doc approve/reject (P0) fixed at API contract level
+  (`status` → `action`).
+- Marketplace visibility (P0): `/api/jobs/nearby` now surfaces jobs
+  with unresolved (0,0) pickup coordinates so pending drivers can see
+  them; bid gate still enforces admin-approval.
+- Change-password (`POST /api/auth/me/change-password`) added with
+  current-password verification + session rotation. Shared
+  `ChangePasswordModal` used across customer / driver / admin.
+- Email is READ-ONLY across all portals (locked pill + "verified
+  email-change coming soon" copy).
+- Placeholder Profile rows (payment / addresses / notifications)
+  REMOVED per owner Q2 = A. Backlogged for proper implementation
+  with real backend contracts.
+- Responsive: marketing header, driver Add-Vehicle modal
+  (dvh + safe-area), admin bottom nav ("More" pattern with
+  MAX_PRIMARY=5) — all pass 320-430 portrait.
+- Baseline pytest **258p/17f/8e/1s** (+37 pass vs 2D baseline;
+  +1 fail is `test_jobs_nearby_driver_privacy` KeyError from
+  historical STATE ordering, unrelated to changes).
+- NOT deployed. NOT pushed to GitHub. CSRF still on hold.
+  Stripe still TEST. Google Maps still OWNER_ACTION_REQUIRED
+  (see §14 of the fix-batch report for exact env vars + Cloud
+  restrictions).
+
 ### Phase 2D — Full-System Production Acceptance  ✅ COMPLETE (2026-02-21)
 - Live production acceptance pass against `https://cargoone.co.uk`
   executed via `testing_agent_v3_fork` — see
