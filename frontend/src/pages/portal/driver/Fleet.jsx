@@ -212,9 +212,13 @@ function VehicleModal({ value, types, caps, saving, err, onCancel, onSave }) {
       role="dialog"
       aria-modal="true"
       data-testid="fleet-modal"
+      style={{ paddingTop: "max(env(safe-area-inset-top), 8px)" }}
     >
-      <div className="flex max-h-[92vh] w-full flex-col overflow-hidden bg-white sm:max-w-[560px] sm:rounded-[20px]">
-        <header className="flex items-center gap-2 border-b border-[#E5E7EB] px-4 py-3">
+      <div
+        className="flex w-full flex-col overflow-hidden rounded-t-[20px] bg-white sm:max-w-[560px] sm:rounded-[20px]"
+        style={{ maxHeight: "min(92dvh, calc(100dvh - env(safe-area-inset-top) - 8px))" }}
+      >
+        <header className="flex flex-shrink-0 items-center gap-2 border-b border-[#E5E7EB] px-4 py-3">
           <div className="flex-1">
             <p className="text-[11px] font-bold tracking-[1.5px] text-[#D62828]">
               {v.id ? "EDIT VEHICLE" : "ADD VEHICLE"}
@@ -328,7 +332,7 @@ function VehicleModal({ value, types, caps, saving, err, onCancel, onSave }) {
             </p>
           )}
         </div>
-        <footer className="flex gap-2 border-t border-[#E5E7EB] p-3">
+        <footer className="flex flex-shrink-0 gap-2 border-t border-[#E5E7EB] p-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}>
           <Button
             title="Cancel"
             variant="ghost"

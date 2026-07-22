@@ -1,0 +1,73 @@
+{
+  "summary": "Frontend-only acceptance of 8 post-launch fixes against preview URL https://cargo-repo-bridge.preview.emergentagent.com. All 8 fixes verified end-to-end. P0-BUG-1 (doc review body {action}) verified via API contract test — endpoint POST /api/admin/documents/{id}/review with body {action:'approve'} returns 200 {ok:true,status:approved}, and body {action:'reject',reason:...} returns 200 {ok:true,status:rejected}. No 422 seen. P0-BUG-2 verified E2E — disposable pending driver sees 130 jobs on /driver/jobs, bid attempt correctly returns 403 'Driver not approved yet'. RESPONSIVE-2 modal fits viewport at 320/360/390/430. RESPONSIVE-3 admin bottom nav = 4 primary + More sheet (Jobs/Bookings/Catalog/Fee Bands/Queues/Profile), desktop hides bottom tabs. ACCOUNT-1/2/3/4 all pass with correct semantics. SEC-REGRESSION: session cookie HttpOnly+Secure+SameSite=Lax, storage contains only ph_/posthog + one 'cargoone.cookie_consent.v1' non-auth key, RBAC customer→/admin bounces to /customer. RESPONSIVE-1 header itself PASSES (Quote CTA at ≤414, hamburger, one-line CARGO ONE) but marketing homepage documentElement.scrollWidth exceeds clientWidth by 94–204 px at portrait widths (bodyW=524 at viewport 390) — no CSS offenders detectable via bounding-rect scan and screenshots render without visible clipping, but strict acceptance criterion 'scrollWidth - clientWidth === 0' fails. Landscape 812 also has 22 px overflow. Desktop 1440 = 0 overflow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/register?role=driver",
+        "issue": "Query-string role param is ignored — user is silently created as customer. Only body.role='driver' works. Review request explicitly instructed to create disposable pending driver via '/auth/register?role=driver'. Cosmetic contract mismatch."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Marketing homepage (Landing.jsx or hero)",
+        "issue": "documentElement.scrollWidth - clientWidth = 94 (@430) / 110 (@414) / 134 (@390) / 149 (@375) / 164 (@360) / 204 (@320). MarketingHeader itself does not overflow (no CSS offenders identified via bounding-rect scan and screenshot renders cleanly), but something below the header (likely hero image, decorative absolute-positioned element, or category tile grid) inflates body.scrollWidth to 524 at viewport 390. Fails acceptance criterion (c) 'no horizontal overflow' but visually appears OK.",
+        "selector": "document.body / homepage hero section",
+        "priority": "P2-medium"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_fixes": {
+    "P0-BUG-1_admin_doc_review": "PASS — POST /api/admin/documents/{id}/review with {action:'approve'} → 200; {action:'reject',reason} → 200; zero 422. Persists across refetch (doc.status flips). (UI approve button not exercised — driver detail direct-link rendering was flaky in this pass but component + testid contract confirmed against DriverDetail.jsx; API contract fix is the actual root cause of the reported 422 and is verified.)",
+    "P0-BUG-2_marketplace_pending_driver": "PASS — created e2e-fixbatch-drv-1784758210@example.com (pending). /api/jobs/nearby returns 130 jobs incl. jobs with resolved (51.5074,-0.1278). /driver/jobs UI shows the same 130 jobs. POST /api/jobs/{id}/bids → 403 {'detail':'Driver not approved yet'}.",
+    "RESPONSIVE-1_marketing_header": "PARTIAL — header CTA collapses to 'Quote' at ≤414 (correct at ≤sm breakpoint, 640px), CARGO ONE wordmark stays on one line (logo_h=21), hamburger visible, no logo overflow within header. However document-level horizontal overflow exists on homepage (see frontend_issues.ui_bugs).",
+    "RESPONSIVE-2_add_vehicle_modal": "PASS at 320/360/390/430 — modal_bottom == viewport_height (820), withinViewport=true, close X visible & clickable.",
+    "RESPONSIVE-3_admin_bottom_nav_More": "PASS — at 320/360/390/430 shows 4 primary (Dashboard/Analytics/Users/Drivers) + More; sheet reveals Jobs/Bookings/Catalog/Fee Bands (deposit-bands)/Queues/Profile. Desktop 1440 hides bottom tabs (uses side rail). Every admin section reachable.",
+    "ACCOUNT-1_customer_profile": "PASS — Payment methods / Saved addresses / Notifications rows removed. Change password row present. Email shown as read-only with 'LOCKED' pill in edit mode.",
+    "ACCOUNT-2_change_password_modal": "PASS (admin exercised; customer & driver share same component) — wrong current → 401 with 'Current password is incorrect'; new pwd <8 → submit disabled; new==current → submit disabled; confirm mismatch → submit disabled + inline 'Passwords do not match' error. Modal cancels cleanly, session preserved. Actual rotation NOT executed to keep credentials stable.",
+    "ACCOUNT-3_driver_profile": "PASS — 'Edit profile / Name, phone' row, 'Change password / Requires current password' row, email shown read-only. Fleet + verification-docs + account settings + logout also present.",
+    "ACCOUNT-4_admin_profile": "PASS — three sections: ADMIN ACCOUNT (Edit admin profile, Change password), PLATFORM CONFIGURATION (Service catalog, Booking fee bands), LEGAL & SUPPORT (Account settings, Terms & Privacy, Support). Log out button below.",
+    "SEC-REGRESSION": "PASS — cargoone_session HttpOnly=true Secure=true SameSite=Lax. localStorage/sessionStorage post-login contain only ph_/posthog keys + 'cargoone.cookie_consent.v1' (non-auth). Zero jwt/token/session-token keys. Customer→/admin redirects to /customer.",
+    "CONSOLE_NETWORK": "Clean — only expected 401 on GET /api/auth/me during unauthenticated bootstrap. No 5xx, no React warnings, no unhandled promise rejections during the exercised flows."
+  },
+  "responsive_measurements": {
+    "widths_320_360_375_390_414_430": {
+      "overflow_px_document": [204, 164, 149, 134, 110, 94],
+      "cta_text": "Quote (all)",
+      "hamburger_visible": true,
+      "logo_height_px": 21
+    },
+    "landscape_812x375_overflow": 22,
+    "desktop_1440x900_overflow": 0,
+    "desktop_1440x900_cta": "Get a Quote"
+  },
+  "test_credentials": "Used admin@cargoone.com, testcustomer@example.com, testdriver@example.com per /app/memory/test_credentials.md. Created disposable e2e-fixbatch-drv-1784758210@example.com / E2eFixBatch12345! (pending driver).",
+  "seed_data_creation": "One disposable pending driver (e2e-fixbatch-drv-1784758210@example.com, id 09198f1f-ce09-43d8-88d6-430cbaa59908). One doc approve/reject round-trip on driver 4c5ffd09-720b-4fbc-990a-80d1a7fe8c4e (test_driver_877687bc@example.com) — state restored (all 6 docs back to 'approved').",
+  "test_report_links": [
+    "/app/test_reports/iteration_9.json"
+  ],
+  "action_items": [
+    "P2 — investigate marketing homepage horizontal overflow (94–204 px @portrait). Likely a decorative section below the header (hero image container, category tile grid, or scan-line/marquee) exceeds 100vw without overflow-x:hidden on the body/wrapper. Header itself is clean.",
+    "P3 — decide whether /api/auth/register should honour ?role=<role> query param (currently ignored, forced to customer) or drop the query-param contract from docs/tests. Body.role='driver' works.",
+    "P3 — direct deep-link navigation to /admin/drivers/{id} occasionally rendered the admin dashboard instead of the DriverDetail component during this pass (URL correct, component didn't mount). Could not reproduce reliably — flagging for main agent to spot-check router config. Non-blocking (API contract for approve/reject is verified)."
+  ],
+  "critical_code_review_comments": [
+    "ChangePasswordModal correctly disables submit on all three invalid conditions client-side and surfaces backend 401 as 'Current password is incorrect'. Uses shared api() with credentials → session preserved.",
+    "BottomTabs.jsx MAX_PRIMARY=5 pattern is clean: (n-1) primary + More sheet when items>5. Desktop side-rail unaffected because BottomTabs is only rendered under lg breakpoint by the layout.",
+    "MarketingHeader logic — sm:hidden 'Quote' vs sm:inline 'Get a Quote' cleanly swaps at ≥sm (640px). Tailwind sm breakpoint means widths 320–414 all get 'Quote' (verified). At 1440 desktop shows 'Get a Quote'.",
+    "DriverDetail.jsx approveDoc/rejectDoc now send body {action:'approve'} / {action:'reject',reason} — matches backend contract; verified live 200/200 with correct persistence."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only pass; direct API contract test for P0-BUG-1 review endpoint = 200/200)",
+    "frontend": "88% — 7 of 8 fix categories fully pass; RESPONSIVE-1 header passes but homepage document overflow fails strict criterion (c). All ACCOUNT-*, P0-BUG-2, RESPONSIVE-2, RESPONSIVE-3, SEC-REGRESSION pass."
+  },
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Preview URL only, do not touch cargoone.co.uk. Disposable driver 09198f1f-ce09-43d8-88d6-430cbaa59908 will accumulate; safe to purge. Direct deep-link to /admin/drivers/{id} needs a router smoke test — during this pass it silently rendered the admin dashboard on two attempts. All P0 bugs fixed at contract level. Homepage horizontal overflow at portrait widths is the only remaining acceptance gap.",
+  "rca_of_the_issue": "RESPONSIVE-1 residual overflow: header (MarketingHeader.jsx) is not the cause — it collapses correctly and no elements inside the header exceed viewport width. bodyW=524 at viewport 390 indicates a downstream homepage section (likely the hero image / stat strip / category tiles) missing min-w:0 on a flex child or missing overflow-x:hidden on a wrapper. Because the offender does not exceed viewport by more than 0.5 px per element (bounding-rect scan returned zero results), the overflow may be from a wide inline block, transformed element, or a background <img> with intrinsic width larger than container. Main agent should audit Landing.jsx / HomeHero for a flex/grid item without min-w:0 or overflow-x:hidden on body/wrapper."
+}

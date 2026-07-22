@@ -123,6 +123,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserPublic(BaseModel):
     id: str
     email: EmailStr
@@ -577,6 +582,38 @@ async def update_me(update: dict, user: dict = Depends(get_current_user)):
     return user_to_public(updated)
 
 
+@api.post("/auth/me/change-password")
+async def change_password(
+    payload: PasswordChange,
+    response: Response,
+    user: dict = Depends(get_current_user),
+):
+    """Authenticated password change. Requires the caller's CURRENT password.
+    Rotates the session token on success and re-issues the HttpOnly cookie so
+    other active sessions on this account become invalid at their next call
+    (their JWTs remain valid until expiry — see backlog for a proper
+    session/tokens table if we want revoke-everywhere). Bearer clients get the
+    new token via the JSON body per the retained mobile compatibility contract.
+    """
+    if not payload.current_password or not payload.new_password:
+        raise HTTPException(status_code=400, detail="Both current and new password are required")
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status_code=400, detail="New password must differ from current password")
+    fresh = await db.users.find_one({"id": user["id"]})
+    if not fresh or not verify_password(payload.current_password, fresh["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password), "password_changed_at": now_iso()}},
+    )
+    # Refresh session so the current browser tab keeps working seamlessly.
+    token = create_token(user["id"], user["role"])
+    set_auth_cookie(response, token)
+    return {"ok": True, "access_token": token, "token_type": "bearer"}
+
+
 # ---------------------------------------------------------------------------
 # Public profile (visible to other users pre-deposit for driver selection)
 # ---------------------------------------------------------------------------
@@ -887,14 +924,30 @@ async def nearby_jobs(
     radius: float = 75.0,
     user: dict = Depends(require_role("driver")),
 ):
+    # Marketplace visibility rule: pending / changes_requested drivers CAN see
+    # available jobs (so they know the platform is active) — they simply can't
+    # bid until admin approves them. Backend bid endpoint still enforces that
+    # separately. See flow-issue-1 root cause: coordinates can be 0/0 when the
+    # customer's autocomplete pipeline could not geocode a real place. Those
+    # jobs are legitimate marketplace listings and must remain visible, so we
+    # exclude them from the radius filter and always include them.
     all_jobs = await db.jobs.find({"status": "posted"}, {"_id": 0}).sort("created_at", -1).to_list(500)
     result = []
     for j in all_jobs:
-        d = haversine_miles(lat, lng, j["pickup_lat"], j["pickup_lng"])
+        p_lat = float(j.get("pickup_lat") or 0)
+        p_lng = float(j.get("pickup_lng") or 0)
+        if p_lat == 0 and p_lng == 0:
+            # Unresolved pickup coordinates — surface job without distance filter.
+            j["distance_from_driver"] = None
+            result.append(public_job(j, include_private=False))
+            continue
+        d = haversine_miles(lat, lng, p_lat, p_lng)
         if d <= radius:
             j["distance_from_driver"] = round(d, 1)
             result.append(public_job(j, include_private=False))
-    result.sort(key=lambda x: x["distance_from_driver"])
+    # Sort: geolocated jobs (nearest first), then unresolved-coord jobs (newest
+    # already from mongo sort).
+    result.sort(key=lambda x: (x.get("distance_from_driver") is None, x.get("distance_from_driver") or 0))
     return result
 
 

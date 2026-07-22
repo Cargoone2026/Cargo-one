@@ -68,7 +68,7 @@ export default function AdminDriverDetail() {
     try {
       await api(`/admin/documents/${docId}/review`, {
         method: "POST",
-        body: { status: "approved" },
+        body: { action: "approve" },
       });
       await load();
     } catch (e) {
@@ -86,7 +86,7 @@ export default function AdminDriverDetail() {
     try {
       await api(`/admin/documents/${docId}/review`, {
         method: "POST",
-        body: { status: "rejected", reason: reasonText.trim() },
+        body: { action: "reject", reason: reasonText.trim() },
       });
       await load();
     } catch (e) {

@@ -2,9 +2,6 @@ import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   User as UserIcon,
-  CreditCard,
-  MapPin,
-  Bell,
   Settings,
   HelpCircle,
   FileText,
@@ -12,21 +9,26 @@ import {
   Star,
   ChevronRight,
   Save,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
+import { ChangePasswordModal } from "@/components/ui-portal/ChangePasswordModal";
 
 /**
- * Customer Profile — Stage 2A-i.
+ * Customer Profile.
  *
  * Safe edits allowed here (established `PUT /api/auth/me` contract):
  *   - name
  *   - phone
  *
- * Not in scope for 2A-i (stubbed rows, "coming soon"):
- *   - Payment methods (Stripe management belongs to Stage 2A-ii)
+ * Email remains READ-ONLY until a verified email-change flow (with email
+ * delivery infrastructure) is approved by the owner.
+ *
+ * Deferred (backlog, no backend contract yet — NOT rendered as placeholder):
+ *   - Payment methods (Stripe management)
  *   - Saved addresses catalog CRUD
  *   - Notification preferences
  */
@@ -36,6 +38,7 @@ export default function CustomerProfile() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+  const [showChangePwd, setShowChangePwd] = useState(false);
   const [form, setForm] = useState({
     name: user?.name || "",
     phone: user?.phone || "",
@@ -125,6 +128,23 @@ export default function CustomerProfile() {
               placeholder="+44 7000 000000"
               testID="profile-phone-input"
             />
+            <div className="mb-3">
+              <span className="mb-1 block text-[13px] font-semibold text-[#111111]">
+                Email
+              </span>
+              <div
+                className="flex items-center gap-2 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-3 text-[14px] text-[#6B7280]"
+                data-testid="profile-email-readonly"
+              >
+                <span className="flex-1 truncate">{user.email}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#9CA3AF]">
+                  Locked
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] text-[#6B7280]">
+                Email changes require a verified email-change flow (coming soon).
+              </p>
+            </div>
             {err ? (
               <p
                 className="mt-1 text-[12px] text-[#DC2626]"
@@ -164,29 +184,16 @@ export default function CustomerProfile() {
             <Row
               Icon={UserIcon}
               label="Edit profile"
+              subtitle="Name, phone"
               testID="profile-edit"
               onClick={() => setEditing(true)}
             />
             <Row
-              Icon={CreditCard}
-              label="Payment methods"
-              subtitle="Available in the next migration stage"
-              testID="profile-payment"
-              disabled
-            />
-            <Row
-              Icon={MapPin}
-              label="Saved addresses"
-              subtitle="Available in the next migration stage"
-              testID="profile-addresses"
-              disabled
-            />
-            <Row
-              Icon={Bell}
-              label="Notifications"
-              subtitle="Available in the next migration stage"
-              testID="profile-notif"
-              disabled
+              Icon={Lock}
+              label="Change password"
+              subtitle="Requires current password"
+              testID="profile-change-password"
+              onClick={() => setShowChangePwd(true)}
             />
           </section>
         )}
@@ -231,6 +238,9 @@ export default function CustomerProfile() {
           />
         </div>
       </div>
+      {showChangePwd && (
+        <ChangePasswordModal onClose={() => setShowChangePwd(false)} />
+      )}
     </div>
   );
 }

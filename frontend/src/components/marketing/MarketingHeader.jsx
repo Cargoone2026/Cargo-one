@@ -33,16 +33,16 @@ export function MarketingHeader() {
       className="sticky top-0 z-[100] w-full border-b border-[#E5E7EB] bg-white/95 backdrop-blur-md"
       data-testid="marketing-header"
     >
-      <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-6 px-4 py-3 md:px-6">
+      <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-2 px-3 py-3 sm:gap-6 sm:px-4 md:px-6">
         <Link
           to="/"
           data-testid="marketing-logo"
-          className="flex items-center gap-2"
+          className="flex min-w-0 flex-shrink-0 items-center gap-2"
         >
-          <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#D62828]">
-            <Package className="h-5 w-5 text-white" strokeWidth={2.4} />
+          <div className="flex h-[32px] w-[32px] items-center justify-center rounded-[10px] bg-[#D62828] sm:h-[34px] sm:w-[34px]">
+            <Package className="h-4 w-4 text-white sm:h-5 sm:w-5" strokeWidth={2.4} />
           </div>
-          <span className="text-[16px] font-bold tracking-[1.5px] text-[#111111]">
+          <span className="whitespace-nowrap text-[14px] font-bold tracking-[1.2px] text-[#111111] sm:text-[16px] sm:tracking-[1.5px]">
             CARGO ONE
           </span>
         </Link>
@@ -62,7 +62,7 @@ export function MarketingHeader() {
           </nav>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
           <button
             type="button"
             aria-label="Search Cargo One"
@@ -70,7 +70,7 @@ export function MarketingHeader() {
             onClick={() => {
               /* Global search modal wired in later stage */
             }}
-            className="rounded-full p-2 text-[#111111] transition-colors hover:bg-[#F4F4F4]"
+            className="hidden rounded-full p-2 text-[#111111] transition-colors hover:bg-[#F4F4F4] sm:inline-flex"
           >
             <Search className="h-[22px] w-[22px]" strokeWidth={2} />
           </button>
@@ -88,17 +88,19 @@ export function MarketingHeader() {
               type="button"
               onClick={goToApp}
               data-testid="marketing-go-to-app"
-              className="rounded-full bg-[#D62828] px-5 py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-[#B01F1F]"
+              className="whitespace-nowrap rounded-full bg-[#D62828] px-3 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[#B01F1F] sm:px-5 sm:py-2.5 sm:text-[14px]"
             >
-              Go to App
+              <span className="sm:hidden">App</span>
+              <span className="hidden sm:inline">Go to App</span>
             </button>
           ) : (
             <Link
               to="/auth/register?role=customer"
               data-testid="marketing-signup"
-              className="rounded-full bg-[#D62828] px-5 py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-[#B01F1F]"
+              className="whitespace-nowrap rounded-full bg-[#D62828] px-3 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[#B01F1F] sm:px-5 sm:py-2.5 sm:text-[14px]"
             >
-              Get a Quote
+              <span className="sm:hidden">Quote</span>
+              <span className="hidden sm:inline">Get a Quote</span>
             </Link>
           )}
           {showMenuIcon && (
@@ -107,12 +109,12 @@ export function MarketingHeader() {
               aria-label="Menu"
               data-testid="marketing-menu-toggle"
               onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-full p-2 text-[#111111] transition-colors hover:bg-[#F4F4F4]"
+              className="rounded-full p-1.5 text-[#111111] transition-colors hover:bg-[#F4F4F4] sm:p-2"
             >
               {menuOpen ? (
-                <X className="h-[26px] w-[26px]" />
+                <X className="h-[22px] w-[22px] sm:h-[26px] sm:w-[26px]" />
               ) : (
-                <Menu className="h-[26px] w-[26px]" />
+                <Menu className="h-[22px] w-[22px] sm:h-[26px] sm:w-[26px]" />
               )}
             </button>
           )}

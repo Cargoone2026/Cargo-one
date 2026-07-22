@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck,
@@ -7,14 +7,45 @@ import {
   Truck,
   Settings,
   ChevronRight,
+  User as UserIcon,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui-portal/Button";
+import { Input } from "@/components/ui-portal/Input";
+import { api } from "@/lib/api";
+import { ChangePasswordModal } from "@/components/ui-portal/ChangePasswordModal";
 
 export default function DriverProfile() {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
   const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [form, setForm] = useState({
+    name: user?.name || "",
+    phone: user?.phone || "",
+  });
   if (!user) return null;
+
+  const save = async (e) => {
+    e?.preventDefault?.();
+    setSaving(true);
+    setErr(null);
+    try {
+      await api("/auth/me", {
+        method: "PUT",
+        body: { name: form.name.trim(), phone: form.phone.trim() || null },
+      });
+      await refresh();
+      setEditing(false);
+    } catch (ex) {
+      setErr(ex?.message || "Could not save changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const initials = (user.name || "?")
     .split(" ")
@@ -72,33 +103,115 @@ export default function DriverProfile() {
           </span>
         </section>
 
-        <section className="mt-4 overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white">
-          <RowLink
-            Icon={FileText}
-            label="Manage verification documents"
-            subtitle={
-              user.documents_verified
-                ? "All approved ✓"
-                : "Upload required documents to get approved"
-            }
-            testID="open-documents"
-            onClick={() => navigate("/driver/documents")}
-          />
-          <RowLink
-            Icon={Truck}
-            label="My fleet"
-            subtitle="Register / edit vehicles and capabilities"
-            testID="open-fleet"
-            onClick={() => navigate("/driver/fleet")}
-          />
-          <RowLink
-            Icon={Settings}
-            label="Account settings"
-            subtitle="Terms, Privacy, Support, Delete Account"
-            testID="open-settings"
-            onClick={() => navigate("/settings")}
-          />
-        </section>
+        {editing ? (
+          <form
+            onSubmit={save}
+            className="mt-4 rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+            data-testid="driver-profile-edit-form"
+          >
+            <h2 className="mb-3 text-[16px] font-semibold text-[#111111]">
+              Edit profile
+            </h2>
+            <Input
+              label="Full name"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              testID="driver-profile-name-input"
+              required
+            />
+            <Input
+              label="Phone"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              placeholder="+44 7000 000000"
+              testID="driver-profile-phone-input"
+            />
+            <div className="mb-3">
+              <span className="mb-1 block text-[13px] font-semibold text-[#111111]">
+                Email
+              </span>
+              <div
+                className="flex items-center gap-2 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-3 text-[14px] text-[#6B7280]"
+                data-testid="driver-profile-email-readonly"
+              >
+                <span className="flex-1 truncate">{user.email}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#9CA3AF]">
+                  Locked
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] text-[#6B7280]">
+                Email changes require a verified email-change flow (coming soon).
+              </p>
+            </div>
+            {err ? (
+              <p className="mt-1 text-[12px] text-[#DC2626]" data-testid="driver-profile-edit-error">
+                {err}
+              </p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
+              <Button
+                title="Cancel"
+                variant="ghost"
+                fullWidth={false}
+                onClick={() => {
+                  setForm({ name: user.name || "", phone: user.phone || "" });
+                  setErr(null);
+                  setEditing(false);
+                }}
+                testID="driver-profile-edit-cancel"
+              />
+              <Button
+                type="submit"
+                title="Save changes"
+                variant="primary"
+                loading={saving}
+                testID="driver-profile-edit-save"
+              />
+            </div>
+          </form>
+        ) : (
+          <section className="mt-4 overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white">
+            <RowLink
+              Icon={UserIcon}
+              label="Edit profile"
+              subtitle="Name, phone"
+              testID="driver-profile-edit"
+              onClick={() => setEditing(true)}
+            />
+            <RowLink
+              Icon={Lock}
+              label="Change password"
+              subtitle="Requires current password"
+              testID="driver-profile-change-password"
+              onClick={() => setShowChangePwd(true)}
+            />
+            <RowLink
+              Icon={FileText}
+              label="Manage verification documents"
+              subtitle={
+                user.documents_verified
+                  ? "All approved ✓"
+                  : "Upload required documents to get approved"
+              }
+              testID="open-documents"
+              onClick={() => navigate("/driver/documents")}
+            />
+            <RowLink
+              Icon={Truck}
+              label="My fleet"
+              subtitle="Register / edit vehicles and capabilities"
+              testID="open-fleet"
+              onClick={() => navigate("/driver/fleet")}
+            />
+            <RowLink
+              Icon={Settings}
+              label="Account settings"
+              subtitle="Terms, Privacy, Support, Delete Account"
+              testID="open-settings"
+              onClick={() => navigate("/settings")}
+            />
+          </section>
+        )}
 
         <div className="mt-6">
           <Button
@@ -112,6 +225,9 @@ export default function DriverProfile() {
           />
         </div>
       </div>
+      {showChangePwd && (
+        <ChangePasswordModal onClose={() => setShowChangePwd(false)} />
+      )}
     </div>
   );
 }
