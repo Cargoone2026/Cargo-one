@@ -236,12 +236,45 @@ data, deposit math or visual language.
   → **no new regressions**, small pass-count improvement is a fixture
   data effect only.
 
-### Phase 3 — Production Hardening  🟢 P2  (do NOT auto-start)
+### Phase 2D — Full-System Production Acceptance  ✅ COMPLETE (2026-02-21)
+- Live production acceptance pass against `https://cargoone.co.uk`
+  executed via `testing_agent_v3_fork` — see
+  `/app/test_reports/iteration_8.json` and the compiled
+  **29-point Phase 2D Final Report** at
+  `/app/memory/PHASE_2D_FINAL_REPORT.md`.
+- Verdict: **PRODUCTION_ACCEPTANCE_PASS** — zero P0/P1/P2 defects.
+- One P3-info hardening item flagged: `POST /api/auth/login` and
+  `POST /api/auth/register` still return `access_token` in the JSON
+  response body (`backend/server.py:506, 518`, `TokenResponse` at
+  `backend/server.py:147-150`). Web frontend has **zero** consumers
+  (grep confirmed). Removal is BLOCKED by retained Bearer/mobile
+  compatibility contract — explicitly asserted by
+  `backend/tests/test_cookie_auth.py:38` ("login must still return
+  access_token (bearer compat)") and by `test_bearer_still_works` +
+  20+ Bearer-driven backend tests. Owner decision required between
+  header-gated omission (Option A, recommended), separate mobile
+  endpoint (Option B), or Optional-typed schema (Option C). NOT
+  applied in this pass per owner instruction.
+- Backend baseline (**221 passed / 16 failed / 8 errors / 1 skipped**)
+  honoured — NOT re-run. No canonical business logic altered.
 
-### Phase 3 — Production Hardening  🟢 P2
-- Attach `cargoone.co.uk` domain; add production restricted Google Maps
-  keys; switch Stripe to live keys + webhooks; add CSRF double-submit
-  tokens for cookie auth.
+### Phase P2-A — Custom Domain Attachment  ✅ COMPLETE (2026-02-21)
+- `frontend/.env` `REACT_APP_BACKEND_URL=https://cargoone.co.uk`.
+- `backend/.env` `CORS_ORIGINS` = strict whitelist
+  `https://cargoone.co.uk,https://www.cargoone.co.uk` (no wildcard).
+- Session cookie: `HttpOnly` + `Secure` + `SameSite=Lax` + `Path=/`
+  + host-only (no explicit Domain attribute).
+- `www` → apex 308 with HSTS `max-age=63072000; includeSubDomains;
+  preload`.
+
+### Phase 3 — Production Hardening  🟢 P2  (do NOT auto-start)
+- **P2-B**: Google Maps production restricted keys + CSRF
+  double-submit tokens for cookie auth.
+- **P2-C**: Stripe LIVE keys + webhook receiver + real payment
+  acceptance.
+- **P3-info hardening (deferred)**: apply chosen backward-compatible
+  separation of `access_token` from the web login response (Options
+  A/B/C in the Phase 2D report).
 
 ## Known Historical Drift (DO NOT AUTO-FIX)
 Baseline serial pytest suite from the source repo carries pre-existing
