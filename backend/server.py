@@ -2448,6 +2448,120 @@ async def geo_autocomplete(q: str = ""):
         return {"suggestions": [], "source": "manual", "query": q, "error": str(e)}
 
 
+@api.get("/geo/details")
+async def geo_details(place_id: str = ""):
+    """Resolve a Google Places `place_id` (returned by `/api/geo/autocomplete`)
+    into the location fields Cargo One needs — including latitude/longitude,
+    formatted address, postcode, locality/town, country name and ISO country
+    code. Uses the same server-side `GOOGLE_MAPS_API_KEY` and the same legacy
+    Places API endpoint as autocomplete, so no additional Cloud APIs need to
+    be enabled.
+
+    Contract:
+        200 { source, place_id, formatted_address, address_line, postcode,
+              town, region, country, country_code, lat, lng }
+        400 { detail: "place_id required" }
+        200 { source:"manual", place_id, ... zeros } when the key is not
+              configured (preserves the manual-entry fallback used by
+              AddressAutocomplete when Google is unreachable).
+
+    Public — safe to call without a JWT (same posture as autocomplete).
+    """
+    place_id = (place_id or "").strip()
+    if not place_id:
+        raise HTTPException(status_code=400, detail="place_id required")
+
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip().strip('"')
+    empty = {
+        "place_id": place_id,
+        "formatted_address": "",
+        "address_line": "",
+        "postcode": "",
+        "town": "",
+        "region": "",
+        "country": "",
+        "country_code": "",
+        "lat": 0.0,
+        "lng": 0.0,
+    }
+    if not api_key or api_key.startswith("placeholder"):
+        return {"source": "manual", **empty}
+
+    try:
+        import httpx  # local import — httpx already in requirements
+        url = "https://maps.googleapis.com/maps/api/place/details/json"
+        params = {
+            "place_id": place_id,
+            "key": api_key,
+            # Only request the fields we actually consume — reduces cost.
+            "fields": "place_id,formatted_address,geometry/location,address_components",
+        }
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            r = await client.get(url, params=params)
+        if r.status_code != 200:
+            return {"source": "google_error", **empty}
+        data = r.json()
+        if data.get("status") != "OK":
+            return {"source": "google_error", **empty, "error": data.get("status")}
+
+        result = data.get("result") or {}
+        loc = ((result.get("geometry") or {}).get("location") or {})
+        lat = float(loc.get("lat") or 0)
+        lng = float(loc.get("lng") or 0)
+
+        # Walk address_components in a single pass; each component has a
+        # `types` array — pick the last matching value for each field.
+        postcode = ""
+        town = ""
+        region = ""
+        country_name = ""
+        country_code = ""
+        street_number = ""
+        route = ""
+        for comp in result.get("address_components") or []:
+            types = set(comp.get("types") or [])
+            long_name = comp.get("long_name") or ""
+            short_name = comp.get("short_name") or ""
+            if "postal_code" in types:
+                postcode = long_name
+            elif "country" in types:
+                country_name = long_name
+                country_code = (short_name or "").upper()
+            elif "administrative_area_level_1" in types:
+                region = long_name
+            elif "postal_town" in types:
+                town = long_name
+            elif not town and (
+                "locality" in types
+                or "sublocality" in types
+                or "administrative_area_level_2" in types
+            ):
+                town = long_name
+            elif "street_number" in types:
+                street_number = long_name
+            elif "route" in types:
+                route = long_name
+
+        address_line = (f"{street_number} {route}".strip()) if (street_number or route) else ""
+
+        return {
+            "source": "google",
+            "place_id": place_id,
+            "formatted_address": result.get("formatted_address") or "",
+            "address_line": address_line,
+            "postcode": postcode,
+            "town": town,
+            "region": region,
+            "country": country_name,
+            "country_code": country_code,
+            "lat": lat,
+            "lng": lng,
+        }
+    except Exception as e:
+        logger.exception("Google Place Details failed")
+        return {"source": "manual", **empty, "error": str(e)}
+
+
 # ---- Driver vehicle profiles (fleet management) ----
 
 class DriverVehicleUpsert(BaseModel):

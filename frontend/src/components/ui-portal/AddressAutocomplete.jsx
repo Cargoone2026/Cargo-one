@@ -121,16 +121,42 @@ function AddressPickerModal({ initial, onClose, onCommit, testID }) {
     return () => debounceRef.current && clearTimeout(debounceRef.current);
   }, [query]);
 
-  const pickSuggestion = useCallback((s) => {
-    // We don't fetch place details on the client — the server-side
-    // proxy already returns town + formatted_address. The rest is
-    // filled by the manual form so the user can confirm postcode/etc.
+  const pickSuggestion = useCallback(async (s) => {
+    // Phase 1 (Maps): resolve the selected place_id into real
+    // coordinates + address components via the server-side
+    // `/api/geo/details` proxy. The Google key stays backend-only.
+    // If details lookup fails (network hiccup, quota, key issue),
+    // we degrade to the previous behaviour — pre-fill formatted_address
+    // + town from the autocomplete result and let the user complete
+    // postcode/etc. by hand in the review step. This preserves the
+    // manual-entry safety net rather than blocking the flow.
     setForm((f) => ({
       ...f,
       formatted_address: s.formatted_address || query,
       town: s.town || f.town,
     }));
     setMode("review");
+    if (!s?.place_id) return;
+    try {
+      const d = await api(
+        `/geo/details?place_id=${encodeURIComponent(s.place_id)}`,
+      );
+      if (d && d.source === "google") {
+        setForm((f) => ({
+          ...f,
+          formatted_address: d.formatted_address || f.formatted_address,
+          address_line: d.address_line || f.address_line,
+          postcode: d.postcode || f.postcode,
+          town: d.town || f.town,
+          region: d.region || f.region,
+          country_code: d.country_code || f.country_code,
+          lat: d.lat || f.lat,
+          lng: d.lng || f.lng,
+        }));
+      }
+    } catch {
+      // silent — manual review form remains fully usable
+    }
   }, [query]);
 
   const canCommit =
