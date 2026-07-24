@@ -919,25 +919,39 @@ async def quote_estimate(pickup_lat: float, pickup_lng: float,
 
 @api.get("/jobs/nearby")
 async def nearby_jobs(
-    lat: float = 51.5074,
-    lng: float = -0.1278,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
     radius: float = 75.0,
     user: dict = Depends(require_role("driver")),
 ):
-    # Marketplace visibility rule: pending / changes_requested drivers CAN see
-    # available jobs (so they know the platform is active) — they simply can't
-    # bid until admin approves them. Backend bid endpoint still enforces that
-    # separately. See flow-issue-1 root cause: coordinates can be 0/0 when the
-    # customer's autocomplete pipeline could not geocode a real place. Those
-    # jobs are legitimate marketplace listings and must remain visible, so we
-    # exclude them from the radius filter and always include them.
+    """Available marketplace jobs for a driver.
+
+    Filtering rules:
+      * Only `status == "posted"` jobs are ever returned. Accepted / manual-
+        quote / awaiting-deposit / cancelled / completed jobs stay out.
+      * If the caller does NOT supply BOTH `lat` and `lng`, no geographic
+        filter is applied — every eligible posted job is surfaced, sorted
+        newest-first. This is deliberate: guessing the driver's location
+        (e.g. defaulting to London) silently hides legitimate jobs elsewhere
+        in the country, which is exactly the regression Fix 1B is closing.
+      * If the caller supplies both `lat` and `lng`, the classic haversine
+        radius filter applies. Jobs whose pickup coords are (0, 0) — the
+        unresolved-coordinate safety-net inherited from the earlier fix
+        batch — remain unconditionally visible so they don't vanish.
+    """
+    have_anchor = lat is not None and lng is not None
     all_jobs = await db.jobs.find({"status": "posted"}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    result = []
+    result: list[dict] = []
     for j in all_jobs:
         p_lat = float(j.get("pickup_lat") or 0)
         p_lng = float(j.get("pickup_lng") or 0)
+        if not have_anchor:
+            # No driver location provided → do not filter by proximity.
+            j["distance_from_driver"] = None
+            result.append(public_job(j, include_private=False))
+            continue
         if p_lat == 0 and p_lng == 0:
-            # Unresolved pickup coordinates — surface job without distance filter.
+            # Unresolved pickup coords — safety net stays.
             j["distance_from_driver"] = None
             result.append(public_job(j, include_private=False))
             continue
@@ -945,10 +959,40 @@ async def nearby_jobs(
         if d <= radius:
             j["distance_from_driver"] = round(d, 1)
             result.append(public_job(j, include_private=False))
-    # Sort: geolocated jobs (nearest first), then unresolved-coord jobs (newest
-    # already from mongo sort).
+    # Sort: geolocated jobs nearest-first, then unresolved-coord / no-anchor
+    # jobs (Mongo already sorted newest-first).
     result.sort(key=lambda x: (x.get("distance_from_driver") is None, x.get("distance_from_driver") or 0))
     return result
+
+
+@api.get("/driver/accepted-jobs")
+async def driver_accepted_jobs(user: dict = Depends(require_role("driver"))):
+    """Fix 2A — pre-deposit view for the driver.
+
+    Returns jobs that the authenticated driver has accepted but for which
+    the customer has not yet paid the deposit (so no booking row exists
+    yet). Each result carries `awaiting_deposit=True` for the frontend to
+    label. Excludes:
+      * jobs the driver hasn't accepted (`assigned_driver_id != user`);
+      * jobs already progressed past `accepted` — those live in `bookings`
+        via `/bookings/mine`, so we don't want duplicate cards.
+
+    Note: the accept endpoint's commercial lifecycle is UNCHANGED. No
+    booking is created here. No pricing, fee, or deposit logic is touched.
+    """
+    docs = await db.jobs.find(
+        {"assigned_driver_id": user["id"], "status": "accepted"},
+        {"_id": 0},
+    ).sort("updated_at", -1).to_list(200)
+    out: list[dict] = []
+    for j in docs:
+        pub = public_job(j, include_private=False)
+        pub["awaiting_deposit"] = True
+        # Surface the price the driver was promised at accept-time so the
+        # "My Jobs" card can show earning + status without an extra fetch.
+        pub["accepted_price"] = j.get("accepted_price") or j.get("fixed_price")
+        out.append(pub)
+    return out
 
 
 @api.get("/jobs/{job_id}")

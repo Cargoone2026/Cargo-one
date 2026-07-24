@@ -28,6 +28,7 @@ export default function DriverJobs() {
   const { data: caps } = useCapabilities();
   const [jobs, setJobs] = useState([]);
   const [radius, setRadius] = useState(75);
+  const [driverLoc, setDriverLoc] = useState(null); // { lat, lng } when browser geolocation is granted
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState(null);
   const [pricing, setPricing] = useState("all");
@@ -41,12 +42,43 @@ export default function DriverJobs() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api(`/jobs/nearby?radius=${radius}`).catch(() => []);
+      // Fix 1A/1B: only send lat/lng when the browser granted geolocation.
+      // No permission → backend returns ALL eligible posted jobs (no radius
+      // filter). This preserves visibility even when the driver denies or
+      // the API is unavailable — matches the P0 requirement.
+      let path = "/jobs/nearby";
+      if (driverLoc && Number.isFinite(driverLoc.lat) && Number.isFinite(driverLoc.lng)) {
+        path += `?lat=${driverLoc.lat}&lng=${driverLoc.lng}&radius=${radius}`;
+      }
+      const list = await api(path).catch(() => []);
       setJobs(Array.isArray(list) ? list : []);
     } finally {
       setLoading(false);
     }
-  }, [radius]);
+  }, [radius, driverLoc]);
+
+  // Best-effort browser geolocation. Failure/denial is intentionally silent
+  // and leaves `driverLoc` null → unfiltered fetch above.
+  useEffect(() => {
+    if (!navigator?.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        const { latitude, longitude } = pos.coords || {};
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          setDriverLoc({ lat: latitude, lng: longitude });
+        }
+      },
+      () => {
+        /* denied / timeout — leave driverLoc null → unfiltered */
+      },
+      { timeout: 4000, maximumAge: 5 * 60 * 1000 },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     load();
