@@ -304,6 +304,50 @@ data, deposit math or visual language.
   separation of `access_token` from the web login response (Options
   A/B/C in the Phase 2D report).
 
+### Maps Phase 1 — Backend Integration  ✅ COMPLETE (2026-02)
+- `/api/geo/autocomplete` + `/api/geo/details` proxied through
+  backend-only `GOOGLE_MAPS_API_KEY` (unrestricted server key). No
+  Places / Distance Matrix credential ever crossed to the browser.
+
+### Maps Phase 2 — Frontend JS Visualization  ✅ COMPLETE (2026-02-25)
+- `RouteMap.jsx` rewritten to load Google Maps JavaScript API via
+  `@googlemaps/js-api-loader`-style hand-rolled script tag with
+  `libraries=marker&v=weekly&loading=async`. SVG fallback preserved
+  for missing key / loader failure / invalid coords.
+- Frontend browser key `REACT_APP_GOOGLE_MAPS_JS_KEY` — HTTP-referrer
+  restricted to `https://cargoone.co.uk/*`. Distinct from backend
+  key (byte-for-byte equality check confirms no crossover).
+- Production smoke matrix (v5, bundle `main.7359ad8a.js`):
+  desktop 1920×900, mobile portrait 390×844, landscape rotate,
+  first-load, hard-refresh, nav-away+return, 3× remount cycles,
+  viewport resize — all `data-map-engine="google"`, 23 tile
+  `<img>` + 2 canvases per mount, road-following polyline via
+  DirectionsService.route(), both P and D markers auto-fit,
+  commercial values (69.6 Mi, £250) unchanged from backend.
+- Zero `REQUEST_DENIED` / `LegacyApiNotActivated` / `RefererNotAllowed` /
+  `InvalidKey` / `BillingNotEnabled` errors.
+- Root causes uncovered + fixed on the way to green:
+  1. `/app/frontend/.env` empty `REACT_APP_GOOGLE_MAPS_JS_KEY=`
+     override clobbered Emergent Custom-Key injection (fixed by
+     removing the empty line).
+  2. Emergent Production Custom Keys were not exposed to CRA build
+     env for this project (worked around by placing the key value
+     directly into `/app/frontend/.env`).
+  3. Initial browser key belonged to a GCP project without the
+     legacy Directions API enabled → straight-line fallback. Owner
+     supplied a second key from a Directions-enabled project.
+- Reports (in `/app/memory/`):
+  `MAPS_PHASE1_IMPLEMENTATION_REPORT.md`,
+  `MAPS_PHASE2_POST_DEPLOY_REPORT.md` (v1 fail),
+  `MAPS_PHASE2_CUSTOM_KEY_AUDIT_AND_FIX.md`,
+  `MAPS_PHASE2_POST_DEPLOY_REPORT_v2.md` (v2 fail — key missing at build),
+  `MAPS_PHASE2_POST_DEPLOY_REPORT_v3.md` (v3 partial — Directions denied),
+  `MAPS_PHASE2_POST_DEPLOY_REPORT_v4.md` (v4 fail — same GCP project),
+  `MAPS_PHASE2_POST_DEPLOY_REPORT_v5_FINAL.md` (**v5 PASS**).
+- Backlog: **P3 migrate legacy `DirectionsService` / `Marker` →
+  Routes API v2 + `AdvancedMarkerElement`** (silences the Feb 25 2026
+  deprecation warnings; not blocking today).
+
 ## Known Historical Drift (DO NOT AUTO-FIX)
 Baseline serial pytest suite from the source repo carries pre-existing
 regressions (endpoints such as `/api/geo/markets`, `/api/quotes/estimate`
