@@ -138,6 +138,12 @@ export default function DriverJobDetail() {
           pickup={{ lat: job.pickup_lat, lng: job.pickup_lng, label: "Pickup" }}
           dropoff={{ lat: job.dropoff_lat, lng: job.dropoff_lng, label: "Dropoff" }}
           height={200}
+          summary={{
+            pickupTown: job.pickup_town,
+            dropoffTown: job.dropoff_town,
+            distanceMiles: job.distance_miles,
+            durationMinutes: job.duration_minutes,
+          }}
         />
 
         <div className="space-y-3 rounded-[12px] bg-[#F9FAFB] p-4">

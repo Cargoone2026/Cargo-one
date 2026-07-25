@@ -336,6 +336,15 @@ export default function DriverBookingDetail() {
               }
               trail={tracking?.trail}
               height={220}
+              summary={{
+                pickupTown: job.pickup_town,
+                dropoffTown: job.dropoff_town,
+                distanceMiles: job.distance_miles,
+                durationMinutes:
+                  tracking?.eta_minutes != null
+                    ? tracking.eta_minutes
+                    : job.duration_minutes,
+              }}
             />
 
             {tracking?.eta_minutes != null && (

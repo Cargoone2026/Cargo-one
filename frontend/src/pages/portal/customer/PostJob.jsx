@@ -348,6 +348,19 @@ export default function CustomerPostJob() {
                   pickup={{ lat: pickup.lat, lng: pickup.lng, label: "Pickup" }}
                   dropoff={{ lat: dropoff.lat, lng: dropoff.lng, label: "Dropoff" }}
                   height={180}
+                  summary={
+                    quote && !quote.requires_manual_review
+                      ? {
+                          pickupTown: pickup?.town || pickup?.name,
+                          dropoffTown: dropoff?.town || dropoff?.name,
+                          distanceMiles: quote.distance_miles,
+                          durationMinutes: quote.duration_minutes,
+                        }
+                      : {
+                          pickupTown: pickup?.town || pickup?.name,
+                          dropoffTown: dropoff?.town || dropoff?.name,
+                        }
+                  }
                 />
                 {quote?.requires_manual_review ? (
                   <div
