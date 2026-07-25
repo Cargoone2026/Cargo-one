@@ -69,8 +69,8 @@ const validPt = (p) =>
 const FIT_PADDING = { top: 68, right: 44, bottom: 68, left: 44 };
 
 const ROUTE_STROKE_COLOR = "#1D4ED8"; // Google-blue, high-contrast on grey tiles
-const ROUTE_STROKE_WEIGHT = 6;
-const ROUTE_STROKE_OPACITY = 0.92;
+const ROUTE_STROKE_WEIGHT = 7;
+const ROUTE_STROKE_OPACITY = 0.95;
 
 const MARKER_GREEN = "#16A34A"; // pickup
 const MARKER_RED = "#D62828";   // dropoff
@@ -113,9 +113,13 @@ function buildTeardropIcon(maps, color, letter) {
     `</svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new maps.Size(40, 52),
-    anchor: new maps.Point(20, 50),
-    labelOrigin: new maps.Point(20, 20),
+    // ~30% smaller than the original 40×52 for a lighter, less-obtrusive feel.
+    scaledSize: new maps.Size(28, 36),
+    // Anchor 4px below the icon's bottom tip so the marker floats just ABOVE
+    // the route endpoint instead of sitting on top of it. Keeps the polyline
+    // termination visible.
+    anchor: new maps.Point(14, 40),
+    labelOrigin: new maps.Point(14, 14),
   };
 }
 
