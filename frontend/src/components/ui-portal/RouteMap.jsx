@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MapPin, Navigation, Clock } from "lucide-react";
+import { MapPin, Navigation, Clock, Ship } from "lucide-react";
 
 /**
  * RouteMap — Google Maps route preview with branded markers, blue polyline,
@@ -68,9 +68,15 @@ const validPt = (p) =>
 // never touch the container edges — including tight mobile portrait viewports.
 const FIT_PADDING = { top: 68, right: 44, bottom: 68, left: 44 };
 
-const ROUTE_STROKE_COLOR = "#111111"; // black route line, high-contrast on any basemap tile
-const ROUTE_STROKE_WEIGHT = 7;
+const ROUTE_STROKE_COLOR = "#1A73E8"; // Google Maps' signature blue — premium, high-contrast
+const ROUTE_STROKE_WEIGHT = 6;
 const ROUTE_STROKE_OPACITY = 0.95;
+
+// Subtle white casing rendered UNDER the main polyline for the premium
+// two-tone look (matches the Google/Uber/Apple Maps house style).
+const ROUTE_CASING_COLOR = "#FFFFFF";
+const ROUTE_CASING_WEIGHT = ROUTE_STROKE_WEIGHT + 4; // 4 px wider than main line
+const ROUTE_CASING_OPACITY = 0.55;
 
 const MARKER_GREEN = "#16A34A"; // pickup
 const MARKER_RED = "#D62828";   // dropoff
@@ -142,13 +148,14 @@ function buildDriverIcon(maps) {
 }
 
 // ============================================================ summary ===
-function SummaryStrip({ summary, testID }) {
-  if (!summary) return null;
-  const { pickupTown, dropoffTown, distanceMiles, durationMinutes } = summary;
+function SummaryStrip({ summary, showFerry, testID }) {
+  if (!summary && !showFerry) return null;
+  const s = summary || {};
+  const { pickupTown, dropoffTown, distanceMiles, durationMinutes } = s;
   const hasTowns = pickupTown || dropoffTown;
   const distText = fmtDistanceMiles(distanceMiles);
   const durText = fmtDurationMinutes(durationMinutes);
-  if (!hasTowns && !distText && !durText) return null;
+  if (!hasTowns && !distText && !durText && !showFerry) return null;
   return (
     <div
       className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[12px] border border-[#E5E7EB] bg-white px-3 py-2 text-[13px] text-[#111111]"
@@ -175,6 +182,15 @@ function SummaryStrip({ summary, testID }) {
           <span className="tabular-nums font-medium">{durText}</span>
         </div>
       )}
+      {showFerry && (
+        <div
+          className="flex items-center gap-1 rounded-full bg-[#EFF6FF] px-2 py-0.5 font-semibold text-[#1A73E8]"
+          data-testid={`${testID}-summary-ferry`}
+        >
+          <Ship className="h-3.5 w-3.5" />
+          <span>Ferry crossing</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -190,10 +206,11 @@ export function RouteMap({
   summary = null,
 }) {
   const canUseGoogle = validPt(pickup) && validPt(dropoff) && MAPS_JS_KEY;
+  const [hasFerry, setHasFerry] = useState(false);
 
   return (
     <div data-testid={`${testID}-wrapper`}>
-      <SummaryStrip summary={summary} testID={testID} />
+      <SummaryStrip summary={summary} showFerry={hasFerry} testID={testID} />
       {canUseGoogle ? (
         <GoogleRouteMap
           pickup={pickup}
@@ -202,6 +219,7 @@ export function RouteMap({
           trail={trail}
           height={height}
           testID={testID}
+          onFerryDetected={setHasFerry}
         />
       ) : (
         <SvgRouteMap
@@ -218,10 +236,11 @@ export function RouteMap({
 }
 
 // ================================================= real Google Maps view ===
-function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID }) {
+function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID, onFerryDetected }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const rendererRef = useRef(null);
+  const casingRef = useRef(null);
   const markersRef = useRef([]);
   const trailPolyRef = useRef(null);
   const fallbackLineRef = useRef(null);
@@ -251,6 +270,8 @@ function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID }) {
         markersRef.current = [];
         rendererRef.current?.setMap(null);
         rendererRef.current = null;
+        casingRef.current?.setMap(null);
+        casingRef.current = null;
         trailPolyRef.current?.setMap(null);
         trailPolyRef.current = null;
         fallbackLineRef.current?.setMap(null);
@@ -338,11 +359,44 @@ function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID }) {
           (result, dstatus) => {
             if (cancelled) return;
             if (dstatus === "OK" && result?.routes?.[0]) {
+              // ── Ferry / water-crossing detection ──────────────────────────
+              // Legacy Directions API marks ferry legs with `maneuver: "ferry"` (or "ferry-train").
+              // Some routes surface it via `warnings` too.
+              let ferry = false;
+              const route = result.routes[0];
+              outer: for (const leg of route.legs || []) {
+                for (const step of leg.steps || []) {
+                  const man = (step.maneuver || "").toLowerCase();
+                  if (man.includes("ferry")) { ferry = true; break outer; }
+                }
+              }
+              if (!ferry) {
+                for (const w of route.warnings || []) {
+                  if (typeof w === "string" && /ferry/i.test(w)) { ferry = true; break; }
+                }
+              }
+              onFerryDetected?.(ferry);
+
+              // ── Premium two-tone polyline: white casing UNDER the blue main line
+              const overview = route.overview_path;
+              if (Array.isArray(overview) && overview.length >= 2) {
+                casingRef.current = new maps.Polyline({
+                  path: overview,
+                  strokeColor: ROUTE_CASING_COLOR,
+                  strokeOpacity: ROUTE_CASING_OPACITY,
+                  strokeWeight: ROUTE_CASING_WEIGHT,
+                  geodesic: true,
+                  map: mapRef.current,
+                  zIndex: 1,
+                });
+              }
+
               rendererRef.current.setDirections(result);
-              const rb = result.routes[0].bounds;
+              const rb = route.bounds;
               if (rb) bounds.union(rb);
             } else {
-              // Straight-line fallback on real tiles — same blue look for consistency.
+              onFerryDetected?.(false);
+              // Straight-line fallback on real tiles — same blue for consistency.
               fallbackLineRef.current = new maps.Polyline({
                 path: [
                   { lat: pickup.lat, lng: pickup.lng },
@@ -353,7 +407,7 @@ function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID }) {
                 strokeOpacity: 0.7,
                 strokeWeight: ROUTE_STROKE_WEIGHT,
                 map: mapRef.current,
-                zIndex: 1,
+                zIndex: 2,
               });
             }
             boundsRef.current = bounds;
