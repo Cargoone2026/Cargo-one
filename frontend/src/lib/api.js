@@ -13,6 +13,16 @@ if (!BACKEND_URL) {
 }
 export const API_BASE = `${BACKEND_URL}/api`;
 
+// SEC1 — CSRF double-submit. The backend sets a non-HttpOnly `cargoone_csrf`
+// cookie at login/register (and opportunistically on /auth/me). We read it
+// here and echo it into the `X-CSRF-Token` header on every mutating request.
+// Bearer/native clients bypass CSRF server-side so this has no effect there.
+function readCsrfToken() {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(/(?:^|;\s*)cargoone_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 /**
  * Thin fetch wrapper.
  *
@@ -21,14 +31,21 @@ export const API_BASE = `${BACKEND_URL}/api`;
  */
 export async function api(path, opts = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const method = (opts.method || "GET").toUpperCase();
   const headers = {
     Accept: "application/json",
     ...(opts.body ? { "Content-Type": "application/json" } : {}),
     ...(opts.headers || {}),
   };
+  if (method !== "GET" && method !== "HEAD") {
+    const csrf = readCsrfToken();
+    if (csrf && !headers["X-CSRF-Token"]) {
+      headers["X-CSRF-Token"] = csrf;
+    }
+  }
 
   const res = await fetch(url, {
-    method: opts.method || "GET",
+    method,
     credentials: "include", // <-- cookie transport
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,

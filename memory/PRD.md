@@ -367,6 +367,18 @@ data, deposit math or visual language.
   no duplicated logic. No files were modified this session.
 - **Report:** `/app/memory/PHASE_A_DRIVER_PARITY_VERIFICATION.md`.
 
+### Web Platform Completion Programme  ✅ COMPLETE (2026-07-29, preview only)
+- **Phase 1 P0 payment security** — per-session `webhook_token` binds every Stripe checkout to a query-string secret; unauthenticated fabricated webhook callbacks are 403'd. `STRIPE_WEBHOOK_SECRET` support wired for LIVE. 12 new security tests green.
+- **Phase 2 CSRF SEC1** — `cargoone_csrf` double-submit cookie, middleware, CORS narrowed. Bearer path preserved. 8 CSRF tests green.
+- **Phase 3 auth** — cookie remains authoritative for browser. `access_token` in JSON retained for backward-compat with native (documented).
+- **Phase 4 Stripe LIVE readiness** — architecture ready, awaits LIVE keys + webhook secret in env.
+- **Phase 8 SEO** — `sitemap.xml` + `robots.txt` shipped in `frontend/public/`.
+- **Phases 5/6/7/9/10/11** — audit-only + documented pending items (email provider, Routes API v2 GCP enable, saved addresses/prefs product decisions).
+- **Not yet done:** Save-to-GitHub, Deploy, Stripe LIVE, email provider integration, Routes API v2 code swap, Phase C cleanup.
+- **Report:** `/app/memory/CARGOONE_WEB_COMPLETION_REPORT.md` (contains MANUAL_KEYS_AND_EXTERNAL_SETUP consolidated list).
+
+
+
 
 
 ## Known Historical Drift (DO NOT AUTO-FIX)

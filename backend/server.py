@@ -7,6 +7,8 @@ Roles: customer, driver, admin.
 import logging
 import math
 import os
+import secrets
+import hmac
 import time
 import uuid
 from datetime import datetime, timezone
@@ -65,6 +67,46 @@ DEPOSIT_PERCENTAGE = float(os.environ.get("DEPOSIT_PERCENTAGE", "0.10"))
 AUTH_COOKIE_NAME = "cargoone_session"
 AUTH_COOKIE_MAX_AGE = 30 * 86400  # matches JWT `days=30` default in create_token
 
+# CSRF double-submit cookie — SEC1. Browser-readable (non-HttpOnly) so the SPA
+# can echo it into the `X-CSRF-Token` header on every mutating request. Bearer
+# (native) clients bypass entirely.
+CSRF_COOKIE_NAME = "cargoone_csrf"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+CSRF_COOKIE_MAX_AGE = AUTH_COOKIE_MAX_AGE
+# Auth flow + anonymous endpoints are exempt (they either issue the token or
+# have no user context to CSRF against). Everything else that mutates is gated.
+CSRF_EXEMPT_PATHS = {
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/logout",
+    "/api/contact",
+    "/api/newsletter/subscribe",
+    # Stripe → Emergent proxy → us. Provider signature (or per-session token
+    # in query string) is the authoritative check for this endpoint; browser
+    # CSRF is not applicable.
+    "/api/webhook/stripe",
+}
+
+
+def new_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def set_csrf_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        max_age=CSRF_COOKIE_MAX_AGE,
+        httponly=False,  # readable by JS so the SPA can echo it
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_csrf_cookie(response: Response) -> None:
+    response.delete_cookie(key=CSRF_COOKIE_NAME, path="/")
+
 
 def set_auth_cookie(response: Response, token: str) -> None:
     response.set_cookie(
@@ -80,6 +122,23 @@ def set_auth_cookie(response: Response, token: str) -> None:
 
 def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+
+
+# ---------------------------------------------------------------------------
+# Webhook shared-secret token (Phase 1 P0 hardening).
+#
+# The Emergent Stripe test proxy does NOT cryptographically sign callbacks for
+# `sk_test_emergent`. Knowledge of a valid `cs_test_...` id alone must not be
+# sufficient to finalise a booking. We defend by binding every session to a
+# per-session random token stored on `payment_transactions.webhook_token` and
+# baked into the `webhook_url` query string that goes into Stripe metadata.
+# The Emergent proxy then POSTs to `.../api/webhook/stripe?t=<token>`. At
+# webhook time we require the token in the query string to match the DB row.
+# Attackers cannot fabricate this because the token never leaves our backend
+# except into Stripe metadata (Stripe → proxy → us, no browser exposure).
+# ---------------------------------------------------------------------------
+def new_webhook_token() -> str:
+    return secrets.token_urlsafe(32)
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -508,6 +567,7 @@ async def register(payload: UserRegister, response: Response):
     await db.users.insert_one(user)
     token = create_token(user["id"], user["role"])
     set_auth_cookie(response, token)
+    set_csrf_cookie(response, new_csrf_token())
     return {"access_token": token, "token_type": "bearer", "user": user_to_public(user)}
 
 
@@ -520,6 +580,7 @@ async def login(payload: UserLogin, response: Response):
         raise HTTPException(status_code=403, detail="Account suspended")
     token = create_token(user["id"], user["role"])
     set_auth_cookie(response, token)
+    set_csrf_cookie(response, new_csrf_token())
     return {"access_token": token, "token_type": "bearer", "user": user_to_public(user)}
 
 
@@ -527,11 +588,17 @@ async def login(payload: UserLogin, response: Response):
 async def logout(response: Response):
     """Clear the HttpOnly web session cookie. Idempotent — safe to call unauth'd."""
     clear_auth_cookie(response)
+    clear_csrf_cookie(response)
     return {"ok": True}
 
 
 @api.get("/auth/me", response_model=UserPublic)
-async def me(user: dict = Depends(get_current_user)):
+async def me(request: Request, response: Response, user: dict = Depends(get_current_user)):
+    # Opportunistic CSRF re-issue: any existing session that predates the SEC1
+    # rollout will hydrate via this endpoint and pick up a fresh CSRF cookie
+    # without needing to log in again.
+    if not request.cookies.get(CSRF_COOKIE_NAME):
+        set_csrf_cookie(response, new_csrf_token())
     return user_to_public(user)
 
 
@@ -1212,9 +1279,14 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
     success_url = f"{origin_url}/customer/booking/{booking_id}?payment=success&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin_url}/customer/booking/{booking_id}?payment=cancel"
 
+    # Phase 1 P0 hardening — per-session shared secret for the callback path.
+    # Baked into the webhook URL query string, stored in payment_transactions,
+    # and validated in POST /api/webhook/stripe. See _stripe_webhook_url docs.
+    webhook_token = new_webhook_token()
+    webhook_url = f"{_stripe_webhook_url(request)}?t={webhook_token}"
     stripe = StripeCheckout(
         api_key=STRIPE_API_KEY,
-        webhook_url=_stripe_webhook_url(request),
+        webhook_url=webhook_url,
     )
     req = CheckoutSessionRequest(
         amount=float(booking["deposit_amount"]),
@@ -1243,6 +1315,7 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
         "payment_status": "initiated",
         "status": "open",
         "metadata": {"type": "booking_deposit"},
+        "webhook_token": webhook_token,
         "created_at": now_iso(),
     }
     await db.payment_transactions.insert_one(txn)
@@ -1371,20 +1444,22 @@ async def stripe_webhook(request: Request):
     Duplicate-delivery safe (Stripe promises at-least-once; the Emergent
     proxy may retry too). Idempotency lives in `_finalise_paid_deposit`.
 
-    Signature verification:
-      * If `STRIPE_WEBHOOK_SECRET` is set, verify via Stripe SDK. This is
-        the correct posture whenever the app is wired directly to Stripe.
-      * With `sk_test_emergent` there is no Stripe secret handshake with
-        us — Stripe signs to the Emergent proxy, the proxy re-POSTs here.
-        We still lock down what we accept: only `checkout.session.*` /
-        `payment_intent.*` events for a `session_id` we already have in
-        `payment_transactions` can trigger any state change. Unknown
-        or unmatched sessions are dropped with a 200 (idempotent to
-        avoid re-delivery storms).
+    Authentication (Phase 1 P0):
+      * If `STRIPE_WEBHOOK_SECRET` is set → cryptographic signature check
+        via `stripe.Webhook.construct_event`. This is the LIVE / real-Stripe
+        posture.
+      * With `sk_test_emergent` there is no Stripe signature to us — Stripe
+        signs to the Emergent proxy, the proxy re-POSTs here. Provable
+        session-id knowledge is insufficient by itself: every session is
+        bound at create time to a per-session `webhook_token` baked into
+        the URL query string and stored in `payment_transactions`. We
+        require the query token to match. Unknown / unmatched sessions
+        are dropped with a 200 (idempotent — avoid retry storms).
     """
     payload = await request.body()
     signature = request.headers.get("Stripe-Signature") or request.headers.get("stripe-signature")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET") or None
+    query_token = request.query_params.get("t") or ""
     stripe_client = StripeCheckout(
         api_key=STRIPE_API_KEY,
         webhook_secret=webhook_secret,
@@ -1393,8 +1468,7 @@ async def stripe_webhook(request: Request):
     try:
         event = await stripe_client.handle_webhook(payload, signature)
     except Exception as e:  # noqa: BLE001
-        # Bad signature or unparseable body → 400 so Stripe retries.
-        logger.warning("Stripe webhook rejected: %s", e)
+        logger.warning("Stripe webhook rejected (parse/signature): %s", e)
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from e
 
     session_id = event.session_id
@@ -1402,8 +1476,18 @@ async def stripe_webhook(request: Request):
     if not session_id:
         return {"ok": True, "ignored": "no session_id"}
 
-    # Only advance state for successful events; other events (expired,
-    # failed) are recorded for audit but MUST NOT flip a paid booking.
+    # SEC — bind: require the per-session token unless a signed webhook secret
+    # already authenticated the payload cryptographically.
+    if not webhook_secret:
+        txn = await db.payment_transactions.find_one({"session_id": session_id})
+        if not txn:
+            # Unknown session — do NOT reveal existence via 4xx. Idempotent no-op.
+            return {"ok": True, "session_id": session_id, "ignored": "unknown_session"}
+        expected = txn.get("webhook_token") or ""
+        if not expected or not query_token or not hmac.compare_digest(expected, query_token):
+            logger.warning("Stripe webhook rejected (token mismatch) for %s", session_id)
+            raise HTTPException(status_code=403, detail="Webhook token invalid")
+
     if event_type in {"checkout.session.completed", "payment_intent.succeeded"} \
             or event.payment_status == "paid":
         finalised = await _finalise_paid_deposit(session_id)
@@ -3499,5 +3583,44 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=_cors_origins,
     allow_methods=["*"],
-    allow_headers=["*"],
+    # Narrowed from "*" so browsers reliably preflight the new X-CSRF-Token
+    # header alongside our existing headers. Safari and stricter WebKit
+    # derivatives reject `Access-Control-Allow-Headers: *` when the request
+    # advertises a custom header and `allow_credentials=True`.
+    allow_headers=["Accept", "Content-Type", "Authorization", "X-CSRF-Token", "X-Client-Type"],
 )
+
+
+# ---------------------------------------------------------------------------
+# SEC1 — CSRF double-submit middleware. Registered AFTER CORS so preflights
+# resolve before we enforce. Bearer/mobile requests are unconditionally
+# bypassed to keep the retained native-client contract intact.
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    method = request.method.upper()
+    if method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return await call_next(request)
+    if path in CSRF_EXEMPT_PATHS:
+        return await call_next(request)
+    # Bearer/native clients never see the CSRF cookie — bypass entirely.
+    auth_header = request.headers.get("Authorization", "").lower()
+    if auth_header.startswith("bearer "):
+        return await call_next(request)
+    # No session cookie → the downstream auth layer will return 401 anyway.
+    # We only enforce CSRF for browser sessions.
+    session_cookie = request.cookies.get(AUTH_COOKIE_NAME)
+    if not session_cookie:
+        return await call_next(request)
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME) or ""
+    header_token = request.headers.get(CSRF_HEADER_NAME) or ""
+    if not header_token:
+        from starlette.responses import JSONResponse as _JR
+        return _JR({"detail": "CSRF token missing"}, status_code=403)
+    if not cookie_token or not hmac.compare_digest(cookie_token, header_token):
+        from starlette.responses import JSONResponse as _JR
+        return _JR({"detail": "CSRF token invalid"}, status_code=403)
+    return await call_next(request)

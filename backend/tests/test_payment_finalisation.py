@@ -97,6 +97,34 @@ def _seed_booking_and_session(cust_token, job_id):
     return booking["id"], r.json()["session_id"]
 
 
+def _fetch_webhook_token(session_id):
+    """Look up the per-session webhook token via a direct DB read.
+
+    Test-only escape hatch — production code never exposes this token
+    outside the Stripe callback URL query string.
+    """
+    import asyncio
+    from dotenv import load_dotenv
+    load_dotenv("/app/backend/.env")
+    from motor.motor_asyncio import AsyncIOMotorClient
+    client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+    db = client[os.environ["DB_NAME"]]
+    async def _read():
+        doc = await db.payment_transactions.find_one({"session_id": session_id})
+        return (doc or {}).get("webhook_token")
+    try:
+        return asyncio.run(_read())
+    finally:
+        client.close()
+
+
+def _webhook_url(session_id):
+    tok = _fetch_webhook_token(session_id)
+    if tok:
+        return f"{API}/webhook/stripe?t={tok}"
+    return f"{API}/webhook/stripe"
+
+
 def _webhook_completed(session_id):
     """Simulate what the Emergent Stripe proxy POSTs for a paid checkout."""
     return {
@@ -126,7 +154,7 @@ class TestWebhookFinalisation:
 
         # webhook fires
         r = requests.post(
-            f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15
+            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
         )
         assert r.status_code == 200
         body = r.json()
@@ -151,7 +179,7 @@ class TestWebhookFinalisation:
 
         # first delivery
         r1 = requests.post(
-            f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15
+            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
         )
         assert r1.json().get("finalised") is True
 
@@ -161,7 +189,7 @@ class TestWebhookFinalisation:
 
         # duplicate delivery — must be no-op
         r2 = requests.post(
-            f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15
+            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
         )
         assert r2.status_code == 200
         assert r2.json().get("finalised") is False
@@ -171,9 +199,13 @@ class TestWebhookFinalisation:
 
     def test_webhook_unknown_session_is_safe(self):
         payload = _webhook_completed("cs_test_unknown_session_that_never_existed")
-        r = requests.post(f"{API}/webhook/stripe", json=payload, timeout=15)
+        r = requests.post(f"{API}/webhook/stripe?t=any", json=payload, timeout=15)
         assert r.status_code == 200
-        assert r.json().get("finalised") is False
+        # New security posture: unknown session returns 200 with ignored=unknown_session
+        # (see server _finalise_paid_deposit + webhook token guard).
+        body = r.json()
+        assert body.get("finalised") in (False, None)
+        assert body.get("ignored") == "unknown_session"
 
     def test_webhook_expired_on_paid_session_does_not_downgrade(self):
         cust = _login(CUSTOMER)
@@ -182,7 +214,7 @@ class TestWebhookFinalisation:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # mark as paid via webhook
-        requests.post(f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15)
+        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
 
         # then deliver a stale expired event for the same session
         expired = {
@@ -191,7 +223,7 @@ class TestWebhookFinalisation:
             "data": {"object": {"id": session_id, "payment_status": "unpaid",
                                  "metadata": {}}},
         }
-        r = requests.post(f"{API}/webhook/stripe", json=expired, timeout=15)
+        r = requests.post(_webhook_url(session_id), json=expired, timeout=15)
         assert r.status_code == 200
         # booking must remain paid — no downgrade
         r = requests.get(f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15)
@@ -208,7 +240,7 @@ class TestStatusPollerIdempotency:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # webhook finalises
-        requests.post(f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15)
+        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
         first = requests.get(
             f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15
         ).json().get("paid_at")
@@ -242,7 +274,7 @@ class TestStatusPollerIdempotency:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # finalise via webhook only
-        requests.post(f"{API}/webhook/stripe", json=_webhook_completed(session_id), timeout=15)
+        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
 
         # even if the Stripe proxy failed silently, poll must return DB truth
         r = requests.get(

@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Allow: /how-it-works
+Allow: /services
+Allow: /business
+Allow: /drivers
+Allow: /faq
+Allow: /contact
+Allow: /trust-safety
+
+# Private portal + account pages — do not index
+Disallow: /auth/
+Disallow: /customer/
+Disallow: /driver/
+Disallow: /admin/
+Disallow: /account/
+Disallow: /api/
+
+# Full sitemap
+Sitemap: https://cargoone.co.uk/sitemap.xml
