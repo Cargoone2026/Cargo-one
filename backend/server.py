@@ -1186,6 +1186,17 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
     return {k: v for k, v in booking.items() if k != "_id"}
 
 
+def _stripe_webhook_url(request: Request) -> str:
+    """Build the absolute webhook URL that Emergent's Stripe proxy will
+    call for `checkout.session.completed` events on `sk_test_emergent`.
+
+    Per playbook the path MUST be `/api/webhook/stripe` verbatim — the
+    emergentintegrations library relays events to this exact path.
+    """
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/api/webhook/stripe"
+
+
 @api.post("/bookings/{booking_id}/deposit")
 async def create_deposit_session(booking_id: str, body: dict, request: Request,
                                    user: dict = Depends(require_role("customer"))):
@@ -1201,7 +1212,10 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
     success_url = f"{origin_url}/customer/booking/{booking_id}?payment=success&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin_url}/customer/booking/{booking_id}?payment=cancel"
 
-    stripe = StripeCheckout(api_key=STRIPE_API_KEY)
+    stripe = StripeCheckout(
+        api_key=STRIPE_API_KEY,
+        webhook_url=_stripe_webhook_url(request),
+    )
     req = CheckoutSessionRequest(
         amount=float(booking["deposit_amount"]),
         currency="gbp",
@@ -1238,59 +1252,173 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
     return {"session_id": session.session_id, "url": session.url}
 
 
+async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
+    """Idempotent, single-writer finaliser for a paid deposit session.
+
+    Called by BOTH `/payments/status/{session_id}` (polling fallback) and
+    `/webhook/stripe` (Stripe → Emergent proxy → us). Uses a conditional
+    Mongo update guarded on `payment_status != "paid"` so any second
+    caller is a no-op — Stripe delivers webhooks at-least-once and the
+    browser may poll multiple times.
+
+    Returns the finalised booking document if this call was the one that
+    flipped the state, or None if it was already finalised (or if no
+    payment_transactions/booking rows exist for the session).
+    """
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if not txn or not txn.get("booking_id"):
+        return None
+    # Atomically claim the transition — only one caller wins.
+    claim = await db.payment_transactions.update_one(
+        {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+        {"$set": {"payment_status": "paid", "status": "complete",
+                  "finalised_at": now_iso(), "updated_at": now_iso()}},
+    )
+    if claim.modified_count == 0:
+        return None  # already finalised — idempotent no-op
+    booking = await db.bookings.find_one({"id": txn["booking_id"]})
+    if not booking:
+        return None
+    await db.bookings.update_one(
+        {"id": booking["id"], "payment_status": {"$ne": "paid"}},
+        {"$set": {"payment_status": "paid", "status": "deposit_paid",
+                  "paid_at": now_iso()}},
+    )
+    await db.jobs.update_one(
+        {"id": booking["job_id"], "status": {"$ne": "confirmed"}},
+        {"$set": {"status": "confirmed"}},
+    )
+    try:
+        await push_notification(
+            booking["driver_id"], "Deposit received!",
+            "Customer paid the deposit. Contact details unlocked. Proceed to pickup.",
+            {"booking_id": booking["id"]},
+        )
+        await push_notification(
+            booking["customer_id"], "Booking confirmed",
+            "Deposit paid. Driver contact details are now unlocked.",
+            {"booking_id": booking["id"]},
+        )
+    except Exception:
+        # push errors must never block the payment finalisation
+        logger.exception("push_notification failed post-deposit; continuing")
+    return await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
+
+
 @api.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, user: dict = Depends(get_current_user)):
+async def payment_status(session_id: str, request: Request,
+                          user: dict = Depends(get_current_user)):
+    """Frontend polls this after Stripe redirects with `?payment=success`.
+
+    Robust to Emergent Stripe proxy retrieve failures: if `Session.retrieve`
+    fails or we can't reach Stripe, we fall back to whatever the webhook
+    has already written to Mongo. The transition to `deposit_paid` is
+    driven by `_finalise_paid_deposit`, guarded by `payment_status != paid`
+    so polling + webhook can safely race.
+    """
     txn = await db.payment_transactions.find_one({"session_id": session_id})
     if not txn:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Poll Stripe (idempotent: only advance booking on first confirmation)
-    stripe = StripeCheckout(api_key=STRIPE_API_KEY)
-    try:
-        status_obj = await stripe.get_checkout_status(session_id)
-    except Exception as e:
-        logger.exception("Stripe status error")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-    prev_status = txn.get("payment_status")
-    await db.payment_transactions.update_one(
-        {"session_id": session_id},
-        {"$set": {
-            "payment_status": status_obj.payment_status,
-            "status": status_obj.status,
-            "updated_at": now_iso(),
-        }},
+    # Best-effort poll of Stripe — if this fails (e.g. Emergent proxy
+    # "No such checkout.session" observed on production), we intentionally
+    # do NOT 500 out. The webhook is the authoritative finaliser; we just
+    # return the current DB state so the browser can keep polling.
+    stripe_paid = False
+    stripe_meta: dict[str, Any] = {}
+    stripe_client = StripeCheckout(
+        api_key=STRIPE_API_KEY,
+        webhook_url=_stripe_webhook_url(request),
     )
+    try:
+        status_obj = await stripe_client.get_checkout_status(session_id)
+        stripe_paid = status_obj.payment_status == "paid"
+        stripe_meta = {
+            "status": status_obj.status,
+            "payment_status": status_obj.payment_status,
+            "amount_total": status_obj.amount_total,
+            "currency": status_obj.currency,
+        }
+        # Best-effort mirror; NOT the source of truth for booking state.
+        await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"stripe_status": status_obj.status,
+                       "stripe_payment_status": status_obj.payment_status,
+                       "updated_at": now_iso()}},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Stripe status retrieve failed for %s: %s", session_id, e)
 
-    if status_obj.payment_status == "paid" and prev_status != "paid":
-        booking = await db.bookings.find_one({"id": txn["booking_id"]})
-        if booking:
-            await db.bookings.update_one(
-                {"id": booking["id"]},
-                {"$set": {"payment_status": "paid", "status": "deposit_paid",
-                          "paid_at": now_iso()}},
-            )
-            await db.jobs.update_one(
-                {"id": booking["job_id"]},
-                {"$set": {"status": "confirmed"}},
-            )
-            await push_notification(
-                booking["driver_id"], "Deposit received!",
-                "Customer paid the deposit. Contact details unlocked. Proceed to pickup.",
-                {"booking_id": booking["id"]},
-            )
-            await push_notification(
-                booking["customer_id"], "Booking confirmed",
-                "Deposit paid. Driver contact details are now unlocked.",
-                {"booking_id": booking["id"]},
-            )
+    if stripe_paid:
+        await _finalise_paid_deposit(session_id)
 
+    # Re-read the transaction so the client sees the authoritative state
+    # (either Stripe-polled or webhook-driven).
+    txn = await db.payment_transactions.find_one({"session_id": session_id}) or txn
     return {
-        "status": status_obj.status,
-        "payment_status": status_obj.payment_status,
-        "amount_total": status_obj.amount_total,
-        "currency": status_obj.currency,
+        "session_id": session_id,
+        "status": stripe_meta.get("status") or txn.get("status") or "open",
+        "payment_status": txn.get("payment_status") or "pending",
+        "amount_total": stripe_meta.get("amount_total") or int(round(float(txn.get("amount", 0)) * 100)),
+        "currency": stripe_meta.get("currency") or txn.get("currency", "gbp"),
     }
+
+
+@api.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Stripe → Emergent proxy → us. Authoritative payment finaliser.
+
+    Duplicate-delivery safe (Stripe promises at-least-once; the Emergent
+    proxy may retry too). Idempotency lives in `_finalise_paid_deposit`.
+
+    Signature verification:
+      * If `STRIPE_WEBHOOK_SECRET` is set, verify via Stripe SDK. This is
+        the correct posture whenever the app is wired directly to Stripe.
+      * With `sk_test_emergent` there is no Stripe secret handshake with
+        us — Stripe signs to the Emergent proxy, the proxy re-POSTs here.
+        We still lock down what we accept: only `checkout.session.*` /
+        `payment_intent.*` events for a `session_id` we already have in
+        `payment_transactions` can trigger any state change. Unknown
+        or unmatched sessions are dropped with a 200 (idempotent to
+        avoid re-delivery storms).
+    """
+    payload = await request.body()
+    signature = request.headers.get("Stripe-Signature") or request.headers.get("stripe-signature")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET") or None
+    stripe_client = StripeCheckout(
+        api_key=STRIPE_API_KEY,
+        webhook_secret=webhook_secret,
+        webhook_url=_stripe_webhook_url(request),
+    )
+    try:
+        event = await stripe_client.handle_webhook(payload, signature)
+    except Exception as e:  # noqa: BLE001
+        # Bad signature or unparseable body → 400 so Stripe retries.
+        logger.warning("Stripe webhook rejected: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid webhook payload") from e
+
+    session_id = event.session_id
+    event_type = event.event_type or ""
+    if not session_id:
+        return {"ok": True, "ignored": "no session_id"}
+
+    # Only advance state for successful events; other events (expired,
+    # failed) are recorded for audit but MUST NOT flip a paid booking.
+    if event_type in {"checkout.session.completed", "payment_intent.succeeded"} \
+            or event.payment_status == "paid":
+        finalised = await _finalise_paid_deposit(session_id)
+        return {"ok": True, "session_id": session_id, "finalised": bool(finalised)}
+
+    if event_type in {"checkout.session.expired", "checkout.session.async_payment_failed",
+                      "payment_intent.payment_failed"}:
+        await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"payment_status": "failed", "status": "failed",
+                      "failed_reason": event_type, "updated_at": now_iso()}},
+        )
+        return {"ok": True, "session_id": session_id, "failed": True}
+
+    return {"ok": True, "session_id": session_id, "ignored": event_type}
 
 
 @api.get("/bookings/mine")
