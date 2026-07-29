@@ -348,6 +348,27 @@ data, deposit math or visual language.
   Routes API v2 + `AdvancedMarkerElement`** (silences the Feb 25 2026
   deprecation warnings; not blocking today).
 
+### Phase A — Driver-side Route Summary / Ferry + Toll Parity  ✅ COMPLETE (2026-07-29)
+- **Objective:** Bring driver-side `RouteMap` call-sites to full visual/data
+  parity with the customer-side (summary strip with pickup/dropoff towns,
+  distance, duration + Ferry / Toll chips driven by shared DirectionsService
+  detection inside `RouteMap`).
+- **Outcome:** Parity was already in place from a prior session. Both
+  `driver/JobDetail.jsx` (L137-147) and `driver/BookingDetail.jsx`
+  (L318-348) supply an identical
+  `summary={{ pickupTown, dropoffTown, distanceMiles, durationMinutes }}`
+  shape to the customer-side counterparts; the driver Booking Detail also
+  uses the same `tracking?.eta_minutes ?? job.duration_minutes` fallback.
+- **Verified:** Live driver-portal render on the preview environment for
+  job `f20a74c6` (Manchester → Birmingham, 70.3 mi). Summary strip renders
+  route towns + distance on desktop (1280×900) and mobile (390×844); Google
+  Maps engine active; charcoal route + P/D markers; no console errors.
+  Ferry / Toll chips remain driven by shared DirectionsService detection,
+  no duplicated logic. No files were modified this session.
+- **Report:** `/app/memory/PHASE_A_DRIVER_PARITY_VERIFICATION.md`.
+
+
+
 ## Known Historical Drift (DO NOT AUTO-FIX)
 Baseline serial pytest suite from the source repo carries pre-existing
 regressions (endpoints such as `/api/geo/markets`, `/api/quotes/estimate`
