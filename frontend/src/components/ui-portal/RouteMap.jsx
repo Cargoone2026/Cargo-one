@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MapPin, Navigation, Clock, Ship } from "lucide-react";
+import { MapPin, Navigation, Clock, Ship, Coins } from "lucide-react";
 
 /**
  * RouteMap — Google Maps route preview with branded markers, blue polyline,
@@ -68,15 +68,15 @@ const validPt = (p) =>
 // never touch the container edges — including tight mobile portrait viewports.
 const FIT_PADDING = { top: 68, right: 44, bottom: 68, left: 44 };
 
-const ROUTE_STROKE_COLOR = "#1A73E8"; // Google Maps' signature blue — premium, high-contrast
+const ROUTE_STROKE_COLOR = "#1F2937"; // deep slate charcoal — reads as black, anti-aliases premium on Google basemap
 const ROUTE_STROKE_WEIGHT = 6;
-const ROUTE_STROKE_OPACITY = 0.95;
+const ROUTE_STROKE_OPACITY = 0.98;
 
-// Subtle white casing rendered UNDER the main polyline for the premium
-// two-tone look (matches the Google/Uber/Apple Maps house style).
+// Slightly brighter white halo now that the main line is dark — makes the
+// two-tone Google-Maps-app sheen pop against light basemap tiles.
 const ROUTE_CASING_COLOR = "#FFFFFF";
 const ROUTE_CASING_WEIGHT = ROUTE_STROKE_WEIGHT + 4; // 4 px wider than main line
-const ROUTE_CASING_OPACITY = 0.55;
+const ROUTE_CASING_OPACITY = 0.72;
 
 const MARKER_GREEN = "#16A34A"; // pickup
 const MARKER_RED = "#D62828";   // dropoff
@@ -148,14 +148,14 @@ function buildDriverIcon(maps) {
 }
 
 // ============================================================ summary ===
-function SummaryStrip({ summary, showFerry, testID }) {
-  if (!summary && !showFerry) return null;
+function SummaryStrip({ summary, showFerry, showTolls, testID }) {
+  if (!summary && !showFerry && !showTolls) return null;
   const s = summary || {};
   const { pickupTown, dropoffTown, distanceMiles, durationMinutes } = s;
   const hasTowns = pickupTown || dropoffTown;
   const distText = fmtDistanceMiles(distanceMiles);
   const durText = fmtDurationMinutes(durationMinutes);
-  if (!hasTowns && !distText && !durText && !showFerry) return null;
+  if (!hasTowns && !distText && !durText && !showFerry && !showTolls) return null;
   return (
     <div
       className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[12px] border border-[#E5E7EB] bg-white px-3 py-2 text-[13px] text-[#111111]"
@@ -184,11 +184,20 @@ function SummaryStrip({ summary, showFerry, testID }) {
       )}
       {showFerry && (
         <div
-          className="flex items-center gap-1 rounded-full bg-[#EFF6FF] px-2 py-0.5 font-semibold text-[#1A73E8]"
+          className="flex items-center gap-1 rounded-full bg-[#F3F4F6] px-2 py-0.5 font-semibold text-[#1F2937]"
           data-testid={`${testID}-summary-ferry`}
         >
           <Ship className="h-3.5 w-3.5" />
           <span>Ferry crossing</span>
+        </div>
+      )}
+      {showTolls && (
+        <div
+          className="flex items-center gap-1 rounded-full bg-[#FFFBEB] px-2 py-0.5 font-semibold text-[#B45309]"
+          data-testid={`${testID}-summary-tolls`}
+        >
+          <Coins className="h-3.5 w-3.5" />
+          <span>Toll roads</span>
         </div>
       )}
     </div>
@@ -207,10 +216,11 @@ export function RouteMap({
 }) {
   const canUseGoogle = validPt(pickup) && validPt(dropoff) && MAPS_JS_KEY;
   const [hasFerry, setHasFerry] = useState(false);
+  const [hasTolls, setHasTolls] = useState(false);
 
   return (
     <div data-testid={`${testID}-wrapper`}>
-      <SummaryStrip summary={summary} showFerry={hasFerry} testID={testID} />
+      <SummaryStrip summary={summary} showFerry={hasFerry} showTolls={hasTolls} testID={testID} />
       {canUseGoogle ? (
         <GoogleRouteMap
           pickup={pickup}
@@ -220,6 +230,7 @@ export function RouteMap({
           height={height}
           testID={testID}
           onFerryDetected={setHasFerry}
+          onTollsDetected={setHasTolls}
         />
       ) : (
         <SvgRouteMap
@@ -236,7 +247,7 @@ export function RouteMap({
 }
 
 // ================================================= real Google Maps view ===
-function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID, onFerryDetected }) {
+function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID, onFerryDetected, onTollsDetected }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const rendererRef = useRef(null);
@@ -363,19 +374,25 @@ function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID, onFerr
               // Legacy Directions API marks ferry legs with `maneuver: "ferry"` (or "ferry-train").
               // Some routes surface it via `warnings` too.
               let ferry = false;
+              let tolls = false;
               const route = result.routes[0];
               outer: for (const leg of route.legs || []) {
                 for (const step of leg.steps || []) {
                   const man = (step.maneuver || "").toLowerCase();
-                  if (man.includes("ferry")) { ferry = true; break outer; }
+                  const html = (step.instructions || step.html_instructions || "").toLowerCase();
+                  if (!ferry && man.includes("ferry")) ferry = true;
+                  if (!tolls && (html.includes("toll") || man.includes("toll"))) tolls = true;
+                  if (ferry && tolls) break outer;
                 }
               }
-              if (!ferry) {
-                for (const w of route.warnings || []) {
-                  if (typeof w === "string" && /ferry/i.test(w)) { ferry = true; break; }
-                }
+              // Also scan route.warnings text for either signal
+              for (const w of route.warnings || []) {
+                const wl = typeof w === "string" ? w.toLowerCase() : "";
+                if (!ferry && /ferry/.test(wl)) ferry = true;
+                if (!tolls && /toll/.test(wl)) tolls = true;
               }
               onFerryDetected?.(ferry);
+              onTollsDetected?.(tolls);
 
               // ── Premium two-tone polyline: white casing UNDER the blue main line
               const overview = route.overview_path;
@@ -396,7 +413,8 @@ function GoogleRouteMap({ pickup, dropoff, driver, trail, height, testID, onFerr
               if (rb) bounds.union(rb);
             } else {
               onFerryDetected?.(false);
-              // Straight-line fallback on real tiles — same blue for consistency.
+              onTollsDetected?.(false);
+              // Straight-line fallback on real tiles — same charcoal for consistency.
               fallbackLineRef.current = new maps.Polyline({
                 path: [
                   { lat: pickup.lat, lng: pickup.lng },
