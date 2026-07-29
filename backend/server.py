@@ -267,6 +267,12 @@ class JobCreate(BaseModel):
     fixed_price: Optional[float] = None
     max_budget: Optional[float] = None
     vehicle_required: Optional[str] = None
+    # Real-time dispatch — v1 additions. Backward-compatible defaults keep
+    # every existing customer flow behaving exactly as before.
+    service_timing: Optional[str] = "scheduled"  # scheduled | asap
+    service_type: Optional[str] = "transport"    # transport | breakdown_recovery
+    vehicle_details: Optional[dict] = None  # {make, model, registration, condition, rolls, steers, brakes}
+    customer_note: Optional[str] = None
 
 
 class BidCreate(BaseModel):
@@ -832,6 +838,16 @@ async def admin_review_document(doc_id: str, payload: DocReview,
 @api.post("/jobs")
 async def create_job(payload: JobCreate, user: dict = Depends(require_role("customer"))):
     data = payload.model_dump()
+    # Real-time dispatch validation (Phase 32).
+    service_timing = (data.get("service_timing") or "scheduled").lower()
+    if service_timing not in ("scheduled", "asap"):
+        raise HTTPException(status_code=400, detail="Invalid service_timing")
+    service_type = (data.get("service_type") or "transport").lower()
+    if service_type not in ("transport", "breakdown_recovery"):
+        raise HTTPException(status_code=400, detail="Invalid service_type")
+    data["service_timing"] = service_timing
+    data["service_type"] = service_type
+
     distance = haversine_miles(
         data["pickup_lat"], data["pickup_lng"], data["dropoff_lat"], data["dropoff_lng"]
     )
@@ -850,6 +866,8 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
         "house_moves": 1.6, "parcels": 1.0, "freight": 1.8, "documents": 0.8,
         "boats": 2.5, "machinery": 2.2,
     }.get(data["category"], 1.2)
+    if service_type == "breakdown_recovery":
+        category_mult = max(category_mult, 2.0)  # recovery premium already baked into commercial rules
     suggested_price = round(max(30, distance * 1.5 * category_mult), 2)
 
     job = {
@@ -866,6 +884,10 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
         "created_at": now_iso(),
         **data,
     }
+    # ASAP jobs must be fixed-price so the atomic claim doesn't collide with
+    # the multi-round bidding lifecycle. Guard commercial rules explicitly.
+    if service_timing == "asap" and job.get("pricing_type") != "fixed":
+        raise HTTPException(status_code=400, detail="ASAP requests must be fixed-price")
     await db.jobs.insert_one(job)
     return public_job(job, include_private=True)
 
@@ -1093,21 +1115,26 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
     job = await db.jobs.find_one({"id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["status"] != "posted":
-        raise HTTPException(status_code=400, detail="Job not available")
-    if job["pricing_type"] != "fixed":
+    if job.get("pricing_type") != "fixed":
         raise HTTPException(status_code=400, detail="Job requires bidding")
+    if job.get("service_timing") == "asap":
+        raise HTTPException(status_code=400, detail="Use /jobs/{id}/claim for ASAP jobs")
 
-    await db.jobs.update_one(
-        {"id": job_id},
+    # Atomic claim — conditional update guards the read-then-update race that
+    # would otherwise let two drivers both flip `status=posted` → `accepted`.
+    result = await db.jobs.update_one(
+        {"id": job_id, "status": "posted", "assigned_driver_id": None},
         {"$set": {
             "status": "accepted",
             "assigned_driver_id": user["id"],
             "assigned_driver_name": user["name"],
             "assigned_driver_rating": user.get("rating", 5.0),
             "accepted_price": job["fixed_price"],
+            "accepted_at": now_iso(),
         }},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Job already claimed or no longer available")
     await push_notification(
         job["customer_id"],
         "Driver accepted your job",
@@ -1115,6 +1142,346 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
         {"job_id": job_id},
     )
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Real-time dispatch — Driver Live Mode + ASAP claim (Phases 7-17 of the
+# Real-time Dispatch Programme). Reuses the existing job / booking / payment
+# / tracking / RouteMap lifecycle wherever possible.
+# ---------------------------------------------------------------------------
+
+# Centralised dispatch constants — do not scatter magic numbers.
+DISPATCH_HEARTBEAT_FRESHNESS_SECONDS = 60        # drivers with older location stop matching
+DISPATCH_DEFAULT_RADIUS_MILES = 25               # candidate filter radius for ASAP offers
+DISPATCH_CANDIDATE_LIMIT = 25                    # max drivers returned per offer poll
+
+
+class DriverLivePayload(BaseModel):
+    lat: float
+    lng: float
+    accuracy_m: Optional[float] = None
+
+
+def _validate_latlng(lat: float, lng: float) -> None:
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+        raise HTTPException(status_code=400, detail="Invalid coordinates")
+
+
+def _dispatch_eligible(job: dict) -> bool:
+    """Server-authoritative dispatch eligibility.
+
+    A job is eligible for real-time dispatch only when EVERY invariant below
+    holds. Never derived from a client-supplied boolean.
+    """
+    if not job:
+        return False
+    if job.get("service_timing") != "asap":
+        return False
+    if job.get("assigned_driver_id"):
+        return False
+    if job.get("cancelled_at") or job.get("completed_at"):
+        return False
+    # Must have reached a paid+ready lifecycle state. ASAP customers pay the
+    # deposit BEFORE broadcast so the job only enters the dispatch queue after
+    # `_finalise_paid_deposit` flips `status` → "confirmed" and stamps
+    # `dispatch_ready_at`. See Phase 7 rules in the programme document.
+    if job.get("status") not in ("confirmed", "dispatch_ready"):
+        return False
+    if not job.get("dispatch_ready_at"):
+        return False
+    return True
+
+
+def _driver_is_capable(driver: dict, job: dict) -> bool:
+    """Minimal, conservative capability matcher (Phase 12).
+
+    v1 rules — deliberately narrow, backed only by existing schema:
+      * driver must have `status == "active"` (approved).
+      * for `service_type == "breakdown_recovery"` the driver profile OR any
+        of the driver's vehicles must advertise recovery capability via
+        `capabilities.recovery == True` OR `service_types` list contains
+        `breakdown_recovery`. If NO driver has capability data configured
+        yet, we do NOT block dispatch — v1 is intentionally lenient with a
+        warning field so operators can tighten later without a migration.
+    """
+    if driver.get("status") != "active":
+        return False
+    if job.get("service_type") == "breakdown_recovery":
+        caps = driver.get("capabilities") or {}
+        svc_types = set((driver.get("service_types") or []))
+        if not caps.get("recovery") and "breakdown_recovery" not in svc_types:
+            # Conservative fallback: allow only when no capability info exists
+            # anywhere on the driver (dispatch v1 opt-in). Return True so
+            # first-run installations don't have zero eligible drivers.
+            has_any_cap_data = bool(caps) or bool(svc_types)
+            if has_any_cap_data:
+                return False
+    return True
+
+
+@api.post("/driver/live/online")
+async def driver_go_online(payload: DriverLivePayload,
+                            user: dict = Depends(require_role("driver"))):
+    _validate_latlng(payload.lat, payload.lng)
+    if user.get("status") != "active":
+        raise HTTPException(status_code=403, detail="Driver not approved yet")
+    now = now_iso()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "live_online": True,
+            "live_lat": payload.lat,
+            "live_lng": payload.lng,
+            "live_accuracy_m": payload.accuracy_m,
+            "live_updated_at": now,
+            "live_online_since": now,
+        }},
+    )
+    return {"ok": True, "online": True, "updated_at": now}
+
+
+@api.post("/driver/live/offline")
+async def driver_go_offline(user: dict = Depends(require_role("driver"))):
+    """Idempotent — safe to call multiple times / on tab close."""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"live_online": False},
+         "$unset": {"live_lat": "", "live_lng": "", "live_accuracy_m": ""}},
+    )
+    return {"ok": True, "online": False}
+
+
+@api.post("/driver/live/heartbeat")
+async def driver_heartbeat(payload: DriverLivePayload,
+                             user: dict = Depends(require_role("driver"))):
+    _validate_latlng(payload.lat, payload.lng)
+    # If offline, silently reject rather than force online — the driver must
+    # explicitly opt in via /driver/live/online first.
+    doc = await db.users.find_one({"id": user["id"]}, {"live_online": 1})
+    if not (doc or {}).get("live_online"):
+        raise HTTPException(status_code=409, detail="Driver is offline")
+    now = now_iso()
+    await db.users.update_one(
+        {"id": user["id"], "live_online": True},
+        {"$set": {"live_lat": payload.lat, "live_lng": payload.lng,
+                   "live_accuracy_m": payload.accuracy_m,
+                   "live_updated_at": now}},
+    )
+    return {"ok": True, "updated_at": now}
+
+
+@api.get("/driver/live/status")
+async def driver_live_status(user: dict = Depends(require_role("driver"))):
+    doc = await db.users.find_one(
+        {"id": user["id"]},
+        {"_id": 0, "live_online": 1, "live_lat": 1, "live_lng": 1,
+         "live_updated_at": 1, "live_accuracy_m": 1, "live_online_since": 1},
+    )
+    return doc or {"live_online": False}
+
+
+def _heartbeat_is_fresh(updated_at: Optional[str]) -> bool:
+    if not updated_at:
+        return False
+    try:
+        ts = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    delta = (datetime.now(timezone.utc) - ts).total_seconds()
+    return delta <= DISPATCH_HEARTBEAT_FRESHNESS_SECONDS
+
+
+@api.get("/driver/live/offers")
+async def driver_live_offers(user: dict = Depends(require_role("driver")),
+                              radius_miles: float = DISPATCH_DEFAULT_RADIUS_MILES):
+    """Return dispatch-eligible ASAP jobs within `radius_miles` of the
+    driver's current heartbeat, capability-filtered, sorted by distance.
+
+    Correctness > complexity — we broadcast to all qualifying candidates and
+    let atomic /claim decide the winner (Phase 15).
+    """
+    # Own driver state must be online + fresh + not busy on an active ASAP job.
+    driver = await db.users.find_one({"id": user["id"]})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    if not driver.get("live_online"):
+        return {"offers": [], "reason": "offline"}
+    if not _heartbeat_is_fresh(driver.get("live_updated_at")):
+        return {"offers": [], "reason": "stale_location"}
+    if not driver.get("live_lat") or not driver.get("live_lng"):
+        return {"offers": [], "reason": "no_location"}
+
+    # Phase 23 — driver busy rule: if the driver has an in-flight ASAP
+    # assignment (accepted / travelling / arrived / collected / on_route)
+    # they do NOT receive new immediate work. Scheduled future work does not
+    # block ASAP offers.
+    busy = await db.jobs.find_one({
+        "assigned_driver_id": user["id"],
+        "service_timing": "asap",
+        "status": {"$in": ["accepted", "confirmed", "dispatch_ready",
+                             "travelling", "arrived", "collected",
+                             "on_route", "delivered"]},
+    }, {"id": 1})
+    if busy:
+        return {"offers": [], "reason": "busy_on_asap"}
+
+    # Candidate query — index-friendly (service_timing + status + assigned_driver_id).
+    candidates = await db.jobs.find(
+        {"service_timing": "asap",
+         "status": {"$in": ["confirmed", "dispatch_ready"]},
+         "assigned_driver_id": None,
+         "cancelled_at": {"$exists": False}},
+        {"_id": 0},
+    ).sort("dispatch_ready_at", 1).to_list(200)
+
+    offers = []
+    d_lat, d_lng = float(driver["live_lat"]), float(driver["live_lng"])
+    for job in candidates:
+        if not _dispatch_eligible(job):
+            continue
+        if not _driver_is_capable(driver, job):
+            continue
+        p_lat = float(job.get("pickup_lat") or 0)
+        p_lng = float(job.get("pickup_lng") or 0)
+        dist = haversine_miles(d_lat, d_lng, p_lat, p_lng)
+        if dist > radius_miles:
+            continue
+        offers.append({
+            "job_id": job["id"],
+            "title": job.get("title"),
+            "category": job.get("category"),
+            "service_type": job.get("service_type"),
+            "distance_to_pickup_miles": round(dist, 1),
+            "pickup_town": job.get("pickup_town"),
+            "dropoff_town": job.get("dropoff_town"),
+            "distance_miles": job.get("distance_miles"),
+            "accepted_price": job.get("accepted_price") or job.get("fixed_price"),
+            "vehicle_details": job.get("vehicle_details"),
+            "customer_note": job.get("customer_note"),
+            "dispatch_ready_at": job.get("dispatch_ready_at"),
+        })
+        if len(offers) >= DISPATCH_CANDIDATE_LIMIT:
+            break
+    offers.sort(key=lambda o: o["distance_to_pickup_miles"])
+    return {"offers": offers, "radius_miles": radius_miles,
+             "heartbeat_freshness_seconds": DISPATCH_HEARTBEAT_FRESHNESS_SECONDS}
+
+
+@api.post("/jobs/{job_id}/claim")
+async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"))):
+    """Atomic ASAP claim (Phase 16 — P0). Exactly one concurrent request wins.
+
+    Conditional Mongo update filter re-validates every dispatch invariant at
+    claim time so a job cancelled or already-assigned milliseconds ago fails
+    cleanly with 409 rather than double-assigning.
+    """
+    if user.get("status") != "active":
+        raise HTTPException(status_code=403, detail="Driver not approved yet")
+
+    # Fetch job for capability + type checks (read is fine — the actual claim
+    # is the conditional update below).
+    job = await db.jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("service_timing") != "asap":
+        raise HTTPException(status_code=400, detail="Use /jobs/{id}/accept for scheduled jobs")
+
+    driver = await db.users.find_one({"id": user["id"]})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    if not driver.get("live_online"):
+        raise HTTPException(status_code=403, detail="Driver must be online to claim ASAP")
+    if not _heartbeat_is_fresh(driver.get("live_updated_at")):
+        raise HTTPException(status_code=403, detail="Driver location too stale")
+    if not _driver_is_capable(driver, job):
+        raise HTTPException(status_code=403, detail="Driver not capable for this job")
+
+    # Guard busy rule at claim time too.
+    busy = await db.jobs.find_one({
+        "assigned_driver_id": user["id"],
+        "service_timing": "asap",
+        "status": {"$in": ["accepted", "confirmed", "dispatch_ready",
+                             "travelling", "arrived", "collected",
+                             "on_route", "delivered"]},
+        "id": {"$ne": job_id},
+    }, {"id": 1})
+    if busy:
+        raise HTTPException(status_code=409, detail="Driver already on an active ASAP job")
+
+    accepted_price = job.get("accepted_price") or job.get("fixed_price")
+    # THE ATOMIC CLAIM — conditional update. This is the single source of
+    # truth for winner selection. Anything else read/checked above is
+    # advisory. If two drivers race, exactly one modified_count == 1.
+    now = now_iso()
+    result = await db.jobs.update_one(
+        {
+            "id": job_id,
+            "service_timing": "asap",
+            "status": {"$in": ["confirmed", "dispatch_ready"]},
+            "assigned_driver_id": None,
+            "cancelled_at": {"$exists": False},
+        },
+        {"$set": {
+            "status": "accepted",   # transition into existing fulfilment lifecycle
+            "assigned_driver_id": user["id"],
+            "assigned_driver_name": user["name"],
+            "assigned_driver_rating": user.get("rating", 5.0),
+            "accepted_price": accepted_price,
+            "accepted_at": now,
+            "dispatch_claimed_at": now,
+        }},
+    )
+    if result.modified_count == 0:
+        # Distinguish idempotent retry by the winning driver vs a true conflict.
+        refreshed = await db.jobs.find_one({"id": job_id},
+                                              {"_id": 0, "assigned_driver_id": 1, "status": 1})
+        if refreshed and refreshed.get("assigned_driver_id") == user["id"]:
+            # Same winner clicking twice — return the existing claim.
+            return {"ok": True, "job_id": job_id, "idempotent": True}
+        raise HTTPException(status_code=409, detail="Job already claimed or no longer available")
+
+    # Also stamp the winning driver id onto the pre-created booking so
+    # `/bookings/mine` (driver) and downstream tracking work end-to-end.
+    await db.bookings.update_one(
+        {"job_id": job_id, "driver_id": None},
+        {"$set": {"driver_id": user["id"]}},
+    )
+    # Notify customer of successful driver assignment.
+    await push_notification(
+        job["customer_id"],
+        "Driver found",
+        f"{user['name']} is on the way. £{accepted_price} confirmed.",
+        {"job_id": job_id, "dispatch": True},
+    )
+    return {"ok": True, "job_id": job_id, "idempotent": False,
+             "accepted_price": accepted_price}
+
+
+@api.get("/customer/dispatch/{job_id}")
+async def customer_dispatch_state(job_id: str,
+                                    user: dict = Depends(require_role("customer"))):
+    """Customer-facing dispatch snapshot — the state the 'Finding a driver'
+    screen polls until a driver is assigned. Never exposes other drivers'
+    coordinates (Phase 26 privacy)."""
+    job = await db.jobs.find_one({"id": job_id})
+    if not job or job.get("customer_id") != user["id"]:
+        raise HTTPException(status_code=404, detail="Job not found")
+    resp: dict[str, Any] = {
+        "job_id": job_id,
+        "service_timing": job.get("service_timing"),
+        "service_type": job.get("service_type"),
+        "status": job.get("status"),
+        "dispatch_ready_at": job.get("dispatch_ready_at"),
+        "cancelled_at": job.get("cancelled_at"),
+        "pickup_town": job.get("pickup_town"),
+        "dropoff_town": job.get("dropoff_town"),
+        "assigned_driver_id": job.get("assigned_driver_id"),
+        "assigned_driver_name": job.get("assigned_driver_name"),
+        "assigned_driver_rating": job.get("assigned_driver_rating"),
+    }
+    resp["dispatch_eligible"] = _dispatch_eligible(job)
+    return resp
+
 
 
 # ---------------------------------------------------------------------------
@@ -1224,21 +1591,35 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
     job = await db.jobs.find_one({"id": job_id})
     if not job or job["customer_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["status"] != "accepted" or not job.get("assigned_driver_id"):
-        raise HTTPException(status_code=400, detail="Job not ready for booking")
+
+    is_asap = job.get("service_timing") == "asap"
+    # Scheduled marketplace: existing invariant — a driver must have accepted.
+    # ASAP: customer pays FIRST, driver is claimed AFTER dispatch broadcast.
+    # In that pre-claim state the booking is created with driver_id=None; the
+    # atomic /jobs/{id}/claim updates it with the winning driver id.
+    if is_asap:
+        if job["status"] not in ("posted", "confirmed", "dispatch_ready"):
+            raise HTTPException(status_code=400, detail="ASAP job not in a bookable state")
+        if job.get("pricing_type") != "fixed":
+            raise HTTPException(status_code=400, detail="ASAP jobs must be fixed-price")
+    else:
+        if job["status"] != "accepted" or not job.get("assigned_driver_id"):
+            raise HTTPException(status_code=400, detail="Job not ready for booking")
 
     existing = await db.bookings.find_one({"job_id": job_id})
     if existing:
         return {k: v for k, v in existing.items() if k != "_id"}
 
-    driver_charge = float(job["accepted_price"])
+    driver_charge = float(job.get("accepted_price") or job.get("fixed_price") or 0)
+    if driver_charge <= 0:
+        raise HTTPException(status_code=400, detail="Missing job price")
     booking_fee = await calculate_booking_fee(driver_charge)
     customer_total = round(driver_charge + booking_fee, 2)
     booking = {
         "id": new_id(),
         "job_id": job_id,
         "customer_id": job["customer_id"],
-        "driver_id": job["assigned_driver_id"],
+        "driver_id": job.get("assigned_driver_id"),  # None for ASAP pre-claim
         "driver_charge": driver_charge,
         "booking_fee": booking_fee,
         "total_price": customer_total,          # what customer pays overall
@@ -1247,6 +1628,8 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         "status": "accepted",  # pending deposit
         "payment_status": "pending",
         "stripe_session_id": None,
+        "service_timing": job.get("service_timing", "scheduled"),
+        "service_type": job.get("service_type", "transport"),
         "created_at": now_iso(),
     }
     await db.bookings.insert_one(booking)
@@ -1357,9 +1740,18 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
         {"$set": {"payment_status": "paid", "status": "deposit_paid",
                   "paid_at": now_iso()}},
     )
+    # Job transition: for scheduled jobs → confirmed (existing lifecycle).
+    # For ASAP jobs → confirmed AND stamped with `dispatch_ready_at` so
+    # `_dispatch_eligible()` returns True and the matching engine can
+    # broadcast the offer to online drivers. (Real-time Dispatch Phase 7.)
+    job_now = await db.jobs.find_one({"id": booking["job_id"]}, {"service_timing": 1})
+    is_asap = (job_now or {}).get("service_timing") == "asap"
+    update_fields = {"status": "confirmed"}
+    if is_asap:
+        update_fields["dispatch_ready_at"] = now_iso()
     await db.jobs.update_one(
         {"id": booking["job_id"], "status": {"$ne": "confirmed"}},
-        {"$set": {"status": "confirmed"}},
+        {"$set": update_fields},
     )
     try:
         await push_notification(
@@ -3412,6 +3804,16 @@ async def root():
 # Seed admin + default deposit bands + service categories + vehicle types
 @app.on_event("startup")
 async def seed_startup():
+    # Real-time dispatch indexes (Phase 31). Idempotent — Mongo skips
+    # existing ones. All keys backward-compatible with existing docs.
+    try:
+        await db.users.create_index([("live_online", 1), ("live_updated_at", -1)])
+        await db.jobs.create_index([("service_timing", 1), ("status", 1),
+                                       ("assigned_driver_id", 1)])
+        await db.jobs.create_index([("dispatch_ready_at", -1)])
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Dispatch index creation skipped: %s", e)
+
     # SEC-002 / SEC-003: In production the seed MUST be disabled (set
     # ALLOW_INITIAL_ADMIN_SEED="false" and PRODUCTION_MODE="true") — admins
     # should be provisioned out-of-band. When the seed IS allowed the

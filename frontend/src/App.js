@@ -30,6 +30,8 @@ import CustomerBookings from "@/pages/portal/customer/Bookings";
 import CustomerMessages from "@/pages/portal/customer/Messages";
 import CustomerProfile from "@/pages/portal/customer/Profile";
 import CustomerPostJob from "@/pages/portal/customer/PostJob";
+import CustomerAsapRequest from "@/pages/portal/customer/AsapRequest";
+import CustomerDispatch from "@/pages/portal/customer/Dispatch";
 import CustomerJobDetail from "@/pages/portal/customer/JobDetail";
 import CustomerBookingDetail from "@/pages/portal/customer/BookingDetail";
 
@@ -43,6 +45,7 @@ import DriverEarnings from "@/pages/portal/driver/Earnings";
 import DriverFleet from "@/pages/portal/driver/Fleet";
 import DriverDocuments from "@/pages/portal/driver/Documents";
 import DriverProfile from "@/pages/portal/driver/Profile";
+import DriverLive from "@/pages/portal/driver/Live";
 import { DriverLayout } from "@/layouts/DriverLayout";
 
 // Admin portal — Stage 2C
@@ -141,6 +144,14 @@ export default function App() {
               element={<Customer Page={CustomerPostJob} />}
             />
             <Route
+              path="/customer/asap"
+              element={<Customer Page={CustomerAsapRequest} />}
+            />
+            <Route
+              path="/customer/dispatch/:jobId"
+              element={<Customer Page={CustomerDispatch} />}
+            />
+            <Route
               path="/customer/booking/:id"
               element={<Customer Page={CustomerBookingDetail} />}
             />
@@ -159,6 +170,7 @@ export default function App() {
             <Route path="/driver/jobs" element={<Driver Page={DriverJobs} />} />
             <Route path="/driver/job/:id" element={<Driver Page={DriverJobDetail} />} />
             <Route path="/driver/my-jobs" element={<Driver Page={DriverMyJobs} />} />
+            <Route path="/driver/live" element={<Driver Page={DriverLive} />} />
             <Route path="/driver/booking/:id" element={<Driver Page={DriverBookingDetail} />} />
             <Route path="/driver/earnings" element={<Driver Page={DriverEarnings} />} />
             <Route path="/driver/fleet" element={<Driver Page={DriverFleet} />} />

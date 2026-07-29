@@ -392,3 +392,18 @@ they will be resolved deliberately once the migration is complete.
 - Test credentials: `/app/memory/test_credentials.md`.
 - Frontend testing report: `/app/test_reports/iteration_1.json`.
 - Preview URL is derived from `REACT_APP_BACKEND_URL`.
+
+### Real-time Dispatch Programme (v1)  ✅ COMPLETE (2026-07-29, preview only)
+- Extends the existing job / booking / payment / tracking / RouteMap infrastructure with an ASAP / breakdown-recovery lifecycle. No parallel platform, no Uber clone.
+- **P0 atomic claim** — `POST /api/jobs/{id}/claim` uses a conditional Mongo update; 6-driver concurrency test proves exactly one winner + DB consistency. Fixed a latent race in existing `POST /jobs/{id}/accept` as a side benefit.
+- **Server-authoritative dispatch eligibility** — `_dispatch_eligible(job)` gates every offer. Only ASAP jobs whose deposit webhook has fired (`dispatch_ready_at` stamped) become eligible.
+- **Driver Live Mode** — `/driver/live` page + `/api/driver/live/{online,offline,heartbeat,status,offers}` endpoints. 30 s heartbeat, 60 s freshness cutoff, 25 mi default radius, busy rule for active ASAP jobs.
+- **Customer ASAP** — `/customer/asap` request page (Transport / Vehicle Recovery, Use-my-location, breakdown fields), `/customer/dispatch/:jobId` searching → driver-found → auto-redirect to existing booking detail.
+- **Reuses:** RouteMap, ferry/toll chips, tracking, notifications, MyJobs dedup, Stripe finalisation, CSRF, Bearer auth.
+- **DB additions (all optional, backward-compatible):** `jobs.{service_timing, service_type, vehicle_details, customer_note, dispatch_ready_at, dispatch_claimed_at, accepted_at, cancelled_at}`; `users.{live_online, live_lat, live_lng, live_updated_at, live_online_since, live_accuracy_m, capabilities.recovery, service_types}`.
+- **Tests:** `test_realtime_dispatch.py` — 21 tests. Combined with prior programmes: 40/40 green.
+- **Product decisions still needed:** ASAP cancellation/refund policy, driver/customer no-show, breakdown liability, offer expiry window, service radius per region, surge pricing, stale-heartbeat auto-offline. See §24 of `CARGOONE_REALTIME_DISPATCH_REPORT.md`.
+- **Not yet done:** Save-to-GitHub, Deploy, nav-bar links to `/driver/live` and `/customer/asap` (accessible by URL — deliberate soft-launch posture), Phase C cleanup.
+- **Report:** `/app/memory/CARGOONE_REALTIME_DISPATCH_REPORT.md`.
+
+
