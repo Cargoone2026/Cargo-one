@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Zap, MapPin, Truck, AlertTriangle, ShieldCheck, Loader2, PowerOff,
+  Signal, Radio, Search,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
@@ -8,6 +9,27 @@ import { RouteMap } from "@/components/ui-portal/RouteMap";
 
 const HEARTBEAT_INTERVAL_MS = 30000;   // send position every 30s
 const OFFER_POLL_INTERVAL_MS = 5000;   // poll for offers every 5s
+const OFFER_COUNTDOWN_SECONDS = 60;    // visual auto-decline hint per offer
+
+function OfferCountdown({ readyAt }) {
+  const [left, setLeft] = React.useState(() => {
+    try {
+      const t0 = readyAt ? new Date(readyAt).getTime() : Date.now();
+      return Math.max(0, OFFER_COUNTDOWN_SECONDS - Math.floor((Date.now() - t0) / 1000));
+    } catch { return OFFER_COUNTDOWN_SECONDS; }
+  });
+  useEffect(() => {
+    if (left <= 0) return () => {};
+    const t = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [left]);
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
+      data-testid="driver-live-offer-countdown">
+      {left}s
+    </span>
+  );
+}
 
 /**
  * CargoOne — Driver Live Mode.
@@ -26,6 +48,9 @@ export default function DriverLive() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [claiming, setClaiming] = useState(null);
+  const [town, setTown] = useState(null);
+  const [todayStats, setTodayStats] = useState({ jobs: 0, earnings: 0 });
+  const [sessionSecs, setSessionSecs] = useState(0);
   const positionRef = useRef(null);
 
   const readOwnStatus = useCallback(async () => {
@@ -82,6 +107,63 @@ export default function DriverLive() {
 
   // Read initial status on mount.
   useEffect(() => { readOwnStatus(); }, [readOwnStatus]);
+
+  // Live session-timer while online. Uses `live_online_since` from /status
+  // so it survives refresh/navigation without any additional API calls.
+  useEffect(() => {
+    if (!online || !status?.live_online_since) { setSessionSecs(0); return () => {}; }
+    let start = 0;
+    try { start = new Date(status.live_online_since).getTime(); }
+    catch { start = Date.now(); }
+    const tick = () => setSessionSecs(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [online, status?.live_online_since]);
+
+  // One-shot today's earnings/jobs when the driver goes online. No new
+  // polling loop — this fires once per online transition.
+  useEffect(() => {
+    if (!online) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const mine = await api("/bookings/mine");
+        if (cancelled || !Array.isArray(mine)) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const todays = mine.filter((b) => (b?.paid_at || b?.created_at || "").startsWith(today));
+        const earnings = todays
+          .filter((b) => b?.payment_status === "paid")
+          .reduce((sum, b) => sum + Number(b?.driver_charge || 0), 0);
+        setTodayStats({ jobs: todays.length, earnings: Math.round(earnings) });
+      } catch { /* silent — non-critical UI stat */ }
+    })();
+    return () => { cancelled = true; };
+  }, [online]);
+
+  // Reverse geocode the driver's current position → town name for the
+  // idle dashboard. Uses the browser Google Maps SDK already loaded by
+  // RouteMap. Zero backend calls.
+  useEffect(() => {
+    if (!online || !status?.live_lat || !status?.live_lng) return () => {};
+    let alive = true;
+    try {
+      const g = window?.google?.maps;
+      if (!g?.Geocoder) return () => {};
+      const geocoder = new g.Geocoder();
+      geocoder.geocode(
+        { location: { lat: status.live_lat, lng: status.live_lng } },
+        (results, s) => {
+          if (!alive || s !== "OK" || !results?.[0]) return;
+          const comp = (results[0].address_components || []).find(
+            (c) => c.types.includes("postal_town") || c.types.includes("locality"),
+          );
+          if (comp) setTown(comp.long_name);
+        },
+      );
+    } catch { /* ignore — town display is best-effort */ }
+    return () => { alive = false; };
+  }, [online, status?.live_lat, status?.live_lng]);
 
   // Heartbeat + offer poll while online.
   useEffect(() => {
@@ -193,18 +275,31 @@ export default function DriverLive() {
         )}
 
         {online && offers.length === 0 && (
-          <div className="rounded-2xl bg-white border border-neutral-200 p-6 text-center" data-testid="driver-live-searching">
-            <div className="relative w-16 h-16 mx-auto mb-3">
-              <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping" />
-              <div className="absolute inset-2 rounded-full bg-emerald-500" />
+          <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
+            {/* Live map showing the driver's own location — no fake driver cars,
+               no unrelated customer coordinates. Reuses the existing RouteMap
+               shell with only a pickup marker at the driver position. */}
+            {status?.live_lat && status?.live_lng && (
+              <div className="h-56 sm:h-72">
+                <RouteMap
+                  pickup={{ lat: status.live_lat, lng: status.live_lng }}
+                  summary={{ pickup: "You are here" }}
+                />
+              </div>
+            )}
+            <div className="p-6 text-center">
+              <div className="relative w-16 h-16 mx-auto mb-3">
+                <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping" />
+                <div className="absolute inset-2 rounded-full bg-emerald-500" />
+              </div>
+              <p className="text-sm font-medium">Looking for nearby jobs…</p>
+              {offersReason === "stale_location" && (
+                <p className="text-xs text-neutral-500 mt-1">Waiting for a fresh GPS fix.</p>
+              )}
+              {offersReason === "busy_on_asap" && (
+                <p className="text-xs text-neutral-500 mt-1">You're already on an active ASAP job.</p>
+              )}
             </div>
-            <p className="text-sm font-medium">Looking for nearby jobs…</p>
-            {offersReason === "stale_location" && (
-              <p className="text-xs text-neutral-500 mt-1">Waiting for a fresh GPS fix.</p>
-            )}
-            {offersReason === "busy_on_asap" && (
-              <p className="text-xs text-neutral-500 mt-1">You're already on an active ASAP job.</p>
-            )}
           </div>
         )}
 
@@ -214,7 +309,10 @@ export default function DriverLive() {
               <div className="rounded-2xl border border-neutral-200 bg-white p-4" data-testid={`driver-live-offer-${o.job_id}`}>
                 <div className="flex items-baseline justify-between mb-1">
                   <div className="text-xs uppercase tracking-wide text-neutral-500">Driver earnings</div>
-                  <div className="text-2xl font-semibold">£{o.accepted_price}</div>
+                  <div className="flex items-baseline gap-2">
+                    <OfferCountdown readyAt={o.dispatch_ready_at} />
+                    <div className="text-2xl font-semibold">£{o.accepted_price}</div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm font-medium mb-1">
                   {o.service_type === "breakdown_recovery" ? (

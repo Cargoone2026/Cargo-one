@@ -40,7 +40,7 @@ export default function CustomerAsapRequest() {
   const useCurrentLocation = useCallback(async () => {
     setLocError(null);
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocError("Location not supported on this device");
+      setLocError("Unable to determine your location. Please search manually.");
       return;
     }
     setLocBusy(true);
@@ -48,21 +48,37 @@ export default function CustomerAsapRequest() {
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          // Reuse the existing backend geocode/reverse if available; otherwise
-          // set a minimal address the customer can edit before submit.
-          setPickup({
-            address: `Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-            town: "Current location",
-            lat: latitude,
-            lng: longitude,
-          });
+          // Reverse geocode via the Maps JS Geocoder if available. Falls back
+          // to raw coordinates if Google Maps hasn't finished loading.
+          let address = `Lat ${latitude.toFixed(4)}, Lng ${longitude.toFixed(4)}`;
+          let town = "Current location";
+          try {
+            const g = window?.google?.maps;
+            if (g?.Geocoder) {
+              const geocoder = new g.Geocoder();
+              const result = await new Promise((resolve) => {
+                geocoder.geocode({ location: { lat: latitude, lng: longitude } },
+                  (results, status) => resolve(status === "OK" ? results : null));
+              });
+              if (result && result[0]) {
+                address = result[0].formatted_address;
+                const locality = (result[0].address_components || []).find(
+                  (c) => c.types.includes("postal_town") || c.types.includes("locality")
+                );
+                if (locality) town = locality.long_name;
+              }
+            }
+          } catch { /* keep coord fallback */ }
+          setPickup({ address, town, lat: latitude, lng: longitude });
         } finally {
           setLocBusy(false);
         }
       },
       (e) => {
         setLocError(
-          e.code === 1 ? "Location permission denied" : "Could not get location"
+          e.code === 1
+            ? "Location permission denied. Please search for your collection address."
+            : "Unable to determine your location. Please search manually."
         );
         setLocBusy(false);
       },
@@ -78,8 +94,28 @@ export default function CustomerAsapRequest() {
     return true;
   }, [pickup, dropoff, mode, vehicle]);
 
+  // Estimated commercial values shown to the customer BEFORE payment. Backend
+  // recomputes authoritatively on job creation — this is a hint only. Follows
+  // the same formula as the server's `create_job` suggested price.
+  const { estimatedTotal, estimatedDeposit } = useMemo(() => {
+    if (!pickup || !dropoff) return { estimatedTotal: 0, estimatedDeposit: 0 };
+    const distance = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+    const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
+    const total = Math.max(30, Math.round(distance * 1.5 * mult));
+    // Existing platform fee is a percentage bucket managed by /admin/deposit-bands.
+    // For the pre-payment hint we approximate at 12.5% capped at £25 — the
+    // actual figure is set by the backend booking response.
+    const deposit = Math.min(25, Math.max(10, Math.round(total * 0.125)));
+    return { estimatedTotal: total, estimatedDeposit: deposit };
+  }, [pickup, dropoff, mode]);
+
   const onSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+    // Explicit user-friendly validation — never surface raw backend JSON.
+    if (!pickup) { setErr("Please confirm your collection location."); return; }
+    if (!dropoff) { setErr("Please enter a delivery destination."); return; }
+    if (mode === "breakdown_recovery" && (!vehicle.make || !vehicle.model)) {
+      setErr("Please enter the vehicle make and model."); return;
+    }
     setSubmitting(true);
     setErr(null);
     try {
@@ -142,10 +178,17 @@ export default function CustomerAsapRequest() {
         navigate(`/customer/booking/${booking.id}`);
       }
     } catch (e) {
-      setErr(e?.message || "Could not create request");
+      // Convert any raw API detail into a friendly message.
+      const raw = e?.message || "";
+      let friendly = "Something went wrong. Please try again.";
+      if (/location|coordinates/i.test(raw)) friendly = "Please confirm your collection location.";
+      else if (/destination|drop/i.test(raw)) friendly = "Please enter a delivery destination.";
+      else if (/payment|stripe/i.test(raw)) friendly = "We couldn't start payment. Please try again in a moment.";
+      else if (/csrf|forbidden|401/i.test(raw)) friendly = "Session expired — please sign in again.";
+      setErr(friendly);
       setSubmitting(false);
     }
-  }, [canSubmit, mode, note, vehicle, pickup, dropoff, navigate]);
+  }, [mode, note, vehicle, pickup, dropoff, navigate]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6" data-testid="customer-asap-request">
@@ -202,32 +245,35 @@ export default function CustomerAsapRequest() {
 
       <section className="mb-4">
         <label className="text-sm font-medium mb-2 flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-emerald-600" /> Pickup
+          <MapPin className="h-4 w-4 text-emerald-600" /> Collection location
         </label>
-        <div className="flex gap-2 mb-2">
-          <div className="flex-1">
-            <AddressAutocomplete
-              value={pickup?.address || ""}
-              placeholder="Where are you now?"
-              onSelect={(v) => setPickup({
-                address: v.address, town: v.town, lat: v.lat, lng: v.lng,
-              })}
-              data-testid="asap-pickup"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={useCurrentLocation}
-            disabled={locBusy}
-            data-testid="asap-use-current-location"
-          >
-            {locBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Locate className="h-4 w-4" />}
-            <span className="ml-1 hidden sm:inline">Use my location</span>
-          </Button>
-        </div>
+        <Button
+          type="button"
+          onClick={useCurrentLocation}
+          disabled={locBusy}
+          className="w-full mb-2"
+          data-testid="asap-use-current-location"
+        >
+          {locBusy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Locate className="h-4 w-4 mr-2" />}
+          Use my current location
+        </Button>
+        <div className="text-xs text-neutral-500 mb-2 text-center">or search below</div>
+        <AddressAutocomplete
+          value={pickup?.address || ""}
+          placeholder="Enter your collection address"
+          onSelect={(v) => setPickup({
+            address: v.address, town: v.town, lat: v.lat, lng: v.lng,
+          })}
+          data-testid="asap-pickup"
+        />
+        {pickup && (
+          <p className="text-xs text-neutral-600 mt-1" data-testid="asap-pickup-preview">
+            <MapPin className="inline h-3 w-3 text-emerald-600 mr-1" />
+            {pickup.address}
+          </p>
+        )}
         {locError && (
-          <p className="text-xs text-red-600" data-testid="asap-loc-error">{locError} — you can still enter it manually above.</p>
+          <p className="text-xs text-red-600 mt-1" data-testid="asap-loc-error">{locError}</p>
         )}
       </section>
 
@@ -344,4 +390,15 @@ function haversineMiles(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function SummaryRow({ label, value, strong = false }) {
+  return (
+    <div className="flex items-baseline justify-between py-1 text-sm">
+      <span className="text-neutral-500">{label}</span>
+      <span className={strong ? "font-semibold text-neutral-900" : "text-neutral-800 text-right ml-2 max-w-[60%] truncate"}>
+        {value}
+      </span>
+    </div>
+  );
 }
