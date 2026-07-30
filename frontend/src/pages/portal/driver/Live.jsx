@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Zap, MapPin, Truck, AlertTriangle, ShieldCheck, Loader2, PowerOff,
-  Signal, Radio, Search,
+  Signal, Radio, Search, Clock, PoundSterling, Package,
 } from "lucide-react";
+
+function formatDuration(secs) {
+  const s = Math.max(0, Math.floor(secs || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${pad(m)}:${pad(r)}`;
+}
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
@@ -275,37 +284,114 @@ export default function DriverLive() {
         )}
 
         {online && offers.length === 0 && (
-          <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
-            {/* Live map showing the driver's own location — no fake driver cars,
-               no unrelated customer coordinates. Reuses the existing RouteMap
-               shell with only a pickup marker at the driver position. */}
-            {status?.live_lat && status?.live_lng && (
-              <div className="h-56 sm:h-72">
-                <RouteMap
-                  pickup={{ lat: status.live_lat, lng: status.live_lng }}
-                  summary={{ pickup: "You are here" }}
-                />
+          <>
+            <div
+              className="rounded-2xl bg-white border border-neutral-200 p-4 mb-4"
+              data-testid="driver-live-idle-dashboard"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <MapPin className="h-4 w-4 text-neutral-500" />
+                  <span data-testid="driver-live-town">
+                    {town || "Locating you…"}
+                  </span>
+                </div>
               </div>
-            )}
-            <div className="p-6 text-center">
-              <div className="relative w-16 h-16 mx-auto mb-3">
-                <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping" />
-                <div className="absolute inset-2 rounded-full bg-emerald-500" />
+
+              <div className="grid grid-cols-3 gap-3">
+                <div
+                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                  data-testid="driver-live-stat-time"
+                >
+                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                    <Clock className="h-3 w-3" /> Time online
+                  </div>
+                  <div className="text-xl font-semibold tabular-nums">
+                    {formatDuration(sessionSecs)}
+                  </div>
+                </div>
+                <div
+                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                  data-testid="driver-live-stat-jobs"
+                >
+                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                    <Package className="h-3 w-3" /> Today's jobs
+                  </div>
+                  <div className="text-xl font-semibold tabular-nums">
+                    {todayStats.jobs}
+                  </div>
+                </div>
+                <div
+                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                  data-testid="driver-live-stat-earnings"
+                >
+                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                    <PoundSterling className="h-3 w-3" /> Today's earnings
+                  </div>
+                  <div className="text-xl font-semibold tabular-nums">
+                    £{todayStats.earnings}
+                  </div>
+                </div>
               </div>
-              <p className="text-sm font-medium">Looking for nearby jobs…</p>
-              {offersReason === "stale_location" && (
-                <p className="text-xs text-neutral-500 mt-1">Waiting for a fresh GPS fix.</p>
-              )}
-              {offersReason === "busy_on_asap" && (
-                <p className="text-xs text-neutral-500 mt-1">You're already on an active ASAP job.</p>
-              )}
+
+              <div
+                className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-600"
+                data-testid="driver-live-status-panel"
+              >
+                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  Online
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Signal className="h-3 w-3 text-emerald-600" /> GPS connected
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Radio className="h-3 w-3 text-emerald-600" /> Dispatch ready
+                </span>
+                <span className="inline-flex items-center gap-1 text-neutral-500">
+                  <Search className="h-3 w-3" /> Searching for nearby jobs…
+                </span>
+              </div>
             </div>
-          </div>
+
+            <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
+              {/* Live map showing the driver's own location — no fake driver cars,
+                 no unrelated customer coordinates. Reuses the existing RouteMap
+                 shell with only a pickup marker at the driver position. */}
+              {status?.live_lat && status?.live_lng && (
+                <div className="h-56 sm:h-72">
+                  <RouteMap
+                    pickup={{ lat: status.live_lat, lng: status.live_lng }}
+                    summary={{ pickup: "You are here" }}
+                  />
+                </div>
+              )}
+              <div className="p-6 text-center">
+                <div className="relative w-16 h-16 mx-auto mb-3">
+                  <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping" />
+                  <div className="absolute inset-2 rounded-full bg-emerald-500" />
+                </div>
+                <p className="text-sm font-medium">Looking for nearby jobs…</p>
+                {offersReason === "stale_location" && (
+                  <p className="text-xs text-neutral-500 mt-1">Waiting for a fresh GPS fix.</p>
+                )}
+                {offersReason === "busy_on_asap" && (
+                  <p className="text-xs text-neutral-500 mt-1">You're already on an active ASAP job.</p>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
         <ul className="space-y-3">
           {offers.map((o) => (
-            <li key={o.job_id}>
+            <li
+              key={o.job_id}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
               <div className="rounded-2xl border border-neutral-200 bg-white p-4" data-testid={`driver-live-offer-${o.job_id}`}>
                 <div className="flex items-baseline justify-between mb-1">
                   <div className="text-xs uppercase tracking-wide text-neutral-500">Driver earnings</div>

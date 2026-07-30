@@ -406,4 +406,14 @@ they will be resolved deliberately once the migration is complete.
 - **Not yet done:** Save-to-GitHub, Deploy, nav-bar links to `/driver/live` and `/customer/asap` (accessible by URL — deliberate soft-launch posture), Phase C cleanup.
 - **Report:** `/app/memory/CARGOONE_REALTIME_DISPATCH_REPORT.md`.
 
+### Driver Live Mode — UX Enhancements  ✅ COMPLETE (this session, preview only)
+- **UI-only completion** of previously half-implemented state (`sessionSecs`, `todayStats`, `town`) in `/app/frontend/src/pages/portal/driver/Live.jsx`.
+- **Idle Dashboard** now renders when driver is online with no offers: current town + 3-column stats (Time Online, Today's Jobs, Today's Earnings) + status panel (🟢 Online · GPS connected · Dispatch ready · Searching for nearby jobs…) above the existing live map.
+- **Incoming offer animation** — cards fade + slide-in via `animate-in fade-in slide-in-from-bottom-2 duration-300` (Tailwind `tailwindcss-animate` plugin; no motion library).
+- **Zero backend / dispatch / booking / pricing / Stripe / Marketplace / Recovery code changes.** Reuses existing state, hooks, and APIs (`/driver/live/status`, `/bookings/mine`, `/driver/live/offers`, `RouteMap`).
+- Backend regression: 39/40 real-time+payment+CSRF tests green; the 1 flake (`test_nearby_online_driver_receives_paid_asap_offer`) passes in isolation — pre-existing test-ordering pollution, no code changes to backend in this task.
+- Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
+- **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
+
+
 
