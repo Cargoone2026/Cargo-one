@@ -81,9 +81,9 @@ CSRF_EXEMPT_PATHS = {
     "/api/auth/logout",
     "/api/contact",
     "/api/newsletter/subscribe",
-    # Stripe → Emergent proxy → us. Provider signature (or per-session token
-    # in query string) is the authoritative check for this endpoint; browser
-    # CSRF is not applicable.
+    # Stripe → us (server-to-server). Cryptographic Stripe-Signature (or
+    # per-session token in query string) is the authoritative check for
+    # this endpoint; browser CSRF is not applicable.
     "/api/webhook/stripe",
 }
 
@@ -127,15 +127,17 @@ def clear_auth_cookie(response: Response) -> None:
 # ---------------------------------------------------------------------------
 # Webhook shared-secret token (Phase 1 P0 hardening).
 #
-# The Emergent Stripe test proxy does NOT cryptographically sign callbacks for
-# `sk_test_emergent`. Knowledge of a valid `cs_test_...` id alone must not be
-# sufficient to finalise a booking. We defend by binding every session to a
-# per-session random token stored on `payment_transactions.webhook_token` and
-# baked into the `webhook_url` query string that goes into Stripe metadata.
-# The Emergent proxy then POSTs to `.../api/webhook/stripe?t=<token>`. At
-# webhook time we require the token in the query string to match the DB row.
-# Attackers cannot fabricate this because the token never leaves our backend
-# except into Stripe metadata (Stripe → proxy → us, no browser exposure).
+# Defence-in-depth for the /api/webhook/stripe endpoint. When
+# `STRIPE_WEBHOOK_SECRET` is configured the primary auth is Stripe's
+# cryptographic `Stripe-Signature` header. As a belt-and-braces layer (and
+# to keep local/dev flows safe when no signing secret is present yet), we
+# also bind every Checkout Session to a per-session random token stored on
+# `payment_transactions.webhook_token` and baked into the `webhook_url`
+# query string that goes into Stripe metadata. Stripe POSTs to
+# `.../api/webhook/stripe?t=<token>` and at webhook time we require the
+# token in the query string to match the DB row. Attackers cannot fabricate
+# this because the token never leaves our backend except into Stripe
+# metadata (no browser exposure).
 # ---------------------------------------------------------------------------
 def new_webhook_token() -> str:
     return secrets.token_urlsafe(32)
@@ -1645,11 +1647,11 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
 
 
 def _stripe_webhook_url(request: Request) -> str:
-    """Build the absolute webhook URL that Emergent's Stripe proxy will
-    call for `checkout.session.completed` events on `sk_test_emergent`.
+    """Build the absolute webhook URL that Stripe will POST
+    `checkout.session.completed` events to.
 
-    Per playbook the path MUST be `/api/webhook/stripe` verbatim — the
-    emergentintegrations library relays events to this exact path.
+    The path MUST be `/api/webhook/stripe` verbatim — this is the endpoint
+    registered in the Stripe dashboard for the Cargo One account.
     """
     base = str(request.base_url).rstrip("/")
     return f"{base}/api/webhook/stripe"
@@ -1720,7 +1722,7 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     """Idempotent, single-writer finaliser for a paid deposit session.
 
     Called by BOTH `/payments/status/{session_id}` (polling fallback) and
-    `/webhook/stripe` (Stripe → Emergent proxy → us). Uses a conditional
+    `/webhook/stripe` (Stripe → us). Uses a conditional
     Mongo update guarded on `payment_status != "paid"` so any second
     caller is a no-op — Stripe delivers webhooks at-least-once and the
     browser may poll multiple times.
@@ -1783,7 +1785,7 @@ async def payment_status(session_id: str, request: Request,
                           user: dict = Depends(get_current_user)):
     """Frontend polls this after Stripe redirects with `?payment=success`.
 
-    Robust to Emergent Stripe proxy retrieve failures: if `Session.retrieve`
+    Robust to transient Stripe retrieve failures: if `Session.retrieve`
     fails or we can't reach Stripe, we fall back to whatever the webhook
     has already written to Mongo. The transition to `deposit_paid` is
     driven by `_finalise_paid_deposit`, guarded by `payment_status != paid`
@@ -1793,10 +1795,10 @@ async def payment_status(session_id: str, request: Request,
     if not txn:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Best-effort poll of Stripe — if this fails (e.g. Emergent proxy
-    # "No such checkout.session" observed on production), we intentionally
-    # do NOT 500 out. The webhook is the authoritative finaliser; we just
-    # return the current DB state so the browser can keep polling.
+    # Best-effort poll of Stripe — if this fails (transient network,
+    # rate-limit, etc.), we intentionally do NOT 500 out. The webhook is
+    # the authoritative finaliser; we just return the current DB state so
+    # the browser can keep polling.
     stripe_paid = False
     stripe_meta: dict[str, Any] = {}
     stripe_client = StripeCheckout(
@@ -1839,22 +1841,22 @@ async def payment_status(session_id: str, request: Request,
 
 @api.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
-    """Stripe → Emergent proxy → us. Authoritative payment finaliser.
+    """Stripe → us. Authoritative payment finaliser.
 
-    Duplicate-delivery safe (Stripe promises at-least-once; the Emergent
-    proxy may retry too). Idempotency lives in `_finalise_paid_deposit`.
+    Duplicate-delivery safe (Stripe promises at-least-once; retries are
+    handled idempotently). Idempotency lives in `_finalise_paid_deposit`.
 
     Authentication (Phase 1 P0):
       * If `STRIPE_WEBHOOK_SECRET` is set → cryptographic signature check
-        via `stripe.Webhook.construct_event`. This is the LIVE / real-Stripe
-        posture.
-      * With `sk_test_emergent` there is no Stripe signature to us — Stripe
-        signs to the Emergent proxy, the proxy re-POSTs here. Provable
-        session-id knowledge is insufficient by itself: every session is
-        bound at create time to a per-session `webhook_token` baked into
-        the URL query string and stored in `payment_transactions`. We
-        require the query token to match. Unknown / unmatched sessions
-        are dropped with a 200 (idempotent — avoid retry storms).
+        via `stripe.Webhook.construct_event`. This is the primary posture
+        for real Stripe (test + live).
+      * If no signing secret is configured (e.g. very early bootstrap
+        before the endpoint is registered), we fall back to per-session
+        `webhook_token` binding: every Checkout Session is created with a
+        random token baked into the webhook URL query string and stored on
+        `payment_transactions`. The webhook must present a matching token
+        or is dropped. Unknown / unmatched sessions are dropped with a 200
+        (idempotent — avoid retry storms).
     """
     payload = await request.body()
     signature = request.headers.get("Stripe-Signature") or request.headers.get("stripe-signature")

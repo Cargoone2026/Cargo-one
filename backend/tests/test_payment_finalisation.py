@@ -9,15 +9,15 @@ Scope:
           overwrite, no duplicate booking).
         - Be safe against unknown session ids and expired/failed events.
     * The `/api/payments/status/{session_id}` endpoint is a *fallback*
-      poller. When Stripe (or the Emergent proxy) returns a hard error,
-      it must NOT 500 out — it must return the current DB state so the
-      browser can keep polling / wait for the webhook.
+      poller. When Stripe returns a hard error, it must NOT 500 out — it
+      must return the current DB state so the browser can keep polling /
+      wait for the webhook.
     * `POST /api/bookings` must remain idempotent so a browser reload
       does not create a duplicate booking row.
 
 These tests do NOT exercise the Stripe hosted checkout page (that needs
 a browser). They exercise the finalisation state machine directly with
-the same-shape payloads the Emergent Stripe proxy delivers.
+the same-shape payloads Stripe delivers to `/api/webhook/stripe`.
 
 Preserves the historical unrelated pytest baseline — this file is
 additive and does not modify or "fix" pre-existing regressions.
@@ -126,7 +126,7 @@ def _webhook_url(session_id):
 
 
 def _webhook_completed(session_id):
-    """Simulate what the Emergent Stripe proxy POSTs for a paid checkout."""
+    """Simulate what Stripe POSTs to `/api/webhook/stripe` for a paid checkout."""
     return {
         "id": f"evt_pytest_{int(time.time() * 1000)}",
         "type": "checkout.session.completed",
