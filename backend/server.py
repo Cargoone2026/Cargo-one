@@ -1029,7 +1029,15 @@ async def nearby_jobs(
         batch — remain unconditionally visible so they don't vanish.
     """
     have_anchor = lat is not None and lng is not None
-    all_jobs = await db.jobs.find({"status": "posted"}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Exclude ASAP jobs from the scheduled marketplace list. ASAP jobs are
+    # dispatched via `/api/jobs/{id}/claim` from Driver Live Mode; if they
+    # leaked into `/jobs/nearby` a driver could `/accept` one via the
+    # scheduled endpoint and bypass the atomic dispatch flow. Legacy jobs
+    # (no `service_timing` field) remain visible via `$ne "asap"`.
+    all_jobs = await db.jobs.find(
+        {"status": "posted", "service_timing": {"$ne": "asap"}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(500)
     result: list[dict] = []
     for j in all_jobs:
         p_lat = float(j.get("pickup_lat") or 0)

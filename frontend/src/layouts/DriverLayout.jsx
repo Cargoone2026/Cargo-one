@@ -8,11 +8,13 @@ import {
   PoundSterling,
   Truck,
   User as UserIcon,
+  Zap,
 } from "lucide-react";
 
 const DRIVER_NAV = [
   { label: "Home", href: "/driver", icon: Home },
   { label: "Available", href: "/driver/jobs", icon: Compass },
+  { label: "Live Mode", href: "/driver/live", icon: Zap },
   { label: "My Jobs", href: "/driver/my-jobs", icon: Package },
   { label: "Earnings", href: "/driver/earnings", icon: PoundSterling },
   { label: "Fleet", href: "/driver/fleet", icon: Truck },
