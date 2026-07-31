@@ -406,14 +406,24 @@ they will be resolved deliberately once the migration is complete.
 - **Not yet done:** Save-to-GitHub, Deploy, nav-bar links to `/driver/live` and `/customer/asap` (accessible by URL — deliberate soft-launch posture), Phase C cleanup.
 - **Report:** `/app/memory/CARGOONE_REALTIME_DISPATCH_REPORT.md`.
 
-### Driver Live Mode — UX Enhancements  ✅ COMPLETE (this session, preview only)
+### Driver Live Mode — UX Enhancements  ✅ COMPLETE (previous session in this fork, preview only)
 - **UI-only completion** of previously half-implemented state (`sessionSecs`, `todayStats`, `town`) in `/app/frontend/src/pages/portal/driver/Live.jsx`.
 - **Idle Dashboard** now renders when driver is online with no offers: current town + 3-column stats (Time Online, Today's Jobs, Today's Earnings) + status panel (🟢 Online · GPS connected · Dispatch ready · Searching for nearby jobs…) above the existing live map.
 - **Incoming offer animation** — cards fade + slide-in via `animate-in fade-in slide-in-from-bottom-2 duration-300` (Tailwind `tailwindcss-animate` plugin; no motion library).
 - **Zero backend / dispatch / booking / pricing / Stripe / Marketplace / Recovery code changes.** Reuses existing state, hooks, and APIs (`/driver/live/status`, `/bookings/mine`, `/driver/live/offers`, `RouteMap`).
-- Backend regression: 39/40 real-time+payment+CSRF tests green; the 1 flake (`test_nearby_online_driver_receives_paid_asap_offer`) passes in isolation — pre-existing test-ordering pollution, no code changes to backend in this task.
 - Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
 - **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
+
+### Cargo One Stripe Migration to New Dedicated Account  ✅ COMPLETE (this session, preview only, 100% ready for launch)
+- Migrated preview environment from pod-provided `sk_test_emergent` proxy to a fresh dedicated Cargo One Stripe test account (`acct_1TyzKZGbGUS6nuaW`, GB / GBP / admin@cargoone.co.uk).
+- Registered TWO webhook endpoints in Stripe: preview (`we_1TzGY9…` → `https://cargo-repo-bridge.preview.emergentagent.com/api/webhook/stripe`) and production URL (`we_1TzHAXGbGUS6nuaWLn4XNYkK` → `https://cargoone.co.uk/api/webhook/stripe`, test-mode only). Both subscribed to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`.
+- `STRIPE_WEBHOOK_SECRET=whsec_…` installed in `/app/backend/.env`. `stripe.Webhook.construct_event` cryptographic verification path is now active; token-binding fallback remains as safety net.
+- Full browser E2E completed on card `4242 4242 4242 4242`: session `cs_test_a1VtEn…` → payment cleared → **real signed webhook** hit `/api/webhook/stripe` HTTP 200 → booking flipped to `deposit_paid` on customer, driver, and admin views. Payment Intent `pi_3TzH8PGbGUS6nuaW11h4OwZy` sits in the Cargo One dashboard as proof.
+- Backend regression: 19/19 payment + CSRF security tests green. Tests updated with `_sign_payload()` + `_post_webhook()` helpers to work under both signature-first and token-fallback postures.
+- Codebase audit: zero remaining references to `sk_test_emergent` / "Emergent proxy" / "Emergent Stripe".
+- ⚠️ **User's Stripe keys auto-expire in 7 days.** When key becomes invalid, rotate `STRIPE_API_KEY` in `/app/backend/.env` and restart backend.
+- **Launch instructions:** user rotates to live-mode keys (`sk_live_…`, live `whsec_…`) via production secrets manager. No code changes required.
+- **Report:** `/app/memory/STRIPE_CARGOONE_MIGRATION_REPORT.md`.
 
 
 

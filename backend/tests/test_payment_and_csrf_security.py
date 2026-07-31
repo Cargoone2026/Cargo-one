@@ -82,14 +82,23 @@ def _paid_payload(session_id):
 
 
 class TestWebhookTokenHardening:
+    """Defense-in-depth tests. Fabricated payloads must be rejected regardless
+    of whether the primary signature layer (`STRIPE_WEBHOOK_SECRET`) or the
+    secondary token-binding layer (`?t=<token>` query) is doing the catching.
+
+    * With `STRIPE_WEBHOOK_SECRET` set (production posture): unsigned or
+      wrong-signature payloads are rejected at signature layer → HTTP 400.
+    * Without it (bootstrap posture): payloads missing / wrong `?t=<token>`
+      are rejected at the token-binding layer → HTTP 403.
+
+    Either way the booking must remain `pending`.
+    """
     def test_webhook_without_token_query_is_rejected(self):
         cust = _login(CUSTOMER); drv = _login(DRIVER)
         booking_id, sid = _seed_session(cust, drv)
-        # No `t=` query param → 403 (unless STRIPE_WEBHOOK_SECRET verified crypto,
-        # which is not the case in preview default env).
+        # No `t=` query param AND no Stripe-Signature → rejected by either layer
         r = requests.post(f"{API}/webhook/stripe", json=_paid_payload(sid), timeout=15)
-        assert r.status_code == 403, r.text
-        # booking must remain pending
+        assert r.status_code in (400, 403), r.text
         b = requests.get(f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15).json()
         assert b["payment_status"] == "pending"
 
@@ -100,16 +109,19 @@ class TestWebhookTokenHardening:
             f"{API}/webhook/stripe?t=totally_wrong_token",
             json=_paid_payload(sid), timeout=15,
         )
-        assert r.status_code == 403, r.text
+        assert r.status_code in (400, 403), r.text
         b = requests.get(f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15).json()
         assert b["payment_status"] == "pending"
 
     def test_webhook_with_unknown_session_no_state_change(self):
-        # Unknown session — must be treated as unauthenticated noise. 200 no-op.
+        # With signature verification active, unsigned payloads never reach the
+        # unknown-session code path → 400. Without signature verification (fallback
+        # posture), the token-binding + unknown-session path returns 200 no-op.
         payload = _paid_payload("cs_test_unknown_session_never_created_hjk")
         r = requests.post(f"{API}/webhook/stripe?t=whatever", json=payload, timeout=15)
-        assert r.status_code == 200
-        assert r.json().get("ignored") == "unknown_session"
+        assert r.status_code in (200, 400), r.text
+        if r.status_code == 200:
+            assert r.json().get("ignored") == "unknown_session"
 
     def test_webhook_malformed_body_returns_400(self):
         r = requests.post(

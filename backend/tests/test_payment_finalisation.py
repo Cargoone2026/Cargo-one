@@ -125,6 +125,40 @@ def _webhook_url(session_id):
     return f"{API}/webhook/stripe"
 
 
+def _sign_payload(payload_bytes):
+    """Return a Stripe-Signature header value if STRIPE_WEBHOOK_SECRET is set.
+
+    Signature scheme: `t=<unix_ts>,v1=<hex(hmac-sha256(<ts>.<body>))>` — matches
+    what `stripe.Webhook.construct_event` expects.
+    """
+    import hmac, hashlib
+    from dotenv import load_dotenv
+    load_dotenv("/app/backend/.env")
+    secret = os.environ.get("STRIPE_WEBHOOK_SECRET") or ""
+    if not secret:
+        return None
+    ts = str(int(time.time()))
+    signed = f"{ts}.{payload_bytes.decode()}".encode()
+    sig = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    return f"t={ts},v1={sig}"
+
+
+def _post_webhook(url, payload_dict):
+    """POST a webhook payload, signing it when STRIPE_WEBHOOK_SECRET is set.
+
+    Falls back to unsigned POST (relying on the per-session `?t=` token) when
+    no signing secret is configured — this keeps the tests portable across
+    both defense postures.
+    """
+    import json as _json
+    body = _json.dumps(payload_dict).encode()
+    sig = _sign_payload(body)
+    headers = {"Content-Type": "application/json"}
+    if sig:
+        headers["Stripe-Signature"] = sig
+    return requests.post(url, data=body, headers=headers, timeout=15)
+
+
 def _webhook_completed(session_id):
     """Simulate what Stripe POSTs to `/api/webhook/stripe` for a paid checkout."""
     return {
@@ -153,9 +187,7 @@ class TestWebhookFinalisation:
         assert r.json()["payment_status"] == "pending"
 
         # webhook fires
-        r = requests.post(
-            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
-        )
+        r = _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
         assert r.status_code == 200
         body = r.json()
         assert body["ok"] is True
@@ -178,9 +210,7 @@ class TestWebhookFinalisation:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # first delivery
-        r1 = requests.post(
-            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
-        )
+        r1 = _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
         assert r1.json().get("finalised") is True
 
         r = requests.get(f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15)
@@ -188,9 +218,7 @@ class TestWebhookFinalisation:
         assert first_paid_at is not None
 
         # duplicate delivery — must be no-op
-        r2 = requests.post(
-            _webhook_url(session_id), json=_webhook_completed(session_id), timeout=15
-        )
+        r2 = _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
         assert r2.status_code == 200
         assert r2.json().get("finalised") is False
 
@@ -199,13 +227,14 @@ class TestWebhookFinalisation:
 
     def test_webhook_unknown_session_is_safe(self):
         payload = _webhook_completed("cs_test_unknown_session_that_never_existed")
-        r = requests.post(f"{API}/webhook/stripe?t=any", json=payload, timeout=15)
+        r = _post_webhook(f"{API}/webhook/stripe?t=any", payload)
         assert r.status_code == 200
-        # New security posture: unknown session returns 200 with ignored=unknown_session
-        # (see server _finalise_paid_deposit + webhook token guard).
+        # In both defense modes the unknown session must be a no-op:
+        # * signature-verified mode → 200 with finalised=false (no DB row to update)
+        # * fallback token mode      → 200 with ignored=unknown_session
         body = r.json()
         assert body.get("finalised") in (False, None)
-        assert body.get("ignored") == "unknown_session"
+        assert body.get("ignored") == "unknown_session" or body.get("finalised") is False
 
     def test_webhook_expired_on_paid_session_does_not_downgrade(self):
         cust = _login(CUSTOMER)
@@ -214,7 +243,7 @@ class TestWebhookFinalisation:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # mark as paid via webhook
-        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
+        _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
 
         # then deliver a stale expired event for the same session
         expired = {
@@ -223,7 +252,7 @@ class TestWebhookFinalisation:
             "data": {"object": {"id": session_id, "payment_status": "unpaid",
                                  "metadata": {}}},
         }
-        r = requests.post(_webhook_url(session_id), json=expired, timeout=15)
+        r = _post_webhook(_webhook_url(session_id), expired)
         assert r.status_code == 200
         # booking must remain paid — no downgrade
         r = requests.get(f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15)
@@ -240,7 +269,7 @@ class TestStatusPollerIdempotency:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # webhook finalises
-        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
+        _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
         first = requests.get(
             f"{API}/bookings/{booking_id}", headers=_auth(cust), timeout=15
         ).json().get("paid_at")
@@ -274,7 +303,7 @@ class TestStatusPollerIdempotency:
         booking_id, session_id = _seed_booking_and_session(cust, job_id)
 
         # finalise via webhook only
-        requests.post(_webhook_url(session_id), json=_webhook_completed(session_id), timeout=15)
+        _post_webhook(_webhook_url(session_id), _webhook_completed(session_id))
 
         # even if the Stripe proxy failed silently, poll must return DB truth
         r = requests.get(
