@@ -139,12 +139,9 @@ export default function CustomerBookingDetail() {
         if (s.payment_status === "paid") {
           if (pollRef.current) clearInterval(pollRef.current);
           setPaymentPollActive(false);
-          // clean the URL
-          const next = new URLSearchParams(params);
-          next.delete("payment");
-          next.delete("session_id");
-          setParams(next, { replace: true });
-          load();
+          // Show the celebratory confirmation screen before handing off to
+          // the live dispatch / booking detail flow.
+          navigate(`/customer/booking-confirmed/${id}`, { replace: true });
         } else if (attempts > 10) {
           if (pollRef.current) clearInterval(pollRef.current);
           setPaymentPollActive(false);

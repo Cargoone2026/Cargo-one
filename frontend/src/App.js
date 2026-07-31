@@ -34,6 +34,7 @@ import CustomerAsapRequest from "@/pages/portal/customer/AsapRequest";
 import CustomerDispatch from "@/pages/portal/customer/Dispatch";
 import CustomerJobDetail from "@/pages/portal/customer/JobDetail";
 import CustomerBookingDetail from "@/pages/portal/customer/BookingDetail";
+import CustomerBookingConfirmed from "@/pages/portal/customer/BookingConfirmed";
 
 // Driver portal — Stage 2B
 import DriverDashboard from "@/pages/portal/driver/Dashboard";
@@ -154,6 +155,10 @@ export default function App() {
             <Route
               path="/customer/booking/:id"
               element={<Customer Page={CustomerBookingDetail} />}
+            />
+            <Route
+              path="/customer/booking-confirmed/:id"
+              element={<Customer Page={CustomerBookingConfirmed} />}
             />
             <Route
               path="/customer/job/:id"

@@ -409,27 +409,45 @@ export default function DriverLive() {
                 </div>
                 <p className="text-sm text-neutral-600 flex items-center gap-1">
                   <MapPin className="h-3 w-3 text-emerald-600" />
-                  {o.pickup_town} · {o.distance_to_pickup_miles} mi away
+                  <span className="min-w-0 truncate">
+                    {o.pickup_address || o.pickup_town} · {o.distance_to_pickup_miles} mi away
+                  </span>
                 </p>
                 <p className="text-sm text-neutral-600 flex items-center gap-1">
                   <MapPin className="h-3 w-3 text-red-600" />
-                  {o.dropoff_town} · {o.distance_miles} mi total
+                  <span className="min-w-0 truncate">
+                    {o.dropoff_address || o.dropoff_town} · {o.distance_miles} mi trip
+                    {o.duration_minutes ? ` · ~${Math.round(o.duration_minutes)} min` : ""}
+                  </span>
                 </p>
-                {o.vehicle_details && (
-                  <div className="mt-2 text-xs text-neutral-600">
-                    {o.vehicle_details.make} {o.vehicle_details.model} — {(o.vehicle_details.condition || "").replace(/_/g, " ")}
+                {(o.vehicle_label || o.vehicle_details) && (
+                  <div className="mt-2 text-xs text-neutral-600 flex items-center gap-2">
+                    <Truck className="h-3 w-3 text-neutral-500" />
+                    <span>
+                      {o.vehicle_label ? `${o.vehicle_label}` : ""}
+                      {o.vehicle_details ? ` · ${o.vehicle_details.make || ""} ${o.vehicle_details.model || ""} — ${(o.vehicle_details.condition || "").replace(/_/g, " ")}` : ""}
+                    </span>
                   </div>
                 )}
                 {o.customer_note && (
                   <div className="mt-1 text-xs italic text-neutral-500">"{o.customer_note}"</div>
                 )}
                 <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setOffers((prev) => prev.filter((x) => x.job_id !== o.job_id))}
+                    disabled={claiming === o.job_id}
+                    className="flex-1"
+                    data-testid={`driver-live-decline-${o.job_id}`}
+                  >
+                    Decline
+                  </Button>
                   <Button onClick={() => claimOffer(o)}
                     disabled={claiming === o.job_id}
                     className="flex-1"
                     data-testid={`driver-live-accept-${o.job_id}`}>
                     {claiming === o.job_id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Accept £{o.accepted_price}
+                    Accept · £{o.accepted_price}
                   </Button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, X as XIcon, Boxes, MapPin } from "lucide-react";
+import { Search, X as XIcon, Boxes, MapPin, CreditCard, RotateCcw, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
@@ -7,6 +7,11 @@ export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
+  const [refundTarget, setRefundTarget] = useState(null);   // booking pending confirmation
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundMsg, setRefundMsg] = useState(null);
+  const [detailBooking, setDetailBooking] = useState(null); // {id, stripe_session_id, stripe_payment_intent_id, ...}
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -21,11 +26,48 @@ export default function AdminBookings() {
     load();
   }, [load]);
 
+  const openPayment = useCallback(async (b) => {
+    setDetailBooking({ ...b, __loading: true });
+    setDetailLoading(true);
+    try {
+      // Fetch the full booking so admin gets stripe_payment_intent_id + refunds[]
+      const full = await api(`/bookings/${b.id}`);
+      setDetailBooking(full);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  const confirmRefund = useCallback(async () => {
+    if (!refundTarget) return;
+    setRefundBusy(true);
+    setRefundMsg(null);
+    try {
+      const r = await api(`/admin/bookings/${refundTarget.id}/refund`, {
+        method: "POST",
+        body: { reason: "admin_full_refund" },
+      });
+      setRefundMsg(r?.note || "Refund recorded successfully.");
+      // Reload the list so the new refund_status shows through
+      await load();
+      // Refresh the open detail panel if same booking
+      if (detailBooking?.id === refundTarget.id) {
+        const full = await api(`/bookings/${refundTarget.id}`);
+        setDetailBooking(full);
+      }
+    } catch (e) {
+      setRefundMsg(e?.message || "Refund failed. Please try again.");
+    } finally {
+      setRefundBusy(false);
+      setRefundTarget(null);
+    }
+  }, [refundTarget, load, detailBooking]);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return bookings;
     return bookings.filter((b) =>
-      `${b.job?.title || ""} ${b.status || ""} ${b.customer_name || ""} ${b.driver_name || ""} ${b.payment_status || ""}`
+      `${b.job?.title || ""} ${b.status || ""} ${b.customer_name || ""} ${b.driver_name || ""} ${b.payment_status || ""} ${b.stripe_session_id || ""}`
         .toLowerCase()
         .includes(term),
     );
@@ -45,7 +87,7 @@ export default function AdminBookings() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search title, status, customer, driver…"
+          placeholder="Search title, status, customer, driver, cs_test_…"
           data-testid="admin-bookings-search"
           className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#9CA3AF]"
         />
@@ -55,6 +97,15 @@ export default function AdminBookings() {
           </button>
         )}
       </div>
+
+      {refundMsg && (
+        <div
+          className="mx-4 mt-3 rounded-[8px] border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[12px] text-[#374151] md:mx-8"
+          data-testid="admin-refund-msg"
+        >
+          {refundMsg}
+        </div>
+      )}
 
       <ul className="mx-4 mt-3 space-y-3 md:mx-8">
         {loading && bookings.length === 0 ? (
@@ -67,47 +118,212 @@ export default function AdminBookings() {
             </p>
           </li>
         ) : (
-          filtered.map((b) => (
-            <li
-              key={b.id}
-              className="rounded-[12px] border border-[#E5E7EB] p-4"
-              data-testid={`admin-booking-${b.id}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 flex-1 truncate text-[16px] font-semibold text-[#111111]">
-                  {b.job?.title || "Booking"}
-                </p>
-                <StatusPill status={b.status} />
-              </div>
-              <div className="mt-2 flex items-center gap-1 text-[13px] text-[#6B7280]">
-                <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
-                <span className="truncate">
-                  {b.job?.pickup_town} → {b.job?.dropoff_town}
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#F3F4F6] pt-2">
-                <div className="text-[12px] text-[#6B7280]">
-                  Customer: {b.customer_name || "—"} · Driver: {b.driver_name || "—"}
+          filtered.map((b) => {
+            const isRecovery = b.service_type === "breakdown_recovery";
+            const isPaid = b.payment_status === "paid";
+            const refunded = b.refund_status === "refunded";
+            return (
+              <li
+                key={b.id}
+                className="rounded-[12px] border border-[#E5E7EB] p-4"
+                data-testid={`admin-booking-${b.id}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <p className="min-w-0 truncate text-[16px] font-semibold text-[#111111]">
+                      {b.job?.title || "Booking"}
+                    </p>
+                    {isRecovery && (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-[0.5px] bg-amber-100 text-amber-800 rounded-full px-2 py-0.5"
+                        data-testid={`admin-booking-recovery-badge-${b.id}`}
+                      >
+                        Recovery
+                      </span>
+                    )}
+                  </div>
+                  <StatusPill status={b.status} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] ${
-                      b.payment_status === "paid"
-                        ? "bg-[#DCFCE7] text-[#16A34A]"
-                        : "bg-[#FEF3C7] text-[#B45309]"
-                    }`}
-                  >
-                    {b.payment_status || "unpaid"}
-                  </span>
-                  <span className="text-[16px] font-bold text-[#111111]">
-                    £{Number(b.total_price || 0).toFixed(0)}
+                <div className="mt-2 flex items-center gap-1 text-[13px] text-[#6B7280]">
+                  <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
+                  <span className="truncate">
+                    {b.job?.pickup_town} → {b.job?.dropoff_town}
                   </span>
                 </div>
-              </div>
-            </li>
-          ))
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#F3F4F6] pt-2">
+                  <div className="text-[12px] text-[#6B7280]">
+                    Customer: {b.customer_name || "—"} · Driver: {b.driver_name || b.assigned_driver_name || "—"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] ${
+                        isPaid ? "bg-[#DCFCE7] text-[#16A34A]" : "bg-[#FEF3C7] text-[#B45309]"
+                      }`}
+                    >
+                      {b.payment_status || "unpaid"}
+                    </span>
+                    {refunded && (
+                      <span className="rounded-full bg-[#FEE2E2] text-[#B91C1C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]">
+                        Refunded
+                      </span>
+                    )}
+                    <span className="text-[16px] font-bold text-[#111111]">
+                      £{Number(b.total_price || 0).toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+
+                {isPaid && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openPayment(b)}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] px-3 py-1 text-[12px] font-medium hover:bg-[#F9FAFB]"
+                      data-testid={`admin-booking-view-payment-${b.id}`}
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      View payment
+                    </button>
+                    {!refunded && (
+                      <button
+                        type="button"
+                        onClick={() => setRefundTarget(b)}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#FCA5A5] px-3 py-1 text-[12px] font-medium text-[#B91C1C] hover:bg-[#FEF2F2]"
+                        data-testid={`admin-booking-refund-${b.id}`}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Refund
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })
         )}
       </ul>
+
+      {/* Refund confirmation dialog */}
+      {refundTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          data-testid="admin-refund-dialog"
+        >
+          <div className="w-full max-w-md rounded-[16px] bg-white p-6">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="h-6 w-6 text-[#B91C1C] shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h2 className="text-[18px] font-bold text-[#111111]">Refund this booking?</h2>
+                <p className="mt-1 text-[13px] text-[#6B7280]">
+                  This will refund the full deposit of{" "}
+                  <span className="font-semibold text-[#111111]">
+                    £{Number(refundTarget.deposit_amount || 0).toFixed(2)}
+                  </span>{" "}
+                  paid via Stripe. The booking will be marked as refunded and cannot be undone from this screen.
+                </p>
+                <div className="mt-3 rounded-[8px] bg-[#FEF3C7] border border-[#FDE68A] px-3 py-2 text-[11px] text-[#78350F]">
+                  Note: Stripe API call is currently in placeholder mode — the refund is recorded
+                  in Cargo One's audit log but the actual Stripe refund will fire when the
+                  final refund flow is signed off.
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRefundTarget(null)}
+                disabled={refundBusy}
+                className="rounded-full border border-[#E5E7EB] px-4 py-2 text-[13px] font-medium hover:bg-[#F9FAFB] disabled:opacity-60"
+                data-testid="admin-refund-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRefund}
+                disabled={refundBusy}
+                className="rounded-full bg-[#B91C1C] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#991B1B] disabled:opacity-60"
+                data-testid="admin-refund-confirm"
+              >
+                {refundBusy ? "Processing…" : "Confirm refund"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment detail modal */}
+      {detailBooking && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+          data-testid="admin-payment-detail"
+        >
+          <div className="w-full max-w-lg rounded-[16px] bg-white p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-[18px] font-bold text-[#111111]">Payment details</h2>
+              <button
+                type="button"
+                onClick={() => setDetailBooking(null)}
+                aria-label="Close"
+                className="text-[#6B7280] hover:text-[#111111]"
+                data-testid="admin-payment-detail-close"
+              >
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
+            {detailLoading ? (
+              <p className="text-[13px] text-[#6B7280]">Loading…</p>
+            ) : (
+              <div className="space-y-3 text-[13px]">
+                <DetailRow k="Booking ID" v={detailBooking.id} />
+                <DetailRow k="Payment status" v={detailBooking.payment_status || "unpaid"} />
+                <DetailRow k="Amount total" v={`£${Number(detailBooking.total_price || 0).toFixed(2)}`} />
+                <DetailRow k="Deposit paid" v={`£${Number(detailBooking.deposit_amount || 0).toFixed(2)}`} />
+                <DetailRow k="Paid at" v={detailBooking.paid_at || "—"} mono />
+                <DetailRow k="Stripe session" v={detailBooking.stripe_session_id || "—"} mono />
+                <DetailRow k="Payment intent" v={detailBooking.stripe_payment_intent_id || "—"} mono />
+                <DetailRow k="Refund status" v={detailBooking.refund_status || "none"} />
+                {Array.isArray(detailBooking.refunds) && detailBooking.refunds.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] mt-4 mb-1">
+                      Refund history
+                    </p>
+                    <ul className="space-y-2">
+                      {detailBooking.refunds.map((r) => (
+                        <li key={r.id} className="rounded-[8px] border border-[#E5E7EB] p-2 text-[12px]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{r.state}</span>
+                            <span className="text-[#6B7280]">{r.at}</span>
+                          </div>
+                          <div className="text-[#6B7280] mt-0.5">
+                            £{Number(r.amount || 0).toFixed(2)} · admin: {r.admin_name || r.admin_id}
+                          </div>
+                          {r.stripe_refund_id && (
+                            <div className="mt-1 font-mono text-[10px] text-[#374151]">
+                              {r.stripe_refund_id}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({ k, v, mono = false }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-[#F3F4F6] pb-2">
+      <span className="text-[#6B7280] shrink-0">{k}</span>
+      <span className={`text-right break-all text-[#111111] ${mono ? "font-mono text-[11px]" : ""}`}>
+        {v}
+      </span>
     </div>
   );
 }

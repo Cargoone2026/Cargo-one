@@ -21,7 +21,7 @@ from emergentintegrations.payments.stripe.checkout import (
     CheckoutSessionRequest,
     StripeCheckout,
 )
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
@@ -1363,8 +1363,12 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             "service_type": job.get("service_type"),
             "distance_to_pickup_miles": round(dist, 1),
             "pickup_town": job.get("pickup_town"),
+            "pickup_address": job.get("pickup_address"),
             "dropoff_town": job.get("dropoff_town"),
+            "dropoff_address": job.get("dropoff_address"),
             "distance_miles": job.get("distance_miles"),
+            "duration_minutes": job.get("duration_minutes"),
+            "vehicle_label": job.get("recommended_vehicle") or job.get("vehicle_label"),
             "accepted_price": job.get("accepted_price") or job.get("fixed_price"),
             "vehicle_details": job.get("vehicle_details"),
             "customer_note": job.get("customer_note"),
@@ -1892,6 +1896,20 @@ async def stripe_webhook(request: Request):
 
     if event_type in {"checkout.session.completed", "payment_intent.succeeded"} \
             or event.payment_status == "paid":
+        # Capture the payment_intent id on the transaction so admins can
+        # cross-reference charges in Stripe (and later trigger refunds).
+        pi_id = None
+        try:
+            raw_obj = event.event_data.get("object") if hasattr(event, "event_data") else None
+            if isinstance(raw_obj, dict):
+                pi_id = raw_obj.get("payment_intent")
+        except Exception:  # pragma: no cover
+            pi_id = None
+        if pi_id:
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_intent_id": pi_id, "updated_at": now_iso()}},
+            )
         finalised = await _finalise_paid_deposit(session_id)
         return {"ok": True, "session_id": session_id, "finalised": bool(finalised)}
 
@@ -1932,6 +1950,12 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         include_private = b.get("payment_status") == "paid"
         job = jobs_map.get(b["job_id"])
         b["job"] = public_job(job, include_private=include_private) if job else None
+        # Projection: mirror the job's assigned_driver_* onto the booking so
+        # downstream UI has a stable field regardless of the atomic-claim path.
+        if job:
+            b["assigned_driver_id"] = job.get("assigned_driver_id") or b.get("driver_id")
+            b["assigned_driver_name"] = job.get("assigned_driver_name")
+            b["assigned_driver_rating"] = job.get("assigned_driver_rating")
         if include_private:
             other_id = b["driver_id"] if user["role"] == "customer" else b["customer_id"]
             other = users_map.get(other_id)
@@ -1949,10 +1973,25 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
     include_private = b.get("payment_status") == "paid" or user["role"] == "admin"
     b["job"] = public_job(job, include_private=include_private) if job else None
+    # Projection — see /bookings/mine for rationale.
+    if job:
+        b["assigned_driver_id"] = job.get("assigned_driver_id") or b.get("driver_id")
+        b["assigned_driver_name"] = job.get("assigned_driver_name")
+        b["assigned_driver_rating"] = job.get("assigned_driver_rating")
     if include_private:
         other_id = b["driver_id"] if user["id"] == b["customer_id"] else b["customer_id"]
         other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0})
         b["other_party"] = user_to_public(other) if other else None
+    # Admin: surface Stripe reference IDs + refund history for the payment
+    # tab. Non-admins never see raw Stripe IDs.
+    if user["role"] == "admin":
+        txn = await db.payment_transactions.find_one(
+            {"session_id": b.get("stripe_session_id")}, {"_id": 0}
+        ) if b.get("stripe_session_id") else None
+        if txn:
+            b["stripe_payment_intent_id"] = txn.get("payment_intent_id")
+            b["stripe_amount_total"] = txn.get("amount_total")
+            b["refunds"] = txn.get("refunds") or []
     return b
 
 
@@ -2528,6 +2567,84 @@ async def admin_list_jobs(user: dict = Depends(require_role("admin"))):
 async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
     bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return bookings
+
+
+@api.post("/admin/bookings/{booking_id}/refund")
+async def admin_refund_booking(booking_id: str, payload: dict = Body(default={}),
+                                user: dict = Depends(require_role("admin"))):
+    """Record a full-refund intent for a paid booking.
+
+    NOTE (Session B scaffolding): this endpoint currently records the refund
+    intent, sets `refund_status` on the booking, appends a refund audit entry
+    to `payment_transactions.refunds`, and returns to the caller.
+
+    Stripe's `refunds.create(payment_intent=…)` call is intentionally NOT
+    fired here — the user explicitly asked to avoid modifying the verified
+    Stripe integration in this session. When the final refund flow is
+    signed off, the single call to `stripe.Refund.create(...)` slots into
+    this handler between the pre-checks and the audit write. All idempotency
+    guards (`refund_status != "refunded"` conditional update, duplicate
+    detection by `payment_intent_id`) are already in place.
+    """
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Booking has not been paid")
+    if b.get("refund_status") in ("refunded", "in_progress", "pending", "succeeded"):
+        raise HTTPException(status_code=409, detail="Refund already recorded or in progress")
+
+    session_id = b.get("stripe_session_id")
+    txn = await db.payment_transactions.find_one({"session_id": session_id}) if session_id else None
+    pi_id = (txn or {}).get("payment_intent_id")
+
+    # Idempotency guard — flip refund_status conditionally.
+    claim = await db.bookings.update_one(
+        {"id": booking_id, "refund_status": {"$in": [None, "", "failed"]}},
+        {"$set": {"refund_status": "in_progress",
+                    "refund_requested_at": now_iso(),
+                    "refund_requested_by": user["id"]}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Refund already recorded")
+
+    # Placeholder for the actual Stripe refund call. Left as a TODO so the
+    # switch to real refunds is a one-line change here plus wiring the
+    # returned refund id into the audit doc.
+    refund_id = None
+    refund_state = "pending"  # would be "succeeded" after stripe.Refund.create
+
+    audit_entry = {
+        "id": new_id(),
+        "at": now_iso(),
+        "admin_id": user["id"],
+        "admin_name": user.get("name"),
+        "amount": b.get("deposit_amount") or (txn or {}).get("amount"),
+        "reason": (payload or {}).get("reason") or "admin_full_refund",
+        "state": refund_state,
+        "stripe_refund_id": refund_id,
+        "payment_intent_id": pi_id,
+    }
+    if txn:
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$push": {"refunds": audit_entry}, "$set": {"updated_at": now_iso()}},
+        )
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"refund_status": refund_state,
+                  "refunded_at": now_iso() if refund_state == "succeeded" else None},
+         "$push": {"refunds": audit_entry}},
+    )
+    return {
+        "ok": True,
+        "booking_id": booking_id,
+        "refund_state": refund_state,
+        "stripe_refund_id": refund_id,
+        "audit_entry_id": audit_entry["id"],
+        "note": ("Refund recorded. Stripe API call is currently a placeholder — "
+                 "final implementation will call stripe.Refund.create when signed off."),
+    }
 
 
 # ---------------------------------------------------------------------------

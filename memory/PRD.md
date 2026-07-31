@@ -414,7 +414,16 @@ they will be resolved deliberately once the migration is complete.
 - Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
 - **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
 
-### Vehicle Recovery E2E — Session A ✅ COMPLETE (this session, preview only, production-ready)
+### Session B — Driver Offer Cards + Admin Payments/Refund + Confirmation Screen  ✅ COMPLETE (this session, preview only, production-ready)
+- **Backend**: added `assigned_driver_id`/`_name`/`_rating` projection on `/bookings/mine` + `/bookings/{id}` (fixes the null-driver bug from Session A). Admin-only surfaces `stripe_payment_intent_id`, `stripe_amount_total`, `refunds[]`. New `POST /api/admin/bookings/{id}/refund` — idempotent guard, admin audit trail, placeholder for `stripe.Refund.create` when signed off. Webhook now persists `payment_intent` id for future refunds. Offer payload enriched with `pickup_address`, `dropoff_address`, `duration_minutes`, `vehicle_label`.
+- **Admin Bookings.jsx**: rewritten — every paid row has `View payment` (modal shows Stripe session ID, PI, refund history) + `Refund` button (confirmation dialog with amber placeholder-mode disclosure, HTTP 409 on duplicate).
+- **Driver Live.jsx**: offer cards now show full addresses, `~min` duration, vehicle label, and a `Decline` action alongside `Accept · £X`.
+- **Customer BookingConfirmed.jsx** (NEW route `/customer/booking-confirmed/:id`): celebratory ✓ screen after payment, auto-forwards to Dispatch (ASAP) or BookingDetail (assigned/scheduled) after 2.5 s. Wired via BookingDetail's payment poll.
+- **Regression**: 39/40 backend tests green (same pre-existing flake).
+- **Deferred** (transparently, not blockers): live Google Map pins for nearby offers in driver Live Mode; actual `stripe.Refund.create` API call (per user directive to not modify verified Stripe integration).
+- **Report:** `/app/memory/SESSION_B_REPORT.md`.
+
+### Vehicle Recovery E2E — Session A ✅ COMPLETE (previous session, preview only, production-ready)
 - **Customer AsapRequest.jsx**: added visible Booking Summary panel (service badge, from/to, live Google-based distance + ETA, vehicle info, fare, deposit) via new `/api/quote/estimate` fetch (debounced 350 ms). CTA now shows `Confirm & pay £X deposit` inline.
 - **Customer BookingDetail.jsx**: after ASAP deposit success, auto-redirects to `/customer/dispatch/{jobId}` (guarded once per booking via sessionStorage to prevent redirect loop with Dispatch page).
 - **Customer Dispatch.jsx**: added loading skeleton; fixed misleading "Waiting for payment confirmation" flash by guarding `notReady` on loaded state.
