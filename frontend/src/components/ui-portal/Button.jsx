@@ -16,7 +16,12 @@ export function Button({
   className = "",
   testID,
   children,
+  ...rest
 }) {
+  // Accept both `testID` (RN-style) and `data-testid` (web-standard) props.
+  const dataTestId = rest["data-testid"] || testID;
+  // Strip out data-testid from rest so it isn't spread twice.
+  const { ["data-testid"]: _omit, ...restProps } = rest;
   const isDisabled = disabled || loading;
   const base =
     "inline-flex items-center justify-center rounded-full font-semibold transition-colors select-none";
@@ -48,8 +53,9 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={isDisabled}
-      data-testid={testID}
+      data-testid={dataTestId}
       className={`${base} ${size} ${width} ${variantCls} ${disabledCls} ${className}`}
+      {...restProps}
     >
       {loading ? (
         <span
