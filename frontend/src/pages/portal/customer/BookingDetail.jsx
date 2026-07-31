@@ -262,6 +262,31 @@ export default function CustomerBookingDetail() {
         </div>
       ) : null}
 
+      {b.refund_status === "succeeded" && (
+        <div
+          className="mx-4 mt-3 rounded-[10px] bg-[#FEE2E2] border border-[#FCA5A5] px-3 py-2 md:mx-8"
+          data-testid="booking-refunded-banner"
+        >
+          <p className="text-[13px] text-[#7F1D1D]">
+            <span className="font-semibold">Refunded.</span>{" "}
+            Your deposit of £{Number(b.deposit_amount || 0).toFixed(2)} has been
+            returned to your original card. It may take 5–10 business days to
+            appear on your statement.
+          </p>
+        </div>
+      )}
+      {(b.refund_status === "pending" || b.refund_status === "in_progress") && (
+        <div
+          className="mx-4 mt-3 rounded-[10px] bg-[#FEF3C7] border border-[#FDE68A] px-3 py-2 md:mx-8"
+          data-testid="booking-refund-pending-banner"
+        >
+          <p className="text-[13px] text-[#78350F]">
+            <span className="font-semibold">Refund in progress.</span>{" "}
+            Stripe is processing your refund and it will appear on your card shortly.
+          </p>
+        </div>
+      )}
+
       {paid && (
         <nav
           className="mx-4 mt-3 flex rounded-full bg-[#F4F4F4] p-1 md:mx-8"

@@ -2608,11 +2608,56 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
     if claim.modified_count == 0:
         raise HTTPException(status_code=409, detail="Refund already recorded")
 
-    # Placeholder for the actual Stripe refund call. Left as a TODO so the
-    # switch to real refunds is a one-line change here plus wiring the
-    # returned refund id into the audit doc.
+    # Fire the real Stripe refund. Requires a captured payment_intent id.
+    # If we don't have one on the txn (e.g. legacy booking paid before we
+    # started persisting PI ids), try to fetch it from Stripe on the fly.
     refund_id = None
-    refund_state = "pending"  # would be "succeeded" after stripe.Refund.create
+    refund_state = "failed"
+    stripe_err = None
+    try:
+        # Import at the top so both back-fill and refund use the same client
+        import stripe as _stripe
+        _stripe.api_key = STRIPE_API_KEY
+
+        if not pi_id and session_id:
+            try:
+                s_obj = _stripe.checkout.Session.retrieve(session_id)
+                pi_id = s_obj.get("payment_intent") if isinstance(s_obj, dict) else getattr(s_obj, "payment_intent", None)
+                if pi_id and txn:
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id},
+                        {"$set": {"payment_intent_id": pi_id, "updated_at": now_iso()}},
+                    )
+            except Exception:  # pragma: no cover — best-effort back-fill
+                pi_id = pi_id or None
+
+        if not pi_id:
+            raise RuntimeError("No payment_intent recorded on this booking — cannot refund")
+
+        refund_obj = _stripe.Refund.create(
+            payment_intent=pi_id,
+            reason="requested_by_customer",
+            metadata={
+                "booking_id": booking_id,
+                "admin_id": user["id"],
+                "cargoone_reason": (payload or {}).get("reason") or "admin_full_refund",
+            },
+        )
+        refund_id = refund_obj.get("id") if isinstance(refund_obj, dict) else getattr(refund_obj, "id", None)
+        stripe_status = refund_obj.get("status") if isinstance(refund_obj, dict) else getattr(refund_obj, "status", None)
+        # Stripe refund statuses: succeeded | pending | failed | canceled | requires_action
+        refund_state = "succeeded" if stripe_status == "succeeded" else (stripe_status or "pending")
+    except Exception as e:
+        stripe_err = str(e)
+        refund_state = "failed"
+        # Roll back the in_progress guard so the admin can retry later
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"refund_status": "failed",
+                      "refund_failed_at": now_iso(),
+                      "refund_error": stripe_err[:500]}},
+        )
+        logger.warning("Stripe refund failed for booking %s: %s", booking_id, stripe_err)
 
     audit_entry = {
         "id": new_id(),
@@ -2624,6 +2669,7 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
         "state": refund_state,
         "stripe_refund_id": refund_id,
         "payment_intent_id": pi_id,
+        "error": stripe_err,
     }
     if txn:
         await db.payment_transactions.update_one(
@@ -2633,17 +2679,20 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
     await db.bookings.update_one(
         {"id": booking_id},
         {"$set": {"refund_status": refund_state,
-                  "refunded_at": now_iso() if refund_state == "succeeded" else None},
+                  "refunded_at": now_iso() if refund_state == "succeeded" else None,
+                  "stripe_refund_id": refund_id,
+                  # If it failed we already wrote refund_error above; leave alone
+                  },
          "$push": {"refunds": audit_entry}},
     )
+    if refund_state == "failed":
+        raise HTTPException(status_code=502, detail=f"Stripe refund failed: {stripe_err}")
     return {
         "ok": True,
         "booking_id": booking_id,
         "refund_state": refund_state,
         "stripe_refund_id": refund_id,
         "audit_entry_id": audit_entry["id"],
-        "note": ("Refund recorded. Stripe API call is currently a placeholder — "
-                 "final implementation will call stripe.Refund.create when signed off."),
     }
 
 

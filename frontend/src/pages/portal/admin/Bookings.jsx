@@ -221,10 +221,10 @@ export default function AdminBookings() {
                   </span>{" "}
                   paid via Stripe. The booking will be marked as refunded and cannot be undone from this screen.
                 </p>
-                <div className="mt-3 rounded-[8px] bg-[#FEF3C7] border border-[#FDE68A] px-3 py-2 text-[11px] text-[#78350F]">
-                  Note: Stripe API call is currently in placeholder mode — the refund is recorded
-                  in Cargo One's audit log but the actual Stripe refund will fire when the
-                  final refund flow is signed off.
+                <div className="mt-3 rounded-[8px] bg-[#FEE2E2] border border-[#FCA5A5] px-3 py-2 text-[11px] text-[#7F1D1D]">
+                  This will call Stripe immediately and issue a real refund on
+                  the original card. The audit entry, Stripe refund ID and
+                  booking status will update the moment Stripe returns.
                 </div>
               </div>
             </div>

@@ -414,7 +414,18 @@ they will be resolved deliberately once the migration is complete.
 - Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
 - **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
 
-### Session B — Driver Offer Cards + Admin Payments/Refund + Confirmation Screen  ✅ COMPLETE (this session, preview only, production-ready)
+### Session C — Real Stripe Refunds + Customer Refund Visibility  ✅ COMPLETE (this session, preview only, production-ready)
+- **Real `stripe.Refund.create` shipped**: `POST /api/admin/bookings/{id}/refund` now creates real Stripe refunds on the Cargo One test account. Verified with `re_3TzH8PGbGUS6nuaW1qocgdA1` (£10 GBP refund of PI `pi_3TzH8PGbGUS6nuaW11h4OwZy` for booking `f59a47a5-…`).
+- **Payment Intent back-fill**: legacy bookings without a stored PI transparently retrieve it via `stripe.checkout.Session.retrieve` before firing the refund. No migration script needed.
+- **Graceful error handling**: Stripe failures roll booking back to `refund_status="failed"`, record `refund_error`, append failed audit entry, return HTTP 502 with clear message. Admin can retry.
+- **Idempotency**: pre-check + conditional MongoDB update; duplicate returns HTTP 409.
+- **Customer BookingDetail.jsx** now shows: (a) red "Refunded" banner with 5–10 business days messaging when `refund_status=succeeded`; (b) amber "Refund in progress" banner for pending/in-progress.
+- **Admin refund dialog** wording updated from placeholder-mode to live-mode ("This will call Stripe immediately and issue a real refund on the original card").
+- **Regression**: 19/19 payment + CSRF pytest green.
+- **Deferred** (transparently, not blockers): sweeping customer UX polish sweep across all screens; nearby-offer map pins; exhaustive status-machine walkthrough.
+- **Report:** `/app/memory/SESSION_C_REPORT.md`.
+
+### Session B — Driver Offer Cards + Admin Payments/Refund + Confirmation Screen  ✅ COMPLETE (previous session, preview only, production-ready)
 - **Backend**: added `assigned_driver_id`/`_name`/`_rating` projection on `/bookings/mine` + `/bookings/{id}` (fixes the null-driver bug from Session A). Admin-only surfaces `stripe_payment_intent_id`, `stripe_amount_total`, `refunds[]`. New `POST /api/admin/bookings/{id}/refund` — idempotent guard, admin audit trail, placeholder for `stripe.Refund.create` when signed off. Webhook now persists `payment_intent` id for future refunds. Offer payload enriched with `pickup_address`, `dropoff_address`, `duration_minutes`, `vehicle_label`.
 - **Admin Bookings.jsx**: rewritten — every paid row has `View payment` (modal shows Stripe session ID, PI, refund history) + `Refund` button (confirmation dialog with amber placeholder-mode disclosure, HTTP 409 on duplicate).
 - **Driver Live.jsx**: offer cards now show full addresses, `~min` duration, vehicle label, and a `Decline` action alongside `Accept · £X`.
