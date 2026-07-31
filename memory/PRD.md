@@ -414,7 +414,16 @@ they will be resolved deliberately once the migration is complete.
 - Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
 - **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
 
-### Session C — Real Stripe Refunds + Customer Refund Visibility  ✅ COMPLETE (this session, preview only, production-ready)
+### Final Production Verification (testing_agent) ✅ PASS — ready for manual QA (this session)
+- Testing agent completed full E2E sweep of all three portals + payment/refund flow + backend pytest. Overall verdict: PASS.
+- Testing agent fixed one blocker: `components/ui-portal/Button.jsx` was dropping `data-testid` props (now passes through via rest-props).
+- Main agent addressed 2 minor cleanup items: `refund_amount` field now persisted on refunded bookings (back-filled on `f59a47a5`); stale `refund_status="failed"` cleared on `01255f9a`.
+- Non-blockers noted: `/api/quote/estimate` uses Haversine fallback (backend Google Maps key issue), historical pytest flake unchanged, legacy bookings pre-Session-B have no captured PI (PI back-fill on refund handler covers).
+- 19/19 payment + CSRF pytest still green.
+- Cargo One is production-ready for manual acceptance QA. Live-mode switch is a pure env-var swap in production secrets + a new live-mode webhook endpoint in Stripe dashboard — zero code changes.
+- **Report:** `/app/memory/FINAL_PRODUCTION_VERIFICATION_REPORT.md`; `/app/test_reports/iteration_10.json`.
+
+### Session C — Real Stripe Refunds + Customer Refund Visibility  ✅ COMPLETE (previous session, preview only, production-ready)
 - **Real `stripe.Refund.create` shipped**: `POST /api/admin/bookings/{id}/refund` now creates real Stripe refunds on the Cargo One test account. Verified with `re_3TzH8PGbGUS6nuaW1qocgdA1` (£10 GBP refund of PI `pi_3TzH8PGbGUS6nuaW11h4OwZy` for booking `f59a47a5-…`).
 - **Payment Intent back-fill**: legacy bookings without a stored PI transparently retrieve it via `stripe.checkout.Session.retrieve` before firing the refund. No migration script needed.
 - **Graceful error handling**: Stripe failures roll booking back to `refund_status="failed"`, record `refund_error`, append failed audit entry, return HTTP 502 with clear message. Admin can retry.

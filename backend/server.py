@@ -2681,6 +2681,7 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
         {"$set": {"refund_status": refund_state,
                   "refunded_at": now_iso() if refund_state == "succeeded" else None,
                   "stripe_refund_id": refund_id,
+                  "refund_amount": audit_entry["amount"] if refund_state == "succeeded" else None,
                   # If it failed we already wrote refund_error above; leave alone
                   },
          "$push": {"refunds": audit_entry}},
