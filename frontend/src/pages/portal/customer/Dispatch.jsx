@@ -51,7 +51,10 @@ export default function CustomerDispatch() {
 
   const cancelled = state?.cancelled_at;
   const searching = state?.dispatch_eligible && !state?.assigned_driver_id;
-  const notReady = !state?.dispatch_eligible && !state?.assigned_driver_id && !cancelled;
+  // Guard on `state` being loaded — otherwise the initial null render would
+  // flash "Waiting for payment confirmation" before the first poll returns.
+  const notReady = state && !state.dispatch_eligible && !state.assigned_driver_id && !cancelled;
+  const loading = !state && !err;
 
   return (
     <div className="min-h-screen bg-neutral-50" data-testid="customer-dispatch">
@@ -60,6 +63,15 @@ export default function CustomerDispatch() {
         <p className="text-sm text-neutral-500 mb-6">
           {state?.pickup_town} → {state?.dropoff_town}
         </p>
+
+        {loading && (
+          <div className="rounded-2xl bg-white border border-neutral-200 p-6 mb-4 flex flex-col items-center text-center" data-testid="dispatch-loading">
+            <div className="relative w-16 h-16 mb-3">
+              <div className="absolute inset-0 rounded-full bg-neutral-100 animate-pulse" />
+            </div>
+            <p className="text-sm text-neutral-600">Loading dispatch status…</p>
+          </div>
+        )}
 
         {cancelled && (
           <div className="rounded-2xl bg-red-50 border border-red-200 p-4 mb-4" data-testid="dispatch-cancelled">

@@ -36,6 +36,9 @@ export default function CustomerAsapRequest() {
   const [locError, setLocError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
+  // Live route quote from backend (uses Google Distance Matrix when available)
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const useCurrentLocation = useCallback(async () => {
     setLocError(null);
@@ -99,6 +102,13 @@ export default function CustomerAsapRequest() {
   // the same formula as the server's `create_job` suggested price.
   const { estimatedTotal, estimatedDeposit } = useMemo(() => {
     if (!pickup || !dropoff) return { estimatedTotal: 0, estimatedDeposit: 0 };
+    // Prefer server-side quote when available (uses Google Distance Matrix).
+    if (quote && quote.suggested_price) {
+      const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
+      const total = Math.max(30, Math.round(quote.suggested_price * mult));
+      const deposit = Math.min(25, Math.max(10, Math.round(total * 0.125)));
+      return { estimatedTotal: total, estimatedDeposit: deposit };
+    }
     const distance = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
     const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
     const total = Math.max(30, Math.round(distance * 1.5 * mult));
@@ -107,6 +117,31 @@ export default function CustomerAsapRequest() {
     // actual figure is set by the backend booking response.
     const deposit = Math.min(25, Math.max(10, Math.round(total * 0.125)));
     return { estimatedTotal: total, estimatedDeposit: deposit };
+  }, [pickup, dropoff, mode, quote]);
+
+  // Live quote fetch — hit /api/quote/estimate whenever both endpoints are set.
+  // Debounced so quick edits don't spam the backend. Backend uses Google
+  // Distance Matrix when the maps key is configured, else Haversine.
+  useEffect(() => {
+    if (!pickup || !dropoff) { setQuote(null); return undefined; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setQuoteLoading(true);
+      try {
+        const category = mode === "breakdown_recovery" ? "cars_vehicles" : "parcels";
+        const q = await api(
+          `/quote/estimate?pickup_lat=${pickup.lat}&pickup_lng=${pickup.lng}` +
+          `&dropoff_lat=${dropoff.lat}&dropoff_lng=${dropoff.lng}` +
+          `&category=${category}`
+        );
+        if (!cancelled) setQuote(q);
+      } catch {
+        // Non-fatal — fall back to Haversine hint.
+      } finally {
+        if (!cancelled) setQuoteLoading(false);
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
   }, [pickup, dropoff, mode]);
 
   const onSubmit = useCallback(async () => {
@@ -362,8 +397,84 @@ export default function CustomerAsapRequest() {
         </div>
       )}
 
+      {pickup && dropoff && (
+        <section
+          className="mb-4 rounded-2xl border border-neutral-200 bg-white p-4"
+          data-testid="asap-booking-summary"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              Booking summary
+            </h2>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                mode === "breakdown_recovery"
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+              data-testid="asap-summary-service-type"
+            >
+              {mode === "breakdown_recovery" ? "Vehicle Recovery" : "ASAP Transport"}
+            </span>
+          </div>
+          <div className="divide-y divide-neutral-100">
+            <SummaryRow
+              label="From"
+              value={pickup.town || pickup.address}
+            />
+            <SummaryRow
+              label="To"
+              value={dropoff.town || dropoff.address}
+            />
+            <SummaryRow
+              label="Distance"
+              value={
+                quoteLoading
+                  ? "Calculating…"
+                  : quote?.distance_miles != null
+                    ? `${quote.distance_miles} mi`
+                    : `${Math.round(haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng))} mi (approx)`
+              }
+            />
+            <SummaryRow
+              label="Est. driving time"
+              value={
+                quoteLoading
+                  ? "Calculating…"
+                  : quote?.duration_minutes != null
+                    ? formatDuration(quote.duration_minutes)
+                    : "—"
+              }
+            />
+            {mode === "breakdown_recovery" && vehicle.make && vehicle.model && (
+              <SummaryRow
+                label="Vehicle"
+                value={`${vehicle.make} ${vehicle.model}${vehicle.registration ? " · " + vehicle.registration : ""}`}
+              />
+            )}
+            <SummaryRow
+              label="Fare (driver charge)"
+              value={estimatedTotal ? `£${estimatedTotal.toFixed(2)}` : "—"}
+            />
+            <SummaryRow
+              label="Booking fee (deposit, paid now)"
+              value={estimatedDeposit ? `£${estimatedDeposit.toFixed(2)}` : "—"}
+              strong
+            />
+          </div>
+          <p className="text-[11px] text-neutral-500 mt-3">
+            Prices are indicative. Your final fare is confirmed by the backend before payment.
+          </p>
+        </section>
+      )}
+
       {err && (
-        <p className="text-sm text-red-600 mb-3" data-testid="asap-error">{err}</p>
+        <p
+          className="text-sm text-red-600 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2"
+          data-testid="asap-error"
+        >
+          {err}
+        </p>
       )}
 
       <Button
@@ -373,7 +484,9 @@ export default function CustomerAsapRequest() {
         data-testid="asap-submit"
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-        Confirm & find driver
+        {estimatedDeposit
+          ? `Confirm & pay £${estimatedDeposit.toFixed(2)} deposit`
+          : "Confirm & find driver"}
       </Button>
       <p className="text-xs text-neutral-500 mt-3 flex items-center gap-1">
         <ShieldCheck className="h-3 w-3" /> You pay the deposit now. We only start looking for a driver after payment.
@@ -390,6 +503,15 @@ function haversineMiles(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatDuration(mins) {
+  if (mins == null) return "—";
+  const m = Math.max(1, Math.round(mins));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r === 0 ? `${h} hr` : `${h} hr ${r} min`;
 }
 
 function SummaryRow({ label, value, strong = false }) {

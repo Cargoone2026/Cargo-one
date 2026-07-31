@@ -84,6 +84,32 @@ export default function CustomerBookingDetail() {
     load();
   }, [load]);
 
+  // ASAP flow — after deposit is paid and no driver assigned yet on THIS
+  // booking, bounce the customer to /customer/dispatch/{jobId} so they see
+  // the live "searching for a driver" screen. Guarded by a session flag so
+  // we only fire the redirect ONCE per booking (otherwise, when the Dispatch
+  // page later hands control back to us after a driver claim, we'd loop).
+  useEffect(() => {
+    if (!b) return;
+    if (b.service_timing !== "asap") return;
+    if (b.payment_status !== "paid") return;
+    if (b.assigned_driver_id) return;
+    if (paymentPollActive) return;
+    // Once per booking — the Dispatch page owns the "searching" experience.
+    // If the customer later comes back to this URL directly, we respect that.
+    let alreadyBounced = false;
+    try {
+      alreadyBounced = sessionStorage.getItem(`asap-bounced:${b.id}`) === "1";
+    } catch { /* ignore */ }
+    if (alreadyBounced) return;
+    let jobId = null;
+    try { jobId = sessionStorage.getItem(`asap:${b.id}`); } catch { /* ignore */ }
+    jobId = jobId || b.job_id;
+    if (!jobId) return;
+    try { sessionStorage.setItem(`asap-bounced:${b.id}`, "1"); } catch { /* ignore */ }
+    navigate(`/customer/dispatch/${jobId}`, { replace: true });
+  }, [b, paymentPollActive, navigate]);
+
   // Poll tracking every 12s while shipment is en route
   useEffect(() => {
     if (!b || b.payment_status !== "paid") return undefined;

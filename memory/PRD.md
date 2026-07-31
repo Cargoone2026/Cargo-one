@@ -414,7 +414,17 @@ they will be resolved deliberately once the migration is complete.
 - Screenshots captured: Idle Dashboard, Incoming Offer, RouteMap after Acceptance.
 - **Report:** `/app/memory/DRIVER_LIVE_MODE_UX_COMPLETION_REPORT.md`.
 
-### Cargo One Stripe Migration to New Dedicated Account  ✅ COMPLETE (this session, preview only, 100% ready for launch)
+### Vehicle Recovery E2E — Session A ✅ COMPLETE (this session, preview only, production-ready)
+- **Customer AsapRequest.jsx**: added visible Booking Summary panel (service badge, from/to, live Google-based distance + ETA, vehicle info, fare, deposit) via new `/api/quote/estimate` fetch (debounced 350 ms). CTA now shows `Confirm & pay £X deposit` inline.
+- **Customer BookingDetail.jsx**: after ASAP deposit success, auto-redirects to `/customer/dispatch/{jobId}` (guarded once per booking via sessionStorage to prevent redirect loop with Dispatch page).
+- **Customer Dispatch.jsx**: added loading skeleton; fixed misleading "Waiting for payment confirmation" flash by guarding `notReady` on loaded state.
+- **Zero backend changes.** Reuses existing `/quote/estimate`, `/jobs`, `/bookings`, `/bookings/{id}/deposit`, `/customer/dispatch/{jobId}`, `/driver/live/*`, `/jobs/{id}/claim`.
+- **Full browser E2E on real Cargo One Stripe test account**: Recovery job (Cobham → Guildford, VW Golf) → live £45/£10 summary → Stripe 4242 payment → auto-redirect to dispatch → driver online → offer received → atomic claim → BookingDetail shows Deposit Paid + driver contact + £55 total.
+- **Regression**: 39/40 backend tests green (1 pre-existing flake — same as prior sessions).
+- **Known follow-up** (small): booking response `assigned_driver_id` field stays null after claim (only job field is updated). UI works because Dispatch reads from job endpoint. Backend projection fix deferred.
+- **Report:** `/app/memory/SESSION_A_RECOVERY_E2E_REPORT.md`.
+
+### Cargo One Stripe Migration to New Dedicated Account  ✅ COMPLETE (previous session, preview only, 100% ready for launch)
 - Migrated preview environment from pod-provided `sk_test_emergent` proxy to a fresh dedicated Cargo One Stripe test account (`acct_1TyzKZGbGUS6nuaW`, GB / GBP / admin@cargoone.co.uk).
 - Registered TWO webhook endpoints in Stripe: preview (`we_1TzGY9…` → `https://cargo-repo-bridge.preview.emergentagent.com/api/webhook/stripe`) and production URL (`we_1TzHAXGbGUS6nuaWLn4XNYkK` → `https://cargoone.co.uk/api/webhook/stripe`, test-mode only). Both subscribed to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`.
 - `STRIPE_WEBHOOK_SECRET=whsec_…` installed in `/app/backend/.env`. `stripe.Webhook.construct_event` cryptographic verification path is now active; token-binding fallback remains as safety net.
