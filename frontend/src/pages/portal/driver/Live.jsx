@@ -14,7 +14,7 @@ function formatDuration(secs) {
 }
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
-import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { DriverLiveMap } from "@/components/ui-portal/DriverLiveMap";
 
 const HEARTBEAT_INTERVAL_MS = 30000;   // send position every 30s
 const OFFER_POLL_INTERVAL_MS = 5000;   // poll for offers every 5s
@@ -358,28 +358,42 @@ export default function DriverLive() {
             </div>
 
             <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
-              {/* Live map showing the driver's own location — no fake driver cars,
-                 no unrelated customer coordinates. Reuses the existing RouteMap
-                 shell with only a pickup marker at the driver position. */}
-              {status?.live_lat && status?.live_lng && (
-                <div className="h-56 sm:h-72">
-                  <RouteMap
-                    pickup={{ lat: status.live_lat, lng: status.live_lng }}
-                    summary={{ pickup: "You are here" }}
-                  />
+              {/* Live map showing the driver's own location with radar-ring
+                  pulses. Replaces the earlier RouteMap fallback which showed
+                  a static SVG grid (RouteMap requires BOTH pickup + dropoff
+                  to render real tiles). DriverLiveMap renders real Google
+                  tiles when a JS key is present and an animated radar-grid
+                  otherwise — never falls back to a lifeless surface. */}
+              {status?.live_lat && status?.live_lng ? (
+                <DriverLiveMap
+                  lat={status.live_lat}
+                  lng={status.live_lng}
+                  className="h-72 sm:h-96"
+                  showSweep
+                />
+              ) : (
+                <div className="h-72 sm:h-96 relative bg-gradient-to-br from-emerald-50 via-white to-neutral-100">
+                  <div className="absolute inset-0 driverlive-radar-grid" aria-hidden="true" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur-sm">
+                      Locating you…
+                    </p>
+                  </div>
                 </div>
               )}
-              <div className="p-6 text-center">
-                <div className="relative w-16 h-16 mx-auto mb-3">
-                  <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping" />
-                  <div className="absolute inset-2 rounded-full bg-emerald-500" />
+              <div className="border-t border-neutral-100 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  <span className="font-medium">Looking for nearby jobs…</span>
                 </div>
-                <p className="text-sm font-medium">Looking for nearby jobs…</p>
                 {offersReason === "stale_location" && (
-                  <p className="text-xs text-neutral-500 mt-1">Waiting for a fresh GPS fix.</p>
+                  <span className="text-xs text-amber-700">Waiting for GPS fix</span>
                 )}
                 {offersReason === "busy_on_asap" && (
-                  <p className="text-xs text-neutral-500 mt-1">You're already on an active ASAP job.</p>
+                  <span className="text-xs text-neutral-500">On an active ASAP job</span>
                 )}
               </div>
             </div>

@@ -32,3 +32,66 @@
         transform: rotate(360deg);
     }
 }
+
+
+/* ---------------------------------------------------------------------
+   Driver Live Mode — radar animations. Used by DriverLiveMap.jsx.
+   Kept in App.css (global, not Tailwind-JIT-driven) so the ring
+   expansion + sweep rotation remain smooth on lower-end mobile GPUs.
+--------------------------------------------------------------------- */
+@keyframes driverlive-ring-pulse {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    70%  { opacity: 0.0; }
+    100% { transform: scale(6);   opacity: 0.0; }
+}
+
+.driverlive-radar-ring {
+    animation: driverlive-ring-pulse 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    will-change: transform, opacity;
+}
+.driverlive-radar-ring--delay-1 { animation-delay: 0.85s; }
+.driverlive-radar-ring--delay-2 { animation-delay: 1.7s;  }
+
+@keyframes driverlive-sweep-rotate {
+    from { transform: rotate(0deg);   }
+    to   { transform: rotate(360deg); }
+}
+
+.driverlive-radar-sweep {
+    background: conic-gradient(
+        from 0deg,
+        rgba(16, 185, 129, 0.00) 0deg,
+        rgba(16, 185, 129, 0.20) 30deg,
+        rgba(16, 185, 129, 0.00) 60deg,
+        rgba(16, 185, 129, 0.00) 360deg
+    );
+    animation: driverlive-sweep-rotate 3.6s linear infinite;
+    will-change: transform;
+}
+
+/* SVG-less fallback: soft radial "radar grid" that breathes instead of
+   sitting flat like a static grid. */
+@keyframes driverlive-grid-breathe {
+    0%, 100% { opacity: 0.55; transform: scale(1);    }
+    50%      { opacity: 0.85; transform: scale(1.06); }
+}
+
+.driverlive-radar-grid {
+    background-image:
+        radial-gradient(circle at center, rgba(16,185,129,0.10) 0%, rgba(16,185,129,0) 55%),
+        repeating-radial-gradient(
+            circle at center,
+            rgba(16,185,129,0.15) 0px,
+            rgba(16,185,129,0.15) 1px,
+            transparent 1px,
+            transparent 48px
+        );
+    animation: driverlive-grid-breathe 4s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .driverlive-radar-ring,
+    .driverlive-radar-sweep,
+    .driverlive-radar-grid { animation: none; }
+}
