@@ -284,120 +284,127 @@ export default function DriverLive() {
         )}
 
         {online && offers.length === 0 && (
-          <>
-            <div
-              className="rounded-2xl bg-white border border-neutral-200 p-4 mb-4"
-              data-testid="driver-live-idle-dashboard"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-sm text-neutral-600">
-                  <MapPin className="h-4 w-4 text-neutral-500" />
-                  <span data-testid="driver-live-town">
-                    {town || "Locating you…"}
-                  </span>
-                </div>
+          <div
+            className="rounded-2xl bg-white border border-neutral-200 p-4 mb-4"
+            data-testid="driver-live-idle-dashboard"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-sm text-neutral-600">
+                <MapPin className="h-4 w-4 text-neutral-500" />
+                <span data-testid="driver-live-town">
+                  {town || "Locating you…"}
+                </span>
               </div>
+            </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div
-                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
-                  data-testid="driver-live-stat-time"
-                >
-                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                    <Clock className="h-3 w-3" /> Time online
-                  </div>
-                  <div className="text-xl font-semibold tabular-nums">
-                    {formatDuration(sessionSecs)}
-                  </div>
-                </div>
-                <div
-                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
-                  data-testid="driver-live-stat-jobs"
-                >
-                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                    <Package className="h-3 w-3" /> Today's jobs
-                  </div>
-                  <div className="text-xl font-semibold tabular-nums">
-                    {todayStats.jobs}
-                  </div>
-                </div>
-                <div
-                  className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
-                  data-testid="driver-live-stat-earnings"
-                >
-                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                    <PoundSterling className="h-3 w-3" /> Today's earnings
-                  </div>
-                  <div className="text-xl font-semibold tabular-nums">
-                    £{todayStats.earnings}
-                  </div>
-                </div>
-              </div>
-
+            <div className="grid grid-cols-3 gap-3">
               <div
-                className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-600"
-                data-testid="driver-live-status-panel"
+                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                data-testid="driver-live-stat-time"
               >
-                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  Online
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Signal className="h-3 w-3 text-emerald-600" /> GPS connected
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Radio className="h-3 w-3 text-emerald-600" /> Dispatch ready
-                </span>
-                <span className="inline-flex items-center gap-1 text-neutral-500">
-                  <Search className="h-3 w-3" /> Searching for nearby jobs…
-                </span>
+                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  <Clock className="h-3 w-3" /> Time online
+                </div>
+                <div className="text-xl font-semibold tabular-nums">
+                  {formatDuration(sessionSecs)}
+                </div>
+              </div>
+              <div
+                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                data-testid="driver-live-stat-jobs"
+              >
+                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  <Package className="h-3 w-3" /> Today's jobs
+                </div>
+                <div className="text-xl font-semibold tabular-nums">
+                  {todayStats.jobs}
+                </div>
+              </div>
+              <div
+                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                data-testid="driver-live-stat-earnings"
+              >
+                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  <PoundSterling className="h-3 w-3" /> Today's earnings
+                </div>
+                <div className="text-xl font-semibold tabular-nums">
+                  £{todayStats.earnings}
+                </div>
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
-              {/* Live map showing the driver's own location with radar-ring
-                  pulses. Replaces the earlier RouteMap fallback which showed
-                  a static SVG grid (RouteMap requires BOTH pickup + dropoff
-                  to render real tiles). DriverLiveMap renders real Google
-                  tiles when a JS key is present and an animated radar-grid
-                  otherwise — never falls back to a lifeless surface. */}
-              {status?.live_lat && status?.live_lng ? (
-                <DriverLiveMap
-                  lat={status.live_lat}
-                  lng={status.live_lng}
-                  className="h-72 sm:h-96"
-                  showSweep
-                />
-              ) : (
-                <div className="h-72 sm:h-96 relative bg-gradient-to-br from-emerald-50 via-white to-neutral-100">
-                  <div className="absolute inset-0 driverlive-radar-grid" aria-hidden="true" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <p className="rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur-sm">
-                      Locating you…
-                    </p>
-                  </div>
-                </div>
-              )}
-              <div className="border-t border-neutral-100 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                  </span>
-                  <span className="font-medium">Looking for nearby jobs…</span>
-                </div>
-                {offersReason === "stale_location" && (
-                  <span className="text-xs text-amber-700">Waiting for GPS fix</span>
-                )}
-                {offersReason === "busy_on_asap" && (
-                  <span className="text-xs text-neutral-500">On an active ASAP job</span>
-                )}
-              </div>
+            <div
+              className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-600"
+              data-testid="driver-live-status-panel"
+            >
+              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Online
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Signal className="h-3 w-3 text-emerald-600" /> GPS connected
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Radio className="h-3 w-3 text-emerald-600" /> Dispatch ready
+              </span>
+              <span className="inline-flex items-center gap-1 text-neutral-500">
+                <Search className="h-3 w-3" /> Searching for nearby jobs…
+              </span>
             </div>
-          </>
+          </div>
+        )}
+
+        {online && (
+          <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
+            {/* Live map — always visible while online. Shows the driver's
+                own position with radar-pulses; when ASAP offers arrive it
+                plots each pickup as a labelled £-pin so the driver can
+                gauge distance/direction before tapping Accept below. */}
+            {status?.live_lat && status?.live_lng ? (
+              <DriverLiveMap
+                lat={status.live_lat}
+                lng={status.live_lng}
+                offers={offers}
+                onOfferClick={(o) => {
+                  const el = document.getElementById(`driver-live-offer-card-${o.job_id}`);
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                className="h-72 sm:h-96"
+                showSweep
+              />
+            ) : (
+              <div className="h-72 sm:h-96 relative bg-gradient-to-br from-emerald-50 via-white to-neutral-100">
+                <div className="absolute inset-0 driverlive-radar-grid" aria-hidden="true" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur-sm">
+                    Locating you…
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="border-t border-neutral-100 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </span>
+                <span className="font-medium">
+                  {offers.length === 0
+                    ? "Looking for nearby jobs…"
+                    : `${offers.length} nearby ASAP offer${offers.length > 1 ? "s" : ""} — tap a pin to review`}
+                </span>
+              </div>
+              {offersReason === "stale_location" && (
+                <span className="text-xs text-amber-700">Waiting for GPS fix</span>
+              )}
+              {offersReason === "busy_on_asap" && offers.length === 0 && (
+                <span className="text-xs text-neutral-500">On an active ASAP job</span>
+              )}
+            </div>
+          </div>
         )}
 
         <ul className="space-y-3">
@@ -406,7 +413,7 @@ export default function DriverLive() {
               key={o.job_id}
               className="animate-in fade-in slide-in-from-bottom-2 duration-300"
             >
-              <div className="rounded-2xl border border-neutral-200 bg-white p-4" data-testid={`driver-live-offer-${o.job_id}`}>
+              <div id={`driver-live-offer-card-${o.job_id}`} className="rounded-2xl border border-neutral-200 bg-white p-4 scroll-mt-4" data-testid={`driver-live-offer-${o.job_id}`}>
                 <div className="flex items-baseline justify-between mb-1">
                   <div className="text-xs uppercase tracking-wide text-neutral-500">Driver earnings</div>
                   <div className="flex items-baseline gap-2">

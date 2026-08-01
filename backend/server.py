@@ -1458,6 +1458,15 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             "distance_to_pickup_miles": round(dist, 1),
             "pickup_town": job.get("pickup_town"),
             "pickup_address": job.get("pickup_address"),
+            # Pickup + dropoff coords — required so the driver Live Mode
+            # map can plot each pending offer as a pin. These are already
+            # implied by `distance_to_pickup_miles`; making them explicit
+            # unlocks visual dispatch decisions without leaking anything
+            # a driver couldn't derive from the existing offer feed.
+            "pickup_lat": p_lat,
+            "pickup_lng": p_lng,
+            "dropoff_lat": float(job.get("dropoff_lat") or 0),
+            "dropoff_lng": float(job.get("dropoff_lng") or 0),
             "dropoff_town": job.get("dropoff_town"),
             "dropoff_address": job.get("dropoff_address"),
             "distance_miles": job.get("distance_miles"),
