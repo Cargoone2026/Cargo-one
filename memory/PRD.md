@@ -423,6 +423,36 @@ they will be resolved deliberately once the migration is complete.
 - Cargo One is production-ready for manual acceptance QA. Live-mode switch is a pure env-var swap in production secrets + a new live-mode webhook endpoint in Stripe dashboard — zero code changes.
 - **Report:** `/app/memory/FINAL_PRODUCTION_VERIFICATION_REPORT.md`; `/app/test_reports/iteration_10.json`.
 
+### Session D — Transactional Email Infrastructure + Password Reset Flow  ✅ COMPLETE (2026-02, preview only, production-ready)
+- **Resend service layer** shipped at `/app/backend/services/email.py`. Thin async-safe wrapper around the `resend` Python SDK with:
+  - **Graceful failure** — when `RESEND_API_KEY` is missing/empty, `send_*` helpers return `{"status":"skipped"}` cleanly, an `email_log` row is still inserted with `status="skipped"`, and NO exception ever propagates. Booking/payment/auth flows can never be blocked by email delivery.
+  - **Background thread dispatch** via `asyncio.to_thread` — request handlers never wait on Resend.
+  - **Full audit trail** in `db.email_log` (to, template, subject, provider, sender, status, provider_id, error, booking_id, user_id).
+  - **Two templates shipped:** `render_deposit_receipt` (branded HTML w/ pickup/dropoff/amount + balance-due, wired into `_finalise_paid_deposit`) and `render_password_reset` (branded CTA button + fallback URL + expiry copy).
+  - Sender: `EMAIL_FROM=noreply@cargoone.co.uk` (env-driven).
+- **Password reset backend endpoints** (server.py L604-694):
+  - `POST /auth/forgot-password { email }` — always returns `{ok:true}` (anti-enumeration); issues 32-byte urlsafe token with 60-min expiry into `password_reset_tokens`; dispatches Resend email; failures are logged and swallowed.
+  - `POST /auth/reset-password { token, new_password }` — validates token (single-use, expiry, existence), atomically rotates `password_hash`, burns token (`used_at`), returns full `TokenResponse` shape and sets the HttpOnly session cookie so the user is immediately signed in.
+- **Frontend components** (both NEW):
+  - `pages/auth/ForgotPassword.jsx` at `/auth/forgot-password` — form + "Check your inbox" success state matching Login/Register visual language.
+  - `pages/auth/ResetPassword.jsx` at `/auth/reset?token=…` (canonical) and `/auth/reset-password` (alias) — missing-token/form/success three-state screen. On success calls `AuthContext.refresh()` and auto-navigates to `roleLanding(user.role)` after 1.5s.
+  - `pages/auth/Login.jsx` — "Forgot password?" link added between submit and register CTA (`data-testid="forgot-password-link"`).
+  - `App.js` — 2 new imports + 3 new routes.
+- **Test coverage** — new `backend/tests/test_password_reset.py` (7 tests, all green):
+  1. Forgot-password creates a token for a real user.
+  2. Forgot-password anti-enumeration (unknown email still 200).
+  3. Full reset flow rotates password; old rejected, new accepted.
+  4. Token is single-use (400 on replay).
+  5. Bogus token → 400.
+  6. Short (< 8) password → 422.
+  7. `email_log` graceful-skip audit row is inserted when RESEND_API_KEY is absent.
+- **Regression** — 73/74 relevant backend tests green (7 new + 5 cookie_auth + 13 payment_csrf + 22/23 realtime_dispatch + payment_finalisation + booking_fees). The single non-pass is a documented pre-existing dispatch ordering flake unrelated to Session D.
+- **Full Playwright frontend E2E** completed on preview: forgot → check-inbox → reset → password-updated → auto-login to `/customer`. Backend curl E2E covers all 9 edge cases including single-use tokens, expiry, and pydantic validation.
+- **Production cut-over:** literally set `RESEND_API_KEY=re_…` in production secrets and restart — no code changes required. `EMAIL_FROM` and `APP_BASE_URL` are already configured. Full checklist in `SESSION_D_EMAIL_AND_PASSWORD_RESET_REPORT.md`.
+- **Untouched this session:** all Stripe / booking / dispatch / refund / recovery / CSRF / cookie code.
+- **Report:** `/app/memory/SESSION_D_EMAIL_AND_PASSWORD_RESET_REPORT.md`.
+
+
 ### Session C — Real Stripe Refunds + Customer Refund Visibility  ✅ COMPLETE (previous session, preview only, production-ready)
 - **Real `stripe.Refund.create` shipped**: `POST /api/admin/bookings/{id}/refund` now creates real Stripe refunds on the Cargo One test account. Verified with `re_3TzH8PGbGUS6nuaW1qocgdA1` (£10 GBP refund of PI `pi_3TzH8PGbGUS6nuaW11h4OwZy` for booking `f59a47a5-…`).
 - **Payment Intent back-fill**: legacy bookings without a stored PI transparently retrieve it via `stripe.checkout.Session.retrieve` before firing the refund. No migration script needed.

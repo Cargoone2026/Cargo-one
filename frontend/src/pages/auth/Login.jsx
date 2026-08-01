@@ -95,10 +95,18 @@ export default function Login() {
           </form>
 
           <Link
+            to="/auth/forgot-password"
+            data-testid="forgot-password-link"
+            className="mt-4 block py-1 text-center text-[14px] font-semibold text-[#D62828] hover:underline"
+          >
+            Forgot password?
+          </Link>
+
+          <Link
             to="/auth/register?role=customer"
             replace
             data-testid="go-register-button"
-            className="mt-6 block py-2 text-center text-[14px] text-[#6B7280]"
+            className="mt-2 block py-2 text-center text-[14px] text-[#6B7280]"
           >
             New here? <span className="font-semibold text-[#D62828]">Create an account</span>
           </Link>

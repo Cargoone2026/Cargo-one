@@ -23,6 +23,8 @@ import DriverProfilePublic from "@/pages/DriverProfilePublic";
 import Welcome from "@/pages/auth/Welcome";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import ForgotPassword from "@/pages/auth/ForgotPassword";
+import ResetPassword from "@/pages/auth/ResetPassword";
 
 // Customer portal — Stage 2A-i (foundation) + Stage 2A-ii (active workflows)
 import CustomerDashboard from "@/pages/portal/customer/Dashboard";
@@ -119,6 +121,9 @@ export default function App() {
             <Route path="/auth/welcome" element={<Welcome />} />
             <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/register" element={<Register />} />
+            <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+            <Route path="/auth/reset" element={<ResetPassword />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
 
             {/* Settings hub + public driver profile (parity with Expo) */}
             <Route path="/settings" element={<Settings />} />
