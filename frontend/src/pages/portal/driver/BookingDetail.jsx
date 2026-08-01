@@ -14,6 +14,7 @@ import {
   X as XIcon,
   CheckCircle2,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -564,7 +565,7 @@ export default function DriverBookingDetail() {
                   return (
                     <div
                       key={m.id}
-                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                      className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
                     >
                       <div
                         className={`max-w-[75%] rounded-[16px] px-3 py-2 text-[14px] ${
@@ -573,6 +574,22 @@ export default function DriverBookingDetail() {
                       >
                         {m.text}
                       </div>
+                      {m.moderated ? (
+                        <div
+                          className={`mt-1 flex max-w-[75%] items-center gap-1 text-[10.5px] font-medium leading-tight text-[#6B7280] ${
+                            mine ? "justify-end" : "justify-start"
+                          }`}
+                          data-testid={`message-moderated-${m.id}`}
+                          title="For your safety, contact details are hidden until pickup is complete."
+                        >
+                          <ShieldCheck className="h-3 w-3 text-[#D62828]" />
+                          <span>
+                            {mine
+                              ? "Contact details hidden by Cargo One — please share them in person on collection."
+                              : "Contact details hidden by Cargo One."}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })
