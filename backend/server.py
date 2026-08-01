@@ -1188,6 +1188,67 @@ async def driver_accepted_jobs(user: dict = Depends(require_role("driver"))):
     return out
 
 
+@api.get("/driver/my-bids")
+async def driver_my_bids(user: dict = Depends(require_role("driver"))):
+    """Driver bid history.
+
+    Returns every bid the authenticated driver has ever submitted, newest
+    first, enriched with a lightweight view of the underlying job (title,
+    route, category, price, current status, message read/unread counts
+    where a booking exists).
+
+    Frontends use this to populate the driver "My Jobs" tab so drivers see
+    every submitted bid — including those still `pending` — rather than
+    only accepted work. This was previously invisible in the UI, so
+    drivers had no bid-history feedback loop at all.
+    """
+    bids = await db.bids.find({"driver_id": user["id"]}, {"_id": 0}) \
+                          .sort("created_at", -1).to_list(200)
+    if not bids:
+        return []
+
+    job_ids = list({b["job_id"] for b in bids})
+    jobs = await db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0}).to_list(len(job_ids))
+    jmap = {j["id"]: j for j in jobs}
+
+    # Attach a compact job summary so the FE doesn't need a per-bid fetch.
+    for b in bids:
+        j = jmap.get(b["job_id"])
+        if j:
+            b["job"] = {
+                "id": j["id"],
+                "title": j.get("title"),
+                "category": j.get("category"),
+                "pickup_town": j.get("pickup_town"),
+                "dropoff_town": j.get("dropoff_town"),
+                "distance_miles": j.get("distance_miles"),
+                "status": j.get("status"),
+                "pricing_type": j.get("pricing_type"),
+                "fixed_price": j.get("fixed_price"),
+                "suggested_price": j.get("suggested_price"),
+                "assigned_driver_id": j.get("assigned_driver_id"),
+                # Booking-related JobExtras fields, so drivers see the same
+                # forklift/loading badges everyone else sees.
+                "needs_forklift": j.get("needs_forklift", False),
+                "needs_loading_help": j.get("needs_loading_help", False),
+                "weight_kg": j.get("weight_kg"),
+                "item_count": j.get("item_count"),
+                "dimensions_l_m": j.get("dimensions_l_m"),
+                "dimensions_w_m": j.get("dimensions_w_m"),
+                "dimensions_h_m": j.get("dimensions_h_m"),
+                "customer_note": j.get("customer_note"),
+                "vehicle_details": j.get("vehicle_details"),
+                "recommended_vehicle": j.get("recommended_vehicle"),
+            }
+            # If THIS driver was the accepted bid, flag it — makes the FE
+            # rendering "won" vs "lost" trivial.
+            b["is_winning"] = j.get("assigned_driver_id") == user["id"]
+        else:
+            b["job"] = None
+            b["is_winning"] = False
+    return bids
+
+
 @api.get("/jobs/{job_id}")
 async def get_job(job_id: str, user: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
@@ -1618,6 +1679,22 @@ async def submit_bid(job_id: str, payload: BidCreate, user: dict = Depends(requi
     if job["status"] != "posted":
         raise HTTPException(status_code=400, detail="Job not accepting bids")
 
+    # SEC1 — moderate the bid message before persisting. Bids fly BEFORE any
+    # deposit exists, which is exactly when drivers try to steer customers
+    # off-platform. Hard-reject any obvious contact-detail leak so both
+    # sides see a clear error and rewrite without the phone/email/URL/etc.
+    from services.moderation import sanitise
+    _clean_msg, _blocked, _hits = sanitise(payload.message or "")
+    if _blocked:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Contact details or off-platform references are not allowed "
+                "in a bid message. Please remove any phone numbers, emails, "
+                "URLs, or social handles and try again."
+            ),
+        )
+
     bid = {
         "id": new_id(),
         "job_id": job_id,
@@ -1626,7 +1703,7 @@ async def submit_bid(job_id: str, payload: BidCreate, user: dict = Depends(requi
         "driver_rating": user.get("rating", 5.0),
         "vehicle": user.get("vehicle"),
         "amount": payload.amount,
-        "message": payload.message,
+        "message": _clean_msg,
         "eta_hours": payload.eta_hours,
         "status": "pending",
         "created_at": now_iso(),
@@ -2246,12 +2323,22 @@ async def send_message(booking_id: str, payload: MessageCreate,
     if b.get("payment_status") != "paid":
         raise HTTPException(status_code=403, detail="Chat unlocks after deposit payment")
 
+    # SEC1 — soft-redact off-platform contact patterns even AFTER deposit
+    # payment: any leak is still a policy violation the platform must not
+    # broker verbatim. Deposit-paid parties can share addresses/phones
+    # verbally on the call once the driver is en route, so we only redact
+    # rather than reject here — matches the Uber/Bolt behaviour.
+    from services.moderation import sanitise
+    clean_text, blocked, _hits = sanitise(payload.text or "")
+    stored_text = clean_text
+
     msg = {
         "id": new_id(),
         "booking_id": booking_id,
         "sender_id": user["id"],
         "sender_name": user["name"],
-        "text": payload.text,
+        "text": stored_text,
+        "moderated": blocked,
         "photo": payload.photo,
         "read": False,
         "created_at": now_iso(),

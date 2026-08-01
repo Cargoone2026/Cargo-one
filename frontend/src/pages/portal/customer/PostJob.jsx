@@ -17,6 +17,7 @@ import { useCategories, useVehicles, requestRecommendation } from "@/hooks/useCa
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete";
+import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 
 const STEP_COUNT = 5;
@@ -44,6 +45,7 @@ export default function CustomerPostJob() {
   const [categoryKey, setCategoryKey] = useState(params.get("category") || "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [photos, setPhotos] = useState([]);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -194,7 +196,7 @@ export default function CustomerPostJob() {
         title: title.trim(),
         category: selectedCategory.key,
         description: description.trim(),
-        photos: [],
+        photos,
         pickup_address: pickup.formatted_address,
         pickup_town: pickup.town || pickup.formatted_address.split(",").pop()?.trim() || "",
         pickup_lat: pickup.lat,
@@ -315,6 +317,12 @@ export default function CustomerPostJob() {
                   data-testid="postjob-desc-input"
                   className="w-full resize-none rounded-[12px] border border-[#E5E7EB] bg-white px-3 py-2 text-[14px] text-[#111111] outline-none focus:border-[#111111]"
                 />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[13px] font-semibold text-[#111111]">
+                  Photos <span className="font-normal text-[#6B7280]">(optional)</span>
+                </span>
+                <PhotoUpload value={photos} onChange={setPhotos} testId="postjob-photos" />
               </label>
             </div>
           </section>

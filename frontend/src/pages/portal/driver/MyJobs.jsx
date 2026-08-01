@@ -22,11 +22,12 @@ export default function DriverMyJobs() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [bookings, accepted] = await Promise.all([
+      const [bookings, accepted, bids] = await Promise.all([
         api("/bookings/mine").catch(() => []),
         api("/driver/accepted-jobs").catch(() => []),
+        api("/driver/my-bids").catch(() => []),
       ]);
-      // Normalise both sources to a single card shape.
+      // Normalise all three sources to a single card shape.
       const bookingCards = (Array.isArray(bookings) ? bookings : []).map((b) => ({
         kind: "booking",
         id: b.id,
@@ -37,6 +38,7 @@ export default function DriverMyJobs() {
         earning: Number(b.driver_charge ?? b.total_price ?? 0),
         link: `/driver/booking/${b.id}`,
         awaiting_deposit: false,
+        bid_status: null,
         ts: b.updated_at || b.created_at || "",
       }));
       const acceptedCards = (Array.isArray(accepted) ? accepted : []).map((j) => ({
@@ -49,18 +51,41 @@ export default function DriverMyJobs() {
         earning: Number(j.accepted_price ?? j.fixed_price ?? 0),
         link: `/driver/job/${j.id}`,
         awaiting_deposit: true,
+        bid_status: null,
         ts: j.updated_at || j.created_at || "",
       }));
-      // Guard against a race between the two lists — the moment a booking
-      // exists for a job, we deliberately drop the job-side card by job_id.
+      // NEW — every bid the driver has submitted, including pending / lost.
+      const bidCards = (Array.isArray(bids) ? bids : []).map((bd) => ({
+        kind: "bid",
+        id: bd.id,
+        job_id: bd.job_id,
+        title: bd.job?.title || "Job",
+        pickup_town: bd.job?.pickup_town,
+        dropoff_town: bd.job?.dropoff_town,
+        status: bd.job?.status || "posted",
+        earning: Number(bd.amount || 0),
+        // Deep-link to the job so the driver can re-open their bid.
+        link: `/driver/job/${bd.job_id}`,
+        awaiting_deposit: false,
+        bid_status: bd.status,           // "pending" | "accepted" | "rejected"
+        is_winning: bd.is_winning,
+        message: bd.message || "",
+        ts: bd.created_at || "",
+      }));
+
+      // Dedupe: prefer booking > accepted > bid for the same underlying job.
       const bookingJobIds = new Set(
         (Array.isArray(bookings) ? bookings : [])
           .map((b) => b?.job_id || b?.job?.id)
           .filter(Boolean),
       );
+      const acceptedJobIds = new Set(acceptedCards.map((c) => c.id));
       const merged = [
         ...bookingCards,
         ...acceptedCards.filter((c) => !bookingJobIds.has(c.id)),
+        ...bidCards.filter(
+          (c) => !bookingJobIds.has(c.job_id) && !acceptedJobIds.has(c.job_id),
+        ),
       ];
       merged.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
       setItems(merged);
@@ -125,9 +150,36 @@ export default function DriverMyJobs() {
                     <span>Waiting for customer deposit</span>
                   </div>
                 ) : null}
+                {c.kind === "bid" ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]"
+                    data-testid={`driver-bid-status-${c.id}`}
+                  >
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                      c.bid_status === "accepted"
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                        : c.bid_status === "rejected"
+                        ? "bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200"
+                        : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                    }`}>
+                      {c.bid_status === "accepted"
+                        ? "Bid accepted"
+                        : c.bid_status === "rejected"
+                        ? "Bid not chosen"
+                        : "Bid pending"}
+                    </span>
+                    {c.status === "accepted" && !c.is_winning ? (
+                      <span className="text-[11px] text-neutral-500">
+                        Job assigned to another driver
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="mt-3 flex items-end justify-between border-t border-[#F3F4F6] pt-3">
                   <div>
-                    <p className="text-[12px] text-[#6B7280]">Your earning</p>
+                    <p className="text-[12px] text-[#6B7280]">
+                      {c.kind === "bid" ? "Your bid" : "Your earning"}
+                    </p>
                     <p className="text-[18px] font-bold text-[#111111]">
                       £{c.earning.toFixed(0)}
                     </p>

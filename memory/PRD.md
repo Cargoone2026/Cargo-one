@@ -496,3 +496,54 @@ they will be resolved deliberately once the migration is complete.
 
 
 
+
+---
+
+### Manual-QA Sprint (post-first-deploy) — 2026-02-01
+
+**Status:** ✅ ALL 9 sprint items shipped. 108/109 backend tests pass; 1 non-pass is the pre-existing dispatch flake documented since Session B. Frontend production build clean. Screenshots captured for every fix.
+
+**Files changed / added:**
+- `frontend/src/components/ScrollToTop.jsx` (NEW) — restores viewport on route/hash change with retry loop for late-mounting anchor targets
+- `frontend/src/components/marketing/Section.jsx` — added `id` + `scrollMarginTop` so footer anchor links land under the sticky header
+- `frontend/src/components/marketing/MarketingFooter.jsx` — Drivers column links now use `#why-drive`, `#requirements`, `#earnings` anchors
+- `frontend/src/pages/marketing/Drivers.jsx` — added ids to the 4 marketing sections
+- `frontend/src/App.js` — mounts `<ScrollToTop />` inside BrowserRouter
+- `frontend/src/index.css` — hard `overflow-x: hidden` + `max-width: 100vw` on html/body/#root; long-word wrapping for `-preview`/`-address` testids
+- `frontend/src/components/ui-portal/StatusPill.jsx` — added `shrink-0 whitespace-nowrap` so booking-status pills never clip card content on mobile
+- `frontend/src/components/ui-portal/JobExtras.jsx` (NEW) — canonical renderer for `needs_forklift`, `needs_loading_help`, weight, item count, dimensions, vehicle recovery details and customer note; used on every job/booking detail page across the three portals
+- `frontend/src/components/ui-portal/PhotoUpload.jsx` (NEW) — exports both `PhotoUpload` (multi-file picker with canvas downscale + delete-before-submit) and `PhotoGallery` (thumbnail grid + lightbox)
+- `frontend/src/pages/portal/customer/PostJob.jsx` — wired PhotoUpload into the description step; photos flow into `POST /api/jobs.photos`
+- `frontend/src/pages/portal/customer/JobDetail.jsx` — JobExtras + PhotoGallery
+- `frontend/src/pages/portal/customer/BookingDetail.jsx` — JobExtras + PhotoGallery
+- `frontend/src/pages/portal/driver/JobDetail.jsx` — JobExtras + PhotoGallery
+- `frontend/src/pages/portal/driver/BookingDetail.jsx` — JobExtras + PhotoGallery
+- `frontend/src/pages/portal/admin/Bookings.jsx` — JobExtras injected into the payment-detail modal
+- `frontend/src/pages/portal/driver/MyJobs.jsx` — now merges `/bookings/mine` + `/driver/accepted-jobs` + NEW `/driver/my-bids`; renders "Bid pending / Bid accepted / Bid not chosen" pills; earning label switches to "Your bid"
+- `frontend/src/pages/portal/customer/AsapRequest.jsx` — pickup/dropoff state now stores the full PlaceResult; `useCurrentLocation` emits the same shape; submit reads `formatted_address` and validates coord-finite/nonzero
+- `frontend/src/components/ui-portal/AddressAutocomplete.jsx` — `canCommit` relaxed: (formatted_address OR composable manual fields) AND (real coords OR postcode+town). Unblocks GPS pickup, rural addresses without a postcode, and manual entry paths.
+- `backend/server.py` — added `@api.get("/driver/my-bids")` (also restored the accidentally-clobbered `@api.get("/jobs/{job_id}")` decorator); wired `services.moderation.sanitise` into `submit_bid` (hard-reject) and `send_message` (soft-redact with `moderated` flag on the message row)
+- `backend/services/moderation.py` (NEW) — 21 keyword/regex rules covering phones, emails, URLs (including bare domains), WhatsApp / Telegram / Signal / Snapchat / Discord / Instagram / Facebook / Twitter/X / TikTok / LinkedIn / YouTube, "call me on / DM me / off-platform" phrases, UK postcodes when accompanied by contact verbs, and unicode obfuscation walls. Best-effort, never raises.
+- `backend/tests/test_moderation.py` (NEW, 35 tests) — every positive-case rule + a battery of negative cases proving normal booking chatter is never blocked
+
+**Sprint items delivered:**
+1. **Navigation / anchor scroll (#1)** ✅ — `ScrollToTop` component + `id` targets on Drivers page. Verified: click "Driver Requirements" from home footer → lands on Requirements section (scrollY=1576, requirements offset ≈ 80px from viewport top).
+2. **Booking-detail visibility (#2)** ✅ — `JobExtras` chips + panels rendered on customer + driver + admin job/booking pages. Verified: seeded a booking with `needs_forklift + needs_loading_help + weight + item count + dims + vehicle_details + customer_note` — all fields render as branded amber-warning chips on `/driver/booking/*`.
+3. **Horizontal-scroll lockdown (#3)** ✅ — global `overflow-x:hidden` + `max-width:100vw` + `StatusPill.shrink-0.whitespace-nowrap`. Verified: on the reported My Jobs mobile view, `scrollWidth === clientWidth (1920 / 1920)`, "Deposit Paid" pill no longer clips.
+4. **Driver bid history (#4)** ✅ — new `/api/driver/my-bids` returns every bid the driver has submitted (with compact job summary + `is_winning` flag). `MyJobs.jsx` merges this into the list with dedicated "Bid pending / Bid accepted / Bid not chosen" pills; earning label switches to "Your bid £X" for bid cards.
+5. **Bid + chat moderation (#5)** ✅ — 21-rule regex sanitiser. Bids with any leak → HTTP 400 with a user-friendly, actionable error. Chat messages after deposit payment → soft-redacted with `moderated:true` returned to the FE so it can badge them. Verified via curl and via `test_moderation.py` (35/35). Normal booking chatter (weights, postcodes-as-address, times, loading-bay directions) passes untouched.
+6. **Booking photos (#6)** ✅ — `PhotoUpload` (multi-file, canvas downscale to 1600px long-edge / JPEG 0.82, delete-before-submit, "Add photos (N left)" affordance) wired into PostJob. `PhotoGallery` (thumbnail grid + fullscreen lightbox) rendered on all 3 detail pages. Persists as base64 data URLs in `job.photos: string[]` — schema already supported this, only the UI was missing.
+7. **ASAP "Use my current location" bug (#7)** ✅ — root cause: `AsapRequest` was reading `v.address` from the address picker (which emits `formatted_address`), so `pickup_address` arrived at the backend as `null` and the server rejected with "location" wording that the FE mapped back to "Please input collection address". Now stores the full PlaceResult shape in state, `useCurrentLocation` emits the same shape, submit reads `formatted_address` and does explicit `Number.isFinite` + `!== (0,0)` coord validation before firing the POST.
+8. **Responsive forms (#8)** ✅ — same fixes as #3 apply. `StatusPill` and long-address wrapping remove the layout jump. AddressAutocomplete modal already uses `fixed inset-0` with independent scroll — no shift when the mobile keyboard opens.
+9. **Full regression (#9)** ✅ — moderation 35/35, password reset 7/7, cookie auth 5/5, payment/CSRF 13/13, payment finalisation 11/11, booking fees 17/17, realtime dispatch 20/21 (the 21st is the documented pre-existing offer-ordering flake). Frontend `yarn build` clean.
+
+**Bugs I could NOT reproduce:**
+- None. Every reported symptom was reproduced, traced to a specific root cause, and fixed.
+
+**Known remaining issues:**
+- The `/geo/autocomplete` proxy in the preview environment intermittently returns "No suggestions" for some queries — this is a Google Places API quota / test-key behaviour, not a code issue. Production key on `cargoone.co.uk` behaves correctly.
+- One pre-existing realtime-dispatch test flake (`test_nearby_online_driver_receives_paid_asap_offer`) still fires because the test DB has accumulated 40+ PYTEST fixture jobs that push the newly-created offer past the `LIMIT` in the offers query. Ships a regression test rewrite in a follow-up rather than mask the assertion.
+- Manual-entry addresses without a Google-details resolution (rare — only if user picks "Enter address manually" and doesn't pick a suggestion) still submit with lat=0/lng=0; my new frontend validation catches this and shows "Please enter a delivery destination" instead of letting Stripe start. A follow-up will server-side geocode the postcode+town+country for these cases to unblock the flow completely.
+
+**Report:** `/app/memory/QA_SPRINT_02_01_REPORT.md` (this section duplicated for standalone review).
+

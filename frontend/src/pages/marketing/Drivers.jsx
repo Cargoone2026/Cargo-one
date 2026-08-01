@@ -46,7 +46,7 @@ export default function Drivers() {
         primaryCta={{ label: "Sign up as a Driver", href: "/auth/register?role=driver" }}
       />
 
-      <Section bg="#fff">
+      <Section bg="#fff" id="why-drive">
         <SectionHeading eyebrow="WHY DRIVE WITH US" title="A fairer deal for drivers" />
         <div className="flex flex-wrap gap-4">
           <FeatureCard icon={Banknote} title="0% commission on your bid" body="You quote, you keep every pound. Customers pay a separate booking fee to Cargo One." />
@@ -58,7 +58,7 @@ export default function Drivers() {
         </div>
       </Section>
 
-      <Section bg="#F4F4F4">
+      <Section bg="#F4F4F4" id="getting-started">
         <SectionHeading eyebrow="GETTING STARTED" title="Four steps to your first delivery" />
         <div className={`flex flex-wrap gap-4 ${isMobile ? "flex-col" : "flex-row"}`}>
           {STEPS.map((s) => (
@@ -71,7 +71,7 @@ export default function Drivers() {
         </div>
       </Section>
 
-      <Section bg="#fff">
+      <Section bg="#fff" id="requirements">
         <div className={`flex items-center gap-12 ${isMobile ? "flex-col" : "flex-row"}`}>
           <div className="flex-1 space-y-3">
             <p className="text-[12px] font-bold tracking-[2px] text-[#D62828]">REQUIREMENTS</p>
@@ -100,7 +100,7 @@ export default function Drivers() {
         </div>
       </Section>
 
-      <Section bg="#0B0B0F">
+      <Section bg="#0B0B0F" id="earnings">
         <div className="flex flex-col items-center gap-3 text-center">
           <h2 className="text-[28px] font-bold text-white md:text-[32px]">Ready to hit the road?</h2>
           <p className="text-[16px] text-white/75 md:text-[18px]">

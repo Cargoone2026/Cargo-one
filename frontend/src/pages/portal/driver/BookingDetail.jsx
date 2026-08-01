@@ -21,6 +21,8 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { SignaturePad } from "@/components/ui-portal/SignaturePad";
 
 const STATUS_FLOW = [
@@ -346,6 +348,17 @@ export default function DriverBookingDetail() {
                     : job.duration_minutes,
               }}
             />
+
+            <JobExtras job={job} />
+
+            {Array.isArray(job.photos) && job.photos.length > 0 && (
+              <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4" data-testid="driver-booking-photos-block">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[1px] text-[#6B7280]">
+                  Customer photos
+                </p>
+                <PhotoGallery photos={job.photos} testId="driver-booking-photos" />
+              </div>
+            )}
 
             {tracking?.eta_minutes != null && (
               <div

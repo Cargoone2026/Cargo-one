@@ -19,6 +19,8 @@ import { useAuth } from "@/context/AuthContext";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 
 const ACTIVE_STATUSES = new Set([
@@ -375,6 +377,17 @@ export default function CustomerBookingDetail() {
                 value={paid ? job.dropoff_address : job.dropoff_town}
               />
             </div>
+
+            <JobExtras job={job} />
+
+            {Array.isArray(job.photos) && job.photos.length > 0 && (
+              <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4" data-testid="customer-booking-photos-block">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[1px] text-[#6B7280]">
+                  Job photos
+                </p>
+                <PhotoGallery photos={job.photos} testId="customer-booking-photos" />
+              </div>
+            )}
 
             {b.other_party && (
               <div

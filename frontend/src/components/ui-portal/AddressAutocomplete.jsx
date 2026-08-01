@@ -159,10 +159,31 @@ function AddressPickerModal({ initial, onClose, onCommit, testID }) {
     }
   }, [query]);
 
-  const canCommit =
-    form.formatted_address.trim().length > 0 &&
-    form.postcode.trim().length > 0 &&
+  // The review form used to require a postcode + town outright. That broke
+  // two production flows:
+  //   (a) "Use my current location" — reverse geocoding for GPS coords
+  //       often returns no postcode component, especially outside urban UK.
+  //   (b) Rural / new-build addresses where Google Places doesn't emit a
+  //       postcode in the details response.
+  // Both are still perfectly valid pickup/dropoff locations because we
+  // have a real lat/lng and formatted_address. We now accept EITHER a
+  // (postcode + town) manual review OR a valid coordinate pair — that
+  // matches what the backend actually needs (`pickup_lat`/`pickup_lng`).
+  const hasCoords =
+    Number.isFinite(form.lat) &&
+    Number.isFinite(form.lng) &&
+    !(form.lat === 0 && form.lng === 0);
+  // Manual review commits synthesise formatted_address from
+  // `address_line + town + postcode`, so the raw form field being blank
+  // is fine as long as those three inputs are populated.
+  const hasComposable =
+    form.address_line.trim().length > 0 &&
     form.town.trim().length > 0 &&
+    form.postcode.trim().length > 0;
+  const canCommit =
+    (form.formatted_address.trim().length > 0 || hasComposable) &&
+    (hasCoords ||
+      (form.postcode.trim().length > 0 && form.town.trim().length > 0)) &&
     form.country_code;
 
   const commit = () => {

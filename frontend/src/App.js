@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { CustomerLayout } from "@/layouts/CustomerLayout";
 
@@ -104,6 +105,7 @@ export default function App() {
   return (
     <div className="App">
       <BrowserRouter>
+        <ScrollToTop />
         <AuthProvider>
           <Routes>
             {/* Marketing */}

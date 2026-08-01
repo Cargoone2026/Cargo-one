@@ -26,9 +26,9 @@ const COLUMNS = [
   {
     heading: "Drivers",
     links: [
-      { label: "Become a Driver", href: "/drivers" },
-      { label: "Driver Requirements", href: "/drivers" },
-      { label: "Earnings", href: "/drivers" },
+      { label: "Become a Driver", href: "/drivers#earnings" },
+      { label: "Driver Requirements", href: "/drivers#requirements" },
+      { label: "Earnings", href: "/drivers#why-drive" },
     ],
   },
   {

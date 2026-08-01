@@ -14,6 +14,8 @@ import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 
 export default function CustomerJobDetail() {
   const { id } = useParams();
@@ -153,6 +155,17 @@ export default function CustomerJobDetail() {
             {job.description || "—"}
           </p>
         </div>
+
+        <JobExtras job={job} />
+
+        {Array.isArray(job.photos) && job.photos.length > 0 && (
+          <div className="rounded-[12px] border border-[#E5E7EB] p-4">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[1px] text-[#6B7280]">
+              Job photos
+            </p>
+            <PhotoGallery photos={job.photos} testId="customer-job-photos" />
+          </div>
+        )}
 
         <div className="flex items-center justify-between rounded-[12px] bg-[#111111] p-4 text-white">
           <div>

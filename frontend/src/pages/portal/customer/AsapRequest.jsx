@@ -72,7 +72,18 @@ export default function CustomerAsapRequest() {
               }
             }
           } catch { /* keep coord fallback */ }
-          setPickup({ address, town, lat: latitude, lng: longitude });
+          setPickup({
+            formatted_address: address,
+            address_line: "",
+            postcode: "",
+            town,
+            region: "",
+            country_code: "GB",
+            country: "United Kingdom",
+            place_id: "",
+            lat: latitude,
+            lng: longitude,
+          });
         } finally {
           setLocBusy(false);
         }
@@ -146,8 +157,14 @@ export default function CustomerAsapRequest() {
 
   const onSubmit = useCallback(async () => {
     // Explicit user-friendly validation — never surface raw backend JSON.
-    if (!pickup) { setErr("Please confirm your collection location."); return; }
-    if (!dropoff) { setErr("Please enter a delivery destination."); return; }
+    if (!pickup || !pickup.formatted_address || !Number.isFinite(pickup.lat) || !Number.isFinite(pickup.lng) || (pickup.lat === 0 && pickup.lng === 0)) {
+      setErr("Please confirm your collection location.");
+      return;
+    }
+    if (!dropoff || !dropoff.formatted_address || !Number.isFinite(dropoff.lat) || !Number.isFinite(dropoff.lng) || (dropoff.lat === 0 && dropoff.lng === 0)) {
+      setErr("Please enter a delivery destination.");
+      return;
+    }
     if (mode === "breakdown_recovery" && (!vehicle.make || !vehicle.model)) {
       setErr("Please enter the vehicle make and model."); return;
     }
@@ -174,11 +191,11 @@ export default function CustomerAsapRequest() {
           service_type: mode,
           vehicle_details: mode === "breakdown_recovery" ? vehicle : null,
           customer_note: note || null,
-          pickup_address: pickup.address,
+          pickup_address: pickup.formatted_address,
           pickup_town: pickup.town || "Pickup",
           pickup_lat: pickup.lat,
           pickup_lng: pickup.lng,
-          dropoff_address: dropoff.address,
+          dropoff_address: dropoff.formatted_address,
           dropoff_town: dropoff.town || "Dropoff",
           dropoff_lat: dropoff.lat,
           dropoff_lng: dropoff.lng,
@@ -294,17 +311,15 @@ export default function CustomerAsapRequest() {
         </Button>
         <div className="text-xs text-neutral-500 mb-2 text-center">or search below</div>
         <AddressAutocomplete
-          value={pickup?.address || ""}
+          value={pickup}
           placeholder="Enter your collection address"
-          onSelect={(v) => setPickup({
-            address: v.address, town: v.town, lat: v.lat, lng: v.lng,
-          })}
+          onSelect={(v) => setPickup(v)}
           data-testid="asap-pickup"
         />
         {pickup && (
           <p className="text-xs text-neutral-600 mt-1" data-testid="asap-pickup-preview">
             <MapPin className="inline h-3 w-3 text-emerald-600 mr-1" />
-            {pickup.address}
+            {pickup.formatted_address}
           </p>
         )}
         {locError && (
@@ -317,11 +332,9 @@ export default function CustomerAsapRequest() {
           <MapPin className="h-4 w-4 text-red-600" /> Destination
         </label>
         <AddressAutocomplete
-          value={dropoff?.address || ""}
+          value={dropoff}
           placeholder="Where is it going?"
-          onSelect={(v) => setDropoff({
-            address: v.address, town: v.town, lat: v.lat, lng: v.lng,
-          })}
+          onSelect={(v) => setDropoff(v)}
           data-testid="asap-dropoff"
         />
       </section>
@@ -420,11 +433,11 @@ export default function CustomerAsapRequest() {
           <div className="divide-y divide-neutral-100">
             <SummaryRow
               label="From"
-              value={pickup.town || pickup.address}
+              value={pickup.town || pickup.formatted_address}
             />
             <SummaryRow
               label="To"
-              value={dropoff.town || dropoff.address}
+              value={dropoff.town || dropoff.formatted_address}
             />
             <SummaryRow
               label="Distance"

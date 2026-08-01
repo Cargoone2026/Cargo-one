@@ -10,7 +10,7 @@ export function StatusPill({ status, testID }) {
   return (
     <span
       data-testid={testID}
-      className="inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 text-[12px] font-semibold tracking-[0.2px]"
+      className="inline-flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-semibold tracking-[0.2px]"
       style={{ backgroundColor: c.bg, color: c.fg }}
     >
       <span

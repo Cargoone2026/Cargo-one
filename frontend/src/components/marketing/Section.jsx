@@ -10,10 +10,12 @@ export function Section({
   paddedY = true,
   className = "",
   testId,
+  id,
 }) {
   return (
     <section
-      style={{ backgroundColor: bg }}
+      id={id}
+      style={{ backgroundColor: bg, scrollMarginTop: "80px" }}
       className={`flex w-full items-center ${className}`}
       data-testid={testId}
     >

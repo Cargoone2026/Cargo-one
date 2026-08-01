@@ -19,7 +19,31 @@ body {
     color: #111111;
     background: #ffffff;
     text-rendering: optimizeLegibility;
-    overflow-x: clip;
+    overflow-x: hidden;
+    /* Belt-and-braces horizontal-scroll lockdown — some inner content
+       (address autocomplete lists, tables, wide charts) briefly exceed
+       the viewport on the smallest screens. `min-width: 0` on flex
+       children below plus body-level clip keeps side-scroll away. */
+    max-width: 100vw;
+}
+
+/* Any direct child of body that mistakenly exceeds the viewport gets
+   clipped rather than pushing the whole page. Combined with the html/
+   body overflow lock, this eliminates the "swipe left to see the £ price"
+   bug reported after manual QA on production. */
+#root {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* Long addresses/emails inside cards must wrap, never trigger horizontal
+   overflow. Applied globally so we don't need to patch every card. */
+.long-word,
+[data-testid$="-preview"],
+[data-testid$="-address"],
+[data-testid$="-title"] {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 ::selection {
