@@ -11,7 +11,7 @@ import secrets
 import hmac
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -598,6 +598,100 @@ async def logout(response: Response):
     clear_auth_cookie(response)
     clear_csrf_cookie(response)
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Password reset — Session D
+#
+# Two-endpoint flow:
+#   1. POST /auth/forgot-password  { email } → issues a token, emails a link.
+#      Always returns 200 to prevent user enumeration.
+#   2. POST /auth/reset-password   { token, new_password } → verifies and
+#      rotates the password_hash, invalidates the token.
+#
+# Tokens are 32-byte urlsafe, one-shot (marked `used_at`), 60-minute expiry.
+# Stored in `password_reset_tokens` with an index on `token`.
+# ---------------------------------------------------------------------------
+PASSWORD_RESET_TTL_MINUTES = 60
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """Issue a password-reset token and email the user a reset link.
+
+    Always returns `{ok: true}` — never leaks whether the email exists,
+    to prevent account enumeration.
+    """
+    email = payload.email.strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0})
+    if user and user.get("status") != "deleted":
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TTL_MINUTES)
+        await db.password_reset_tokens.insert_one({
+            "id": new_id(),
+            "token": token,
+            "user_id": user["id"],
+            "email": email,
+            "expires_at": expires.isoformat(),
+            "used_at": None,
+            "created_at": now_iso(),
+        })
+        base = (os.environ.get("APP_BASE_URL") or "https://cargoone.co.uk").rstrip("/")
+        reset_url = f"{base}/auth/reset?token={token}"
+        try:
+            from services.email import send_password_reset
+            await send_password_reset(db, user=user, reset_url=reset_url,
+                                       expiry_minutes=PASSWORD_RESET_TTL_MINUTES)
+        except Exception:
+            logger.exception("forgot-password email failed; returning ok anyway")
+    return {"ok": True}
+
+
+@api.post("/auth/reset-password", response_model=TokenResponse)
+async def reset_password(payload: ResetPasswordRequest, response: Response):
+    """Validate the reset token and rotate the user's password.
+
+    On success returns the same TokenResponse shape as /auth/login so the
+    frontend can immediately hand off into an authenticated session.
+    """
+    rec = await db.password_reset_tokens.find_one({"token": payload.token})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    if rec.get("used_at"):
+        raise HTTPException(status_code=400, detail="This reset link has already been used")
+    try:
+        exp = datetime.fromisoformat(rec["expires_at"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    if datetime.now(timezone.utc) > exp:
+        raise HTTPException(status_code=400, detail="This reset link has expired")
+
+    user = await db.users.find_one({"id": rec["user_id"]})
+    if not user or user.get("status") == "deleted":
+        raise HTTPException(status_code=400, detail="Account no longer exists")
+
+    new_hash = hash_password(payload.new_password)
+    # Atomic burn: rotate password + mark token used in the same round-trip.
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": new_hash}})
+    await db.password_reset_tokens.update_one(
+        {"token": payload.token, "used_at": None},
+        {"$set": {"used_at": now_iso()}},
+    )
+
+    # Immediately log the user in — same shape as /auth/login
+    token = create_token(user["id"], user["role"])
+    set_auth_cookie(response, token)
+    set_csrf_cookie(response, new_csrf_token())
+    return TokenResponse(access_token=token, user=user_to_public(user))
 
 
 @api.get("/auth/me", response_model=UserPublic)
@@ -1781,6 +1875,19 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     except Exception:
         # push errors must never block the payment finalisation
         logger.exception("push_notification failed post-deposit; continuing")
+
+    # Transactional email — deposit receipt to customer. Non-blocking:
+    # any Resend failure is captured by the service and does not raise.
+    try:
+        from services.email import send_deposit_receipt
+        fresh_booking = await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
+        cust = await db.users.find_one({"id": booking["customer_id"]}, {"_id": 0, "password_hash": 0})
+        job_doc = await db.jobs.find_one({"id": booking["job_id"]}, {"_id": 0})
+        if fresh_booking and cust:
+            fresh_booking["job"] = job_doc  # for template pickup/dropoff
+            await send_deposit_receipt(db, user=cust, booking=fresh_booking)
+    except Exception:
+        logger.exception("deposit-receipt email failed; continuing (booking not affected)")
     return await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
 
 
