@@ -275,6 +275,9 @@ class JobCreate(BaseModel):
     service_type: Optional[str] = "transport"    # transport | breakdown_recovery
     vehicle_details: Optional[dict] = None  # {make, model, registration, condition, rolls, steers, brakes}
     customer_note: Optional[str] = None
+    # Session G-1 — ASAP transport-details (what is being sent + free text)
+    transport_category: Optional[str] = None
+    transport_description: Optional[str] = None
 
 
 class BidCreate(BaseModel):
@@ -2116,9 +2119,16 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
 
 
 @api.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, request: Request,
-                          user: dict = Depends(get_current_user)):
+async def payment_status(session_id: str, request: Request):
     """Frontend polls this after Stripe redirects with `?payment=success`.
+
+    INTENTIONALLY UNAUTHENTICATED. The Stripe `session_id` is an opaque
+    78-char secret that only the paying customer's browser sees, so it
+    functions as its own capability token. Requiring auth here was
+    breaking Apple Pay on iOS Safari — the redirect back from Stripe
+    Checkout occasionally drops the HttpOnly session cookie under ITP,
+    leaving the polling loop silently 401'd and the customer stuck on a
+    blank "Waiting for Deposit" screen.
 
     Robust to transient Stripe retrieve failures: if `Session.retrieve`
     fails or we can't reach Stripe, we fall back to whatever the webhook

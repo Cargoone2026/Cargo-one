@@ -72,6 +72,11 @@ export function JobExtras({ job, dense = false }) {
       label: job.recommended_vehicle || job.vehicle_label,
       testid: "jobextras-vehicle" });
   }
+  if (job.transport_category) {
+    const nice = String(job.transport_category).replace(/_/g, " ");
+    chips.push({ key: "cargo", icon: Package, tone: "emerald",
+      label: `Cargo: ${nice}`, testid: "jobextras-transport-category" });
+  }
 
   // Recovery-specific vehicle information (make/model/condition/rolls/steers/brakes)
   const v = job.vehicle_details;
@@ -89,7 +94,7 @@ export function JobExtras({ job, dense = false }) {
     });
   }
 
-  const note = (job.customer_note || "").trim();
+  const note = ((job.customer_note || "") + (job.transport_description ? `\n\nCargo details: ${job.transport_description}` : "")).trim();
 
   if (chips.length === 0 && vehicleBits.length === 0 && !note) return null;
 

@@ -1,0 +1,45 @@
+{
+  "summary": "Final QA Round 1 — verified all 4 targeted fixes. Backend: 16/16 tests pass (public /payments/status endpoint returns 404 for unknown session (not 401); real Stripe checkout session is reachable anonymously — Apple Pay redirect flow unblocked; ASAP transport + ASAP breakdown_recovery bookings correctly persist booking_fee, booking_fee_percent, booking_fee_band_id, booking_fee_source='booking_fee_bands'; transport_category + transport_description round-trip on the ASAP job; all 10 tier boundaries on /booking-fee-bands/preview return the correct percentage per Session F spec (15/14/13/12/10). Frontend: Fixed a critical runtime crash on BookingDetail (uncaught ReferenceError: `err is not defined`) that was the actual cause of the blank page reported for BUG #11 — added missing useState. Post-fix, /customer/booking/UNKNOWN?payment=success&session_id=... correctly renders the branded 'Confirming your payment…' fullscreen overlay (data-testid=payment-polling-fullscreen) with Refresh + Back-to-my-bookings CTAs. ASAP form on /customer/asap correctly shows all 10 transport categories, transport-description input, and switches asap-note placeholder between transport ('Help with loading...') and breakdown_recovery ('hard shoulder') modes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CustomerBookingDetail (/frontend/src/pages/portal/customer/BookingDetail.jsx)",
+        "issue": "Uncaught ReferenceError: `err is not defined` — setErr()/err were referenced (lines 155, 242-244) but no useState declaration existed. This crashed the whole route to a red React error overlay and was the true root cause of the 'blank page after Apple Pay' report in BUG #11. FIXED by adding `const [err, setErr] = useState(null);`",
+        "selector": "[data-testid=payment-polling-fullscreen]",
+        "priority": "CRITICAL (fixed by testing agent)"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r1.py",
+    "/app/test_reports/pytest/final_qa_r1.xml",
+    "/app/test_reports/qa_r1_polling_fullscreen.jpg",
+    "/app/test_reports/qa_r1_asap_transport.jpg"
+  ],
+  "action_items": [
+    "None — the one critical bug (missing useState) has been fixed in-place. Main agent should code-review the one-line fix on BookingDetail.jsx to confirm it is the desired remediation (vs. e.g. removing the setErr call entirely).",
+    "Note: fixture-driver approval in /app/backend/tests/conftest.py assumes admin password 'admin123' by default; the real seeded admin password lives in /app/memory/test_credentials.md. Not blocking here (bootstrap failure is caught) but worth aligning."
+  ],
+  "critical_code_review_comments": [
+    "BookingDetail.jsx was shipped with a reference to a non-existent `err/setErr` state — this passes lint because setErr looks like a normal setter, but crashes at render. Recommend adding a smoke playwright test that hits /customer/booking/xxx?payment=success and asserts no console runtime error, as part of the standard regression pack.",
+    "The public /api/payments/status/{session_id} route relies on the 78-char Stripe session_id as a capability token. This is safe against enumeration but there is no rate-limit visible on this route — consider adding one to prevent scraping / DoS.",
+    "conftest.py hardcodes fallback admin password 'admin123' — mismatched with the real seeded admin. This is masked by the try/except but silently disables driver approval for tests that assume it. Recommend reading from an env var or the memory file."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/portal/customer/BookingDetail.jsx",
+    "/app/backend/tests/test_final_qa_r1.py"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% after 1-line fix"},
+  "test_credentials": "Used testcustomer@example.com / CustomerTest12345! from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Test file creates ASAP transport + ASAP breakdown_recovery jobs & bookings under testcustomer; each is idempotent (booking creation returns existing on conflict). Test jobs prefixed TEST_ASAP for easy cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The err/setErr fix in BookingDetail.jsx is a hot-reload change; no supervisor restart needed. If a future test wants to exercise the full Stripe redirect end-to-end, use POST /api/bookings/{id}/deposit (NOT /checkout — the route is named `deposit`). To verify #11 in the browser, must be logged in as any customer (ProtectedRoute redirects anon users to /auth/login before BookingDetail even mounts) — the fullscreen overlay is designed for authenticated-user + wrong-booking-id case, mirroring the Apple Pay cookie-drop where the FE session is intact but the booking fetch 404s.",
+  "rca of the issue": "BUG #11 root cause: BookingDetail.jsx called setErr() from the polling timeout branch and referenced `err` in the fallback JSX, but neither existed as component state. React threw ReferenceError: err is not defined at render time, which the top-level error boundary rendered as a full-red overlay — visually a 'blank/dead' page to the customer. The public /payments/status endpoint fix was already in place and works correctly (verified anonymously against a real Stripe checkout session). Reproduction: log in as any customer, visit /customer/booking/anything?payment=success&session_id=x — pre-fix crashed with ReferenceError; post-fix renders the branded confirmation overlay. Mitigation: added `const [err, setErr] = useState(null);` alongside the other useState hooks in the component."
+}

@@ -57,6 +57,7 @@ export default function CustomerBookingDetail() {
   const [tab, setTab] = useState("overview");
   const [showReview, setShowReview] = useState(false);
   const [paymentPollActive, setPaymentPollActive] = useState(false);
+  const [err, setErr] = useState(null);
   const pollRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -127,7 +128,10 @@ export default function CustomerBookingDetail() {
     return () => clearInterval(iv);
   }, [b, id]);
 
-  // Stripe return: poll /payments/status until paid, then reload booking
+  // Stripe return: poll /payments/status until paid, then reload booking.
+  // Poll ~30 times over 60 seconds to survive slow webhook processing.
+  // If polling times out, the user gets a clear "still processing" message
+  // with a manual refresh button — never a blank/dead screen.
   useEffect(() => {
     const payment = params.get("payment");
     const sessionId = params.get("session_id");
@@ -144,12 +148,17 @@ export default function CustomerBookingDetail() {
           // Show the celebratory confirmation screen before handing off to
           // the live dispatch / booking detail flow.
           navigate(`/customer/booking-confirmed/${id}`, { replace: true });
-        } else if (attempts > 10) {
+        } else if (attempts > 30) {
           if (pollRef.current) clearInterval(pollRef.current);
           setPaymentPollActive(false);
+          // Timeout — surface a manual reload option rather than a blank
+          // page. The webhook may still finalise moments later.
+          setErr("Your payment is still processing. Refresh this page in a few seconds — you won't be charged twice.");
         }
       } catch {
-        // silent
+        // silent — /payments/status is public now, so this only fires on
+        // a network blip. Continue polling; the webhook is the source of
+        // truth and will finalise regardless.
       }
     };
     tick();
@@ -212,6 +221,7 @@ export default function CustomerBookingDetail() {
   }
 
   if (!b) {
+    const isReturningFromStripe = params.get("payment") === "success";
     return (
       <div className="min-h-screen bg-white px-4 pt-6 md:px-8" data-testid="customer-booking-detail">
         <button
@@ -223,9 +233,38 @@ export default function CustomerBookingDetail() {
         >
           <ChevronLeft className="h-5 w-5 text-[#111111]" />
         </button>
-        <p className="mt-6 text-[13px] text-[#6B7280]">
-          {loading ? "Loading booking…" : "Booking not found."}
-        </p>
+        {isReturningFromStripe ? (
+          <div className="mt-10 flex flex-col items-center gap-4 text-center" data-testid="payment-polling-fullscreen">
+            <span className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-[#D62828] border-t-transparent" />
+            <h2 className="text-[20px] font-bold text-[#111111]">Confirming your payment…</h2>
+            <p className="max-w-[320px] text-[13px] text-[#6B7280]">
+              We're finalising your booking with Stripe. This normally takes a few seconds. You won't be charged twice — you can safely refresh if this screen stays open for more than a minute.
+            </p>
+            {err ? (
+              <div className="mt-2 rounded-[10px] bg-[#FFF7ED] px-3 py-2 text-[13px] text-[#78350F]">{err}</div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              data-testid="payment-refresh-button"
+              className="mt-3 rounded-full bg-[#111111] px-5 py-2 text-[13px] font-semibold text-white hover:bg-black"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/customer", { replace: true })}
+              data-testid="payment-back-home-button"
+              className="text-[13px] font-medium text-[#6B7280] hover:text-[#111111]"
+            >
+              Back to my bookings
+            </button>
+          </div>
+        ) : (
+          <p className="mt-6 text-[13px] text-[#6B7280]">
+            {loading ? "Loading booking…" : "Booking not found."}
+          </p>
+        )}
       </div>
     );
   }

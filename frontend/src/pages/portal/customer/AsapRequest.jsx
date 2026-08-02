@@ -28,6 +28,8 @@ export default function CustomerAsapRequest() {
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
   const [note, setNote] = useState("");
+  const [transportCategory, setTransportCategory] = useState("");
+  const [transportDescription, setTransportDescription] = useState("");
   const [vehicle, setVehicle] = useState({
     make: "", model: "", registration: "", condition: "will_not_start",
     rolls: "unknown", steers: "unknown", brakes: "unknown",
@@ -168,6 +170,9 @@ export default function CustomerAsapRequest() {
     if (mode === "breakdown_recovery" && (!vehicle.make || !vehicle.model)) {
       setErr("Please enter the vehicle make and model."); return;
     }
+    if (mode === "transport" && !transportCategory) {
+      setErr("Please select what you're sending."); return;
+    }
     setSubmitting(true);
     setErr(null);
     try {
@@ -184,9 +189,20 @@ export default function CustomerAsapRequest() {
       const created = await api("/jobs", {
         method: "POST",
         body: {
-          title: mode === "breakdown_recovery" ? "ASAP Vehicle Recovery" : "ASAP Delivery",
-          description: note || "ASAP request",
-          category,
+          title: mode === "breakdown_recovery"
+            ? "ASAP Vehicle Recovery"
+            : `ASAP Delivery — ${(transportCategory || "General").replace(/_/g, " ")}`,
+          category: mode === "breakdown_recovery"
+            ? "cars_vehicles"
+            : (transportCategory === "furniture" ? "furniture_delivery" :
+                transportCategory === "pallets"   ? "freight_haulage" :
+                transportCategory === "machinery" ? "freight_haulage" :
+                "package_delivery"),
+          description: mode === "breakdown_recovery"
+            ? "ASAP vehicle recovery"
+            : (transportDescription || `ASAP delivery — ${transportCategory}`),
+          transport_category: mode === "transport" ? transportCategory : null,
+          transport_description: mode === "transport" ? (transportDescription || null) : null,
           service_timing: "asap",
           service_type: mode,
           vehicle_details: mode === "breakdown_recovery" ? vehicle : null,
@@ -393,10 +409,49 @@ export default function CustomerAsapRequest() {
         </section>
       )}
 
+      {mode === "transport" && (
+        <section className="mb-6" data-testid="asap-transport-details">
+          <label className="text-sm font-medium mb-2 block">
+            What are you sending? <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={transportCategory}
+            onChange={(e) => setTransportCategory(e.target.value)}
+            data-testid="asap-transport-category"
+            className="mb-2 block w-full rounded-lg border border-neutral-200 bg-white p-2 text-sm"
+          >
+            <option value="">Select a category…</option>
+            <option value="parcel">Parcel</option>
+            <option value="documents">Documents</option>
+            <option value="medical_supplies">Medical supplies</option>
+            <option value="pallets">Pallets</option>
+            <option value="furniture">Furniture</option>
+            <option value="machinery">Machinery</option>
+            <option value="boxes">Boxes</option>
+            <option value="retail_goods">Retail goods</option>
+            <option value="electrical_items">Electrical items</option>
+            <option value="other">Other</option>
+          </select>
+          <Input
+            value={transportDescription}
+            onChange={(e) => setTransportDescription(e.target.value)}
+            placeholder="Describe what's being collected (e.g. 3 boxes of glassware, ~30kg total)"
+            data-testid="asap-transport-description"
+          />
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Drivers see this before they accept — the clearer, the faster you'll be matched.
+          </p>
+        </section>
+      )}
+
       <section className="mb-6">
         <label className="text-sm font-medium mb-2 block">Anything the driver should know? (optional)</label>
         <Input value={note} onChange={(e) => setNote(e.target.value)}
-          placeholder="e.g. Vehicle is on the hard shoulder / height restriction"
+          placeholder={
+            mode === "breakdown_recovery"
+              ? "e.g. Vehicle is on the hard shoulder / height restriction"
+              : "e.g. Help with loading, fragile items, access restrictions, urgent deadline"
+          }
           data-testid="asap-note" />
       </section>
 
