@@ -644,3 +644,46 @@ Every call site is wrapped in `try/except` with `logger.exception(...)`. Email d
 
 **Not broken:** Stripe (deposit + refund still use the same booking.deposit_amount + stripe_payment_intent_id fields, only their upstream calc changed) · Marketplace bidding · Recovery bookings · ASAP bookings · Refunds · Password reset · Emails · Live dispatch — all covered by the 106-test regression.
 
+
+
+### Phase — FINAL MANUAL QA SPRINT ROUND 2 ✅ COMPLETE (Feb 2026)
+Focus: last launch blockers before native iOS / Android builds. Detailed report: `/app/memory/FINAL_QA_ROUND2_REPORT.md`.
+
+**Priority 1 — Platform-wide horizontal-scrolling audit ✅**
+- Root cause: `flex-1` in `PortalShell` inherited `min-width: auto`, so long unbreakable titles (`TEST_ASAP_breakdown_recovery`) and status pills (`AWAITING_PAYMENT`) forced the shell wider than the viewport; `overflow-x: hidden` on `html/body` hid the excess — pills, prices and CTAs were being clipped past the right edge on mobile/tablet.
+- Fix: added `min-w-0` + inner `overflow-x-hidden` on the shell, wrapped the admin fee-bands table in `overflow-x-auto`, dropped the `min-w-*` values on marketing footer columns.
+- Also fixed a pre-existing `booking is not defined` ReferenceError in `customer/BookingDetail.jsx` (SumRow referenced `booking.booking_fee_percent` instead of state variable `b`).
+- Verification: 126 automated checks (42 pages × mobile 390 / tablet 768 / desktop 1280) — 0 real overflow remaining. Testing agent additionally sampled 111 checks — all green.
+
+**Priority 2 — Contact & Admin Reply UX ✅**
+- `/contact`: kept the office number (+44 800 111 000), added second line **07757 133163** (tel:+447757133163), added **WhatsApp** channel (https://wa.me/447757133163) with a green branded card. All 6 contact channels are now anchor tags with click-to-call / mailto / WhatsApp deep-links and `contact-channel-*` testIDs.
+- `/admin/queues`: every contact message row now shows Reply-by-email (mailto with subject `Re: <original>` and body pre-quoted), Call (tel:) and WhatsApp (wa.me) actions — only rendered when the underlying channel exists on the message. TestIDs: `contact-reply-<id>`, `contact-call-<id>`, `contact-whatsapp-<id>`.
+
+**Priority 3 — Customer Profile & Registration ✅**
+- Backend (`server.py`): extended `UserBase`, `UserPublic`, `user_to_public()`, `POST /auth/register` and `PUT /auth/me` allow-list with six optional address fields: `address_line1`, `address_line2`, `town`, `county`, `postcode`, `country`. Also fixed a pre-existing syntax corruption in the Stripe-refund block around line 3011.
+- Frontend:
+  - New helper `frontend/src/lib/validators.js` — permissive UK phone + UK postcode regex + `formatUKPostcode`.
+  - `Register.jsx`: address fieldset (line 1, line 2, town, county, postcode, country dropdown), client-side UK-postcode + phone validation with actionable error messages.
+  - `Customer Profile.jsx`: address fieldset in the edit form, cancel resets all fields, `profile-address-summary` card on the read-only view, avatar with camera-badge upload button — client-side downscale to 512 px JPEG @ 0.85 before posting via `POST /users/me/documents` `doc_type=profile_photo`.
+  - `AuthContext.register` now passthrough entire payload (future-proof).
+
+**Testing status**
+- Backend: 106 pre-existing regression tests still pass; testing agent added 7 new tests in `tests/test_final_qa_r2.py` — all pass.
+- Frontend: `yarn build` clean, browser E2E all flows verified by testing agent (see `/app/test_reports/iteration_final_qa_r2.json`).
+- Deliverables: `FINAL_QA_ROUND2_REPORT.md` + screenshots in `/app/screenshots/qa_r2/`.
+
+**Files changed**
+- `frontend/src/components/portal/PortalShell.jsx`
+- `frontend/src/components/marketing/MarketingFooter.jsx`
+- `frontend/src/pages/portal/admin/BookingFeeBands.jsx`
+- `frontend/src/pages/portal/customer/BookingDetail.jsx`
+- `frontend/src/pages/marketing/Contact.jsx`
+- `frontend/src/pages/portal/admin/Queues.jsx`
+- `frontend/src/pages/auth/Register.jsx`
+- `frontend/src/pages/portal/customer/Profile.jsx`
+- `frontend/src/context/AuthContext.jsx`
+- `frontend/src/lib/validators.js` (NEW)
+- `backend/server.py`
+- `backend/tests/test_final_qa_r2.py` (NEW — added by testing agent)
+
+**Launch readiness:** All Round 2 launch blockers cleared. Web platform is ready to hand off to native iOS / Android build sprint.
