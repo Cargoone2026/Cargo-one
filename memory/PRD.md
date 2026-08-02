@@ -547,3 +547,36 @@ they will be resolved deliberately once the migration is complete.
 
 **Report:** `/app/memory/QA_SPRINT_02_01_REPORT.md` (this section duplicated for standalone review).
 
+
+---
+
+### Session E — Full Transactional Email System + Live Verification  ✅ COMPLETE (2026-02-02)
+
+**Status:** All 10 emails (6 new templates × 4 lifecycle branches + 2 existing) delivered live to `abdulbasit2016diesel@gmail.com` via Resend with a fresh `provider_id` on every send. Preview-side `RESEND_API_KEY` used **temporarily** and wiped immediately after — the key remains only in your production secrets manager.
+
+**Templates now live:** Welcome · Password Reset · Deposit Receipt · Booking Confirmation (Standard / Marketplace / Recovery variants) · Driver Assigned · Booking Completed · Booking Cancelled · Refund Confirmation.
+
+**Design:** Every email uses the same `_shell(...)` (600px table, `#D62828` accent, `#111111` header, mailto footer to `support@cargoone.co.uk`, viewport meta, plain-text alternative, hidden preview text). Recovery variant surfaces make/model/reg/condition in an amber `#FFF7ED` block. Subject pattern: `<Action> — Cargo One booking <ref[:8]>`.
+
+**Call sites wired (5 new):**
+- `POST /auth/register` → welcome
+- `_finalise_paid_deposit` → deposit-receipt + booking-confirmation (variant chosen by `service_type + pricing_type`)
+- `POST /jobs/{id}/claim` (ASAP atomic claim) → driver-assigned
+- `POST /bookings/{id}/complete` → completion email
+- `POST /bookings/{id}/status` with `status="cancelled"` → cancellation email
+- `POST /admin/bookings/{id}/refund` after successful `stripe.Refund.create` → refund confirmation
+
+Every call site is wrapped in `try/except` with `logger.exception(...)`. Email delivery never blocks bookings, payments, refunds or auth.
+
+**Verification evidence:** `/app/memory/SESSION_E_EMAIL_VERIFICATION_REPORT.md` includes all 10 Resend `provider_id`s and the `email_log` audit rows.
+
+**Regression:** 88/88 backend tests pass (moderation 35, password_reset 7, cookie_auth 5, payment_csrf 13, payment_finalisation 11, booking_fees 17). One pre-existing DB-state drift found and fixed: `deposit_bands` collection had `enabled:false` on all rows, causing booking-fee tests to fall back to the 10% percentage rule (£27 instead of £25). Re-enabled all 5 tiers.
+
+**Deferred:** Driver En Route email (marked optional in the ask), VAT line on templates (explicitly deferred per ask).
+
+**Post-deploy TODO for user:**
+1. Redeploy — new email code + call sites need to be pushed to production.
+2. `RESEND_API_KEY` already in production secrets — nothing to change there.
+3. Verify all 10 IDs read **Delivered** in the Resend dashboard.
+4. Verify inbox on `abdulbasit2016diesel@gmail.com`.
+

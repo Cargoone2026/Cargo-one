@@ -576,6 +576,12 @@ async def register(payload: UserRegister, response: Response):
     token = create_token(user["id"], user["role"])
     set_auth_cookie(response, token)
     set_csrf_cookie(response, new_csrf_token())
+    # Fire-and-forget welcome email. Never blocks registration on failure.
+    try:
+        from services.email import send_welcome
+        await send_welcome(db, user=user)
+    except Exception as _e:  # pragma: no cover
+        logger.warning("welcome email skipped: %s", _e)
     return {"access_token": token, "token_type": "bearer", "user": user_to_public(user)}
 
 
@@ -1631,6 +1637,16 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
         f"{user['name']} is on the way. £{accepted_price} confirmed.",
         {"job_id": job_id, "dispatch": True},
     )
+    # Session E — email the customer the branded "Driver assigned" note.
+    try:
+        from services.email import send_driver_assigned
+        booking = await db.bookings.find_one({"job_id": job_id}, {"_id": 0})
+        cust = await db.users.find_one({"id": job["customer_id"]}, {"_id": 0, "password_hash": 0})
+        if booking and cust:
+            booking["job"] = {k: v for k, v in job.items() if k != "_id"}
+            await send_driver_assigned(db, user=cust, booking=booking, driver=driver)
+    except Exception:
+        logger.exception("driver-assigned email failed; continuing")
     return {"ok": True, "job_id": job_id, "idempotent": False,
              "accepted_price": accepted_price}
 
@@ -1965,15 +1981,20 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     # Transactional email — deposit receipt to customer. Non-blocking:
     # any Resend failure is captured by the service and does not raise.
     try:
-        from services.email import send_deposit_receipt
+        from services.email import send_deposit_receipt, send_booking_confirmation
         fresh_booking = await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
         cust = await db.users.find_one({"id": booking["customer_id"]}, {"_id": 0, "password_hash": 0})
         job_doc = await db.jobs.find_one({"id": booking["job_id"]}, {"_id": 0})
         if fresh_booking and cust:
             fresh_booking["job"] = job_doc  # for template pickup/dropoff
             await send_deposit_receipt(db, user=cust, booking=fresh_booking)
+            # Session E — also send the branded Booking Confirmation. The
+            # deposit-receipt is a payment ack; the confirmation includes
+            # service-type-specific copy (recovery / marketplace / standard),
+            # vehicle details for recovery, and driver-charge line.
+            await send_booking_confirmation(db, user=cust, booking=fresh_booking)
     except Exception:
-        logger.exception("deposit-receipt email failed; continuing (booking not affected)")
+        logger.exception("post-deposit emails failed; continuing (booking not affected)")
     return await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
 
 
@@ -2208,6 +2229,23 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
     await push_notification(other_id, f"Booking {payload.status}",
                              f"Booking status updated to {payload.status.replace('_', ' ')}.",
                              {"booking_id": booking_id})
+    # Session E — email the customer if the booking was cancelled.
+    if payload.status == "cancelled":
+        try:
+            from services.email import send_booking_cancelled
+            fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
+            cust = await db.users.find_one({"id": b["customer_id"]},
+                                             {"_id": 0, "password_hash": 0})
+            if fresh_b and cust:
+                fresh_b["job"] = job_doc
+                await send_booking_cancelled(
+                    db, user=cust, booking=fresh_b,
+                    reason=None,
+                    refund_pending=fresh_b.get("payment_status") == "paid",
+                )
+        except Exception:
+            logger.exception("booking-cancelled email failed; continuing")
     return {"ok": True}
 
 
@@ -2425,6 +2463,17 @@ async def complete_booking(booking_id: str, user: dict = Depends(require_role("c
                                                                 "completed_at": now_iso()}})
     await db.jobs.update_one({"id": b["job_id"]}, {"$set": {"status": "completed"}})
     await db.users.update_one({"id": b["driver_id"]}, {"$inc": {"total_jobs": 1}})
+    # Session E — completion confirmation email.
+    try:
+        from services.email import send_booking_completed
+        fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
+        driver = await db.users.find_one({"id": b["driver_id"]}, {"_id": 0, "password_hash": 0}) or {}
+        if fresh_b and user:
+            fresh_b["job"] = job_doc
+            await send_booking_completed(db, user=user, booking=fresh_b, driver=driver)
+    except Exception:
+        logger.exception("booking-completed email failed; continuing")
     return {"ok": True}
 
 
@@ -2891,6 +2940,21 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
     )
     if refund_state == "failed":
         raise HTTPException(status_code=502, detail=f"Stripe refund failed: {stripe_err}")
+    # Session E — email the customer confirming the refund is on its way.
+    try:
+        from services.email import send_refund_confirmation
+        fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0}) if b.get("job_id") else None
+        cust = await db.users.find_one({"id": b["customer_id"]},
+                                         {"_id": 0, "password_hash": 0})
+        if fresh_b and cust:
+            fresh_b["job"] = job_doc
+            await send_refund_confirmation(
+                db, user=cust, booking=fresh_b,
+                amount=float(audit_entry["amount"] or 0),
+            )
+    except Exception:
+        logger.exception("refund-confirmation email failed; continuing")
     return {
         "ok": True,
         "booking_id": booking_id,
