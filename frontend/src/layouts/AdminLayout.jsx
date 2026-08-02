@@ -23,6 +23,7 @@ const ADMIN_NAV = [
   { label: "Bookings", href: "/admin/bookings", icon: Boxes },
   { label: "Catalog", href: "/admin/catalog", icon: Layers },
   { label: "Fee Bands", href: "/admin/deposit-bands", icon: Wallet },
+  { label: "Booking-Fee %", href: "/admin/booking-fee-bands", icon: Wallet },
   { label: "Queues", href: "/admin/queues", icon: Inbox },
   { label: "Profile", href: "/admin/profile", icon: UserIcon },
 ];

@@ -580,3 +580,67 @@ Every call site is wrapped in `try/except` with `logger.exception(...)`. Email d
 3. Verify all 10 IDs read **Delivered** in the Resend dashboard.
 4. Verify inbox on `abdulbasit2016diesel@gmail.com`.
 
+
+---
+
+### Session F — Dynamic Booking-Fee Bands (Percentage Tiers) ✅ COMPLETE (2026-02-02)
+
+**Status:** Every booking on the platform now uses ONE backend calculator (`calculate_booking_fee_detail`) driven by a database-owned `booking_fee_bands` collection. Historical bookings snapshot the % that was live when they were created.
+
+**Tier math (all 12 spec values verified):**
+| £ | % | Fee £ | Total £ |
+|---|---|---|---|
+| 50 | 15 | 7.50 | 57.50 |
+| 150 | 15 | 22.50 | 172.50 |
+| 151 | 14 | 21.14 | 172.14 |
+| 299 | 14 | 41.86 | 340.86 |
+| 300 | 14 | 42.00 | 342.00 |
+| 301 | 13 | 39.13 | 340.13 |
+| 600 | 13 | 78.00 | 678.00 |
+| 601 | 12 | 72.12 | 673.12 |
+| 999 | 12 | 119.88 | 1118.88 |
+| 1000 | 12 | 120.00 | 1120.00 |
+| 1001 | 10 | 100.10 | 1101.10 |
+| 2500 | 10 | 250.00 | 2750.00 |
+
+**Backend (single source of truth):**
+- New `booking_fee_bands` collection with schema `{id, min_amount, max_amount, booking_fee_percent, enabled, priority, label, created_at, updated_at}` — auto-seeded on startup with the 5 default tiers.
+- `calculate_booking_fee_detail(driver_charge)` returns `{percent, amount, band_id, source}`. Preference order: `booking_fee_bands` (percent) → legacy `deposit_bands` (fixed) → ultimate 10% fallback.
+- Legacy `calculate_booking_fee` + `calculate_deposit` are thin wrappers that keep older call sites compiling.
+- Every booking now persists **`booking_fee_percent`**, **`booking_fee_band_id`**, and **`booking_fee_source`** at creation — IMMUTABLE after payment.
+- `preview_deposit` (and the new `/api/booking-fee-bands/preview`) surfaces the % + band metadata so the FE and emails never duplicate the calc.
+- Deposit-receipt email + shell shows full breakdown: "Transport price £X · Cargo One Booking Fee (13%) £Y · Total booking value £Z".
+
+**Frontend:**
+- Customer `BookingDetail.jsx` shows the applied % inline ("Cargo One Booking Fee (13%)") — pulled from `booking.booking_fee_percent`.
+- NEW **Admin → Booking-Fee %** page (`/admin/booking-fee-bands`) with:
+  - Live preview: type a driver charge, see the exact fee + total + source chip that will apply
+  - Editable table (CRUD): label, min £, max £, fee %, priority, enabled
+  - Source chip on preview shows whether the calc came from `booking_fee_bands`, `deposit_bands`, or `fallback`
+- Sidebar entry "Booking-Fee %" added to Admin layout.
+
+**Admin API (all `require_role("admin")` guarded):**
+- `GET /admin/booking-fee-bands` — list including disabled
+- `POST /admin/booking-fee-bands` — create
+- `PUT /admin/booking-fee-bands/{id}` — update
+- `DELETE /admin/booking-fee-bands/{id}` — delete
+- Public: `GET /booking-fee-bands` (enabled only), `GET /booking-fee-bands/preview?driver_charge=X`
+
+**Testing:**
+- NEW `tests/test_booking_fee_bands.py` — 18 tests locking in every spec value + boundary condition + fallback source.
+- Updated `tests/test_booking_fees.py` (21 tests) — replaced fixed-amount expectations with percentage-tier math; added `booking_fee_percent`, `booking_fee_band_id`, `booking_fee_source` assertions on the booking row.
+- Fixed a pre-existing test-infrastructure bug in `test_booking_fees.py` where `mongo` fixture drifted to `cargoone_db` instead of the backend's actual `test_database` — `load_dotenv` now runs at module import to align env vars.
+- Full regression: **106/106 tests pass** across booking_fee_bands + booking_fees + moderation + password_reset + cookie_auth + payment_csrf + payment_finalisation. Zero unrelated failures.
+
+**Files changed / added:**
+- `backend/server.py` — replaced `calculate_booking_fee` with `calculate_booking_fee_detail`, added `_lookup_booking_fee_band`, added startup seed hook, added 5 admin/public endpoints, persisted `booking_fee_percent` + `booking_fee_band_id` + `booking_fee_source` on booking creation.
+- `backend/services/email.py` — deposit-receipt template now renders the full breakdown block with the applied %.
+- `backend/tests/test_booking_fee_bands.py` (NEW).
+- `backend/tests/test_booking_fees.py` (updated to new % math + load_dotenv fix).
+- `frontend/src/pages/portal/admin/BookingFeeBands.jsx` (NEW).
+- `frontend/src/pages/portal/customer/BookingDetail.jsx` — pricing block shows the applied %.
+- `frontend/src/App.js` — route `/admin/booking-fee-bands`.
+- `frontend/src/layouts/AdminLayout.jsx` — sidebar entry.
+
+**Not broken:** Stripe (deposit + refund still use the same booking.deposit_amount + stripe_payment_intent_id fields, only their upstream calc changed) · Marketplace bidding · Recovery bookings · ASAP bookings · Refunds · Password reset · Emails · Live dispatch — all covered by the 106-test regression.
+

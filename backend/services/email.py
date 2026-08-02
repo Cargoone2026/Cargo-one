@@ -133,10 +133,40 @@ def _shell(*, title: str, preview: str, body_html: str) -> str:
 
 def render_deposit_receipt(*, name: str, booking_ref: str, amount: float,
                            pickup: str, dropoff: str, service_type: str,
-                           balance_due: float | None) -> tuple[str, str, str]:
+                           balance_due: float | None,
+                           fee_percent: float | None = None,
+                           driver_charge: float | None = None) -> tuple[str, str, str]:
     is_recovery = (service_type == "breakdown_recovery")
     label = "Vehicle Recovery" if is_recovery else "Delivery"
     subject = f"Deposit received — Cargo One booking {booking_ref[:8]}"
+
+    # Session F — full price breakdown with the tier % that was applied.
+    breakdown_html = ""
+    if driver_charge is not None:
+        fee_line = (f"Cargo One Booking Fee ({fee_percent:.0f}%)"
+                     if fee_percent is not None else "Cargo One Booking Fee")
+        breakdown_html = f"""
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+          <tr><td style="padding:14px 18px;">
+            <table width="100%">
+              <tr>
+                <td style="font-size:13px;color:#374151;">Transport price</td>
+                <td align="right" style="font-size:13px;color:#374151;">£{driver_charge:.2f}</td>
+              </tr>
+              <tr>
+                <td style="font-size:13px;color:#374151;padding-top:4px;">{fee_line}</td>
+                <td align="right" style="font-size:13px;color:#374151;padding-top:4px;">£{amount:.2f}</td>
+              </tr>
+              <tr><td colspan="2" style="border-top:1px solid #eeeeee;padding-top:8px;"></td></tr>
+              <tr>
+                <td style="font-size:13px;color:{_BRAND_MUTED};padding-top:4px;">Total booking value</td>
+                <td align="right" style="font-size:14px;color:#374151;font-weight:600;padding-top:4px;">£{(driver_charge + amount):.2f}</td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+        """
+
     body = f"""
       <p style="margin:0 0 12px;font-size:15px;">Hi {name or 'there'},</p>
       <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
@@ -155,23 +185,46 @@ def render_deposit_receipt(*, name: str, booking_ref: str, amount: float,
           </div>
         </td></tr>
       </table>
+      {breakdown_html}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
         <tr>
-          <td style="font-size:14px;color:{_BRAND_MUTED};">Deposit paid</td>
+          <td style="font-size:14px;color:{_BRAND_MUTED};">Deposit paid now</td>
           <td align="right" style="font-size:20px;font-weight:700;color:{_BRAND_PRIMARY};">£{amount:.2f}</td>
         </tr>
-        {f'<tr><td style="font-size:13px;color:{_BRAND_MUTED};padding-top:4px;">Balance on completion</td><td align="right" style="font-size:14px;color:#374151;padding-top:4px;">£{balance_due:.2f}</td></tr>' if balance_due else ''}
+        {f'<tr><td style="font-size:13px;color:{_BRAND_MUTED};padding-top:4px;">Pay driver on delivery</td><td align="right" style="font-size:14px;color:#374151;padding-top:4px;">£{balance_due:.2f}</td></tr>' if balance_due else ''}
       </table>
       <p style="margin:24px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
         A driver will be assigned shortly. You'll receive another update the moment your driver is on the way.
       </p>
     """
-    text = (f"Deposit received — booking {booking_ref[:8]}\n\n"
-            f"Hi {name or 'there'},\n"
-            f"We've received your £{amount:.2f} deposit for your {label.lower()}.\n"
-            f"From: {pickup}\nTo: {dropoff}\n"
-            + (f"Balance on completion: £{balance_due:.2f}\n" if balance_due else "")
-            + f"\nBooking ref: {booking_ref}\n\nThanks,\nCargo One")
+    text_lines = [
+        f"Deposit received — booking {booking_ref[:8]}",
+        "",
+        f"Hi {name or 'there'},",
+    ]
+    if driver_charge is not None:
+        text_lines += [
+            f"Transport price: £{driver_charge:.2f}",
+            (f"Cargo One Booking Fee ({fee_percent:.0f}%): £{amount:.2f}"
+             if fee_percent is not None else f"Cargo One Booking Fee: £{amount:.2f}"),
+            f"Total booking value: £{(driver_charge + amount):.2f}",
+            "",
+        ]
+    text_lines += [
+        f"Deposit paid now: £{amount:.2f}",
+    ]
+    if balance_due:
+        text_lines.append(f"Pay driver on delivery: £{balance_due:.2f}")
+    text_lines += [
+        f"From: {pickup}",
+        f"To: {dropoff}",
+        "",
+        f"Booking ref: {booking_ref}",
+        "",
+        "Thanks,",
+        "Cargo One",
+    ]
+    text = "\n".join(text_lines)
     html = _shell(title=subject, preview=f"Deposit of £{amount:.2f} received", body_html=body)
     return subject, html, text
 
@@ -220,6 +273,11 @@ async def send_deposit_receipt(db, *, user: dict, booking: dict) -> dict:
         dropoff=(booking.get("job") or {}).get("dropoff_town") or booking.get("dropoff_town") or "Destination",
         service_type=booking.get("service_type") or "transport",
         balance_due=float(booking.get("balance_due") or 0) if booking.get("balance_due") else None,
+        # Session F — surface the applied tier % on the receipt
+        fee_percent=(float(booking["booking_fee_percent"])
+                      if booking.get("booking_fee_percent") is not None else None),
+        driver_charge=(float(booking["driver_charge"])
+                        if booking.get("driver_charge") is not None else None),
     )
     return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
                                 template="deposit_receipt",

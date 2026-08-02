@@ -22,6 +22,13 @@ import os
 import uuid
 
 import pymongo
+from pathlib import Path
+from dotenv import load_dotenv
+# Ensure MONGO_URL / DB_NAME env vars are populated the same way the
+# backend loads them. Without this, `mongo` fixture below drifts to a
+# different DB_NAME than the running server, and every "manipulate a
+# collection then hit the API" test silently no-ops.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 import pytest
 import requests
 
@@ -155,13 +162,13 @@ class TestBookingFeePreview:
             headers=_auth(customer_token))
         assert r.status_code == 200, r.text
         d = r.json()
-        # New fields
+        # Session F — £270 falls in the 150.01-300 tier @ 14% = £37.80
         _assert_close(d["driver_charge"], 270, "driver_charge")
-        _assert_close(d["booking_fee"], 25, "booking_fee")
-        _assert_close(d["customer_total"], 295, "customer_total")
+        _assert_close(d["booking_fee"], 37.80, "booking_fee")
+        _assert_close(d["customer_total"], 307.80, "customer_total")
         # Legacy fields
-        _assert_close(d["total_price"], 295, "total_price")
-        _assert_close(d["deposit_amount"], 25, "deposit_amount")
+        _assert_close(d["total_price"], 307.80, "total_price")
+        _assert_close(d["deposit_amount"], 37.80, "deposit_amount")
         _assert_close(d["balance_due"], 270, "balance_due")
 
     def test_preview_rejects_negative_driver_charge(self, base_url, customer_token):
@@ -175,12 +182,14 @@ class TestBookingFeePreview:
         assert r.status_code in (401, 403)
 
     @pytest.mark.parametrize("charge,fee,total", [
-        (50.0, 10.0, 60.0),
-        (100.0, 10.0, 110.0),
-        (100.01, 25.0, 125.01),
-        (500.0, 50.0, 550.0),
-        (1200.0, 100.0, 1300.0),
-        (3000.0, 150.0, 3150.0),
+        # Session F — percentage tiers (£0-150→15%, 150.01-300→14%,
+        # 300.01-600→13%, 600.01-1000→12%, over 1000→10%)
+        (50.0, 7.5, 57.5),
+        (100.0, 15.0, 115.0),
+        (100.01, 15.00, 115.01),
+        (500.0, 65.0, 565.0),
+        (1200.0, 120.0, 1320.0),   # 1200 is in 600.01-1000 band? no, 1000.01-∞ → 10%. 1200*0.10=120
+        (3000.0, 300.0, 3300.0),
     ])
     def test_preview_bands_across_tiers(self, base_url, customer_token,
                                         charge, fee, total):
@@ -223,22 +232,29 @@ class TestFixedPriceBooking:
     def test_fixed_price_270_booking_math(self, base_url, customer_token, driver_token):
         b = _accept_fixed_and_book(base_url, customer_token, driver_token, 270)
         _assert_close(b["driver_charge"], 270, "driver_charge")
-        _assert_close(b["booking_fee"], 25, "booking_fee")
-        _assert_close(b["total_price"], 295, "total_price")
-        _assert_close(b["deposit_amount"], 25, "deposit_amount")
+        # Session F — £270 lands in the £150.01-£300 tier @ 14% = £37.80
+        _assert_close(b["booking_fee"], 37.80, "booking_fee")
+        _assert_close(b["total_price"], 307.80, "total_price")
+        _assert_close(b["deposit_amount"], 37.80, "deposit_amount")
         _assert_close(b["balance_due"], 270, "balance_due")
         # Cross-field invariants
         assert b["deposit_amount"] == b["booking_fee"]
         assert b["balance_due"] == b["driver_charge"]
         assert b["total_price"] == b["driver_charge"] + b["booking_fee"]
+        # Session F — the applied % must be persisted on the booking so it
+        # stays IMMUTABLE for historical bookings even if admins change the
+        # tiers later.
+        assert b["booking_fee_percent"] == 14.0
+        assert b.get("booking_fee_band_id")
+        assert b.get("booking_fee_source") == "booking_fee_bands"
 
 
 class TestBiddingBooking:
     @pytest.mark.parametrize("bid,fee,total", [
-        (500.0, 50.0, 550.0),
-        (50.0, 10.0, 60.0),
-        (1200.0, 100.0, 1300.0),
-        (3000.0, 150.0, 3150.0),
+        (500.0, 65.0, 565.0),      # 13%
+        (50.0, 7.5, 57.5),         # 15%
+        (1200.0, 120.0, 1320.0),   # 10%
+        (3000.0, 300.0, 3300.0),   # 10%
     ])
     def test_accepted_bid_booking_math(self, base_url, customer_token,
                                         driver_token, bid, fee, total):
@@ -256,9 +272,9 @@ class TestStripeChargesBookingFee:
     def test_deposit_session_amount_equals_booking_fee(
             self, base_url, customer_token, driver_token, mongo):
         b = _accept_fixed_and_book(base_url, customer_token, driver_token, 500)
-        # driver_charge=500, booking_fee=50, customer_total=550
-        _assert_close(b["booking_fee"], 50)
-        _assert_close(b["total_price"], 550)
+        # Session F: driver_charge=500 → 13% tier → fee=65, customer_total=565
+        _assert_close(b["booking_fee"], 65)
+        _assert_close(b["total_price"], 565)
 
         r = requests.post(
             f"{base_url}/api/bookings/{b['id']}/deposit",
@@ -268,10 +284,10 @@ class TestStripeChargesBookingFee:
         session_id = r.json()["session_id"]
         assert session_id
 
-        # Verify persisted transaction amount == booking_fee (50), NOT customer_total (550)
+        # Verify persisted transaction amount == booking_fee (65), NOT customer_total (565)
         txn = mongo.payment_transactions.find_one({"session_id": session_id})
         assert txn is not None, "payment_transactions row missing"
-        _assert_close(txn["amount"], 50, "Stripe txn.amount must equal booking_fee")
+        _assert_close(txn["amount"], 65, "Stripe txn.amount must equal booking_fee")
         assert txn["currency"] == "gbp"
 
 
@@ -280,10 +296,18 @@ class TestStripeChargesBookingFee:
 class TestFallbackAllBandsDisabled:
     def test_fallback_percentage_of_driver_charge(
             self, base_url, customer_token, driver_token, mongo):
-        original = list(mongo.deposit_bands.find({"enabled": True}, {"_id": 0, "id": 1}))
+        # Session F — disable BOTH collections to hit the 10% ultimate fallback.
+        # Snapshot for restore, then disable EVERY row (not just currently-enabled).
+        orig_bf = list(mongo.booking_fee_bands.find({}, {"_id": 0, "id": 1, "enabled": 1}))
+        orig_dep = list(mongo.deposit_bands.find({}, {"_id": 0, "id": 1, "enabled": 1}))
         try:
-            mongo.deposit_bands.update_many(
-                {"enabled": True}, {"$set": {"enabled": False}})
+            r_bf = mongo.booking_fee_bands.update_many({}, {"$set": {"enabled": False}})
+            r_dep = mongo.deposit_bands.update_many({}, {"$set": {"enabled": False}})
+            # Belt-and-braces — verify the write landed before we hit the API.
+            assert mongo.booking_fee_bands.count_documents({"enabled": True}) == 0, \
+                f"booking_fee_bands not disabled (matched={r_bf.matched_count})"
+            assert mongo.deposit_bands.count_documents({"enabled": True}) == 0, \
+                f"deposit_bands not disabled (matched={r_dep.matched_count})"
 
             # preview fallback: 10% of driver_charge
             p = requests.get(
@@ -303,10 +327,12 @@ class TestFallbackAllBandsDisabled:
             _assert_close(b["deposit_amount"], 70)
             _assert_close(b["balance_due"], 700)
         finally:
-            ids = [x["id"] for x in original]
-            if ids:
-                mongo.deposit_bands.update_many(
-                    {"id": {"$in": ids}}, {"$set": {"enabled": True}})
+            for x in orig_bf:
+                mongo.booking_fee_bands.update_one(
+                    {"id": x["id"]}, {"$set": {"enabled": bool(x.get("enabled", True))}})
+            for x in orig_dep:
+                mongo.deposit_bands.update_one(
+                    {"id": x["id"]}, {"$set": {"enabled": bool(x.get("enabled", True))}})
 
 
 # --------------------------------------------------------------------------- admin CRUD regression

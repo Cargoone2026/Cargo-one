@@ -62,6 +62,7 @@ import AdminJobs from "@/pages/portal/admin/Jobs";
 import AdminBookings from "@/pages/portal/admin/Bookings";
 import AdminCatalog from "@/pages/portal/admin/Catalog";
 import AdminDepositBands from "@/pages/portal/admin/DepositBands";
+import AdminBookingFeeBands from "@/pages/portal/admin/BookingFeeBands";
 import AdminQueues from "@/pages/portal/admin/Queues";
 import AdminProfile from "@/pages/portal/admin/Profile";
 import { AdminLayout } from "@/layouts/AdminLayout";
@@ -200,6 +201,7 @@ export default function App() {
             <Route path="/admin/bookings" element={<Admin Page={AdminBookings} />} />
             <Route path="/admin/catalog" element={<Admin Page={AdminCatalog} />} />
             <Route path="/admin/deposit-bands" element={<Admin Page={AdminDepositBands} />} />
+            <Route path="/admin/booking-fee-bands" element={<Admin Page={AdminBookingFeeBands} />} />
             <Route path="/admin/queues" element={<Admin Page={AdminQueues} />} />
             <Route path="/admin/profile" element={<Admin Page={AdminProfile} />} />
             <Route path="/admin/*" element={<Admin Page={AdminDashboard} />} />

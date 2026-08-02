@@ -498,8 +498,50 @@ async def google_distance_matrix(origin: tuple[float, float],
 
 
 # ---------------------------------------------------------------------------
-# Deposit bands
+# Booking-fee bands — Session F (percentage tiers)
 # ---------------------------------------------------------------------------
+#
+# One canonical source of truth for every booking fee across the platform.
+# `booking_fee_bands` is a percentage-tier collection (£0–150 → 15%, etc.).
+# Legacy `deposit_bands` (fixed £-amount tiers) is still consulted for
+# back-compat with any older row that hasn't been migrated — but the new
+# bands take priority. Every downstream call site (booking creation,
+# quote, Stripe checkout, refund, deposit receipt, admin reports) reads
+# through `calculate_booking_fee_detail` — DO NOT introduce a second
+# fee-calc anywhere.
+
+DEFAULT_BOOKING_FEE_BANDS: list[dict] = [
+    # (min_amount, max_amount, percent, label)
+    {"min_amount": 0.00,     "max_amount": 150.00,  "booking_fee_percent": 15.0, "label": "Band A"},
+    {"min_amount": 150.01,   "max_amount": 300.00,  "booking_fee_percent": 14.0, "label": "Band B"},
+    {"min_amount": 300.01,   "max_amount": 600.00,  "booking_fee_percent": 13.0, "label": "Band C"},
+    {"min_amount": 600.01,   "max_amount": 1000.00, "booking_fee_percent": 12.0, "label": "Band D"},
+    {"min_amount": 1000.01,  "max_amount": None,    "booking_fee_percent": 10.0, "label": "Band E"},
+]
+
+
+async def _ensure_booking_fee_bands_seeded():
+    """Idempotent — seeds the 5 default bands the first time only.
+    Once seeded, admins own the collection and can edit freely."""
+    count = await db.booking_fee_bands.count_documents({})
+    if count > 0:
+        return
+    now = now_iso()
+    docs = []
+    for i, b in enumerate(DEFAULT_BOOKING_FEE_BANDS):
+        docs.append({
+            "id": new_id(),
+            "min_amount": b["min_amount"],
+            "max_amount": b["max_amount"],
+            "booking_fee_percent": b["booking_fee_percent"],
+            "label": b["label"],
+            "enabled": True,
+            "priority": i,
+            "created_at": now,
+            "updated_at": now,
+        })
+    await db.booking_fee_bands.insert_many(docs)
+    logger.info("booking_fee_bands seeded: %d default tiers", len(docs))
 
 
 class DepositBandIn(BaseModel):
@@ -510,16 +552,77 @@ class DepositBandIn(BaseModel):
     label: Optional[str] = None
 
 
-async def calculate_booking_fee(driver_charge: float) -> float:
-    """Find the first enabled band matching driver_charge. Fallback to DEPOSIT_PERCENTAGE."""
-    bands = await db.deposit_bands.find({"enabled": True}, {"_id": 0}) \
-                                    .sort("min_price", 1).to_list(200)
+class BookingFeeBandIn(BaseModel):
+    min_amount: float
+    max_amount: Optional[float] = None  # None => infinity
+    booking_fee_percent: float
+    enabled: bool = True
+    label: Optional[str] = None
+    priority: Optional[int] = None
+
+
+async def _lookup_booking_fee_band(driver_charge: float) -> Optional[dict]:
+    """Find the first enabled percentage-band matching driver_charge.
+    Returns the full band dict or None if no band matches."""
+    bands = await db.booking_fee_bands.find({"enabled": True}, {"_id": 0}) \
+                                        .sort([("priority", 1), ("min_amount", 1)]) \
+                                        .to_list(200)
     for b in bands:
+        min_a = float(b.get("min_amount", 0))
+        max_a = b.get("max_amount")
+        if driver_charge >= min_a and (max_a is None or driver_charge <= float(max_a)):
+            return b
+    return None
+
+
+async def calculate_booking_fee_detail(driver_charge: float) -> dict:
+    """Single source of truth for every booking fee on the platform.
+
+    Preference order:
+      1. `booking_fee_bands` (percentage tiers — Session F canonical).
+      2. Legacy `deposit_bands` (fixed £-amount tiers — kept for back-compat).
+      3. Fallback: 10% of driver_charge.
+
+    Returns:
+        {
+          "percent":   float  # e.g. 13.0
+          "amount":    float  # rounded to 2dp
+          "band_id":   str | None  # id of the band that fired, if any
+          "source":    "booking_fee_bands" | "deposit_bands" | "fallback"
+        }
+    """
+    band = await _lookup_booking_fee_band(driver_charge)
+    if band:
+        pct = float(band["booking_fee_percent"])
+        amount = round(driver_charge * pct / 100.0, 2)
+        return {"percent": pct, "amount": amount, "band_id": band.get("id"),
+                "source": "booking_fee_bands"}
+
+    # Legacy fallback — some environments still edit the older collection.
+    legacy = await db.deposit_bands.find({"enabled": True}, {"_id": 0}) \
+                                     .sort("min_price", 1).to_list(200)
+    for b in legacy:
         min_p = float(b.get("min_price", 0))
         max_p = b.get("max_price")
         if driver_charge >= min_p and (max_p is None or driver_charge <= float(max_p)):
-            return round(float(b["deposit_amount"]), 2)
-    return round(driver_charge * DEPOSIT_PERCENTAGE, 2)
+            amount = round(float(b["deposit_amount"]), 2)
+            pct = round((amount / driver_charge) * 100.0, 2) if driver_charge > 0 else 0.0
+            return {"percent": pct, "amount": amount, "band_id": b.get("id"),
+                    "source": "deposit_bands"}
+
+    # Ultimate fallback so nothing ever passes zero.
+    amount = round(driver_charge * DEPOSIT_PERCENTAGE, 2)
+    return {"percent": round(DEPOSIT_PERCENTAGE * 100.0, 2),
+             "amount": amount, "band_id": None, "source": "fallback"}
+
+
+async def calculate_booking_fee(driver_charge: float) -> float:
+    """Legacy thin wrapper — returns just the amount so older call sites
+    keep compiling. New code should call `calculate_booking_fee_detail`
+    when it needs the percent (for storage on the booking or display in
+    the customer summary / email)."""
+    detail = await calculate_booking_fee_detail(driver_charge)
+    return detail["amount"]
 
 
 # Back-compat alias (used by earlier code paths)
@@ -527,15 +630,22 @@ calculate_deposit = calculate_booking_fee
 
 
 async def preview_deposit(driver_charge: float) -> dict:
-    """Return pricing breakdown for a given driver_charge."""
-    fee = await calculate_booking_fee(driver_charge)
+    """Return the full pricing breakdown for a given driver_charge.
+
+    Also carries the fee percent + band metadata so the FE / emails can
+    render `Cargo One Booking Fee (13%)` without duplicating the tier
+    logic client-side."""
+    d = await calculate_booking_fee_detail(driver_charge)
     return {
         "driver_charge": round(driver_charge, 2),
-        "booking_fee": fee,
-        "customer_total": round(driver_charge + fee, 2),
+        "booking_fee": d["amount"],
+        "booking_fee_percent": d["percent"],
+        "booking_fee_band_id": d["band_id"],
+        "booking_fee_source": d["source"],
+        "customer_total": round(driver_charge + d["amount"], 2),
         # Legacy field names kept for backwards compat with older clients:
-        "total_price": round(driver_charge + fee, 2),
-        "deposit_amount": fee,
+        "total_price": round(driver_charge + d["amount"], 2),
+        "deposit_amount": d["amount"],
         "balance_due": round(driver_charge, 2),
     }
 
@@ -1823,7 +1933,8 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
     driver_charge = float(job.get("accepted_price") or job.get("fixed_price") or 0)
     if driver_charge <= 0:
         raise HTTPException(status_code=400, detail="Missing job price")
-    booking_fee = await calculate_booking_fee(driver_charge)
+    fee_detail = await calculate_booking_fee_detail(driver_charge)
+    booking_fee = fee_detail["amount"]
     customer_total = round(driver_charge + booking_fee, 2)
     booking = {
         "id": new_id(),
@@ -1832,6 +1943,12 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         "driver_id": job.get("assigned_driver_id"),  # None for ASAP pre-claim
         "driver_charge": driver_charge,
         "booking_fee": booking_fee,
+        # Session F — persist the tier % + source that fired at time of
+        # booking. IMMUTABLE — once written, historical bookings retain
+        # the band that was live when the customer paid.
+        "booking_fee_percent": fee_detail["percent"],
+        "booking_fee_band_id": fee_detail["band_id"],
+        "booking_fee_source": fee_detail["source"],
         "total_price": customer_total,          # what customer pays overall
         "deposit_amount": booking_fee,          # what customer pays now (Stripe)
         "balance_due": driver_charge,           # what customer pays driver on delivery
@@ -3051,6 +3168,81 @@ async def admin_delete_band(band_id: str, user: dict = Depends(require_role("adm
 
 
 # ---------------------------------------------------------------------------
+# Session F — Booking-fee bands (percentage tiers)
+# ---------------------------------------------------------------------------
+# Public read + preview so the customer app can render the exact tier the
+# backend will apply. Admin CRUD gates behind require_role("admin").
+
+
+@api.get("/booking-fee-bands")
+async def list_booking_fee_bands():
+    docs = await db.booking_fee_bands.find({"enabled": True}, {"_id": 0}) \
+                                        .sort([("priority", 1), ("min_amount", 1)]) \
+                                        .to_list(200)
+    return docs
+
+
+@api.get("/booking-fee-bands/preview")
+async def preview_booking_fee_band(driver_charge: float):
+    """Show the tier + amount that will apply for a given driver_charge."""
+    if driver_charge < 0:
+        raise HTTPException(status_code=400, detail="driver_charge must be non-negative")
+    return await preview_deposit(driver_charge)
+
+
+@api.get("/admin/booking-fee-bands")
+async def admin_list_booking_fee_bands(user: dict = Depends(require_role("admin"))):
+    docs = await db.booking_fee_bands.find({}, {"_id": 0}) \
+                                        .sort([("priority", 1), ("min_amount", 1)]) \
+                                        .to_list(200)
+    return docs
+
+
+@api.post("/admin/booking-fee-bands")
+async def admin_create_booking_fee_band(payload: BookingFeeBandIn,
+                                          user: dict = Depends(require_role("admin"))):
+    if payload.booking_fee_percent < 0 or payload.booking_fee_percent > 100:
+        raise HTTPException(status_code=400, detail="booking_fee_percent must be 0–100")
+    if payload.max_amount is not None and payload.max_amount <= payload.min_amount:
+        raise HTTPException(status_code=400, detail="max_amount must be greater than min_amount")
+    doc = payload.model_dump()
+    doc.update({
+        "id": new_id(),
+        "priority": doc.get("priority") or 0,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    })
+    await db.booking_fee_bands.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.put("/admin/booking-fee-bands/{band_id}")
+async def admin_update_booking_fee_band(band_id: str, payload: BookingFeeBandIn,
+                                          user: dict = Depends(require_role("admin"))):
+    if payload.booking_fee_percent < 0 or payload.booking_fee_percent > 100:
+        raise HTTPException(status_code=400, detail="booking_fee_percent must be 0–100")
+    if payload.max_amount is not None and payload.max_amount <= payload.min_amount:
+        raise HTTPException(status_code=400, detail="max_amount must be greater than min_amount")
+    update = payload.model_dump()
+    update["updated_at"] = now_iso()
+    res = await db.booking_fee_bands.update_one({"id": band_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Band not found")
+    doc = await db.booking_fee_bands.find_one({"id": band_id}, {"_id": 0})
+    return doc
+
+
+@api.delete("/admin/booking-fee-bands/{band_id}")
+async def admin_delete_booking_fee_band(band_id: str,
+                                          user: dict = Depends(require_role("admin"))):
+    res = await db.booking_fee_bands.delete_one({"id": band_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Band not found")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Service categories & vehicle types
 # ---------------------------------------------------------------------------
 
@@ -4257,6 +4449,13 @@ async def seed_startup():
         await db.jobs.create_index([("dispatch_ready_at", -1)])
     except Exception as e:  # noqa: BLE001
         logger.warning("Dispatch index creation skipped: %s", e)
+
+    # Session F — seed booking-fee bands the first time. Idempotent — once
+    # any row exists, admins own the collection and edits stick.
+    try:
+        await _ensure_booking_fee_bands_seeded()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("booking_fee_bands seed skipped: %s", e)
 
     # SEC-002 / SEC-003: In production the seed MUST be disabled (set
     # ALLOW_INITIAL_ADMIN_SEED="false" and PRODUCTION_MODE="true") — admins

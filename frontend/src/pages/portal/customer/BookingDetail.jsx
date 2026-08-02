@@ -440,7 +440,14 @@ export default function CustomerBookingDetail() {
 
             <div className="space-y-2 rounded-[12px] border border-[#E5E7EB] p-4" data-testid="booking-summary">
               <SumRow label="Driver Charge" value={`£${driverCharge.toFixed(2)}`} />
-              <SumRow label="Cargo One Booking Fee" value={`£${bookingFee.toFixed(2)}`} />
+              <SumRow
+                label={
+                  booking.booking_fee_percent
+                    ? `Cargo One Booking Fee (${Number(booking.booking_fee_percent).toFixed(0)}%)`
+                    : "Cargo One Booking Fee"
+                }
+                value={`£${bookingFee.toFixed(2)}`}
+              />
               <SumRow label="Total Booking Price" value={`£${total.toFixed(2)}`} />
               <div className="my-1 border-t border-[#F3F4F6]" />
               <SumRow label="Pay Driver On Delivery" value={`£${driverCharge.toFixed(2)}`} highlight testID="booking-summary-pay-driver" />
