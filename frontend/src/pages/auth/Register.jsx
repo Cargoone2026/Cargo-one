@@ -3,6 +3,20 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Car, ChevronLeft, Info, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { SEO } from "@/components/marketing/SEO";
+import { isValidPhone, isValidUKPostcode } from "@/lib/validators";
+
+const COUNTRIES = [
+  "United Kingdom",
+  "Ireland",
+  "France",
+  "Germany",
+  "Netherlands",
+  "Belgium",
+  "Spain",
+  "Italy",
+  "Poland",
+  "Other",
+];
 
 function roleLanding(role) {
   if (role === "customer") return "/customer";
@@ -17,7 +31,18 @@ export default function Register() {
   const [params] = useSearchParams();
   const initialRole = params.get("role") === "driver" ? "driver" : "customer";
   const [role, setRole] = useState(initialRole);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    address_line1: "",
+    address_line2: "",
+    town: "",
+    county: "",
+    postcode: "",
+    country: "United Kingdom",
+  });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +52,15 @@ export default function Register() {
     e.preventDefault();
     setError(null);
     if (!form.name.trim() || !form.email.trim() || !form.password) {
-      setError("All fields required");
+      setError("Name, email and password are required.");
+      return;
+    }
+    if (form.phone && !isValidPhone(form.phone)) {
+      setError("Please enter a valid phone number (e.g. 07700 900 123 or +44 7700 900123).");
+      return;
+    }
+    if (form.postcode && form.country === "United Kingdom" && !isValidUKPostcode(form.postcode)) {
+      setError("Please enter a valid UK postcode (e.g. EC4Y 1AA).");
       return;
     }
     setLoading(true);
@@ -36,8 +69,14 @@ export default function Register() {
         email: form.email.trim(),
         password: form.password,
         name: form.name.trim(),
-        phone: form.phone,
+        phone: form.phone.trim() || null,
         role,
+        address_line1: form.address_line1.trim() || null,
+        address_line2: form.address_line2.trim() || null,
+        town: form.town.trim() || null,
+        county: form.county.trim() || null,
+        postcode: form.postcode.trim() || null,
+        country: form.country || null,
       });
       navigate(roleLanding(me?.role), { replace: true });
     } catch (err) {
@@ -55,7 +94,7 @@ export default function Register() {
         path="/auth/register"
       />
       <div className="min-h-screen bg-white" data-testid="register-screen">
-        <div className="mx-auto w-full max-w-[500px] px-6 py-6">
+        <div className="mx-auto w-full max-w-[560px] px-6 py-6">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -96,54 +135,105 @@ export default function Register() {
           </div>
 
           <form onSubmit={onSubmit} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-[12px] font-semibold text-[#111111]">Full name</label>
-              <input
-                value={form.name}
-                onChange={upd("name")}
-                placeholder="Jane Doe"
-                autoComplete="name"
-                data-testid="register-name-input"
-                className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
+            <TextField
+              label="Full name"
+              value={form.name}
+              onChange={upd("name")}
+              placeholder="Jane Doe"
+              autoComplete="name"
+              testId="register-name-input"
+            />
+            <TextField
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={upd("email")}
+              placeholder="you@example.com"
+              autoComplete="email"
+              testId="register-email-input"
+            />
+            <TextField
+              label="Phone"
+              type="tel"
+              value={form.phone}
+              onChange={upd("phone")}
+              placeholder="07700 900 123"
+              autoComplete="tel"
+              testId="register-phone-input"
+              hint="UK mobile or landline. Optional but recommended."
+            />
+            <TextField
+              label="Password"
+              type="password"
+              value={form.password}
+              onChange={upd("password")}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+              testId="register-password-input"
+            />
+
+            <fieldset className="mt-4 space-y-3 rounded-[12px] border border-[#F3F4F6] bg-[#FAFAFA] p-4">
+              <legend className="px-1 text-[12px] font-semibold uppercase tracking-[0.5px] text-[#6B7280]">
+                Address (optional)
+              </legend>
+              <TextField
+                label="Address line 1"
+                value={form.address_line1}
+                onChange={upd("address_line1")}
+                placeholder="12 Fleet Street"
+                autoComplete="address-line1"
+                testId="register-address1-input"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-semibold text-[#111111]">Email</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={upd("email")}
-                placeholder="you@example.com"
-                autoComplete="email"
-                autoCapitalize="none"
-                data-testid="register-email-input"
-                className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
+              <TextField
+                label="Address line 2"
+                value={form.address_line2}
+                onChange={upd("address_line2")}
+                placeholder="Flat 3, Riverside Building"
+                autoComplete="address-line2"
+                testId="register-address2-input"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-semibold text-[#111111]">Phone (optional)</label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={upd("phone")}
-                placeholder="+44 700 900 000"
-                autoComplete="tel"
-                data-testid="register-phone-input"
-                className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[12px] font-semibold text-[#111111]">Password</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={upd("password")}
-                placeholder="At least 6 characters"
-                autoComplete="new-password"
-                data-testid="register-password-input"
-                className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
-              />
-            </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <TextField
+                  label="Town / City"
+                  value={form.town}
+                  onChange={upd("town")}
+                  placeholder="London"
+                  autoComplete="address-level2"
+                  testId="register-town-input"
+                />
+                <TextField
+                  label="County"
+                  value={form.county}
+                  onChange={upd("county")}
+                  placeholder="Greater London"
+                  autoComplete="address-level1"
+                  testId="register-county-input"
+                />
+                <TextField
+                  label="Postcode"
+                  value={form.postcode}
+                  onChange={upd("postcode")}
+                  placeholder="EC4Y 1AA"
+                  autoComplete="postal-code"
+                  testId="register-postcode-input"
+                />
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-[#111111]">
+                    Country
+                  </label>
+                  <select
+                    value={form.country}
+                    onChange={upd("country")}
+                    data-testid="register-country-input"
+                    className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </fieldset>
 
             {role === "driver" && (
               <div className="flex items-start gap-2 rounded-[12px] bg-[#FFF7ED] p-3">
@@ -185,5 +275,24 @@ export default function Register() {
         </div>
       </div>
     </>
+  );
+}
+
+function TextField({ label, value, onChange, placeholder, type = "text", autoComplete, testId, hint }) {
+  return (
+    <div>
+      <label className="mb-1 block text-[12px] font-semibold text-[#111111]">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        autoCapitalize={type === "email" ? "none" : undefined}
+        data-testid={testId}
+        className="h-12 w-full rounded-[12px] border border-[#E5E7EB] bg-[#F4F4F4] px-3 text-[16px] text-[#111111] outline-none focus:border-[#D62828]"
+      />
+      {hint ? <p className="mt-1 text-[11px] text-[#6B7280]">{hint}</p> : null}
+    </div>
   );
 }

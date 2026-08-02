@@ -173,6 +173,14 @@ class UserBase(BaseModel):
     name: str
     phone: Optional[str] = None
     role: str = "customer"  # customer | driver | admin
+    # Address (optional). Captured at registration or via profile edit; used for
+    # invoicing, receipts, business account KYC, and pre-filling booking pickup.
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    town: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = None
 
 
 class UserRegister(UserBase):
@@ -208,6 +216,13 @@ class UserPublic(BaseModel):
     changes_requested_reason: Optional[str] = None
     changes_requested_doc_types: Optional[list[str]] = None
     suspension_reason: Optional[str] = None
+    # Optional address fields (captured at registration or via profile edit).
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    town: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -402,6 +417,12 @@ def user_to_public(user: dict) -> dict:
         "changes_requested_reason": user.get("changes_requested_reason"),
         "changes_requested_doc_types": user.get("changes_requested_doc_types"),
         "suspension_reason": user.get("suspension_reason"),
+        "address_line1": user.get("address_line1"),
+        "address_line2": user.get("address_line2"),
+        "town": user.get("town"),
+        "county": user.get("county"),
+        "postcode": user.get("postcode"),
+        "country": user.get("country"),
     }
 
 
@@ -684,6 +705,12 @@ async def register(payload: UserRegister, response: Response):
         "vehicle": None,
         "documents_verified": False,
         "created_at": now_iso(),
+        "address_line1": payload.address_line1,
+        "address_line2": payload.address_line2,
+        "town": payload.town,
+        "county": payload.county,
+        "postcode": payload.postcode,
+        "country": payload.country,
     }
     await db.users.insert_one(user)
     token = create_token(user["id"], user["role"])
@@ -862,7 +889,10 @@ async def delete_me(user: dict = Depends(get_current_user)):
 
 @api.put("/auth/me")
 async def update_me(update: dict, user: dict = Depends(get_current_user)):
-    allowed = {"name", "phone", "vehicle", "profile_photo"}
+    allowed = {
+        "name", "phone", "vehicle", "profile_photo",
+        "address_line1", "address_line2", "town", "county", "postcode", "country",
+    }
     patch = {k: v for k, v in update.items() if k in allowed}
     if patch:
         await db.users.update_one({"id": user["id"]}, {"$set": patch})

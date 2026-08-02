@@ -63,11 +63,10 @@ export function AuthProvider({ children }) {
   );
 
   const register = useCallback(
-    async ({ email, password, name, phone, role }) => {
-      await api("/auth/register", {
-        method: "POST",
-        body: { email, password, name, phone, role },
-      });
+    async (payload) => {
+      // Pass through any fields the caller provides (email/password/name/phone/
+      // role + optional address_line1/2, town, county, postcode, country).
+      await api("/auth/register", { method: "POST", body: payload });
       const me = await refresh();
       return me;
     },

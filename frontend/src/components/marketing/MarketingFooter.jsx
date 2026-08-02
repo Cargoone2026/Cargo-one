@@ -81,7 +81,7 @@ export function MarketingFooter() {
       <div className="mx-auto w-full max-w-[1200px] px-4 py-12 md:px-6 md:py-16">
         <div className="grid grid-cols-1 gap-12 md:grid-cols-[1.2fr_2fr]">
           {/* Brand column */}
-          <div className="min-w-[260px] space-y-4">
+          <div className="min-w-0 space-y-4">
             <div className="flex items-center gap-2">
               <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-[#D62828]">
                 <Package className="h-5 w-5 text-white" strokeWidth={2.4} />
@@ -156,7 +156,7 @@ export function MarketingFooter() {
           {/* Links grid */}
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             {COLUMNS.map((col) => (
-              <div key={col.heading} className="min-w-[140px] space-y-1">
+              <div key={col.heading} className="min-w-0 space-y-1">
                 <h4 className="mb-2 text-[14px] font-bold tracking-[0.5px] text-white">
                   {col.heading}
                 </h4>

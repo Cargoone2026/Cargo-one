@@ -481,8 +481,8 @@ export default function CustomerBookingDetail() {
               <SumRow label="Driver Charge" value={`£${driverCharge.toFixed(2)}`} />
               <SumRow
                 label={
-                  booking.booking_fee_percent
-                    ? `Cargo One Booking Fee (${Number(booking.booking_fee_percent).toFixed(0)}%)`
+                  b.booking_fee_percent
+                    ? `Cargo One Booking Fee (${Number(b.booking_fee_percent).toFixed(0)}%)`
                     : "Cargo One Booking Fee"
                 }
                 value={`£${bookingFee.toFixed(2)}`}

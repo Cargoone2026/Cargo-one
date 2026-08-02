@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowRight, Building2, CheckCircle2, Headphones, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Headphones, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { api } from "@/lib/api";
 import { Hero } from "@/components/marketing/Hero";
 import { IMG } from "@/components/marketing/images";
@@ -93,22 +93,42 @@ export default function Contact() {
               </div>
               <div className="space-y-3">
                 {[
-                  { icon: Mail, title: "Email", body: "hello@cargoone.co.uk", tag: "Reply within 24h" },
-                  { icon: Phone, title: "Phone", body: "+44 800 111 000", tag: "24/7 support line" },
-                  { icon: MapPin, title: "Head office", body: "Cargo One Ltd, 1 Fleet Street, London EC4A 1AA", tag: "By appointment" },
-                  { icon: Headphones, title: "Emergency line", body: "For safety incidents in progress", tag: "+44 800 111 999" },
-                ].map((c) => (
-                  <div key={c.title} className="flex gap-3 rounded-[20px] border border-[#E5E7EB] bg-white p-5">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#FEE2E2]">
-                      <c.icon className="h-[22px] w-[22px] text-[#D62828]" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[16px] font-bold text-[#111111]">{c.title}</p>
-                      <p className="mt-0.5 text-[14px] text-[#111111]">{c.body}</p>
-                      <p className="mt-1 text-[12px] text-[#6B7280]">{c.tag}</p>
-                    </div>
-                  </div>
-                ))}
+                  { icon: Mail, title: "Email", body: "hello@cargoone.co.uk", tag: "Reply within 24h", href: "mailto:hello@cargoone.co.uk", testId: "contact-channel-email" },
+                  { icon: Phone, title: "Office", body: "+44 800 111 000", tag: "Mon–Fri, 8am–8pm", href: "tel:+448001110000", testId: "contact-channel-phone-office" },
+                  { icon: Phone, title: "Mobile / Direct line", body: "07757 133163", tag: "Click to call — 24/7", href: "tel:+447757133163", testId: "contact-channel-phone-mobile" },
+                  { icon: MessageCircle, title: "WhatsApp", body: "Chat with our team on WhatsApp", tag: "07757 133163 — usually replies within minutes", href: "https://wa.me/447757133163", target: "_blank", testId: "contact-channel-whatsapp" },
+                  { icon: MapPin, title: "Head office", body: "Cargo One Ltd, 1 Fleet Street, London EC4A 1AA", tag: "By appointment", href: "https://www.google.com/maps?q=1+Fleet+Street+London+EC4A+1AA", target: "_blank", testId: "contact-channel-office" },
+                  { icon: Headphones, title: "Emergency line", body: "For safety incidents in progress", tag: "+44 800 111 999", href: "tel:+448001110999", testId: "contact-channel-emergency" },
+                ].map((c) => {
+                  const isWhatsApp = c.title === "WhatsApp";
+                  return (
+                    <a
+                      key={c.title}
+                      href={c.href}
+                      target={c.target}
+                      rel={c.target === "_blank" ? "noopener noreferrer" : undefined}
+                      data-testid={c.testId}
+                      className={`flex gap-3 rounded-[20px] border p-5 transition-colors ${
+                        isWhatsApp
+                          ? "border-[#25D366]/40 bg-[#F0FDF4] hover:border-[#25D366]"
+                          : "border-[#E5E7EB] bg-white hover:border-[#D62828]"
+                      }`}
+                    >
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] ${
+                          isWhatsApp ? "bg-[#25D366]" : "bg-[#FEE2E2]"
+                        }`}
+                      >
+                        <c.icon className={`h-[22px] w-[22px] ${isWhatsApp ? "text-white" : "text-[#D62828]"}`} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[16px] font-bold text-[#111111]">{c.title}</p>
+                        <p className="mt-0.5 break-words text-[14px] text-[#111111]">{c.body}</p>
+                        <p className="mt-1 text-[12px] text-[#6B7280]">{c.tag}</p>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
 

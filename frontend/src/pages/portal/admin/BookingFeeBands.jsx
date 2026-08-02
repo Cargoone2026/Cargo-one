@@ -84,7 +84,7 @@ export default function AdminBookingFeeBands() {
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="admin-booking-fee-bands">
       <div className="mx-auto max-w-[960px] px-4 pt-6">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h1 className="flex items-center gap-2 text-[24px] font-bold text-[#111111]">
               <TrendingUp className="h-6 w-6 text-[#D62828]" />
@@ -146,8 +146,8 @@ export default function AdminBookingFeeBands() {
         </div>
 
         {/* Bands table */}
-        <div className="mt-4 overflow-hidden rounded-[12px] border border-[#E5E7EB]">
-          <table className="w-full text-left text-[13px]">
+        <div className="mt-4 overflow-x-auto rounded-[12px] border border-[#E5E7EB]">
+          <table className="w-full min-w-[520px] text-left text-[13px]">
             <thead className="bg-[#F9FAFB] text-[#6B7280]">
               <tr>
                 <th className="px-3 py-2">Label</th>
