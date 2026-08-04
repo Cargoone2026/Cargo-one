@@ -289,6 +289,33 @@ export default function AdminBookings() {
                     <JobExtras job={detailBooking.job} />
                   </div>
                 )}
+                {detailBooking.job && Array.isArray(detailBooking.job.photos) && detailBooking.job.photos.length > 0 && (
+                  <div
+                    className="pt-3 border-t border-[#F3F4F6]"
+                    data-testid="admin-booking-photos-block"
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] mb-2">
+                      Customer photos ({detailBooking.job.photos.length})
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {detailBooking.job.photos.map((p, i) => (
+                        <a
+                          key={i}
+                          href={p}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid={`admin-booking-photo-${i}`}
+                        >
+                          <img
+                            src={p}
+                            alt=""
+                            className="h-24 w-full rounded-[8px] border border-[#E5E7EB] object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {Array.isArray(detailBooking.refunds) && detailBooking.refunds.length > 0 && (
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280] mt-4 mb-1">

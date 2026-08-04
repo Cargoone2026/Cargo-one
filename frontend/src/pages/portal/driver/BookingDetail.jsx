@@ -103,6 +103,40 @@ export default function DriverBookingDetail() {
     load();
   }, [load]);
 
+  // Auto-open Chat tab when arriving via the "View & Reply" email link
+  // (…/driver/booking/<id>#chat).
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#chat") {
+      setTab("chat");
+    }
+  }, []);
+
+  // Round 3 — driver-side chat presence + read receipts poller. Mirrors
+  // the customer BookingDetail effect: pings the presence endpoint while
+  // the driver has the Chat tab open (suppresses the customer's throttled
+  // email), marks incoming messages as read, and refreshes every 6 s so
+  // the driver sees the customer's replies and the "read" ticks flip live.
+  useEffect(() => {
+    if (!id || !b || b.payment_status !== "paid" || tab !== "chat") return undefined;
+    let cancelled = false;
+    const ping = () => api(`/bookings/${id}/conversation/presence`, { method: "POST" })
+      .catch(() => {});
+    const markRead = () => api(`/bookings/${id}/messages/mark-read`, { method: "POST" })
+      .catch(() => {});
+    const refresh = async () => {
+      try {
+        const m = await api(`/bookings/${id}/messages`);
+        if (!cancelled) setMessages(Array.isArray(m) ? m : []);
+      } catch { /* silent */ }
+    };
+    ping();
+    markRead();
+    refresh();
+    const iv1 = setInterval(ping, 20000);
+    const iv2 = setInterval(refresh, 6000);
+    return () => { cancelled = true; clearInterval(iv1); clearInterval(iv2); };
+  }, [id, b, tab]);
+
   const stopTracking = useCallback(() => {
     if (watchIdRef.current != null && "geolocation" in navigator) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -562,10 +596,25 @@ export default function DriverBookingDetail() {
               ) : (
                 messages.map((m) => {
                   const mine = m.sender_id === user?.id;
+                  let tick = null;
+                  if (mine) {
+                    if (m.read_at) {
+                      tick = <span className="ml-1 text-[10px] font-bold text-[#FCA5A5]" title="Read">✓✓</span>;
+                    } else if (m.delivered_at) {
+                      tick = <span className="ml-1 text-[10px] text-white/70" title="Delivered">✓✓</span>;
+                    } else {
+                      tick = <span className="ml-1 text-[10px] text-white/70" title="Sent">✓</span>;
+                    }
+                  }
+                  const stamp = m.created_at ? new Date(m.created_at) : null;
+                  const time = stamp
+                    ? stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : "";
                   return (
                     <div
                       key={m.id}
                       className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
+                      data-testid={`driver-message-row-${m.id}`}
                     >
                       <div
                         className={`max-w-[75%] rounded-[16px] px-3 py-2 text-[14px] ${
@@ -573,6 +622,14 @@ export default function DriverBookingDetail() {
                         }`}
                       >
                         {m.text}
+                      </div>
+                      <div className={`mt-0.5 flex items-center gap-1 text-[10px] text-[#9CA3AF] ${
+                        mine ? "justify-end" : "justify-start"
+                      }`}>
+                        <span>{time}</span>
+                        {mine ? (
+                          <span data-testid={`driver-message-tick-${m.id}`}>{tick}</span>
+                        ) : null}
                       </div>
                       {m.moderated ? (
                         <div

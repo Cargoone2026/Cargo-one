@@ -341,6 +341,28 @@ export default function DriverJobs() {
                   <span className="text-[#9CA3AF]">→</span>
                   <span className="truncate text-[#111111]">{j.dropoff_town}</span>
                 </div>
+                {/* Round 3 — surface customer photos on the offer card so
+                    drivers can gauge load size before opening the detail. */}
+                {Array.isArray(j.photos) && j.photos.length > 0 && (
+                  <div
+                    className="mt-3 flex items-center gap-2 overflow-x-auto pb-1"
+                    data-testid={`driver-job-photos-strip-${j.id}`}
+                  >
+                    {j.photos.slice(0, 4).map((p, i) => (
+                      <img
+                        key={i}
+                        src={p}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-lg object-cover border border-[#E5E7EB]"
+                      />
+                    ))}
+                    {j.photos.length > 4 && (
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#F4F4F4] text-[12px] font-semibold text-[#6B7280]">
+                        +{j.photos.length - 4}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-[#F3F4F6] pt-2">
                   <Chip mini>{j.distance_miles} mi job</Chip>
                   <Chip mini>{j.distance_from_driver} mi away</Chip>

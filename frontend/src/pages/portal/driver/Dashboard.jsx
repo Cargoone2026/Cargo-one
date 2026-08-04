@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ArrowRight,
   UploadCloud,
+  MessagesSquare,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -24,14 +25,19 @@ export default function DriverDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [dash, setDash] = useState({});
+  const [msgUnread, setMsgUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api("/driver/dashboard").catch(() => ({}));
+      const [d, u] = await Promise.all([
+        api("/driver/dashboard").catch(() => ({})),
+        api("/messages/unread-count").catch(() => ({ total: 0 })),
+      ]);
       setDash(d || {});
+      setMsgUnread(Number(u?.total || 0));
     } finally {
       setLoading(false);
     }
@@ -269,6 +275,49 @@ export default function DriverDashboard() {
                 ))}
               </ul>
             </>
+          )}
+        </Card>
+
+        {/* Messages — Round 3: unread count from booking chats */}
+        <Card
+          testID="section-messages"
+          Icon={MessagesSquare}
+          iconBg="#FFF7ED"
+          iconColor="#FF6A00"
+          title="Messages"
+          rightLabel="Open inbox"
+          rightHref="/driver/my-jobs"
+        >
+          {msgUnread > 0 ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-[10px] bg-[#FEF3C7] p-3"
+              data-testid="driver-messages-unread-card"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold text-[#111111]">
+                  {msgUnread} new {msgUnread === 1 ? "message" : "messages"}
+                </p>
+                <p className="text-[12px] text-[#6B7280]">
+                  Open the booking to reply — reading a conversation marks it read.
+                </p>
+              </div>
+              <span
+                className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-[#D62828] px-2 py-1 text-[12px] font-bold text-white"
+                data-testid="driver-messages-unread-badge"
+              >
+                {msgUnread > 99 ? "99+" : msgUnread}
+              </span>
+            </div>
+          ) : (
+            <div
+              className="flex flex-col items-center gap-1 rounded-[10px] bg-[#F9FAFB] p-4 text-center"
+              data-testid="driver-messages-empty"
+            >
+              <MessagesSquare className="h-6 w-6 text-[#9CA3AF]" />
+              <p className="text-[13px] text-[#6B7280]">
+                No unread messages.
+              </p>
+            </div>
           )}
         </Card>
 

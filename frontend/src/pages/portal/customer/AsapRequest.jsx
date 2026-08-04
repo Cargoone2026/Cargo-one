@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, MapPin, Truck, Zap, ShieldCheck, AlertTriangle,
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
 
 /**
  * CargoOne — ASAP / Real-time Dispatch request page.
@@ -30,6 +31,7 @@ export default function CustomerAsapRequest() {
   const [note, setNote] = useState("");
   const [transportCategory, setTransportCategory] = useState("");
   const [transportDescription, setTransportDescription] = useState("");
+  const [photos, setPhotos] = useState([]); // Round 3 — multi-photo attachment for BOTH transport + recovery
   const [vehicle, setVehicle] = useState({
     make: "", model: "", registration: "", condition: "will_not_start",
     rolls: "unknown", steers: "unknown", brakes: "unknown",
@@ -41,6 +43,10 @@ export default function CustomerAsapRequest() {
   // Live route quote from backend (uses Google Distance Matrix when available)
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  // Round 3 — pull the AUTHORITATIVE booking-fee band from the backend so the
+  // summary line matches Stripe Checkout + the confirmation page exactly.
+  const [feePreview, setFeePreview] = useState(null);
+  const feeAbortRef = useRef(null);
 
   const useCurrentLocation = useCallback(async () => {
     setLocError(null);
@@ -113,24 +119,57 @@ export default function CustomerAsapRequest() {
   // Estimated commercial values shown to the customer BEFORE payment. Backend
   // recomputes authoritatively on job creation — this is a hint only. Follows
   // the same formula as the server's `create_job` suggested price.
-  const { estimatedTotal, estimatedDeposit } = useMemo(() => {
-    if (!pickup || !dropoff) return { estimatedTotal: 0, estimatedDeposit: 0 };
-    // Prefer server-side quote when available (uses Google Distance Matrix).
+  //
+  // Round 3 fix: `estimatedDeposit` was previously computed client-side with
+  // a stale `min(£25, max(£10, total*0.125))` heuristic which no longer
+  // matches the dynamic `booking_fee_bands` tiers (10–15%) that Stripe and
+  // the confirmation page use. We now defer to `/api/booking-fee-bands/preview`
+  // for the definitive band-based fee and fall back only when the network
+  // call hasn't returned yet.
+  const { estimatedTotal, estimatedDeposit, feePercent } = useMemo(() => {
+    if (!pickup || !dropoff) return { estimatedTotal: 0, estimatedDeposit: 0, feePercent: null };
+    let total;
     if (quote && quote.suggested_price) {
       const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
-      const total = Math.max(30, Math.round(quote.suggested_price * mult));
-      const deposit = Math.min(25, Math.max(10, Math.round(total * 0.125)));
-      return { estimatedTotal: total, estimatedDeposit: deposit };
+      total = Math.max(30, Math.round(quote.suggested_price * mult));
+    } else {
+      const distance = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+      const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
+      total = Math.max(30, Math.round(distance * 1.5 * mult));
     }
-    const distance = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
-    const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
-    const total = Math.max(30, Math.round(distance * 1.5 * mult));
-    // Existing platform fee is a percentage bucket managed by /admin/deposit-bands.
-    // For the pre-payment hint we approximate at 12.5% capped at £25 — the
-    // actual figure is set by the backend booking response.
-    const deposit = Math.min(25, Math.max(10, Math.round(total * 0.125)));
-    return { estimatedTotal: total, estimatedDeposit: deposit };
-  }, [pickup, dropoff, mode, quote]);
+    // Prefer backend booking-fee-band preview (single source of truth). While
+    // it loads we show the 10% floor from the band schema — never the old
+    // 12.5% heuristic — so the number can only move down, not up, once the
+    // preview resolves.
+    const previewMatches = feePreview && feePreview.driver_charge === total;
+    const deposit = previewMatches
+      ? Number(feePreview.booking_fee || 0)
+      : Math.round(total * 0.10);
+    const percent = previewMatches ? Number(feePreview.booking_fee_percent) : null;
+    return { estimatedTotal: total, estimatedDeposit: deposit, feePercent: percent };
+  }, [pickup, dropoff, mode, quote, feePreview]);
+
+  // Refresh authoritative booking-fee preview whenever the driver charge
+  // changes. Debounced (300 ms) and abortable so quick edits don't spam
+  // the backend or cause out-of-order responses.
+  useEffect(() => {
+    if (!estimatedTotal) { setFeePreview(null); return undefined; }
+    if (feeAbortRef.current) feeAbortRef.current.abort?.();
+    const ac = new AbortController();
+    feeAbortRef.current = ac;
+    const t = setTimeout(async () => {
+      try {
+        const res = await api(`/booking-fee-bands/preview?driver_charge=${estimatedTotal}`,
+          { signal: ac.signal });
+        if (!ac.signal.aborted) setFeePreview({ ...res, driver_charge: estimatedTotal });
+      } catch (e) {
+        if (!ac.signal.aborted) {
+          // Non-fatal — the summary just keeps the 10% floor estimate.
+        }
+      }
+    }, 300);
+    return () => { clearTimeout(t); ac.abort(); };
+  }, [estimatedTotal]);
 
   // Live quote fetch — hit /api/quote/estimate whenever both endpoints are set.
   // Debounced so quick edits don't spam the backend. Backend uses Google
@@ -220,6 +259,7 @@ export default function CustomerAsapRequest() {
           delivery_date: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
           pricing_type: "fixed",
           fixed_price: suggested,
+          photos: photos && photos.length ? photos : undefined,
         },
       });
       // Create booking immediately (ASAP flow) — server allows pre-claim booking.
@@ -256,7 +296,7 @@ export default function CustomerAsapRequest() {
       setErr(friendly);
       setSubmitting(false);
     }
-  }, [mode, note, vehicle, pickup, dropoff, navigate]);
+  }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6" data-testid="customer-asap-request">
@@ -455,6 +495,23 @@ export default function CustomerAsapRequest() {
           data-testid="asap-note" />
       </section>
 
+      {/* Round 3 — photo uploads for BOTH ASAP transport and ASAP recovery.
+         Drivers see these on the offer card and job detail so they can
+         judge access, load size or vehicle condition before claiming. */}
+      <section className="mb-6" data-testid="asap-photos-section">
+        <label className="text-sm font-medium mb-1 block">
+          {mode === "breakdown_recovery"
+            ? "Photos of the vehicle (optional)"
+            : "Photos of the item (optional)"}
+        </label>
+        <p className="text-xs text-neutral-500 mb-2">
+          {mode === "breakdown_recovery"
+            ? "Add up to 4 photos so the recovery driver can see the vehicle's position and access."
+            : "Add up to 4 photos so the driver can see the load, packaging and access."}
+        </p>
+        <PhotoUpload value={photos} onChange={setPhotos} testId="asap-photos" />
+      </section>
+
       {pickup && dropoff && (
         <div className="mb-4 rounded-2xl overflow-hidden border border-neutral-200">
           <RouteMap
@@ -525,7 +582,9 @@ export default function CustomerAsapRequest() {
               value={estimatedTotal ? `£${estimatedTotal.toFixed(2)}` : "—"}
             />
             <SummaryRow
-              label="Booking fee (deposit, paid now)"
+              label={feePercent != null
+                ? `Booking fee (${Number(feePercent).toFixed(0)}%, paid now)`
+                : "Booking fee (deposit, paid now)"}
               value={estimatedDeposit ? `£${estimatedDeposit.toFixed(2)}` : "—"}
               strong
             />

@@ -34,18 +34,21 @@ export default function CustomerDashboard() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [msgUnread, setMsgUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, n] = await Promise.all([
+      const [b, n, u] = await Promise.all([
         api("/bookings/mine").catch(() => []),
         api("/notifications").catch(() => []),
+        api("/messages/unread-count").catch(() => ({ total: 0 })),
       ]);
       setBookings(Array.isArray(b) ? b : []);
       setNotes(Array.isArray(n) ? n : []);
+      setMsgUnread(Number(u?.total || 0));
     } finally {
       setLoading(false);
     }
@@ -167,16 +170,26 @@ export default function CustomerDashboard() {
           <Link
             to="/customer/messages"
             data-testid="quick-messages"
-            className="flex flex-col gap-2 rounded-[12px] border border-[#E5E7EB] bg-white p-4 hover:border-[#111111]"
+            className="relative flex flex-col gap-2 rounded-[12px] border border-[#E5E7EB] bg-white p-4 hover:border-[#111111]"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[#FFF7ED]">
               <MessagesSquare className="h-5 w-5 text-[#FF6A00]" />
             </span>
+            {msgUnread > 0 && (
+              <span
+                className="absolute right-3 top-3 min-w-[22px] rounded-full bg-[#D62828] px-1.5 py-0.5 text-center text-[11px] font-bold text-white"
+                data-testid="customer-messages-unread-badge"
+              >
+                {msgUnread > 99 ? "99+" : msgUnread}
+              </span>
+            )}
             <span className="text-[16px] font-semibold text-[#111111]">
               Messages
             </span>
             <span className="text-[13px] text-[#6B7280]">
-              {unreadCount} unread
+              {msgUnread > 0
+                ? `${msgUnread} unread ${msgUnread === 1 ? "message" : "messages"}`
+                : "No new messages"}
             </span>
           </Link>
         </div>

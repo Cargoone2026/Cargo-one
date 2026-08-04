@@ -87,6 +87,14 @@ export default function CustomerBookingDetail() {
     load();
   }, [load]);
 
+  // Auto-open the chat tab when reached via the messaging-email link
+  // (e.g. https://.../customer/booking/<id>#chat).
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#chat") {
+      setTab("chat");
+    }
+  }, []);
+
   // ASAP flow — after deposit is paid and no driver assigned yet on THIS
   // booking, bounce the customer to /customer/dispatch/{jobId} so they see
   // the live "searching for a driver" screen. Guarded by a session flag so
@@ -127,6 +135,32 @@ export default function CustomerBookingDetail() {
     }, 12000);
     return () => clearInterval(iv);
   }, [b, id]);
+
+  // Round 3 — presence heartbeat + poll new messages every 6s while the
+  // chat tab is open. The heartbeat suppresses new-message emails when the
+  // recipient is actively looking at the conversation. Mark-as-read fires
+  // on every open + on every incoming message so the sender's WhatsApp-style
+  // ticks flip to "read" without needing a full page refresh.
+  useEffect(() => {
+    if (!id || !b || b.payment_status !== "paid" || tab !== "chat") return undefined;
+    let cancelled = false;
+    const ping = () => api(`/bookings/${id}/conversation/presence`, { method: "POST" })
+      .catch(() => {});
+    const markRead = () => api(`/bookings/${id}/messages/mark-read`, { method: "POST" })
+      .catch(() => {});
+    const refresh = async () => {
+      try {
+        const m = await api(`/bookings/${id}/messages`);
+        if (!cancelled) setMessages(Array.isArray(m) ? m : []);
+      } catch { /* silent */ }
+    };
+    ping();
+    markRead();
+    refresh();
+    const iv1 = setInterval(ping, 20000);      // presence — every 20 s
+    const iv2 = setInterval(refresh, 6000);    // fresh msgs + ticks — 6 s
+    return () => { cancelled = true; clearInterval(iv1); clearInterval(iv2); };
+  }, [id, b, tab]);
 
   // Stripe return: poll /payments/status until paid, then reload booking.
   // Poll ~30 times over 60 seconds to survive slow webhook processing.
@@ -548,10 +582,40 @@ export default function CustomerBookingDetail() {
               ) : (
                 messages.map((m) => {
                   const mine = m.sender_id === user?.id;
+                  // WhatsApp-style ticks: single grey (sent), double grey
+                  // (delivered), double red (read). Non-mine messages don't
+                  // show ticks — they're always displayed post-fetch.
+                  let tick = null;
+                  if (mine) {
+                    if (m.read_at) {
+                      tick = (
+                        <span className="ml-1 text-[10px] font-bold text-[#FCA5A5]" aria-label="Read" title="Read">
+                          ✓✓
+                        </span>
+                      );
+                    } else if (m.delivered_at) {
+                      tick = (
+                        <span className="ml-1 text-[10px] text-white/70" aria-label="Delivered" title="Delivered">
+                          ✓✓
+                        </span>
+                      );
+                    } else {
+                      tick = (
+                        <span className="ml-1 text-[10px] text-white/70" aria-label="Sent" title="Sent">
+                          ✓
+                        </span>
+                      );
+                    }
+                  }
+                  const stamp = m.created_at ? new Date(m.created_at) : null;
+                  const time = stamp
+                    ? stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : "";
                   return (
                     <div
                       key={m.id}
                       className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
+                      data-testid={`message-row-${m.id}`}
                     >
                       <div
                         className={`max-w-[75%] rounded-[16px] px-3 py-2 text-[14px] ${
@@ -561,6 +625,16 @@ export default function CustomerBookingDetail() {
                         }`}
                       >
                         {m.text}
+                      </div>
+                      <div className={`mt-0.5 flex items-center gap-1 text-[10px] text-[#9CA3AF] ${
+                        mine ? "justify-end" : "justify-start"
+                      }`}>
+                        <span>{time}</span>
+                        {mine ? (
+                          <span data-testid={`message-tick-${m.id}`} className="inline-flex items-center">
+                            {tick}
+                          </span>
+                        ) : null}
                       </div>
                       {m.moderated ? (
                         <div

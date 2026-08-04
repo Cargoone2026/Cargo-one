@@ -1874,6 +1874,19 @@ async def submit_bid(job_id: str, payload: BidCreate, user: dict = Depends(requi
         f"{user['name']} bid £{payload.amount} on your {job['title']} job.",
         {"job_id": job_id, "bid_id": bid["id"]},
     )
+    # Round 3 — also email the customer the branded "New bid" notification.
+    try:
+        from services.email import send_new_bid_email
+        customer = await db.users.find_one(
+            {"id": job["customer_id"]}, {"_id": 0, "password_hash": 0}
+        )
+        if customer:
+            await send_new_bid_email(
+                db, customer=customer, driver=user, job=job, bid=bid,
+                verified_driver=bool(user.get("verified_driver")),
+            )
+    except Exception:
+        logger.exception("new-bid email failed; continuing")
     return {k: v for k, v in bid.items() if k != "_id"}
 
 
@@ -2536,12 +2549,41 @@ async def send_message(booking_id: str, payload: MessageCreate,
         "moderated": blocked,
         "photo": payload.photo,
         "read": False,
+        "delivered_at": now_iso(),
+        "read_at": None,
         "created_at": now_iso(),
     }
     await db.messages.insert_one(msg)
     other_id = b["customer_id"] if user["id"] == b["driver_id"] else b["driver_id"]
     await push_notification(other_id, f"Message from {user['name']}",
                              payload.text or "Sent a photo", {"booking_id": booking_id})
+
+    # Round 3 — email the recipient if they're not actively viewing and the
+    # 5-minute per-conversation throttle allows it. Fire and forget so a slow
+    # Resend network round-trip never blocks the message being persisted.
+    try:
+        from services.email import send_new_message_email, is_conversation_active
+        active = await is_conversation_active(db, user_id=other_id, booking_id=booking_id)
+        if not active:
+            other_user = await db.users.find_one(
+                {"id": other_id}, {"_id": 0, "password_hash": 0}
+            )
+            unread_count = await db.messages.count_documents(
+                {"booking_id": booking_id, "sender_id": {"$ne": other_id}, "read": False},
+            )
+            if other_user:
+                role_hint = "driver" if other_id == b.get("driver_id") else "customer"
+                await send_new_message_email(
+                    db,
+                    recipient=other_user,
+                    sender=user,
+                    booking=b,
+                    preview_text=(payload.text or "(sent a photo)"),
+                    unread_count=unread_count,
+                    role_hint=role_hint,
+                )
+    except Exception:
+        logger.exception("new-message email failed; continuing")
     return {k: v for k, v in msg.items() if k != "_id"}
 
 
@@ -2556,12 +2598,91 @@ async def list_messages(booking_id: str, user: dict = Depends(get_current_user))
         return []
     msgs = await db.messages.find({"booking_id": booking_id}, {"_id": 0}) \
                              .sort("created_at", 1).to_list(500)
-    # mark as read for the reader
-    await db.messages.update_many(
-        {"booking_id": booking_id, "sender_id": {"$ne": user["id"]}, "read": False},
-        {"$set": {"read": True}},
-    )
+    # Mark the OTHER party's messages as read for this reader, and stamp
+    # a read_at timestamp so the sender can render WhatsApp-style ticks.
+    if user["role"] != "admin":
+        now = now_iso()
+        await db.messages.update_many(
+            {"booking_id": booking_id, "sender_id": {"$ne": user["id"]},
+             "$or": [{"read": False}, {"read_at": None}]},
+            {"$set": {"read": True, "read_at": now}},
+        )
+        # Refresh msgs so the caller sees the freshly-stamped read_at values
+        msgs = await db.messages.find({"booking_id": booking_id}, {"_id": 0}) \
+                                 .sort("created_at", 1).to_list(500)
+        # Also mark presence — user is looking at this conversation right now.
+        await db.conversation_presence.update_one(
+            {"user_id": user["id"], "booking_id": booking_id},
+            {"$set": {"last_seen_at": now}},
+            upsert=True,
+        )
     return msgs
+
+
+@api.post("/bookings/{booking_id}/messages/mark-read")
+async def mark_messages_read(booking_id: str, user: dict = Depends(get_current_user)):
+    """Mark every message from the OTHER party as read for the current user.
+    Front-end calls this every time the conversation view is (re)opened, or
+    when a new message arrives while the tab is focused."""
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in (b["customer_id"], b["driver_id"]):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    now = now_iso()
+    result = await db.messages.update_many(
+        {"booking_id": booking_id, "sender_id": {"$ne": user["id"]},
+         "$or": [{"read": False}, {"read_at": None}]},
+        {"$set": {"read": True, "read_at": now}},
+    )
+    await db.conversation_presence.update_one(
+        {"user_id": user["id"], "booking_id": booking_id},
+        {"$set": {"last_seen_at": now}},
+        upsert=True,
+    )
+    return {"ok": True, "marked_read": result.modified_count}
+
+
+@api.post("/bookings/{booking_id}/conversation/presence")
+async def conversation_presence_ping(booking_id: str,
+                                        user: dict = Depends(get_current_user)):
+    """Heartbeat — the client calls this every ~20 s while the conversation
+    is open. Used by the messaging-email throttle to skip sending emails
+    when the recipient is already looking at the chat."""
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0, "customer_id": 1, "driver_id": 1})
+    if not b:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    await db.conversation_presence.update_one(
+        {"user_id": user["id"], "booking_id": booking_id},
+        {"$set": {"last_seen_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.get("/messages/unread-count")
+async def messages_unread_count(user: dict = Depends(get_current_user)):
+    """Aggregate unread messages per booking (for the dashboard badge + the
+    sidebar nav pip). Only bookings the caller is a party to."""
+    # Find every booking this user is on.
+    q = {"$or": [{"customer_id": user["id"]}, {"driver_id": user["id"]}]}
+    bookings = await db.bookings.find(q, {"id": 1, "_id": 0}).to_list(500)
+    booking_ids = [b["id"] for b in bookings]
+    if not booking_ids:
+        return {"total": 0, "by_booking": {}}
+    pipeline = [
+        {"$match": {"booking_id": {"$in": booking_ids},
+                     "sender_id": {"$ne": user["id"]},
+                     "read": False}},
+        {"$group": {"_id": "$booking_id", "n": {"$sum": 1}}},
+    ]
+    by_booking = {}
+    async for doc in db.messages.aggregate(pipeline):
+        by_booking[doc["_id"]] = int(doc.get("n", 0))
+    total = sum(by_booking.values())
+    return {"total": total, "by_booking": by_booking}
 
 
 # ---------------------------------------------------------------------------

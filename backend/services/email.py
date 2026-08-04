@@ -678,3 +678,261 @@ async def send_refund_confirmation(db, *, user: dict, booking: dict, amount: flo
                                 template="refund_confirmation",
                                 booking_id=booking.get("id"),
                                 user_id=user.get("id"))
+
+
+
+# ---------------------------------------------------------------------------
+# Round 3 — Messaging & bidding email templates
+# ---------------------------------------------------------------------------
+
+_APP_ORIGIN = os.environ.get("APP_ORIGIN") or "https://cargoone.co.uk"
+
+
+def _clip(text: str, max_len: int = 200) -> str:
+    text = (text or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "\u2026"
+
+
+def render_new_message(
+    *,
+    recipient_name: str,
+    sender_name: str,
+    booking_ref: str,
+    preview: str,
+    reply_url: str,
+    unread_count: int,
+) -> tuple[str, str, str]:
+    """Branded conversation-notification email. Preview is soft-clipped at 200
+    chars so leaked essays from a chatty driver don't blow up the inbox.
+    """
+    clipped = _clip(preview, 200)
+    unread_line = ""
+    if unread_count > 1:
+        unread_line = (
+            f"<p style=\"margin:0 0 12px;font-size:13px;color:{_BRAND_MUTED};\">"
+            f"You have <strong>{unread_count} unread messages</strong> on this booking."
+            f"</p>"
+        )
+    subject = f"{sender_name} sent you a message — Cargo One booking {booking_ref[:8]}"
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {recipient_name or 'there'},</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
+        <strong>{sender_name}</strong> just sent you a message on your Cargo One booking.
+      </p>
+      {unread_line}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-left:4px solid {_BRAND_ACCENT};border-radius:10px;">
+        <tr><td style="padding:16px 18px;">
+          <p style="margin:0 0 8px;font-size:11px;color:{_BRAND_MUTED};text-transform:uppercase;letter-spacing:0.6px;">
+            {sender_name} · Booking {booking_ref[:8]}
+          </p>
+          <p style="margin:0;font-size:14px;color:#111111;line-height:1.55;white-space:pre-wrap;">{clipped}</p>
+        </td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
+        <tr><td align="center">
+          <a href="{reply_url}" style="display:inline-block;background:{_BRAND_ACCENT};color:#ffffff;font-weight:700;font-size:14px;padding:12px 22px;border-radius:999px;text-decoration:none;">View &amp; Reply</a>
+        </td></tr>
+      </table>
+      <p style="margin:22px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        You'll only get one email every few minutes even if the conversation is busy. Open the chat to see the full history.
+      </p>
+    """
+    text = "\n".join([
+        f"{sender_name} sent you a message on Cargo One (booking {booking_ref[:8]})",
+        "",
+        f"Hi {recipient_name or 'there'},",
+        "",
+        f"> {clipped}",
+        "",
+        (f"You have {unread_count} unread messages on this booking." if unread_count > 1 else ""),
+        f"View & Reply: {reply_url}",
+        "",
+        "— Cargo One",
+    ])
+    text = "\n".join([ln for ln in text.split("\n") if ln or ln == ""])  # keep blank lines
+    html = _shell(title=subject, preview=clipped or "New Cargo One message", body_html=body)
+    return subject, html, text
+
+
+def render_new_bid(
+    *,
+    customer_name: str,
+    driver_name: str,
+    job_title: str,
+    amount: float,
+    eta_hours: float | None,
+    driver_rating: float,
+    verified_driver: bool,
+    review_url: str,
+) -> tuple[str, str, str]:
+    """Emailed to the customer whenever a driver bids on their job."""
+    subject = f"New bid: £{amount:.2f} from {driver_name} — Cargo One"
+    badge = ""
+    if verified_driver:
+        badge = (
+            f"<span style=\"display:inline-block;background:#DCFCE7;color:#166534;"
+            f"font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;"
+            f"letter-spacing:0.4px;text-transform:uppercase;\">Verified</span>"
+        )
+    eta_line = ""
+    if eta_hours is not None:
+        eta_line = (
+            f"<tr><td style=\"font-size:13px;color:{_BRAND_MUTED};padding-top:4px;\">Estimated pickup</td>"
+            f"<td align=\"right\" style=\"font-size:13px;color:#374151;padding-top:4px;\">"
+            f"{'{:.1f}'.format(float(eta_hours))} h</td></tr>"
+        )
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {customer_name or 'there'},</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
+        A driver just placed a bid on your job <strong>{job_title}</strong>.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+        <tr><td style="padding:16px 18px;">
+          <table width="100%"><tr>
+            <td style="font-size:14px;font-weight:600;color:#111111;">{driver_name} {badge}</td>
+            <td align="right" style="font-size:12px;color:{_BRAND_MUTED};">★ {float(driver_rating):.1f}</td>
+          </tr></table>
+          <table width="100%" style="margin-top:12px;">
+            <tr>
+              <td style="font-size:13px;color:{_BRAND_MUTED};">Bid amount</td>
+              <td align="right" style="font-size:20px;font-weight:700;color:{_BRAND_PRIMARY};">£{amount:.2f}</td>
+            </tr>
+            {eta_line}
+          </table>
+        </td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
+        <tr><td align="center">
+          <a href="{review_url}" style="display:inline-block;background:{_BRAND_ACCENT};color:#ffffff;font-weight:700;font-size:14px;padding:12px 22px;border-radius:999px;text-decoration:none;">Review this bid</a>
+        </td></tr>
+      </table>
+      <p style="margin:22px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        You can compare all bids and accept the one that suits you best.
+      </p>
+    """
+    text = "\n".join([
+        f"New bid: £{amount:.2f} from {driver_name}",
+        "",
+        f"Hi {customer_name or 'there'},",
+        "",
+        f"Job: {job_title}",
+        f"Driver: {driver_name}  ★ {float(driver_rating):.1f}"
+        + ("  [Verified]" if verified_driver else ""),
+        f"Bid amount: £{amount:.2f}",
+        (f"Estimated pickup: {float(eta_hours):.1f} h" if eta_hours is not None else ""),
+        "",
+        f"Review this bid: {review_url}",
+        "",
+        "— Cargo One",
+    ])
+    html = _shell(title=subject, preview=f"£{amount:.2f} from {driver_name}", body_html=body)
+    return subject, html, text
+
+
+async def send_new_message_email(
+    db,
+    *,
+    recipient: dict,
+    sender: dict,
+    booking: dict,
+    preview_text: str,
+    unread_count: int,
+    role_hint: str = "customer",
+) -> dict:
+    """Sends a new-message notification IF the 5-minute per-conversation
+    throttle allows it. The caller is responsible for the "recipient is
+    actively viewing" check (see `is_conversation_active`).
+    """
+    to = recipient.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+
+    booking_id = booking.get("id") or ""
+    recipient_id = recipient.get("id") or ""
+
+    # Throttle — one email per {recipient, conversation} per 5 min.
+    THROTTLE_SECONDS = 300
+    now = datetime.now(timezone.utc)
+    state = await db.conversation_email_state.find_one(
+        {"user_id": recipient_id, "booking_id": booking_id}
+    )
+    if state and state.get("last_sent_at"):
+        try:
+            last = datetime.fromisoformat(state["last_sent_at"])
+        except Exception:
+            last = None
+        if last and (now - last).total_seconds() < THROTTLE_SECONDS:
+            return {"status": "skipped", "reason": "throttled"}
+
+    # Choose the correct portal path based on the recipient role — customer
+    # opens /customer/booking/<id>, driver opens /driver/booking/<id>.
+    portal = "customer" if role_hint == "customer" else "driver"
+    reply_url = f"{_APP_ORIGIN}/{portal}/booking/{booking_id}#chat"
+
+    subject, html, text = render_new_message(
+        recipient_name=recipient.get("name") or "",
+        sender_name=sender.get("name") or "Your Cargo One contact",
+        booking_ref=booking_id,
+        preview=preview_text,
+        reply_url=reply_url,
+        unread_count=int(unread_count or 1),
+    )
+    result = await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="new_message", booking_id=booking_id, user_id=recipient_id,
+    )
+    # Record last-send timestamp for the throttle regardless of Resend
+    # outcome — if the send failed we still don't want to hammer them.
+    await db.conversation_email_state.update_one(
+        {"user_id": recipient_id, "booking_id": booking_id},
+        {"$set": {"last_sent_at": now.isoformat(), "updated_at": now.isoformat()}},
+        upsert=True,
+    )
+    return result
+
+
+async def send_new_bid_email(
+    db, *, customer: dict, driver: dict, job: dict, bid: dict, verified_driver: bool = False,
+) -> dict:
+    to = customer.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    review_url = f"{_APP_ORIGIN}/customer/job/{job.get('id') or ''}"
+    subject, html, text = render_new_bid(
+        customer_name=customer.get("name") or "",
+        driver_name=driver.get("name") or "A driver",
+        job_title=job.get("title") or "your job",
+        amount=float(bid.get("amount") or 0),
+        eta_hours=bid.get("eta_hours"),
+        driver_rating=float(driver.get("rating") or 5.0),
+        verified_driver=bool(verified_driver),
+        review_url=review_url,
+    )
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="new_bid", booking_id=None,
+        user_id=customer.get("id"),
+    )
+
+
+async def is_conversation_active(db, *, user_id: str, booking_id: str,
+                                     window_seconds: int = 45) -> bool:
+    """Returns True if the user has heartbeated presence on this conversation
+    within `window_seconds`. Called immediately before we decide whether to
+    email them about a new message.
+    """
+    state = await db.conversation_presence.find_one(
+        {"user_id": user_id, "booking_id": booking_id}
+    )
+    if not state:
+        return False
+    ts = state.get("last_seen_at")
+    if not ts:
+        return False
+    try:
+        last = datetime.fromisoformat(ts)
+    except Exception:
+        return False
+    return (datetime.now(timezone.utc) - last).total_seconds() < window_seconds
