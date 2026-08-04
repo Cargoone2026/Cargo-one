@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Facebook, Instagram, Linkedin, Package, Twitter } from "lucide-react";
+import { Facebook, Instagram, Linkedin, MessageCircle, Package, Phone, Twitter } from "lucide-react";
 import { api } from "@/lib/api";
 
 const COLUMNS = [
@@ -93,6 +93,29 @@ export function MarketingFooter() {
             <p className="max-w-[320px] text-[14px] text-white/65">
               Ship Anything. Anywhere. Instant Quotes.
             </p>
+
+            {/* Round 5 fix — surface the mobile line + WhatsApp so every
+                public page footer offers a direct route to talk to us. */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <a
+                href="tel:+447757133163"
+                data-testid="footer-phone"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:border-white/40"
+              >
+                <Phone className="h-3.5 w-3.5 text-[#D62828]" />
+                07757 133163
+              </a>
+              <a
+                href="https://wa.me/447757133163"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="footer-whatsapp"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#25D366]/50 bg-[#25D366]/10 px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:border-[#25D366]"
+              >
+                <MessageCircle className="h-3.5 w-3.5 text-[#25D366]" />
+                WhatsApp
+              </a>
+            </div>
 
             <div className="space-y-2">
               <p className="text-[16px] font-semibold text-white">

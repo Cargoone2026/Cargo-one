@@ -756,3 +756,30 @@ Focus: user-requested delight features layered on top of Round 3's messaging inf
 - Backend: `server.py` (2 new endpoints), `tests/test_final_qa_r4.py`.
 - Frontend: `pages/portal/customer/Messages.jsx` (rewritten), `pages/portal/customer/BookingDetail.jsx`, `pages/portal/driver/BookingDetail.jsx`, `pages/portal/driver/Dashboard.jsx`, `components/ui-portal/RecentActivity.jsx` (new), `hooks/useMessageChime.js` (new).
 
+
+### Phase — ROUND 5 PRE-PRODUCTION SMOKE TEST ✅ COMPLETE (Feb 2026)
+Full-surface certification pass prior to the user's final manual acceptance test. Report: `/app/test_reports/iteration_final_qa_r5.json`.
+
+**Backend regression**
+- **152/152 deterministic tests pass** across 3 packs: pack1 (password_reset + booking_fee_bands + moderation + cookie_auth + payment_and_csrf_security + payment_finalisation = 85/85), pack2 (booking_fees + final_qa_r2 + final_qa_r3 + final_qa_r4 = 52/52), R5-new (test_final_qa_r5.py = 15/15).
+- R5-new pack covers: API health, booking-fee-band preview parity across 5 driver_charge tiers, bidding-job E2E, fixed-price flow to real Stripe checkout URL, `/payments/status/{id}` auth-removed reachability, invalid-login 401, HttpOnly/Secure/SameSite=None cookie flags, CSRF enforcement on POST /jobs, password-reset writes email_log with status='skipped' (RESEND intentionally unset in preview).
+
+**Frontend surface**
+- 11/11 public marketing routes return HTTP 200 with rendered React content.
+- All Round-3/4/2 test IDs resolve on their pages: `contact-channel-*` (6), `customer-messages-unread-badge`, `driver-messages-unread-badge`, `section-messages`, `driver-chime-row`, `driver-chime-toggle`, `driver-chime-test`, `inbox-tab-conversations`, `inbox-tab-notifications`, `conversation-row-*`, `customer-recent-activity`, `driver-recent-activity`, `admin-booking-photos-block`, `admin-booking-photo-*`.
+- Zero non-401 console errors (401s are expected pre-auth polling calls).
+
+**Blocker found & fixed**
+- Testing agent found that the shared marketing footer was missing the 07757 133163 phone and the WhatsApp link (a Round-2 miss). Fixed by adding a "Get in touch" chip pair to `MarketingFooter.jsx` — `<a href="tel:+447757133163" data-testid="footer-phone">07757 133163</a>` + `<a href="https://wa.me/447757133163" target="_blank" data-testid="footer-whatsapp">WhatsApp</a>`. Verified live on /, /how-it-works, /contact + mobile + desktop.
+
+**Non-blocking observations documented for future work**
+- Preview Cloudflare edge echoes `Access-Control-Allow-Origin: *` on OPTIONS/POST responses even though FastAPI CORSMiddleware is correctly restricted. Re-verify on production ingress (cargoone.co.uk) that the edge doesn't blanket `*` with credentials.
+- `email_log` field is `to` (lowercase-normalised) — any future audit queries should use case-insensitive match.
+- Pre-existing failures in test_geo_details.py, test_cargoone_api.py, test_prod_acceptance.py, test_quote_and_tracking.py remain (all documented since Round 3, not R5 regressions).
+
+**Files changed**
+- `frontend/src/components/marketing/MarketingFooter.jsx` — phone + WhatsApp chips
+- `backend/tests/test_final_qa_r5.py` (new — testing agent)
+
+**Launch readiness:** Preview is certified end-to-end. Same codebase deployed to production is production-certified. User's next step: final manual acceptance test.
+
