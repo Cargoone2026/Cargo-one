@@ -727,3 +727,32 @@ Focus: 5 new issues raised in the user's Round 3 acceptance testing. Report: `/a
 
 **Launch readiness:** Web platform is complete. Ready for redeployment to production + native iOS / Android build sprint.
 
+
+### Phase — ROUND 4 ENHANCEMENTS ✅ COMPLETE (Feb 2026)
+Focus: user-requested delight features layered on top of Round 3's messaging infrastructure. Report: `/app/test_reports/iteration_final_qa_r4.json`.
+
+**#1 Driver push chime ✅**
+- New hook `frontend/src/hooks/useMessageChime.js` — polls `/api/messages/unread-count` every 15 s and plays a Web-Audio two-note chime whenever the count strictly increases relative to the previous poll.
+- Never plays on the first poll (avoids beeping on every page load).
+- Chime is suppressed until the user has made ANY gesture (autoplay-policy compliant); the AudioContext is unlocked lazily via `pointerdown`/`keydown` listeners.
+- `cargoone_chime_enabled` localStorage flag lets drivers mute off-shift while keeping the badge. Toggle + Test button on the driver dashboard (`driver-chime-row`, `driver-chime-toggle`, `driver-chime-test`).
+
+**#2 Auto-read preview + WhatsApp-style inbox ✅**
+- New endpoint `GET /api/messages/summary` — one row per PAID booking, with the counterparty's avatar/name, ellipsized (≤100 chars) preview of the latest message, `mine` flag, delivered/read timestamps, moderated flag, and per-conversation unread count. Ordered latest-active first; no-message bookings sink to the bottom.
+- Customer Messages page rewritten with tabbed inbox: **Conversations** (new, default) + **Updates** (classic notifications). Row click opens `/customer/booking/<id>#chat`, which auto-scrolls the chat tab (Round 3 hash handler).
+- Moderated messages render as `Contact details were hidden by Cargo One.`; photo-only messages render as `📷 Photo`.
+
+**#3 Recent Activity timeline ✅**
+- New endpoint `GET /api/bookings/{id}/activity` — derives events live from booking + job + messages + POD data; no new persistence.
+- Events: `created` (Booking created), `driver_accepted` (Driver accepted your booking), `deposit_paid` (Deposit received), `driver_message` (Driver sent a message — timestamped at latest driver message), `en_route` (Driver is en route — when job.status ∈ collected/on_route/…), `delivered` (Delivered — when POD uploaded or job.status ≥ delivered), `completed` (Booking completed).
+- New shared component `frontend/src/components/ui-portal/RecentActivity.jsx` — Today / Yesterday / weekday groupings, oldest→newest within each day, mounted on both customer + driver BookingDetail Overview tabs (`customer-recent-activity`, `driver-recent-activity`).
+
+**Testing**
+- Backend: 12 new R4 tests in `/app/backend/tests/test_final_qa_r4.py`. All pass. R3 pack still passing.
+- Frontend: `yarn build` clean. Playwright verified all Round 4 testids resolve + toggle flips localStorage + polling reaches the endpoint.
+- Testing agent verdict: **zero regressions**; retest not required.
+
+**Files changed**
+- Backend: `server.py` (2 new endpoints), `tests/test_final_qa_r4.py`.
+- Frontend: `pages/portal/customer/Messages.jsx` (rewritten), `pages/portal/customer/BookingDetail.jsx`, `pages/portal/driver/BookingDetail.jsx`, `pages/portal/driver/Dashboard.jsx`, `components/ui-portal/RecentActivity.jsx` (new), `hooks/useMessageChime.js` (new).
+
