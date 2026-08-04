@@ -687,3 +687,43 @@ Focus: last launch blockers before native iOS / Android builds. Detailed report:
 - `backend/tests/test_final_qa_r2.py` (NEW — added by testing agent)
 
 **Launch readiness:** All Round 2 launch blockers cleared. Web platform is ready to hand off to native iOS / Android build sprint.
+
+### Phase — FINAL MANUAL QA SPRINT ROUND 3 ✅ COMPLETE (Feb 2026)
+Focus: 5 new issues raised in the user's Round 3 acceptance testing. Report: `/app/memory/FINAL_MANUAL_QA_ROUND3_REPORT.md`.
+
+**Item 1 — Customer & driver email notifications ✅**
+- Emails now sent to the CUSTOMER on: new driver bid received, new message from driver. Driver claim email (`send_driver_assigned`) already covered in Session E — retained unchanged.
+- Emails now sent to the DRIVER on: new message from customer.
+- All emails logged to `email_log` collection. `RESEND_API_KEY` intentionally unset in preview so entries have `status="skipped"` — production redeploy will pick up the live key.
+- New templates: `render_new_message`, `render_new_bid`. Existing `_shell()` layout ensures mobile-responsive markup + plain-text version.
+
+**Item 2 — Messaging template + 5-min throttle + read receipts + unread count ✅**
+- New collections: `conversation_presence` (per-user last_seen heartbeat), `conversation_email_state` (per-user, per-booking last-sent-at throttle cache).
+- New endpoints: `POST /bookings/{id}/conversation/presence`, `POST /bookings/{id}/messages/mark-read`, `GET /messages/unread-count`. Existing `GET /bookings/{id}/messages` now stamps `read_at` and updates presence in one shot.
+- 5-minute throttle: same-recipient, same-conversation email suppressed for 5 min. Skipped when presence heartbeat < 45 s.
+- WhatsApp-style ticks on customer + driver chat UI (single grey sent, double grey delivered, double red read). Timestamps under every bubble.
+- Customer dashboard "Messages" tile + Driver dashboard "Messages" card both sourced from `/messages/unread-count`.
+- Email `View & Reply` deep-links use `#chat` fragment — both BookingDetail pages auto-open the chat tab.
+
+**Item 3 — ASAP photo uploads ✅**
+- Both ASAP Transport and ASAP Recovery flows expose the shared `PhotoUpload` widget (multi-photo, base64 dataurls, downscaled client-side).
+- Photos surface on the driver offer card (`overflow-x-auto` strip), in Job Detail, Booking Detail, and the admin booking payment-detail modal.
+
+**Item 4 — ASAP Booking Fee Display fix ✅**
+- Root cause: legacy client-side heuristic `min(£25, max(£10, total*0.125))` — pre-dates Session F's dynamic band schema.
+- Fix: `AsapRequest.jsx` now calls `GET /booking-fee-bands/preview?driver_charge=X` (debounced, abortable) and displays the authoritative `booking_fee` + `booking_fee_percent`. Same value used by Stripe Checkout + confirmation page. **One source of truth** (`calculate_booking_fee_detail`).
+
+**Item 6 — Remaining responsive issues ✅**
+- Repeated the Round 2 automated audit at 390 / 768 / 1280 breakpoints on 41 populated pages. **85 checks / 0 offenders.** Only intentional `overflow-x-auto` scroll strips remain.
+
+**Testing**
+- Backend: 12 new R3 tests in `/app/backend/tests/test_final_qa_r3.py` — 12/12 pass. 344 pre-existing regression tests still pass. 26 pre-existing failures unrelated to Round 3 (all documented in the report).
+- Frontend: `yarn build` clean. All Round 3 testids verified via Playwright.
+- Testing agent verdict: **zero regressions**; retest not required.
+
+**Files changed**
+- Backend: `services/email.py`, `server.py`, `tests/test_final_qa_r3.py` (new).
+- Frontend: `pages/portal/customer/AsapRequest.jsx`, `pages/portal/customer/BookingDetail.jsx`, `pages/portal/driver/BookingDetail.jsx`, `pages/portal/driver/Jobs.jsx`, `pages/portal/customer/Dashboard.jsx`, `pages/portal/driver/Dashboard.jsx`, `pages/portal/admin/Bookings.jsx`.
+
+**Launch readiness:** Web platform is complete. Ready for redeployment to production + native iOS / Android build sprint.
+
