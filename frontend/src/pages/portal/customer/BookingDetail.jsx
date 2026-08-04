@@ -22,6 +22,7 @@ import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
+import { RecentActivity } from "@/components/ui-portal/RecentActivity";
 
 const ACTIVE_STATUSES = new Set([
   "deposit_paid",
@@ -385,6 +386,16 @@ export default function CustomerBookingDetail() {
             <h2 className="text-[26px] font-bold leading-tight text-[#111111]">
               {job.title}
             </h2>
+
+            {/* Round 4 — Recent activity timeline. Only rendered post-deposit
+                (i.e. when the booking is actually live) so it never appears
+                empty for a just-created but unpaid booking. */}
+            {paid ? (
+              <RecentActivity
+                bookingId={id}
+                testIdPrefix="customer-recent-activity"
+              />
+            ) : null}
 
             <RouteMap
               pickup={

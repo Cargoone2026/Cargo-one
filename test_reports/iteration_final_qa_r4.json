@@ -1,0 +1,38 @@
+{
+  "summary": "Final QA Round 4 verified. Wrote 12 new backend tests in /app/backend/tests/test_final_qa_r4.py — all 12 PASSED in serial (-n 0, ~14s). Covers GET /api/messages/summary (shape, paid-only filter, ellipsized preview at 100 chars with U+2026, moderated flag propagates, null last_message on no-messages, ordering latest→oldest with no-message rows at bottom) and GET /api/bookings/{id}/activity across the full event-derivation matrix (created only, created+accepted+deposit_paid, +driver_message, +job.status=on_route emits en_route, +delivered emits delivered — plus 403 for non-parties and 404 for missing booking, event ordering oldest→newest). R3 pack (/app/backend/tests/test_final_qa_r3.py) re-run: 12/12 still passing — no regression. Frontend E2E via Playwright on preview URL: customer login OK; /customer/messages renders inbox-tab-conversations (default) + inbox-tab-notifications; 6 conversation-row-* elements returned (matches 6 PAID bookings on testcustomer@example.com); first-row preview text is the moderated placeholder 'Contact details were hidden by Cargo One.' (moderated flag correctly rendered as human-readable text); switching to Notifications tab and back produces no console/pageerror; clicking a conversation row navigates to /customer/booking/<id>#chat (auto-opening Chat tab per Round 3 behaviour). Loading the same booking on Overview tab shows customer-recent-activity with 4 events in expected order (driver_message under 'Sat, Aug 1', then created→driver_accepted→deposit_paid under 'Fri, Jul 31') — grouping + sort verified. Driver dashboard renders driver-chime-row with the sound icon, driver-chime-test button, and driver-chime-toggle (role='switch'). Toggle click flips aria-checked true→false AND localStorage cargoone_chime_enabled 1→0; state persists across a full page reload. Test button click did not throw any pageerror. Network spy captured 9 GET /api/messages/unread-count calls during the driver session — the useMessageChime polling hook is wired and reaching the backend on interval. AudioContext audibility itself cannot be validated in headless Playwright (per agent-to-agent note) but the JS code path is exercised and error-free.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r4.py",
+    "/app/test_reports/pytest/final_qa_r4.xml"
+  ],
+  "action_items": [
+    "None blocking for Round 4. Pre-existing failures (test_geo_details.py, test_cargoone_api.py, test_prod_acceptance.py, test_quote_and_tracking.py) documented in Round 3 report still apply and are NOT introduced by Round 4."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py messages_summary (line 2688): uses 2 aggregate pipelines (latest-per-booking + unread counts) — O(3) round-trips regardless of booking count. Preview clipping at 100 chars uses U+2026 ellipsis and preserves the moderated + has_photo flags so the client can badge them independently. Good.",
+    "backend/server.py messages_summary sort key (line 2798): rows with no last_message resolve to empty string in the sort tuple and correctly sink to the bottom under reverse=True. Verified in test_summary_ordered_latest_first.",
+    "backend/server.py booking_activity (line 2805): approves admin as a party (correct) and returns 404 before 403 (correct order). Uses job.updated_at as en_route timestamp — acceptable given no per-transition timestamp is persisted, but a future enhancement could stamp status_history[] on job for pinpoint accuracy.",
+    "frontend/src/hooks/useMessageChime.js (line 74): guards chime with (prev != null && count > prev && enabledPref && primedRef.current) — correctly suppresses on first poll, when toggle is off, and before any user gesture. lastCountRef is updated on every poll so a burst plays exactly ONE chime.",
+    "frontend/src/components/ui-portal/RecentActivity.jsx groupByDay (line 130): uses local-tz startOfDay for Today/Yesterday computation and falls back to `weekday, day month` for older dates. Reverse-order push at line 158 places Today at the top while items within each day remain oldest→newest — matches spec.",
+    "frontend/src/pages/portal/customer/Messages.jsx: ConversationsPane renders moderated text verbatim ('Contact details were hidden by Cargo One.'). If desired later, the moderated flag could be visually pilled (e.g. red-tinted 'hidden' badge) — non-blocking cosmetic.",
+    "frontend chime hook: no visible loading/error state for the /messages/unread-count fetch, but silent-catch is intentional here (background polling should not surface transient errors). OK."
+  ],
+  "updated_files": ["/app/backend/tests/test_final_qa_r4.py"],
+  "success_rate": {
+    "backend": "12/12 (100%) new R4 tests + R3 pack 12/12 still passing",
+    "frontend": "100% of Round-4-scoped testids resolved on preview: inbox-tab-conversations, inbox-tab-notifications, conversation-row-*, conversation-preview-*, customer-recent-activity, customer-recent-activity-<kind>, driver-chime-row, driver-chime-toggle (role=switch), driver-chime-test; polling + persistence + toggle-flip verified"
+  },
+  "test_credentials": "testcustomer@example.com / CustomerTest12345!, testdriver@example.com / DriverTest12345!, admin@cargoone.com / Vc9O0sNDGR6SfzKDaa0L1lhp",
+  "seed_data_creation": "Fresh TEST_qar4_* customers + drivers registered per test (module-scoped fixture for the summary env with 3 paid bookings A/B/C; per-test fixtures for the 5 activity-matrix tests). Booking A carries a moderated-mimic message inserted via pymongo (moderated=True), booking B carries a 150-char message to prove ellipsis clipping, booking C has no messages. All prefixed TEST_qar4_ for cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Round 4 pack is at /app/backend/tests/test_final_qa_r4.py — run with: `EXPO_PUBLIC_BACKEND_URL=<preview> TEST_ADMIN_PASSWORD=<admin> MONGO_URL=mongodb://localhost:27017 DB_NAME=test_database python -m pytest backend/tests/test_final_qa_r4.py -n 0 -v`. Uses direct pymongo to force payment_status=paid, insert a moderated message, and mutate job.status for en_route/delivered branches. The 'no driver' branch of /activity is validated by inserting a synthetic booking row with driver_id=None because the public /bookings creation flow requires a driver. RESEND_API_KEY still deliberately unset; R4 does not touch email flow. Chime audibility cannot be tested headless — verify via (1) driver-chime-row presence, (2) toggle flips aria-checked + localStorage, (3) test button click does not throw, (4) /messages/unread-count is polled every ~15s (network spy). All four verified in this run."
+}

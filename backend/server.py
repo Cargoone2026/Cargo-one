@@ -2685,6 +2685,190 @@ async def messages_unread_count(user: dict = Depends(get_current_user)):
     return {"total": total, "by_booking": by_booking}
 
 
+@api.get("/messages/summary")
+async def messages_summary(user: dict = Depends(get_current_user)):
+    """Enhanced inbox feed — one row per PAID booking the caller is on, with
+    the latest message preview + unread count. Used by the Customer &
+    Driver inbox to show WhatsApp-style thread previews without opening
+    every conversation."""
+    q = {
+        "$or": [{"customer_id": user["id"]}, {"driver_id": user["id"]}],
+        "payment_status": "paid",
+    }
+    bookings = await db.bookings.find(
+        q,
+        {"_id": 0, "id": 1, "customer_id": 1, "driver_id": 1, "job_id": 1,
+         "status": 1, "created_at": 1, "updated_at": 1},
+    ).sort("updated_at", -1).to_list(200)
+    if not bookings:
+        return []
+
+    booking_ids = [b["id"] for b in bookings]
+    # Fetch the latest message for each booking + unread counts, both via
+    # aggregate to stay under 3 total round-trips even for a chatty user.
+    latest_pipeline = [
+        {"$match": {"booking_id": {"$in": booking_ids}}},
+        {"$sort": {"created_at": -1}},
+        {"$group": {
+            "_id": "$booking_id",
+            "msg": {"$first": "$$ROOT"},
+        }},
+    ]
+    unread_pipeline = [
+        {"$match": {"booking_id": {"$in": booking_ids},
+                     "sender_id": {"$ne": user["id"]},
+                     "read": False}},
+        {"$group": {"_id": "$booking_id", "n": {"$sum": 1}}},
+    ]
+    latest_by_bk = {}
+    async for row in db.messages.aggregate(latest_pipeline):
+        m = row.get("msg") or {}
+        m.pop("_id", None)
+        latest_by_bk[row["_id"]] = m
+    unread_by_bk = {}
+    async for row in db.messages.aggregate(unread_pipeline):
+        unread_by_bk[row["_id"]] = int(row.get("n", 0))
+
+    # Job titles + counterparty names in bulk to keep this endpoint O(1)
+    # round-trip regardless of booking count.
+    job_ids = [b.get("job_id") for b in bookings if b.get("job_id")]
+    jobs = {}
+    if job_ids:
+        async for j in db.jobs.find(
+            {"id": {"$in": job_ids}},
+            {"_id": 0, "id": 1, "title": 1, "pickup_town": 1, "dropoff_town": 1},
+        ):
+            jobs[j["id"]] = j
+    other_ids = list({
+        (b["driver_id"] if b["customer_id"] == user["id"] else b["customer_id"])
+        for b in bookings
+    })
+    others = {}
+    if other_ids:
+        async for u in db.users.find(
+            {"id": {"$in": other_ids}},
+            {"_id": 0, "id": 1, "name": 1, "profile_photo": 1, "role": 1, "rating": 1},
+        ):
+            others[u["id"]] = u
+
+    out = []
+    for b in bookings:
+        other_id = b["driver_id"] if b["customer_id"] == user["id"] else b["customer_id"]
+        other = others.get(other_id) or {}
+        job = jobs.get(b.get("job_id")) or {}
+        last = latest_by_bk.get(b["id"])
+        if last:
+            # Preview soft-clip to 100 chars for a compact inbox row.
+            raw = last.get("text") or ""
+            preview = raw if len(raw) <= 100 else raw[:99].rstrip() + "\u2026"
+            last_summary = {
+                "text": preview,
+                "sender_id": last.get("sender_id"),
+                "sender_name": last.get("sender_name"),
+                "mine": last.get("sender_id") == user["id"],
+                "read": bool(last.get("read")),
+                "read_at": last.get("read_at"),
+                "delivered_at": last.get("delivered_at"),
+                "created_at": last.get("created_at"),
+                "moderated": bool(last.get("moderated")),
+                "has_photo": bool(last.get("photo")),
+            }
+        else:
+            last_summary = None
+        out.append({
+            "booking_id": b["id"],
+            "status": b.get("status"),
+            "job_title": job.get("title") or "Booking",
+            "pickup_town": job.get("pickup_town"),
+            "dropoff_town": job.get("dropoff_town"),
+            "counterparty": {
+                "id": other_id,
+                "name": other.get("name") or "",
+                "profile_photo": other.get("profile_photo"),
+                "role": other.get("role"),
+                "rating": other.get("rating"),
+            },
+            "last_message": last_summary,
+            "unread_count": unread_by_bk.get(b["id"], 0),
+            "updated_at": b.get("updated_at") or b.get("created_at"),
+        })
+    # Order: most recently-active conversation first, but bookings without
+    # any messages float to the bottom (still returned so the customer sees
+    # every paid booking in one place).
+    out.sort(key=lambda r: (
+        r["last_message"]["created_at"] if r["last_message"] else "",
+        r["updated_at"] or "",
+    ), reverse=True)
+    return out
+
+
+@api.get("/bookings/{booking_id}/activity")
+async def booking_activity(booking_id: str, user: dict = Depends(get_current_user)):
+    """Return a chronological timeline of key events for a booking — used by
+    the customer Booking Detail "Recent Activity" widget. Events are derived
+    live from the booking / job / messages / pod_uploads collections; no new
+    persistence is required.
+    """
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")) \
+            and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    j = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0}) or {}
+
+    events: list[dict] = []
+
+    def push(kind: str, label: str, at: Optional[str], icon: str = "check"):
+        if at:
+            events.append({"kind": kind, "label": label, "at": at, "icon": icon})
+
+    # Booking created — always present.
+    push("created", "Booking created", b.get("created_at"), "sparkle")
+    # Driver acceptance — for ASAP claim the booking is created *after* the
+    # driver accepts, so this is effectively contemporaneous with created_at.
+    # For scheduled bidding, `accepted` bid → booking creation are the same
+    # step. In either case we treat booking.created_at as the acceptance ts.
+    if b.get("driver_id"):
+        push("driver_accepted",
+             "Driver accepted your booking",
+             b.get("created_at"), "user_check")
+    # Deposit received.
+    if b.get("payment_status") == "paid":
+        push("deposit_paid", "Deposit received",
+             b.get("paid_at") or b.get("updated_at"), "receipt")
+
+    # Driver sent a message — earliest driver message on this booking, only
+    # if there IS one. Latest driver message is more useful for "recent"
+    # activity so we surface that instead of the very first.
+    if b.get("driver_id"):
+        last_driver_msg = await db.messages.find_one(
+            {"booking_id": booking_id, "sender_id": b["driver_id"]},
+            {"_id": 0, "created_at": 1},
+            sort=[("created_at", -1)],
+        )
+        if last_driver_msg:
+            push("driver_message", "Driver sent a message",
+                 last_driver_msg.get("created_at"), "chat")
+
+    # Job lifecycle transitions come from job.status. We don't track a
+    # per-transition timestamp today, so use the job's updated_at for the
+    # most-advanced status the job has reached.
+    js = (j.get("status") or b.get("status") or "").lower()
+    if js in ("collected", "on_route", "delivered", "pod_uploaded", "completed"):
+        push("en_route", "Driver is en route",
+             j.get("updated_at") or b.get("updated_at"), "truck")
+    if js in ("delivered", "pod_uploaded", "completed") or b.get("delivered_at"):
+        push("delivered", "Delivered", b.get("delivered_at"), "package")
+    if js == "completed" or b.get("completed_at"):
+        push("completed", "Booking completed", b.get("completed_at"), "flag")
+
+    # Sort oldest → newest for the timeline (the frontend renders reverse
+    # if it wants "most recent first").
+    events.sort(key=lambda e: e.get("at") or "")
+    return events
+
+
 # ---------------------------------------------------------------------------
 # POD (Proof of Delivery)
 # ---------------------------------------------------------------------------

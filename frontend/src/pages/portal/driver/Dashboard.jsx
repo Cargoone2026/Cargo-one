@@ -14,12 +14,15 @@ import {
   ArrowRight,
   UploadCloud,
   MessagesSquare,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { GlobalSearchModal } from "@/components/ui-portal/GlobalSearchModal";
 import { Button } from "@/components/ui-portal/Button";
+import { useMessageChime } from "@/hooks/useMessageChime";
 
 export default function DriverDashboard() {
   const { user } = useAuth();
@@ -28,20 +31,26 @@ export default function DriverDashboard() {
   const [msgUnread, setMsgUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Round 4 — driver global chime on new messages. Polls
+  // /messages/unread-count every 15 s and beeps when the count rises. The
+  // driver can toggle it from the card below.
+  const chime = useMessageChime({ enabled: true });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [d, u] = await Promise.all([
-        api("/driver/dashboard").catch(() => ({})),
-        api("/messages/unread-count").catch(() => ({ total: 0 })),
-      ]);
+      const d = await api("/driver/dashboard").catch(() => ({}));
       setDash(d || {});
-      setMsgUnread(Number(u?.total || 0));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Reflect the chime hook's live poll into the Messages card so we only
+  // hit the endpoint once every 15 s instead of twice.
+  useEffect(() => {
+    setMsgUnread(chime.unread);
+  }, [chime.unread]);
 
   useEffect(() => {
     load();
@@ -278,7 +287,7 @@ export default function DriverDashboard() {
           )}
         </Card>
 
-        {/* Messages — Round 3: unread count from booking chats */}
+        {/* Messages — Round 3 + 4: unread count + audible chime toggle */}
         <Card
           testID="section-messages"
           Icon={MessagesSquare}
@@ -319,6 +328,55 @@ export default function DriverDashboard() {
               </p>
             </div>
           )}
+          {/* Chime toggle — off-shift driver mutes without losing the badge */}
+          <div
+            className="mt-3 flex items-center justify-between rounded-[10px] border border-[#E5E7EB] bg-white px-3 py-2"
+            data-testid="driver-chime-row"
+          >
+            <div className="flex items-center gap-2">
+              {chime.enabled ? (
+                <Volume2 className="h-4 w-4 text-[#16A34A]" />
+              ) : (
+                <VolumeX className="h-4 w-4 text-[#6B7280]" />
+              )}
+              <div>
+                <p className="text-[13px] font-semibold text-[#111111]">
+                  New-message chime
+                </p>
+                <p className="text-[11px] text-[#6B7280]">
+                  {chime.enabled
+                    ? "Plays a short sound when a customer replies."
+                    : "Muted — you'll still see the badge."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={chime.test}
+                data-testid="driver-chime-test"
+                className="rounded-full border border-[#E5E7EB] px-3 py-1 text-[11px] font-semibold text-[#6B7280] hover:border-[#111111] hover:text-[#111111]"
+              >
+                Test
+              </button>
+              <button
+                type="button"
+                onClick={() => chime.setEnabled(!chime.enabled)}
+                data-testid="driver-chime-toggle"
+                role="switch"
+                aria-checked={chime.enabled}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  chime.enabled ? "bg-[#16A34A]" : "bg-[#E5E7EB]"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                    chime.enabled ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </Card>
 
         {/* Upcoming Jobs */}

@@ -19,6 +19,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
+import { RecentActivity } from "@/components/ui-portal/RecentActivity";
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
@@ -351,6 +352,13 @@ export default function DriverBookingDetail() {
             <h2 className="text-[24px] font-bold tracking-tight text-[#111111]">
               {job.title}
             </h2>
+
+            {paid ? (
+              <RecentActivity
+                bookingId={id}
+                testIdPrefix="driver-recent-activity"
+              />
+            ) : null}
 
             <RouteMap
               pickup={
