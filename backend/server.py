@@ -1465,9 +1465,74 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
 # ---------------------------------------------------------------------------
 
 # Centralised dispatch constants — do not scatter magic numbers.
-DISPATCH_HEARTBEAT_FRESHNESS_SECONDS = 60        # drivers with older location stop matching
-DISPATCH_DEFAULT_RADIUS_MILES = 25               # candidate filter radius for ASAP offers
-DISPATCH_CANDIDATE_LIMIT = 25                    # max drivers returned per offer poll
+DISPATCH_HEARTBEAT_FRESHNESS_SECONDS = 90        # drivers with older location stop matching (loosened from 60 to survive network hiccups)
+DISPATCH_DEFAULT_RADIUS_MILES = 500              # driver's inbox filter (nationwide by default); server per-job radius still controls dispatch
+DISPATCH_CANDIDATE_LIMIT = 50                    # max drivers returned per offer poll
+
+# Escalating search-radius schedule. `age_seconds` since `dispatch_ready_at`
+# determines which band applies — jobs quietly widen their search area until
+# a driver claims OR the job is cancelled / expired. Never removes an
+# eligible booking from the queue.
+#
+# Bands (seconds → miles): 0-30 → 10; 30-90 → 20; 90-180 → 40; 180-300 → 75;
+# 300+ → 500 (effectively nationwide). Tuned for a busy urban market where
+# a claim within 90 s is the expectation; national fallback ensures rural
+# corridors never black-hole a customer.
+DISPATCH_RADIUS_LADDER = [
+    (30,   10),
+    (90,   20),
+    (180,  40),
+    (300,  75),
+    (None, 500),
+]
+
+
+def _current_search_radius_miles(job: dict, now: Optional[datetime] = None) -> float:
+    """Age-based per-job dispatch radius. Returns miles.
+
+    Server-authoritative: never trust a client to derive this. Called from
+    `_driver_live_offers` on every poll — cheap because the math is a
+    handful of comparisons.
+    """
+    ready = job.get("dispatch_ready_at")
+    if not ready:
+        return DISPATCH_RADIUS_LADDER[0][1]
+    try:
+        t0 = datetime.fromisoformat(ready.replace("Z", "+00:00")) \
+             if isinstance(ready, str) else ready
+    except Exception:
+        return DISPATCH_RADIUS_LADDER[0][1]
+    t = now or datetime.now(timezone.utc)
+    age = (t - t0).total_seconds()
+    for max_age, miles in DISPATCH_RADIUS_LADDER:
+        if max_age is None or age < max_age:
+            return float(miles)
+    return float(DISPATCH_RADIUS_LADDER[-1][1])
+
+
+async def _log_dispatch_attempt(
+    *, job_id: str, driver_id: Optional[str],
+    distance_miles: Optional[float], radius_used: float,
+    outcome: str, reason: Optional[str] = None,
+) -> None:
+    """Persist a single dispatch decision for post-mortem debugging.
+
+    Written to the `dispatch_log` collection (best-effort — never raises,
+    never blocks the offer poll). Fields intentionally keep to what the
+    Admin Dispatch Monitor needs to answer 'why didn't driver X see job Y?'.
+    """
+    try:
+        await db.dispatch_log.insert_one({
+            "job_id": job_id,
+            "driver_id": driver_id,
+            "distance_miles": distance_miles,
+            "radius_used": radius_used,
+            "outcome": outcome,        # offered | out_of_radius | not_capable | offline | stale_location | busy | claimed | expired
+            "reason": reason,
+            "ts": now_iso(),
+        })
+    except Exception:
+        logger.exception("dispatch_log write failed; swallowing")
 
 
 class DriverLivePayload(BaseModel):
@@ -1619,16 +1684,26 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
     if not driver:
         raise HTTPException(status_code=404, detail="Driver not found")
     if not driver.get("live_online"):
+        await _log_dispatch_attempt(
+            job_id="*", driver_id=user["id"], distance_miles=None,
+            radius_used=0.0, outcome="offline",
+        )
         return {"offers": [], "reason": "offline"}
     if not _heartbeat_is_fresh(driver.get("live_updated_at")):
+        await _log_dispatch_attempt(
+            job_id="*", driver_id=user["id"], distance_miles=None,
+            radius_used=0.0, outcome="stale_location",
+            reason=f"live_updated_at={driver.get('live_updated_at')}",
+        )
         return {"offers": [], "reason": "stale_location"}
     if not driver.get("live_lat") or not driver.get("live_lng"):
+        await _log_dispatch_attempt(
+            job_id="*", driver_id=user["id"], distance_miles=None,
+            radius_used=0.0, outcome="no_location",
+        )
         return {"offers": [], "reason": "no_location"}
 
-    # Phase 23 — driver busy rule: if the driver has an in-flight ASAP
-    # assignment (accepted / travelling / arrived / collected / on_route)
-    # they do NOT receive new immediate work. Scheduled future work does not
-    # block ASAP offers.
+    # Phase 23 — driver busy rule
     busy = await db.jobs.find_one({
         "assigned_driver_id": user["id"],
         "service_timing": "asap",
@@ -1637,6 +1712,10 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
                              "on_route", "delivered"]},
     }, {"id": 1})
     if busy:
+        await _log_dispatch_attempt(
+            job_id=busy.get("id"), driver_id=user["id"], distance_miles=None,
+            radius_used=0.0, outcome="busy",
+        )
         return {"offers": [], "reason": "busy_on_asap"}
 
     # Candidate query — index-friendly (service_timing + status + assigned_driver_id).
@@ -1650,15 +1729,39 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
 
     offers = []
     d_lat, d_lng = float(driver["live_lat"]), float(driver["live_lng"])
+    now_dt = datetime.now(timezone.utc)
     for job in candidates:
         if not _dispatch_eligible(job):
+            await _log_dispatch_attempt(
+                job_id=job.get("id"), driver_id=user["id"],
+                distance_miles=None, radius_used=0.0,
+                outcome="not_eligible", reason="_dispatch_eligible False",
+            )
             continue
         if not _driver_is_capable(driver, job):
+            await _log_dispatch_attempt(
+                job_id=job.get("id"), driver_id=user["id"],
+                distance_miles=None, radius_used=0.0,
+                outcome="not_capable",
+                reason=f"service_type={job.get('service_type')}",
+            )
             continue
         p_lat = float(job.get("pickup_lat") or 0)
         p_lng = float(job.get("pickup_lng") or 0)
         dist = haversine_miles(d_lat, d_lng, p_lat, p_lng)
-        if dist > radius_miles:
+        # Server-authoritative per-job search radius — expands with age. The
+        # driver's requested `radius_miles` acts as a personal cap: they can
+        # narrow their own inbox but they cannot see jobs whose dispatch
+        # radius hasn't yet expanded to reach them.
+        job_radius = _current_search_radius_miles(job, now=now_dt)
+        effective = min(radius_miles, job_radius)
+        if dist > effective:
+            await _log_dispatch_attempt(
+                job_id=job.get("id"), driver_id=user["id"],
+                distance_miles=round(dist, 1), radius_used=effective,
+                outcome="out_of_radius",
+                reason=f"job_radius={job_radius} driver_cap={radius_miles}",
+            )
             continue
         offers.append({
             "job_id": job["id"],
@@ -1669,10 +1772,7 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             "pickup_town": job.get("pickup_town"),
             "pickup_address": job.get("pickup_address"),
             # Pickup + dropoff coords — required so the driver Live Mode
-            # map can plot each pending offer as a pin. These are already
-            # implied by `distance_to_pickup_miles`; making them explicit
-            # unlocks visual dispatch decisions without leaking anything
-            # a driver couldn't derive from the existing offer feed.
+            # map can plot each pending offer as a pin.
             "pickup_lat": p_lat,
             "pickup_lng": p_lng,
             "dropoff_lat": float(job.get("dropoff_lat") or 0),
@@ -1685,8 +1785,20 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             "accepted_price": job.get("accepted_price") or job.get("fixed_price"),
             "vehicle_details": job.get("vehicle_details"),
             "customer_note": job.get("customer_note"),
+            "photos": job.get("photos") or [],
             "dispatch_ready_at": job.get("dispatch_ready_at"),
+            "current_search_radius_miles": job_radius,
+            "waiting_seconds": int(
+                (now_dt - datetime.fromisoformat(
+                    job["dispatch_ready_at"].replace("Z", "+00:00")
+                )).total_seconds()
+            ) if job.get("dispatch_ready_at") else 0,
         })
+        await _log_dispatch_attempt(
+            job_id=job.get("id"), driver_id=user["id"],
+            distance_miles=round(dist, 1), radius_used=effective,
+            outcome="offered",
+        )
         if len(offers) >= DISPATCH_CANDIDATE_LIMIT:
             break
     offers.sort(key=lambda o: o["distance_to_pickup_miles"])
@@ -1817,6 +1929,43 @@ async def customer_dispatch_state(job_id: str,
         "assigned_driver_rating": job.get("assigned_driver_rating"),
     }
     resp["dispatch_eligible"] = _dispatch_eligible(job)
+    # Round 6 — expose the age-based radius so the "Looking for driver"
+    # screen can show the customer that we're widening the search rather
+    # than sitting idle.
+    now_dt = datetime.now(timezone.utc)
+    ready = job.get("dispatch_ready_at")
+    if ready:
+        try:
+            t0 = datetime.fromisoformat(ready.replace("Z", "+00:00"))
+            resp["waiting_seconds"] = int((now_dt - t0).total_seconds())
+        except Exception:
+            resp["waiting_seconds"] = 0
+    else:
+        resp["waiting_seconds"] = 0
+    resp["current_search_radius_miles"] = _current_search_radius_miles(job, now=now_dt)
+    # Compute next radius expansion time (if any)
+    resp["next_radius_expansion_at"] = None
+    if ready:
+        for max_age, _miles in DISPATCH_RADIUS_LADDER:
+            if max_age is None:
+                break
+            if resp["waiting_seconds"] < max_age:
+                try:
+                    t0 = datetime.fromisoformat(ready.replace("Z", "+00:00"))
+                    resp["next_radius_expansion_at"] = (
+                        t0 + timedelta(seconds=max_age)
+                    ).isoformat()
+                except Exception:
+                    pass
+                break
+    # Aggregate offers-so-far (unique drivers notified) — no PII, just a count.
+    try:
+        distinct = await db.dispatch_log.distinct(
+            "driver_id", {"job_id": job_id, "outcome": "offered"},
+        )
+        resp["drivers_notified_count"] = len([d for d in distinct if d])
+    except Exception:
+        resp["drivers_notified_count"] = 0
     return resp
 
 
@@ -3281,6 +3430,134 @@ async def admin_list_jobs(user: dict = Depends(require_role("admin"))):
 async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
     bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return bookings
+
+
+@api.get("/admin/dispatch/active")
+async def admin_active_dispatches(user: dict = Depends(require_role("admin"))):
+    """Real-time Admin Dispatch Monitor (Round 6).
+
+    Returns every ASAP job currently in the dispatch queue, enriched with:
+      - waiting_seconds since dispatch_ready_at
+      - current_search_radius_miles (per the age-based ladder)
+      - drivers_notified / offered / declined counts derived from dispatch_log
+      - accepted_by (if a driver has claimed since offers began)
+      - next_radius_expansion_at (approx timestamp when the radius will widen)
+      - last_dispatch_attempt (most recent dispatch_log entry)
+
+    This is the primary debugging screen. Live-updates by client polling
+    every ~5 s; no websocket dependency.
+    """
+    jobs = await db.jobs.find(
+        {"service_timing": "asap",
+         "status": {"$in": ["confirmed", "dispatch_ready"]},
+         "assigned_driver_id": None,
+         "cancelled_at": {"$exists": False}},
+        {"_id": 0},
+    ).sort("dispatch_ready_at", 1).to_list(200)
+    # Also include jobs that were claimed in the last 15 min for context.
+    recently_claimed = await db.jobs.find(
+        {"service_timing": "asap",
+         "assigned_driver_id": {"$ne": None},
+         "status": {"$in": ["accepted", "confirmed", "dispatch_ready",
+                              "travelling", "arrived", "collected"]}},
+        {"_id": 0},
+    ).sort("updated_at", -1).limit(20).to_list(20)
+
+    now_dt = datetime.now(timezone.utc)
+    out = []
+
+    async def _summarise(job: dict, is_open: bool):
+        job_id = job["id"]
+        ready = job.get("dispatch_ready_at")
+        waiting = 0
+        if ready:
+            try:
+                t0 = datetime.fromisoformat(ready.replace("Z", "+00:00"))
+                waiting = int((now_dt - t0).total_seconds())
+            except Exception:
+                waiting = 0
+        radius = _current_search_radius_miles(job, now=now_dt)
+        # dispatch_log aggregation — count per outcome
+        counts: dict = {}
+        drivers_notified: set = set()
+        last_attempt = None
+        async for row in db.dispatch_log.find(
+            {"job_id": job_id}, {"_id": 0},
+        ).sort("ts", -1).limit(500):
+            counts[row["outcome"]] = counts.get(row["outcome"], 0) + 1
+            if row.get("driver_id") and row["outcome"] == "offered":
+                drivers_notified.add(row["driver_id"])
+            if last_attempt is None:
+                last_attempt = row
+        # Compute next radius expansion timestamp
+        next_expansion = None
+        for max_age, _miles in DISPATCH_RADIUS_LADDER:
+            if max_age is not None and waiting < max_age:
+                if ready:
+                    try:
+                        t0 = datetime.fromisoformat(ready.replace("Z", "+00:00"))
+                        next_expansion = (
+                            t0 + timedelta(seconds=max_age)
+                        ).isoformat()
+                    except Exception:
+                        next_expansion = None
+                break
+        assigned = job.get("assigned_driver_id")
+        accepted_by = None
+        if assigned:
+            u = await db.users.find_one(
+                {"id": assigned}, {"_id": 0, "id": 1, "name": 1, "phone": 1},
+            )
+            accepted_by = u
+        return {
+            "job_id": job_id,
+            "title": job.get("title"),
+            "service_type": job.get("service_type"),
+            "status": job.get("status"),
+            "pickup_town": job.get("pickup_town"),
+            "dropoff_town": job.get("dropoff_town"),
+            "pickup_lat": job.get("pickup_lat"),
+            "pickup_lng": job.get("pickup_lng"),
+            "dispatch_ready_at": ready,
+            "waiting_seconds": waiting,
+            "current_search_radius_miles": radius,
+            "next_radius_expansion_at": next_expansion,
+            "attempt_counts": counts,
+            "drivers_notified_count": len(drivers_notified),
+            "offers_pending": counts.get("offered", 0),
+            "offers_declined": counts.get("out_of_radius", 0)
+                                + counts.get("not_capable", 0),
+            "last_dispatch_attempt": last_attempt,
+            "accepted_by": accepted_by,
+            "queue_state": "open" if is_open else "claimed",
+        }
+
+    for j in jobs:
+        out.append(await _summarise(j, is_open=True))
+    for j in recently_claimed:
+        out.append(await _summarise(j, is_open=False))
+    return {
+        "active_count": len(jobs),
+        "recently_claimed_count": len(recently_claimed),
+        "generated_at": now_dt.isoformat(),
+        "radius_ladder": [
+            {"until_seconds": m, "radius_miles": r}
+            for m, r in DISPATCH_RADIUS_LADDER
+        ],
+        "heartbeat_freshness_seconds": DISPATCH_HEARTBEAT_FRESHNESS_SECONDS,
+        "items": out,
+    }
+
+
+@api.get("/admin/dispatch/log/{job_id}")
+async def admin_dispatch_log(job_id: str,
+                                user: dict = Depends(require_role("admin"))):
+    """Raw per-attempt log for one job — useful for deep debugging."""
+    rows = await db.dispatch_log.find(
+        {"job_id": job_id}, {"_id": 0},
+    ).sort("ts", -1).limit(500).to_list(500)
+    return {"job_id": job_id, "rows": rows}
+
 
 
 @api.post("/admin/bookings/{booking_id}/refund")

@@ -1,0 +1,36 @@
+{
+  "summary": "Round 6 — ASAP Dispatch launch-blocker certification. Full backend test pack (/app/backend/tests/test_final_qa_r6.py) covering all 18 items in the review request: radius-ladder helper (5 bands + no-anchor default), dispatch_log outcomes (offline/offered/out_of_radius/busy/not_capable), driver /offers escalation E2E, driver-side ?radius_miles cap, admin /dispatch/active shape + 403 guard, admin /dispatch/log/{job_id} shape + 403 guard, customer /dispatch/{job_id} enrichment + anonymous 401/403 guard, persistent-queue behaviour (10-min-old unclaimed job still listed at 500 mi), cancel-removes-from-queue, transport ASAP claim flow (moves open→claimed with accepted_by), recovery ASAP with capability required + not_capable log, and multi-driver near-wins/far-only-after-escalation. Frontend UI smoke on /admin/dispatch confirms every data-testid required (admin-dispatch-monitor, dispatch-radius-ladder, dispatch-stat-waiting/claimed, dispatch-items, dispatch-search filter behaviour, dispatch-refresh, dispatch-item-<job_id>, dispatch-item-log-toggle-<job_id>, dispatch-log-<job_id>) and admin-dispatch-link on /admin dashboard. Regression: 36/36 of test_final_qa_r5.py + test_realtime_dispatch.py still pass. Total 23/23 new + 36/36 regression = 59/59 green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r6.py",
+    "/app/test_reports/pytest/qar6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 5294 lines — should be split into modules (auth/dispatch/jobs/admin) for maintainability. Non-blocking for this launch.",
+    "dispatch_log has no TTL index; on a busy market this collection will grow unbounded. Recommend adding a TTL of ~30 days on `ts` (best-effort, not required for launch).",
+    "customer_dispatch_state re-parses dispatch_ready_at three times per call (waiting_seconds, next_radius_expansion_at, _current_search_radius_miles). Micro-inefficient — parse once and reuse. Not a correctness issue.",
+    "admin_active_dispatches: per-job `dispatch_log.find(...).limit(500)` inside the loop is O(N_jobs * 500). Fine at current scale; consider a single `$facet` aggregation if the queue exceeds ~50 concurrent items."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_final_qa_r6.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 new + 36/36 regression = 59/59)",
+    "frontend": "100% of required data-testids present and functional"
+  },
+  "test_credentials": "admin@cargoone.com / Vc9O0sNDGR6SfzKDaa0L1lhp (from /app/memory/test_credentials.md); ephemeral test users created per-test with prefix TEST_qar6_",
+  "seed_data_creation": "Each test creates ephemeral TEST_qar6_* users and QAR6-* jobs. Bypasses Stripe by direct Mongo write to job.status='confirmed' + dispatch_ready_at=NOW (same effect as _finalise_paid_deposit). Cleanup step deletes TEST_qar6_ users + associated jobs + dispatch_log rows; an additional out-of-band cleanup removed orphaned QAR6-* jobs & TEST_/PYTEST-/ASAP FRESH R6 stragglers (796 rows).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Round 6 dispatch monitor is production-ready. Backend test pack lives at /app/backend/tests/test_final_qa_r6.py — 23 tests, 24 s runtime, uses direct Mongo writes to time-shift dispatch_ready_at. Admin monitor at /admin/dispatch polls /api/admin/dispatch/active every 5 s and works end-to-end. Recovery capability gating uses `capabilities.recovery` OR `service_types` list — the not_capable outcome is only logged when the driver has explicit capability info that excludes recovery (v1 lenient fallback documented at server.py:1585-1598). If future rounds tighten recovery capability, update test_recovery_driver_without_capability_excluded accordingly.",
+  "rca of the issue": "Original bug: dispatch endpoint used a fixed 25-mile radius with no escalation. Fix implemented + certified: `_current_search_radius_miles` returns 10/20/40/75/500 mi based on age since dispatch_ready_at (server-authoritative, driver ?radius_miles=X only caps their own inbox). Persistent queue verified — a 10-minute-old unclaimed job still appears in /admin/dispatch/active items[queue_state=open] at 500 mi. dispatch_log collection captures every offer decision with driver_id, distance_miles, radius_used, outcome, reason, ts. Every test in the review request passed on first run — no fixes required."
+}

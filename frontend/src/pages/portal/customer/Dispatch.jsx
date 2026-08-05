@@ -93,7 +93,33 @@ export default function CustomerDispatch() {
               <Radar className="absolute inset-0 m-auto h-8 w-8 text-amber-600" />
             </div>
             <p className="text-lg font-medium">Looking for nearby drivers…</p>
-            <p className="text-sm text-neutral-500 mt-1">This usually takes under 2 minutes.</p>
+            {state?.current_search_radius_miles ? (
+              <div
+                className="mt-3 flex flex-col items-center gap-1"
+                data-testid="dispatch-radius-status"
+              >
+                <p className="text-sm text-neutral-600">
+                  Searching within{" "}
+                  <strong className="text-neutral-900">
+                    {state.current_search_radius_miles} miles
+                  </strong>{" "}
+                  · {state.drivers_notified_count || 0} driver
+                  {(state.drivers_notified_count || 0) === 1 ? "" : "s"} notified
+                </p>
+                {state.next_radius_expansion_at ? (
+                  <p className="text-xs text-neutral-500">
+                    Widening the search{" "}
+                    {formatIn(state.next_radius_expansion_at)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-neutral-500">
+                    Search is nationwide — we'll never stop looking.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500 mt-1">This usually takes under 2 minutes.</p>
+            )}
           </div>
         )}
 
@@ -129,4 +155,12 @@ export default function CustomerDispatch() {
       </div>
     </div>
   );
+}
+
+function formatIn(iso) {
+  const t = new Date(iso).getTime();
+  const s = Math.max(0, Math.round((t - Date.now()) / 1000));
+  if (s <= 0) return "any moment";
+  if (s < 60) return `in ${s} s`;
+  return `in ${Math.floor(s / 60)} m ${s % 60} s`;
 }

@@ -15,6 +15,7 @@ import {
   Search,
   ShieldCheck,
   BarChart3,
+  Radar,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -133,6 +134,15 @@ export default function AdminDashboard() {
             subtitle="KPIs, top categories, top drivers, revenue"
             href="/admin/analytics"
             testID="admin-analytics-link"
+          />
+          <ActionRow
+            Icon={Radar}
+            iconBg="#FEE2E2"
+            iconColor="#D62828"
+            title="ASAP Dispatch Monitor"
+            subtitle="Live queue, radius expansion, per-attempt logs"
+            href="/admin/dispatch"
+            testID="admin-dispatch-link"
           />
           <ActionRow
             Icon={Inbox}
