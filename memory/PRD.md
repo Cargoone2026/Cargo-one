@@ -783,3 +783,49 @@ Full-surface certification pass prior to the user's final manual acceptance test
 
 **Launch readiness:** Preview is certified end-to-end. Same codebase deployed to production is production-certified. User's next step: final manual acceptance test.
 
+
+### Phase — ROUND 6 ASAP DISPATCH LAUNCH-BLOCKER FIX ✅ COMPLETE (Feb 2026)
+Focus: user hit a production issue where ASAP bookings never surfaced to online drivers. Deep RCA + full-scope fix. Report: `/app/test_reports/iteration_final_qa_r6.json`.
+
+**Root cause**
+- Dispatch endpoint used a fixed 25-mile radius (`DISPATCH_DEFAULT_RADIUS_MILES`) with NO age-based escalation. Anyone outside 25 miles of pickup was silently invisible forever.
+- No `dispatch_log` collection → no way to answer "why didn't driver X see job Y?"
+- No admin dispatch monitor → no visibility into the queue.
+- Heartbeat window was 60 s → aggressive; a briefly-throttled tab stopped receiving offers.
+
+**Fix**
+- **Escalating radius ladder** (`DISPATCH_RADIUS_LADDER` const): 10 mi <30 s → 20 mi <90 s → 40 mi <180 s → 75 mi <300 s → **500 mi nationwide** thereafter. Server-authoritative; the driver's `?radius_miles=X` only caps their own inbox.
+- `DISPATCH_HEARTBEAT_FRESHNESS_SECONDS` loosened 60 → 90 to tolerate network hiccups.
+- `DISPATCH_CANDIDATE_LIMIT` raised 25 → 50; `DISPATCH_DEFAULT_RADIUS_MILES` raised 25 → 500 (nationwide inbox by default).
+- New `dispatch_log` collection — every offer decision written with `{job_id, driver_id, distance_miles, radius_used, outcome, reason, ts}`. Outcomes: `offered / out_of_radius / not_capable / offline / stale_location / no_location / busy / not_eligible / claimed / expired`. Best-effort — never raises, never blocks.
+- New `_current_search_radius_miles(job)` helper: age-based deterministic radius, unit-tested across all 5 bands + no-anchor default.
+- New `_log_dispatch_attempt(...)` helper.
+
+**New endpoints**
+- `GET /api/admin/dispatch/active` — live queue + recently-claimed + radius_ladder + heartbeat_freshness_seconds + per-job attempt_counts + drivers_notified_count + offers_pending + offers_declined + last_dispatch_attempt + accepted_by + queue_state. Admin only (403 for others).
+- `GET /api/admin/dispatch/log/{job_id}` — raw log for deep dives.
+- `GET /api/customer/dispatch/{job_id}` extended with `waiting_seconds`, `current_search_radius_miles`, `next_radius_expansion_at`, `drivers_notified_count`.
+
+**New frontend**
+- `/admin/dispatch` — real-time DispatchMonitor page (polls /admin/dispatch/active every 5 s). Radius-ladder pills, waiting + recently-claimed stats, search box, per-job cards with wait timer / current radius / next expansion ETA / drivers notified / offers pending / offers declined / accepted_by / show-raw-log toggle. Green background for claimed rows; red hover for open rows.
+- Admin dashboard: new `admin-dispatch-link` ActionRow leading into it.
+- Customer `/customer/dispatch/{id}` — the "Looking for driver" spinner now shows "Searching within N miles · X drivers notified · Widening the search in Ys" (or "Search is nationwide — we'll never stop looking" once fully escalated).
+
+**Persistent queue guarantee**
+- Certified: a 10-minute-old unclaimed ASAP job remains in `/admin/dispatch/active` at 500 mi radius. Removed only on `cancelled_at` or `assigned_driver_id` set. Never expires silently.
+
+**Testing**
+- New pack `/app/backend/tests/test_final_qa_r6.py` — 23 tests, 24 s runtime.
+- Test coverage: radius ladder (5 bands + no-anchor default), all 7 dispatch_log outcomes, driver-inside-radius, driver-outside-radius, escalation E2E, multi-driver, no-drivers persistence, admin monitor shape + 403, admin log 403, customer dispatch enrichment, cancel removes from queue, transport ASAP claim flow (open→claimed with accepted_by), recovery ASAP with capability gating.
+- Result: **23/23 new + 36/36 regression = 59/59 pass on first run**. Testing agent verdict: production-ready, no fixes required.
+
+**Files changed**
+- Backend: `server.py` (constants, helpers, /driver/live/offers rewrite, admin_active_dispatches, admin_dispatch_log, customer_dispatch_state enrichment).
+- Backend tests: `tests/test_final_qa_r6.py` (new).
+- Frontend: `pages/portal/admin/DispatchMonitor.jsx` (new), `pages/portal/customer/Dispatch.jsx`, `pages/portal/admin/Dashboard.jsx`, `App.js`.
+
+**Known non-blocking improvements (documented for post-launch)**
+- `server.py` is 5294 lines — split into modules soon.
+- `dispatch_log` needs a TTL index (~30 days) on `ts` in production.
+- Admin monitor per-job `dispatch_log` lookup is O(N * 500); switch to a single `$facet` aggregation past ~50 concurrent items.
+
