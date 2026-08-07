@@ -448,6 +448,12 @@ def public_job(job: dict, include_private: bool = False) -> dict:
         out.pop("pickup_address", None)
         out.pop("dropoff_address", None)
         # Keep towns and approximate coords for map preview
+    # Round 9 — always surface a Suitable Vehicle. Historic jobs written
+    # before the create-time deriver won't have `recommended_vehicle` set;
+    # compute it on read so every job — ASAP transport, ASAP recovery,
+    # scheduled, marketplace — displays a vehicle to the driver.
+    if not out.get("recommended_vehicle"):
+        out["recommended_vehicle"] = _derive_suitable_vehicle(job)
     return out
 
 
@@ -1133,6 +1139,14 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     # the multi-round bidding lifecycle. Guard commercial rules explicitly.
     if service_timing == "asap" and job.get("pricing_type") != "fixed":
         raise HTTPException(status_code=400, detail="ASAP requests must be fixed-price")
+    # Round 9 fix — always populate a Suitable Vehicle label. ASAP jobs
+    # posted by customers rarely include one explicitly; without it the
+    # driver's offer card / booking detail can't render the vehicle row.
+    # Derives from transport_category (transport) or vehicle_details.type
+    # (recovery) with sensible fallbacks so the field is NEVER empty.
+    if not job.get("recommended_vehicle"):
+        job["recommended_vehicle"] = _derive_suitable_vehicle(job)
+
     await db.jobs.insert_one(job)
     return public_job(job, include_private=True)
 
@@ -1485,6 +1499,76 @@ DISPATCH_RADIUS_LADDER = [
     (300,  75),
     (None, 500),
 ]
+
+
+
+# Category → recommended vehicle mapping. Deliberately conservative and
+# UK-market focused. Updates should extend the table rather than adding
+# per-call branching to keep the deriver purely declarative.
+_SUITABLE_VEHICLE_BY_CATEGORY = {
+    "documents":              "Small Van",
+    "parcels":                "Small Van",
+    "parcel":                 "Small Van",
+    "multiple_parcels":       "Medium Van",
+    "boxes":                  "Medium Van",
+    "retail_goods":           "Medium Van",
+    "food_delivery":          "Small Van",
+    "fragile_items":          "Medium Van",
+    "electrical_equipment":   "Medium Van",
+    "medical_equipment":      "Medium Van",
+    "bicycle":                "Medium Van",
+    "motorcycle":             "Motorcycle Recovery",  # only used when service_type != transport
+    "furniture":              "Luton Van",
+    "house_moves":            "Luton Van",
+    "generator":              "Luton Van",
+    "machinery":              "7.5T Box Truck",
+    "building_materials":     "Luton Van",
+    "pallet":                 "Large Van",
+    "pallets":                "Large Van",
+    "freight":                "7.5T Box Truck",
+    "cars":                   "Car Transporter",
+    "boats":                  "Low Loader",
+}
+
+
+def _derive_suitable_vehicle(job: dict) -> str:
+    """Best-effort vehicle recommendation for any job that didn't already
+    carry a `recommended_vehicle` label. Returns a UK-market vehicle name
+    like 'Small Van', 'Luton Van', '3.5T Recovery Truck'. Deterministic —
+    same inputs always yield the same label.
+    """
+    service_type = (job.get("service_type") or "").lower()
+    if service_type == "breakdown_recovery":
+        v = job.get("vehicle_details") or {}
+        vtype = (v.get("type") or v.get("category") or "").lower()
+        if "bike" in vtype or "motor" in vtype:
+            return "Motorcycle Recovery"
+        if "van" in vtype or "small" in vtype:
+            return "3.5T Recovery Truck"
+        if "hgv" in vtype or "truck" in vtype or "lorry" in vtype:
+            return "Heavy Recovery"
+        if "commercial" in vtype or "7.5" in vtype:
+            return "7.5T Recovery Truck"
+        # Sensible default — covers the vast majority of car recoveries.
+        return "3.5T Recovery Truck"
+    # Transport: prefer explicit transport_category, else the top-level category
+    key = (job.get("transport_category") or job.get("category") or "").lower()
+    key = key.replace(" ", "_")
+    if key in _SUITABLE_VEHICLE_BY_CATEGORY:
+        return _SUITABLE_VEHICLE_BY_CATEGORY[key]
+    # Weight fallback — if we still don't know, size by declared weight_kg.
+    try:
+        w = float(job.get("weight_kg") or 0)
+    except Exception:
+        w = 0
+    if w >= 1500:
+        return "7.5T Box Truck"
+    if w >= 500:
+        return "Luton Van"
+    if w >= 100:
+        return "Large Van"
+    return "Small Van"
+
 
 
 def _current_search_radius_miles(job: dict, now: Optional[datetime] = None) -> float:
@@ -1858,7 +1942,10 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             "customer_note": job.get("customer_note"),
             "transport_category": job.get("transport_category"),
             "transport_description": job.get("transport_description"),
-            "recommended_vehicle": job.get("recommended_vehicle"),
+            "recommended_vehicle": (
+                job.get("recommended_vehicle")
+                or _derive_suitable_vehicle(job)
+            ),
             "photos": job.get("photos") or [],
             "dispatch_ready_at": job.get("dispatch_ready_at"),
             "current_search_radius_miles": job_radius,
@@ -1976,6 +2063,11 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
         booking = await db.bookings.find_one({"job_id": job_id}, {"_id": 0})
         cust = await db.users.find_one({"id": job["customer_id"]}, {"_id": 0, "password_hash": 0})
         if booking and cust:
+            # Ensure suitable-vehicle is always populated in the email
+            # (ASAP jobs derive it at create-time; this is a belt-and-braces
+            # fallback for any historic doc missing the field).
+            if not job.get("recommended_vehicle"):
+                job["recommended_vehicle"] = _derive_suitable_vehicle(job)
             booking["job"] = {k: v for k, v in job.items() if k != "_id"}
             await send_driver_assigned(db, user=cust, booking=booking, driver=driver)
             await send_driver_booking_accepted_email(

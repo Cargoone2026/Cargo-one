@@ -106,6 +106,20 @@ export default function CustomerBookingConfirmed() {
           <MapPin className="h-4 w-4 text-red-600" />
           <span className="truncate">{b.job?.dropoff_town || "Destination"}</span>
         </div>
+        {(b.job?.recommended_vehicle || b.job?.vehicle_label) && (
+          <div
+            className="mt-2 flex items-center gap-2 text-sm text-neutral-700"
+            data-testid="booking-confirmed-vehicle"
+          >
+            <Truck className="h-4 w-4 text-neutral-500" />
+            <span className="text-neutral-500">
+              {isRecovery ? "Recovery Vehicle" : "Suitable Vehicle"}:
+            </span>
+            <span className="font-medium">
+              {b.job?.recommended_vehicle || b.job?.vehicle_label}
+            </span>
+          </div>
+        )}
         <div className="mt-3 text-sm text-neutral-600">
           <span className="font-medium">£{Number(b.deposit_amount || 0).toFixed(2)}</span> deposit paid
           <span className="text-neutral-400 mx-2">·</span>
