@@ -885,3 +885,34 @@ Focus: subtle "You missed N offers while offline" toast surfaced when a driver c
 - Backend: `server.py::driver_go_online` (~line 1594), `tests/test_final_qa_r8.py` (new).
 - Frontend: `pages/portal/driver/Live.jsx` (missedToast state + banner).
 
+
+### Phase — ROUND 9: Recommended Vehicle E2E Visibility ✅ COMPLETE (Feb 2026)
+Focus: guarantee the backend-derived `recommended_vehicle` (Suitable Vehicle / Recovery Vehicle) is rendered in every driver-facing, customer-facing and admin-facing screen for ASAP Transport AND ASAP Recovery. Report: `/app/test_reports/iteration_final_qa_r9.json`.
+
+**Backend derivation (already in place across 3 call sites, this round added a 4th belt-and-braces derive)**
+- `server.py::_derive_suitable_vehicle` — deterministic UK-vehicle picker (Motorcycle Recovery / 3.5T Recovery Truck / Heavy Recovery / Small–Luton–7.5T Box Truck) driven by transport_category, vehicle_details.type and weight_kg fallback.
+- Create-time (`POST /jobs` L1147-1148) · Read-time (`public_job()` L455-456) · Live offers (`/driver/live/offers` L1945-1947) · **Claim-time email fallback** (`POST /jobs/:id/claim` L2069-2073 — new this round) so historic jobs without the field still send correct driver-assigned emails.
+
+**Frontend rendering (all 7 target locations verified)**
+- Customer BookingConfirmed — new `booking-confirmed-vehicle` row on `/customer/booking-confirmed/:id` (uses `Suitable Vehicle` for Transport, `Recovery Vehicle` for Recovery).
+- Customer BookingDetail — `JobExtras` chip.
+- Driver Live offer card — `AcceptanceInfo` component (`Suitable Vehicle` for Transport, `Recovery Vehicle Required` for Recovery).
+- Driver JobDetail preview — `JobExtras` chip.
+- Driver BookingDetail — `JobExtras` chip.
+- Admin Bookings → View payment modal — `JobExtras` chip.
+- Driver `driver_booking_accepted` email — `Vehicle:` line + branded HTML row driven by `job.recommended_vehicle`.
+
+**Testing**
+- Backend: 16 new pytest cases in `/app/backend/tests/test_final_qa_r9_vehicle.py` — 100% pass. Cover: derive at create for ASAP Transport (Small/Large/Luton/7.5T Box by weight), ASAP Recovery (3.5T/Heavy/7.5T/Motorcycle by vehicle_details.type), read-time derive on legacy jobs, live-offers derive, claim-time belt-and-braces derive, driver_booking_accepted email includes rendered "Vehicle:" line.
+- Frontend: 6/6 Playwright UI checkpoints green (2 pages × Transport + Recovery seeds).
+- Regression: R6 (23) + R7 (8) + R8 (9) + R9 (16) = **56/56 all green**. Zero new failures against the 258/17/8/1 baseline.
+
+**Files changed**
+- Backend: `server.py::claim_asap_job` (derive fallback before driver_booking_accepted email), `tests/test_final_qa_r9_vehicle.py` (new — 16 cases).
+- Frontend: `pages/portal/customer/BookingConfirmed.jsx` (new `booking-confirmed-vehicle` row w/ Recovery label variant).
+
+**Deferred (non-blocking) — flagged as `critical_code_review_comments` by testing agent**
+- Consolidate the 4 derive call sites into a single normaliser (server.py is ~5,482 lines).
+- `email_log._send_and_log` should persist a `text_snippet` (first 500 chars) so future audits don't need re-rendering to fact-check body content.
+- `_derive_suitable_vehicle` uses substring matches (`'bike' in vtype`) — swap to a whitelist mapping when we tidy the taxonomy.
+
