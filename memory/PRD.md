@@ -829,3 +829,36 @@ Focus: user hit a production issue where ASAP bookings never surfaced to online 
 - `dispatch_log` needs a TTL index (~30 days) on `ts` in production.
 - Admin monitor per-job `dispatch_log` lookup is O(N * 500); switch to a single `$facet` aggregation past ~50 concurrent items.
 
+
+### Phase — ROUND 7 DRIVER ACCEPTANCE + ASAP INFO ✅ COMPLETE (Feb 2026)
+Focus: user found in production that critical info was missing from offer cards and only drivers could call customers. Report: `/app/test_reports/iteration_final_qa_r7.json`.
+
+**New shared component**
+- `frontend/src/components/ui-portal/AcceptanceInfo.jsx` — prominent labelled rows for Suitable Vehicle, Transport Item + Description (non-recovery), Recovery Vehicle Required + Vehicle to Recover + Fault (recovery). Data-driven — omits itself when no fields are set.
+
+**Mounted on 6 surfaces**
+- Driver `Jobs.jsx` offer cards
+- Driver `Live.jsx` ASAP offer popup + new photo strip (`live-offer-photos-<id>`)
+- Driver `JobDetail.jsx`
+- Driver `BookingDetail.jsx` Overview
+- Customer `BookingDetail.jsx` Overview
+- Admin `Bookings.jsx` payment-detail modal
+
+**Backend**
+- New email: `render_driver_booking_accepted` + `send_driver_booking_accepted_email` (`services/email.py`) — Cargo One branded, includes customer name + phone, pickup, drop-off, Suitable Vehicle, Transport Item, Amount to Collect, Start Trip + Open Booking CTAs. Plain-text mirror.
+- Wired: `POST /jobs/{id}/claim` (ASAP path) and `_finalise_paid_deposit` (non-ASAP path, guarded so ASAP doesn't double-fire). Logs `template='driver_booking_accepted'` to `email_log`.
+- HIGH bug caught by testing agent + fixed: `/driver/live/offers` now forwards `transport_category`, `transport_description`, `recommended_vehicle` so the AcceptanceInfo on the Live popup renders correctly.
+
+**Customer→driver call button**
+- Pre-existing at customer `BookingDetail.jsx:517` (`call-party-button`) — verified gated on `other_party.phone` (assigned + phone populated). Correct pre-assignment hidden state.
+
+**Testing**
+- New pack `/app/backend/tests/test_final_qa_r7.py` — 8/8 pass.
+- Regression: `test_final_qa_r6.py` 23/23, R5–R2 46/46 green.
+- **Total: 77/77 pass across R2–R7 deterministic packs.**
+
+**Non-blocking noted**
+- `server.py` is now 5316 lines — split-out overdue (still non-blocking).
+- Consider `JobCreate.recommended_vehicle: Optional[str]` so customers/admins can set it at POST time.
+- Consider unique index on (template, booking_id) for `email_log` to make double-send race-free by construction.
+
