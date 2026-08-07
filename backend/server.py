@@ -1618,19 +1618,31 @@ async def driver_go_online(payload: DriverLivePayload,
     prev_updated = (prev or {}).get("live_updated_at")
     missed_count = 0
     try:
-        # If the driver has never been online we don't want to spam them
-        # with "you missed 20 offers" on first login — cap the look-back at
-        # 60 min to keep the toast contextually relevant.
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
-        cutoff_iso = cutoff.isoformat()
-        since = prev_updated or cutoff_iso
-        # Take the LATER of the two so a driver returning after weeks still
-        # only sees offers from the last hour.
-        since = max(since, cutoff_iso)
+        # Cap the look-back at 60 min so a driver returning after weeks
+        # still only sees offers from the last hour. Compare via parsed
+        # datetime rather than lexicographic string compare — this survives
+        # any future change in the ISO-string offset format ('+00:00' vs 'Z').
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=60)
+        cutoff_iso = cutoff_dt.isoformat()
+        since_dt = cutoff_dt
+        if prev_updated:
+            try:
+                pd = datetime.fromisoformat(str(prev_updated).replace("Z", "+00:00"))
+                if pd > cutoff_dt:
+                    since_dt = pd
+            except Exception:
+                pass
+        since = since_dt.isoformat()
         cands = await db.jobs.find(
             {"service_timing": "asap",
              "dispatch_ready_at": {"$gt": since},
-             "cancelled_at": {"$exists": False}},
+             # Explicit null-safe exclusion — treat both missing AND null as
+             # 'not cancelled' so any historical rows written with an
+             # explicit null cancelled_at are correctly ignored.
+             "$or": [
+                 {"cancelled_at": {"$exists": False}},
+                 {"cancelled_at": None},
+             ]},
             {"_id": 0, "service_type": 1, "category": 1, "capabilities": 1,
              "pickup_lat": 1, "pickup_lng": 1, "dispatch_ready_at": 1,
              "assigned_driver_id": 1},

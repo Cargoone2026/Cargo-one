@@ -862,3 +862,26 @@ Focus: user found in production that critical info was missing from offer cards 
 - Consider `JobCreate.recommended_vehicle: Optional[str]` so customers/admins can set it at POST time.
 - Consider unique index on (template, booking_id) for `email_log` to make double-send race-free by construction.
 
+
+### Phase — ROUND 8 MISSED-OFFER TOAST ✅ COMPLETE (Feb 2026)
+Focus: subtle "You missed N offers while offline" toast surfaced when a driver comes back online. Report: `/app/test_reports/iteration_final_qa_r8.json`.
+
+**Backend**
+- `POST /api/driver/live/online` now returns `missed_offers_count` — non-breaking additive field. Counts ASAP jobs whose `dispatch_ready_at > max(user.live_updated_at, now-60min)` where the driver is a capable candidate AND within `_current_search_radius_miles(job)` (Round-6 escalating ladder). Includes jobs claimed by others in the interim — they were still missed by this driver.
+- 60-min look-back cap prevents "500 missed offers" spam after weeks offline.
+- 50-item candidate scan cap keeps the endpoint fast on busy platforms.
+- Defensive datetime compare (parsed, not lexicographic) — survives future ISO-offset changes.
+- Explicit null-safe `cancelled_at` exclusion (`$or [{$exists:False}, {$eq:null}]`) — historical rows with explicit null are correctly ignored.
+
+**Frontend**
+- `/driver/live` renders a subtle amber banner (`missed-offers-toast`) immediately after successful go-online when count > 0. "You missed N offer(s) while offline." Auto-dismisses after 8 s; dismiss button (`missed-offers-toast-dismiss`) available. Never renders on count === 0.
+
+**Testing**
+- `/app/backend/tests/test_final_qa_r8.py` — 9/9 tests: zero missed, one missed, look-back cap enforced, aged-out jobs excluded, capability filter, radius filter, 50-item cap, response shape backward-compat, cancelled-job exclusion.
+- Playwright drive-through verified toast copy + dismiss + no-render-when-zero.
+- Regression: R6 (23/23) + R7 (8/8) + R8 (9/9) = **40/40 all green**.
+
+**Files changed**
+- Backend: `server.py::driver_go_online` (~line 1594), `tests/test_final_qa_r8.py` (new).
+- Frontend: `pages/portal/driver/Live.jsx` (missedToast state + banner).
+
