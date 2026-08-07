@@ -936,3 +936,128 @@ async def is_conversation_active(db, *, user_id: str, booking_id: str,
     except Exception:
         return False
     return (datetime.now(timezone.utc) - last).total_seconds() < window_seconds
+
+
+# ---------------------------------------------------------------------------
+# Round 7 — Driver booking-accepted email
+# ---------------------------------------------------------------------------
+
+def render_driver_booking_accepted(
+    *,
+    driver_name: str,
+    booking_ref: str,
+    customer_name: str,
+    customer_phone: str,
+    pickup: str,
+    dropoff: str,
+    suitable_vehicle: str,
+    transport_item: str,
+    amount_to_collect: float,
+    booking_url: str,
+    start_trip_url: str,
+) -> tuple[str, str, str]:
+    """Confirmation email sent to the driver once they've claimed / been
+    assigned to a booking. Bundles every field they need to start the job
+    without opening the app first."""
+    subject = f"You accepted a Cargo One job — booking {booking_ref[:8]}"
+    call_line = (
+        f'<a href="tel:{customer_phone}" '
+        f'style="color:{_BRAND_ACCENT};font-weight:600;text-decoration:none;">'
+        f"{customer_phone}</a>"
+        if customer_phone else "—"
+    )
+    amount_line = f"£{float(amount_to_collect):.2f}" if amount_to_collect else "—"
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {driver_name or 'there'},</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
+        You've accepted booking <strong>{booking_ref[:8]}</strong>. Here's
+        everything you need to run the job:
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+        <tr><td style="padding:14px 16px;">
+          <table width="100%" style="font-size:13px;color:#374151;">
+            <tr><td style="width:42%;color:{_BRAND_MUTED};padding:6px 0;">Customer</td>
+                <td style="color:#111111;font-weight:600;padding:6px 0;">{customer_name or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Phone</td>
+                <td style="padding:6px 0;">{call_line}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Pickup</td>
+                <td style="color:#111111;padding:6px 0;">{pickup or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Drop-off</td>
+                <td style="color:#111111;padding:6px 0;">{dropoff or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Suitable vehicle</td>
+                <td style="color:#111111;padding:6px 0;">{suitable_vehicle or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Transport item</td>
+                <td style="color:#111111;padding:6px 0;">{transport_item or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Amount to collect</td>
+                <td style="color:#111111;font-weight:700;padding:6px 0;">{amount_line}</td></tr>
+          </table>
+        </td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;">
+        <tr>
+          <td align="center" style="padding-right:6px;">
+            <a href="{start_trip_url}" style="display:inline-block;background:{_BRAND_ACCENT};color:#ffffff;font-weight:700;font-size:14px;padding:12px 22px;border-radius:999px;text-decoration:none;">Start trip</a>
+          </td>
+          <td align="center" style="padding-left:6px;">
+            <a href="{booking_url}" style="display:inline-block;background:#ffffff;color:{_BRAND_PRIMARY};border:1px solid {_BRAND_PRIMARY};font-weight:700;font-size:14px;padding:11px 22px;border-radius:999px;text-decoration:none;">Open booking</a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:22px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Drive safe — you've got this. Message the customer from inside the
+        app if anything comes up.
+      </p>
+    """
+    text = "\n".join([
+        f"You accepted a Cargo One job — booking {booking_ref[:8]}",
+        "",
+        f"Customer:  {customer_name or '—'}  ({customer_phone or 'no phone'})",
+        f"Pickup:    {pickup or '—'}",
+        f"Drop-off:  {dropoff or '—'}",
+        f"Vehicle:   {suitable_vehicle or '—'}",
+        f"Item:      {transport_item or '—'}",
+        f"Collect:   {amount_line}",
+        "",
+        f"Start trip:   {start_trip_url}",
+        f"Open booking: {booking_url}",
+        "",
+        "— Cargo One",
+    ])
+    html = _shell(title=subject,
+                  preview=f"{customer_name or 'A customer'} · {pickup} → {dropoff}",
+                  body_html=body)
+    return subject, html, text
+
+
+async def send_driver_booking_accepted_email(
+    db, *, driver: dict, customer: dict, booking: dict, job: dict,
+) -> dict:
+    to = driver.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    booking_id = booking.get("id") or ""
+    booking_url = f"{_APP_ORIGIN}/driver/booking/{booking_id}"
+    start_trip_url = f"{_APP_ORIGIN}/driver/booking/{booking_id}?tab=trip"
+    transport_item = (
+        (job.get("transport_category") or "").replace("_", " ").strip()
+        or (job.get("category") or "").replace("_", " ").strip()
+    )
+    subject, html, text = render_driver_booking_accepted(
+        driver_name=driver.get("name") or "",
+        booking_ref=booking_id,
+        customer_name=customer.get("name") or "",
+        customer_phone=customer.get("phone") or "",
+        pickup=(job.get("pickup_address") or job.get("pickup_town") or ""),
+        dropoff=(job.get("dropoff_address") or job.get("dropoff_town") or ""),
+        suitable_vehicle=(job.get("recommended_vehicle") or job.get("vehicle_label") or ""),
+        transport_item=transport_item,
+        amount_to_collect=float(booking.get("driver_charge") or 0),
+        booking_url=booking_url,
+        start_trip_url=start_trip_url,
+    )
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="driver_booking_accepted",
+        booking_id=booking_id, user_id=driver.get("id"),
+    )
+

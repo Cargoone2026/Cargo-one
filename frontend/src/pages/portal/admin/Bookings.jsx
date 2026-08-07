@@ -3,6 +3,7 @@ import { Search, X as XIcon, Boxes, MapPin, CreditCard, RotateCcw, ShieldAlert }
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 
 export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
@@ -284,6 +285,14 @@ export default function AdminBookings() {
                 <DetailRow k="Stripe session" v={detailBooking.stripe_session_id || "—"} mono />
                 <DetailRow k="Payment intent" v={detailBooking.stripe_payment_intent_id || "—"} mono />
                 <DetailRow k="Refund status" v={detailBooking.refund_status || "none"} />
+                {detailBooking.job && (
+                  <div className="pt-3 border-t border-[#F3F4F6]">
+                    <AcceptanceInfo
+                      job={detailBooking.job}
+                      testIdPrefix="admin-booking-accept"
+                    />
+                  </div>
+                )}
                 {detailBooking.job && (
                   <div className="pt-3 border-t border-[#F3F4F6]">
                     <JobExtras job={detailBooking.job} />

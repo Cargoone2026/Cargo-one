@@ -8,6 +8,7 @@ import { Input } from "@/components/ui-portal/Input";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 
 export default function DriverJobDetail() {
@@ -164,6 +165,8 @@ export default function DriverJobDetail() {
             {job.description || "—"}
           </p>
         </div>
+
+        <AcceptanceInfo job={job} testIdPrefix="driver-jobdetail-accept" />
 
         <JobExtras job={job} />
 

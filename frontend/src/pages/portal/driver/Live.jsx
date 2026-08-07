@@ -15,6 +15,7 @@ function formatDuration(secs) {
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
 import { DriverLiveMap } from "@/components/ui-portal/DriverLiveMap";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 
 const HEARTBEAT_INTERVAL_MS = 30000;   // send position every 30s
 const OFFER_POLL_INTERVAL_MS = 5000;   // poll for offers every 5s
@@ -441,17 +442,38 @@ export default function DriverLive() {
                     {o.duration_minutes ? ` · ~${Math.round(o.duration_minutes)} min` : ""}
                   </span>
                 </p>
-                {(o.vehicle_label || o.vehicle_details) && (
-                  <div className="mt-2 text-xs text-neutral-600 flex items-center gap-2">
-                    <Truck className="h-3 w-3 text-neutral-500" />
-                    <span>
-                      {o.vehicle_label ? `${o.vehicle_label}` : ""}
-                      {o.vehicle_details ? ` · ${o.vehicle_details.make || ""} ${o.vehicle_details.model || ""} — ${(o.vehicle_details.condition || "").replace(/_/g, " ")}` : ""}
-                    </span>
+                {/* Round 7 — always show Suitable Vehicle + Transport Item
+                   / Recovery details before the driver taps Accept. */}
+                <div className="mt-3">
+                  <AcceptanceInfo
+                    job={o}
+                    dense
+                    testIdPrefix={`live-offer-accept-${o.job_id}`}
+                  />
+                </div>
+                {/* Customer photos strip — same info the offer card shows */}
+                {Array.isArray(o.photos) && o.photos.length > 0 && (
+                  <div
+                    className="mt-2 flex items-center gap-2 overflow-x-auto pb-1"
+                    data-testid={`live-offer-photos-${o.job_id}`}
+                  >
+                    {o.photos.slice(0, 4).map((p, i) => (
+                      <img
+                        key={i}
+                        src={p}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-lg object-cover border border-neutral-200"
+                      />
+                    ))}
+                    {o.photos.length > 4 && (
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 text-xs font-semibold text-neutral-600">
+                        +{o.photos.length - 4}
+                      </span>
+                    )}
                   </div>
                 )}
                 {o.customer_note && (
-                  <div className="mt-1 text-xs italic text-neutral-500">"{o.customer_note}"</div>
+                  <div className="mt-2 text-xs italic text-neutral-500">"{o.customer_note}"</div>
                 )}
                 <div className="mt-3 flex gap-2">
                   <Button

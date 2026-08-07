@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCapabilities, useCategories } from "@/hooks/useCatalog";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 
 const RADII = [10, 20, 40, 75, 250];
 const SORTS = [
@@ -363,6 +364,15 @@ export default function DriverJobs() {
                     )}
                   </div>
                 )}
+                {/* Round 7 — Suitable vehicle + transport item / recovery
+                    details must be visible BEFORE the driver taps Accept. */}
+                <div className="mt-3">
+                  <AcceptanceInfo
+                    job={j}
+                    dense
+                    testIdPrefix={`driver-job-accept-${j.id}`}
+                  />
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-[#F3F4F6] pt-2">
                   <Chip mini>{j.distance_miles} mi job</Chip>
                   <Chip mini>{j.distance_from_driver} mi away</Chip>

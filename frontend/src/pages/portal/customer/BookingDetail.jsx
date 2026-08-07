@@ -20,6 +20,7 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 import { RecentActivity } from "@/components/ui-portal/RecentActivity";
@@ -461,6 +462,8 @@ export default function CustomerBookingDetail() {
                 value={paid ? job.dropoff_address : job.dropoff_town}
               />
             </div>
+
+            <AcceptanceInfo job={job} testIdPrefix="customer-booking-accept" />
 
             <JobExtras job={job} />
 

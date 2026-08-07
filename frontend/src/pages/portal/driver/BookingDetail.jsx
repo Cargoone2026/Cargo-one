@@ -24,6 +24,7 @@ import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { SignaturePad } from "@/components/ui-portal/SignaturePad";
 
@@ -391,6 +392,8 @@ export default function DriverBookingDetail() {
                     : job.duration_minutes,
               }}
             />
+
+            <AcceptanceInfo job={job} testIdPrefix="driver-booking-accept" />
 
             <JobExtras job={job} />
 

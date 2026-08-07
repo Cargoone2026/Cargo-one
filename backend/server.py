@@ -1892,16 +1892,23 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
         f"{user['name']} is on the way. £{accepted_price} confirmed.",
         {"job_id": job_id, "dispatch": True},
     )
-    # Session E — email the customer the branded "Driver assigned" note.
+    # Session E — email the customer the branded "Driver assigned" note,
+    # and Round 7 — email the driver a branded booking-acceptance summary.
     try:
-        from services.email import send_driver_assigned
+        from services.email import (
+            send_driver_assigned,
+            send_driver_booking_accepted_email,
+        )
         booking = await db.bookings.find_one({"job_id": job_id}, {"_id": 0})
         cust = await db.users.find_one({"id": job["customer_id"]}, {"_id": 0, "password_hash": 0})
         if booking and cust:
             booking["job"] = {k: v for k, v in job.items() if k != "_id"}
             await send_driver_assigned(db, user=cust, booking=booking, driver=driver)
+            await send_driver_booking_accepted_email(
+                db, driver=driver, customer=cust, booking=booking, job=job,
+            )
     except Exception:
-        logger.exception("driver-assigned email failed; continuing")
+        logger.exception("driver-assigned / accepted email failed; continuing")
     return {"ok": True, "job_id": job_id, "idempotent": False,
              "accepted_price": accepted_price}
 
@@ -2293,18 +2300,33 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     # Transactional email — deposit receipt to customer. Non-blocking:
     # any Resend failure is captured by the service and does not raise.
     try:
-        from services.email import send_deposit_receipt, send_booking_confirmation
+        from services.email import (
+            send_deposit_receipt,
+            send_booking_confirmation,
+            send_driver_booking_accepted_email,
+        )
         fresh_booking = await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
         cust = await db.users.find_one({"id": booking["customer_id"]}, {"_id": 0, "password_hash": 0})
         job_doc = await db.jobs.find_one({"id": booking["job_id"]}, {"_id": 0})
         if fresh_booking and cust:
             fresh_booking["job"] = job_doc  # for template pickup/dropoff
             await send_deposit_receipt(db, user=cust, booking=fresh_booking)
-            # Session E — also send the branded Booking Confirmation. The
-            # deposit-receipt is a payment ack; the confirmation includes
-            # service-type-specific copy (recovery / marketplace / standard),
-            # vehicle details for recovery, and driver-charge line.
             await send_booking_confirmation(db, user=cust, booking=fresh_booking)
+        # Round 7 — scheduled/marketplace bookings: fire the branded
+        # "You accepted a job" email to the driver now that deposit is
+        # confirmed. ASAP bookings already fire this on /jobs/{id}/claim so
+        # skip here to avoid a duplicate.
+        is_asap = (job_doc or {}).get("service_timing") == "asap"
+        if (not is_asap) and fresh_booking and fresh_booking.get("driver_id"):
+            drv = await db.users.find_one(
+                {"id": fresh_booking["driver_id"]},
+                {"_id": 0, "password_hash": 0},
+            )
+            if drv and cust and job_doc:
+                await send_driver_booking_accepted_email(
+                    db, driver=drv, customer=cust,
+                    booking=fresh_booking, job=job_doc,
+                )
     except Exception:
         logger.exception("post-deposit emails failed; continuing (booking not affected)")
     return await db.bookings.find_one({"id": booking["id"]}, {"_id": 0})
