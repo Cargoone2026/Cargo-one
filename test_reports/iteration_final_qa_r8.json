@@ -1,0 +1,26 @@
+{
+  "summary": "Round 8 (Missed-Offer Toast) validated end-to-end. Added /app/backend/tests/test_final_qa_r8.py — 9/9 pytest cases pass covering all 8 spec scenarios plus a cancelled-job sanity check. Frontend Playwright drive-through against the preview URL confirms the amber missed-offers toast renders on go-online with correct wording ('You missed 10 offers while offline.'), and the dismiss button removes it. Backend response shape is backward compatible: {ok, online, updated_at, missed_offers_count}. No regressions detected on /driver/live/offers or /driver/live/offline.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r8.py",
+    "/app/test_reports/pytest/qar8_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:1624 — cutoff uses `since = max(since, cutoff_iso)`. Because ISO-8601 timestamps compare lexicographically, this only works while both strings are UTC with the same offset shape ('+00:00'). now_iso() and datetime.isoformat() with tzinfo=UTC both produce '+00:00' today, so it's safe — but a comment or explicit datetime compare would be more defensive.",
+    "server.py:1633 — cancelled_at exclusion uses {'$exists': False}. If any cancelled job stores cancelled_at=null (rather than omitted), it will be COUNTED. Consider `{'$in': [None, missing]}` or explicit `{'$eq': None}` semantics.",
+    "server.py:1630-1637 — candidate query has no index hint on (service_timing, dispatch_ready_at). At scale confirm a compound index exists to keep the 50-item limited scan fast.",
+    "Live.jsx:105 — setTimeout auto-dismiss uses functional updater comparing `v === missed`. Correct, but if a NEW missed count arrives before the 8 s elapses (edge case: rapid offline/online cycles), the older timer still fires; not a bug today but worth a cleanup ref in future rounds."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_final_qa_r8.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (toast render + dismiss verified via Playwright)"},
+  "test_credentials": "testdriver@example.com / DriverTest12345! (activated + live_updated_at set to 20 min ago via direct Mongo write to trigger the toast).",
+  "seed_data_creation": "3 ASAP jobs inserted directly via pymongo near London (51.51,-0.10) with dispatch_ready_at ~5 min ago for the frontend drive-through. Backend pytest seeds and cleans up its own jobs per test (TEST_qar8_ prefix).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "R8 backend + UI verified. If re-running the Playwright script, remember to (1) grant geolocation to the preview origin, (2) reset the driver's live_updated_at in Mongo to ~20 min ago BEFORE clicking Go online — otherwise a fresh heartbeat means cutoff=now and count=0. The backend endpoint POST /api/driver/live/online now returns missed_offers_count in the response body.",
+  "rca of the issue": "N/A — enhancement verification, no bugs found."
+}

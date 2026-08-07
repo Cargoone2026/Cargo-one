@@ -83,6 +83,8 @@ export default function DriverLive() {
     );
   }), []);
 
+  const [missedToast, setMissedToast] = useState(null);
+
   const goOnline = useCallback(async () => {
     setBusy(true);
     setLocError(null);
@@ -93,6 +95,15 @@ export default function DriverLive() {
       const r = await api("/driver/live/online", { method: "POST", body: pos });
       setOnline(true);
       setStatus({ ...status, live_online: true, live_lat: pos.lat, live_lng: pos.lng });
+      // Round 8 — Missed-Offer Toast. Surface the count returned by the
+      // /online endpoint so the driver knows what they might have missed
+      // while offline. Auto-dismiss after 8 s; a manual close is also
+      // available so the driver can dispatch it themselves.
+      const missed = Number(r?.missed_offers_count || 0);
+      if (missed > 0) {
+        setMissedToast(missed);
+        setTimeout(() => setMissedToast((v) => (v === missed ? null : v)), 8000);
+      }
     } catch (e) {
       setLocError(e.message || "Could not go online");
     } finally {
@@ -249,6 +260,34 @@ export default function DriverLive() {
   return (
     <div className="min-h-screen bg-neutral-50" data-testid="driver-live">
       <div className="mx-auto max-w-2xl p-4">
+        {/* Round 8 — subtle "you missed N offers" banner surfaced by the
+           /driver/live/online response. Auto-dismisses after 8 s; the driver
+           can also close it themselves. */}
+        {missedToast ? (
+          <div
+            role="status"
+            data-testid="missed-offers-toast"
+            className="mb-3 flex items-center gap-3 rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 shadow-sm"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Zap className="h-4 w-4 text-amber-600" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong>You missed {missedToast} offer{missedToast === 1 ? "" : "s"} while offline.</strong>
+              {" "}
+              <span className="text-amber-800/80">Fresh offers will appear below.</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setMissedToast(null)}
+              data-testid="missed-offers-toast-dismiss"
+              className="rounded-full px-2 py-1 text-[12px] font-semibold text-amber-900 hover:bg-amber-100"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">

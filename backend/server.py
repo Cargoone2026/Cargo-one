@@ -1605,6 +1605,60 @@ async def driver_go_online(payload: DriverLivePayload,
     if user.get("status") != "active":
         raise HTTPException(status_code=403, detail="Driver not approved yet")
     now = now_iso()
+
+    # Round 8 — Missed-Offer Toast. Before we flip the driver back online,
+    # count ASAP jobs that entered the queue AFTER their last heartbeat and
+    # for which they would have been an eligible candidate. Capped, cheap
+    # enough to run on every /online (the query is bounded to the recent
+    # ASAP window).
+    prev = await db.users.find_one(
+        {"id": user["id"]},
+        {"_id": 0, "live_updated_at": 1, "live_online": 1},
+    )
+    prev_updated = (prev or {}).get("live_updated_at")
+    missed_count = 0
+    try:
+        # If the driver has never been online we don't want to spam them
+        # with "you missed 20 offers" on first login — cap the look-back at
+        # 60 min to keep the toast contextually relevant.
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
+        cutoff_iso = cutoff.isoformat()
+        since = prev_updated or cutoff_iso
+        # Take the LATER of the two so a driver returning after weeks still
+        # only sees offers from the last hour.
+        since = max(since, cutoff_iso)
+        cands = await db.jobs.find(
+            {"service_timing": "asap",
+             "dispatch_ready_at": {"$gt": since},
+             "cancelled_at": {"$exists": False}},
+            {"_id": 0, "service_type": 1, "category": 1, "capabilities": 1,
+             "pickup_lat": 1, "pickup_lng": 1, "dispatch_ready_at": 1,
+             "assigned_driver_id": 1},
+        ).limit(50).to_list(50)
+        # Reuse the same capability + radius rules as live dispatch.
+        driver_probe = {**user, "live_lat": payload.lat, "live_lng": payload.lng}
+        now_dt = datetime.now(timezone.utc)
+        for j in cands:
+            # Was it claimed by someone else, and by then the driver was
+            # already offline? Still counts as "missed" — they never had a
+            # chance to bid.
+            if not _driver_is_capable(driver_probe, j):
+                continue
+            radius = _current_search_radius_miles(j, now=now_dt)
+            try:
+                d = haversine_miles(
+                    float(payload.lat), float(payload.lng),
+                    float(j.get("pickup_lat") or 0),
+                    float(j.get("pickup_lng") or 0),
+                )
+            except Exception:
+                continue
+            if d <= radius:
+                missed_count += 1
+    except Exception:
+        logger.exception("missed-offer count failed; ignoring")
+        missed_count = 0
+
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {
@@ -1616,7 +1670,12 @@ async def driver_go_online(payload: DriverLivePayload,
             "live_online_since": now,
         }},
     )
-    return {"ok": True, "online": True, "updated_at": now}
+    return {
+        "ok": True,
+        "online": True,
+        "updated_at": now,
+        "missed_offers_count": missed_count,
+    }
 
 
 @api.post("/driver/live/offline")
