@@ -1006,3 +1006,19 @@ Two R12 follow-ups shipped. Report: `/app/test_reports/iteration_final_qa_r13.js
 - Backend: `server.py::admin_nudge_drivers_missing_phone` (new endpoint w/ 24h dedupe), `services/email.py` (2 new helpers), `tests/test_final_qa_r13.py` (new — 7 cases).
 - Frontend: `hooks/useNotificationChime.js` (new), `pages/portal/driver/Dashboard.jsx` (hook mirror), `pages/portal/driver/Notifications.jsx` (chime toggle + live re-fetch), `pages/portal/admin/Users.jsx` (nudge button + result pill).
 
+
+### Phase — ROUND 14: Customer Notification Chime ✅ COMPLETE (Feb 2026)
+Single-issue R13 follow-up. Report: `/app/test_reports/iteration_final_qa_r14.json` (frontend-only, 100% pass on all 4 acceptance items, zero regressions).
+
+**Customer Notification Chime (P0)**
+- Customer `Dashboard.jsx` now imports `useNotificationChime` and mirrors the hook's live unread count into the bell dot via `Math.max(chime.unread, notes-based)` — dot now lights up within one poll cycle (≤16s) of a new notification landing, without a page reload.
+- Customer `Messages.jsx` also subscribes to `useNotificationChime`; the Updates tab list re-fetches on every `chime.unread` change via a dedicated `useEffect` so the pane stays live without a duplicate poll loop.
+- New Volume2 / VolumeX toggle (`customer-notif-chime-toggle`, `aria-pressed`) inside the Updates pane header — persists to the shared localStorage key `cargoone_notification_chime_enabled` so a user who toggles it on the customer side sees the driver-side reflect the same preference (single shared account attribute across roles).
+- `useMessageChime` intentionally kept separate under its own key `cargoone_message_chime_enabled` — message- and notification-chimes never fight.
+
+**Files changed**
+- Frontend: `pages/portal/customer/Dashboard.jsx` (chime import + Math.max), `pages/portal/customer/Messages.jsx` (chime import + toggle props + re-fetch effect + Updates-pane header row + Volume2/VolumeX icons).
+
+**Deferred (non-blocking)**
+- Two `useNotificationChime` instances co-exist when both Dashboard + Messages are mounted; harmless (primedRef gate + separate refs) but a minor duplicate 15 s call. Consider hoisting to context if it gets noisy.
+
