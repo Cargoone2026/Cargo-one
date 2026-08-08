@@ -1073,3 +1073,19 @@ Fix: `AsapRequest.jsx` now sends `weight_kg: null` when the customer skips the s
 - Frontend: `pages/portal/customer/AsapRequest.jsx` (weight_kg fallback → null).
 - Tests: `tests/test_final_qa_r17_weight_fallback.py` (new, 9 cases).
 
+
+### Phase — ROUND 18: Customer Dispatch — Premium Display Upgrade ✅ COMPLETE (Feb 2026)
+Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:jobId`) to match the premium reference screenshots — dark surface, hero orange pin with layered ripples, refined typography, full-width orange pill CTA. **Zero behaviour changes**: every `data-testid`, every state branch (`loading` / `not-ready` / `searching` / `cancelled` / `driver-found` / `keep-waiting`), the 4-s poll and the navigate-to-booking transition are all preserved verbatim.
+
+**Design deltas**
+- Surface: `bg-neutral-50` → `bg-[#0A0A0A]` with white/muted-white text tokens.
+- Heading: `text-2xl` → `text-[36px] sm:text-[44px]` bold with tight tracking.
+- Route pill: subtitle → row with a tilted Navigation arrow icon between towns.
+- Hero visual: replaced the small amber radar icon with a new `PulsePin` — 24-unit orange core, two `animate-ping` rings at 28 + 40 units with different durations, and a soft blurred glow. Pure Tailwind, no SVG asset.
+- Status card removed; text sits under the pin as the reference screenshots show.
+- CTA: secondary Button → full-width `rounded-full` orange pill (`#EA580C`) with a red-tinted drop shadow.
+- Every colour palette shift respects the existing amber (waiting-for-payment) + red (cancelled) + emerald (driver-found) semantic tokens with lower-alpha variants for the dark surface.
+
+**Files changed**
+- `pages/portal/customer/Dispatch.jsx` (rewritten — display layer only).
+
