@@ -507,12 +507,12 @@ export default function CustomerBookingDetail() {
                     </span>
                   </div>
                   {b.other_party.phone && (
-                    <p className="mt-1 text-[13px] text-[#6B7280]">
+                    <p className="mt-1 text-[13px] text-[#6B7280]" data-testid="party-phone">
                       {b.other_party.phone}
                     </p>
                   )}
                 </div>
-                {b.other_party.phone && (
+                {b.other_party.phone ? (
                   <a
                     href={`tel:${b.other_party.phone}`}
                     aria-label="Call"
@@ -521,6 +521,17 @@ export default function CustomerBookingDetail() {
                   >
                     <Phone className="h-4 w-4" />
                   </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTab("chat")}
+                    data-testid="party-chat-fallback"
+                    aria-label="Message driver"
+                    title="Phone not on file — message via chat"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F4F4] text-[#111111] hover:bg-[#E5E7EB]"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             )}

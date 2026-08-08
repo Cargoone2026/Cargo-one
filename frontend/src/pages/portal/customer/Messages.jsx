@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, MessagesSquare, Lock, MessageCircle, ExternalLink } from "lucide-react";
+import { Bell, MessagesSquare, Lock, MessageCircle, ExternalLink, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 
 /**
@@ -40,7 +40,11 @@ export default function CustomerMessages() {
       const n = await api("/notifications").catch(() => []);
       const list = Array.isArray(n) ? n : [];
       setNotes(list);
-      if (list.length && !selected) setSelected(list[0]);
+      // Auto-select the newest notification ONLY on md+ screens so mobile
+      // users see the list first and can pick which one to open.
+      if (list.length && !selected && typeof window !== "undefined" && window.innerWidth >= 768) {
+        setSelected(list[0]);
+      }
     } finally {
       setNotesLoading(false);
     }
@@ -117,6 +121,7 @@ export default function CustomerMessages() {
           loading={notesLoading}
           selected={selected}
           onPick={pick}
+          onClose={() => setSelected(null)}
           draft={draft}
           setDraft={setDraft}
         />
@@ -249,11 +254,13 @@ function ConversationRow({ t }) {
   );
 }
 
-function NotificationsPane({ listItems, loading, selected, onPick, draft, setDraft }) {
+function NotificationsPane({ listItems, loading, selected, onPick, onClose, draft, setDraft }) {
   return (
     <div className="grid gap-4 px-4 md:grid-cols-[minmax(260px,320px)_1fr] md:px-8">
       <section
-        className="rounded-[12px] border border-[#E5E7EB] bg-white"
+        className={`rounded-[12px] border border-[#E5E7EB] bg-white ${
+          selected ? "hidden md:block" : ""
+        }`}
         data-testid="messages-list"
       >
         {loading ? (
@@ -312,21 +319,34 @@ function NotificationsPane({ listItems, loading, selected, onPick, draft, setDra
       </section>
 
       <section
-        className="flex min-h-[420px] flex-col rounded-[12px] border border-[#E5E7EB] bg-white"
+        className={`flex min-h-[420px] flex-col rounded-[12px] border border-[#E5E7EB] bg-white ${
+          selected ? "" : "hidden md:flex"
+        }`}
         data-testid="messages-thread"
       >
         {selected ? (
           <>
-            <div className="border-b border-[#E5E7EB] px-5 py-4">
-              <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[#D62828]">
-                Notification
-              </p>
-              <h2 className="mt-1 text-[18px] font-bold text-[#111111]">
-                {selected.title}
-              </h2>
-              <p className="mt-1 text-[12px] text-[#9CA3AF]">
-                {formatWhen(selected.created_at, true)}
-              </p>
+            <div className="flex items-start gap-2 border-b border-[#E5E7EB] px-5 py-4">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Back to notifications"
+                data-testid="notification-back-button"
+                className="mt-0.5 -ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-[#F4F4F4] md:hidden"
+              >
+                <ArrowLeft className="h-4 w-4 text-[#111111]" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[#D62828]">
+                  Notification
+                </p>
+                <h2 className="mt-1 text-[18px] font-bold text-[#111111]">
+                  {selected.title}
+                </h2>
+                <p className="mt-1 text-[12px] text-[#9CA3AF]">
+                  {formatWhen(selected.created_at, true)}
+                </p>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 text-[14px] leading-relaxed text-[#111111]">
               {selected.body}

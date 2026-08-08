@@ -9,6 +9,7 @@ import {
   ChevronRight,
   User as UserIcon,
   Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui-portal/Button";
@@ -33,10 +34,16 @@ export default function DriverProfile() {
     e?.preventDefault?.();
     setSaving(true);
     setErr(null);
+    const trimmedPhone = form.phone.trim();
+    if (trimmedPhone.length < 7) {
+      setErr("A valid phone number is required so customers can reach you after booking.");
+      setSaving(false);
+      return;
+    }
     try {
       await api("/auth/me", {
         method: "PUT",
-        body: { name: form.name.trim(), phone: form.phone.trim() || null },
+        body: { name: form.name.trim(), phone: trimmedPhone },
       });
       await refresh();
       setEditing(false);
@@ -46,6 +53,8 @@ export default function DriverProfile() {
       setSaving(false);
     }
   };
+
+  const phoneMissing = !user.phone || user.phone.trim().length < 7;
 
   const initials = (user.name || "?")
     .split(" ")
@@ -58,6 +67,28 @@ export default function DriverProfile() {
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="driver-profile">
       <div className="mx-auto max-w-[720px] px-4 py-6 md:px-8">
+        {phoneMissing && !editing ? (
+          <div
+            className="mb-4 flex items-start gap-3 rounded-[12px] border border-[#F59E0B] bg-[#FFFBEB] p-3"
+            data-testid="driver-phone-missing-banner"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#B45309]" />
+            <div className="min-w-0 flex-1 text-[13px] text-[#92400E]">
+              <p className="font-semibold">Add your phone number</p>
+              <p className="mt-0.5">
+                Customers cannot call you after their booking is confirmed until you add a phone.
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                data-testid="driver-phone-missing-cta"
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#111111] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[#D62828]"
+              >
+                Add phone number
+              </button>
+            </div>
+          </div>
+        ) : null}
         <section
           className="flex flex-col items-center gap-2 rounded-[16px] border border-[#E5E7EB] bg-white p-6 text-center"
           data-testid="driver-profile-header"
@@ -120,11 +151,12 @@ export default function DriverProfile() {
               required
             />
             <Input
-              label="Phone"
+              label="Phone (required)"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder="+44 7000 000000"
               testID="driver-profile-phone-input"
+              required
             />
             <div className="mb-3">
               <span className="mb-1 block text-[13px] font-semibold text-[#111111]">

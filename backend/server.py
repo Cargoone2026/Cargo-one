@@ -697,6 +697,16 @@ async def register(payload: UserRegister, response: Response):
             status_code=400,
             detail="Invalid role — only customer or driver accounts can be self-registered.",
         )
+    # Drivers MUST supply a phone at signup — customers need to be able to
+    # reach them once a booking is confirmed. This was previously optional,
+    # which produced ghost drivers that customers could not call.
+    if payload.role == "driver":
+        phone = (payload.phone or "").strip()
+        if len(phone) < 7:
+            raise HTTPException(
+                status_code=400,
+                detail="A valid phone number is required for driver accounts so customers can reach you after booking.",
+            )
 
     user = {
         "id": new_id(),
@@ -900,6 +910,16 @@ async def update_me(update: dict, user: dict = Depends(get_current_user)):
         "address_line1", "address_line2", "town", "county", "postcode", "country",
     }
     patch = {k: v for k, v in update.items() if k in allowed}
+    # Drivers must not be able to clear their phone — customers need it to
+    # reach them post-booking.
+    if user.get("role") == "driver" and "phone" in patch:
+        phone_val = (patch["phone"] or "").strip() if isinstance(patch["phone"], str) else ""
+        if len(phone_val) < 7:
+            raise HTTPException(
+                status_code=400,
+                detail="Drivers must keep a valid phone number on file so customers can reach you.",
+            )
+        patch["phone"] = phone_val
     if patch:
         await db.users.update_one({"id": user["id"]}, {"$set": patch})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})

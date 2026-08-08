@@ -55,6 +55,10 @@ export default function Register() {
       setError("Name, email and password are required.");
       return;
     }
+    if (role === "driver" && !form.phone.trim()) {
+      setError("Drivers must add a phone number — customers need to be able to reach you after booking.");
+      return;
+    }
     if (form.phone && !isValidPhone(form.phone)) {
       setError("Please enter a valid phone number (e.g. 07700 900 123 or +44 7700 900123).");
       return;
@@ -153,14 +157,16 @@ export default function Register() {
               testId="register-email-input"
             />
             <TextField
-              label="Phone"
+              label={role === "driver" ? "Phone (required)" : "Phone"}
               type="tel"
               value={form.phone}
               onChange={upd("phone")}
               placeholder="07700 900 123"
               autoComplete="tel"
               testId="register-phone-input"
-              hint="UK mobile or landline. Optional but recommended."
+              hint={role === "driver"
+                ? "Required for drivers so customers can reach you after booking."
+                : "UK mobile or landline. Optional but recommended."}
             />
             <TextField
               label="Password"
