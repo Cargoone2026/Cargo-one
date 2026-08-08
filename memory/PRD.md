@@ -1124,3 +1124,37 @@ Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:j
 
 **Deployment** — not deployed automatically. Redeploy via the "Deploy" button in the chat UI when your manual QA is ready.
 
+
+
+---
+
+## R22 — driver_id KeyError Hardening  ✅ COMPLETE (Feb 2026)
+
+**Context**: R21 pre-production smoke test flagged strict `b["driver_id"]` dictionary lookups on booking objects that could crash with `KeyError` for legacy / unassigned / paid-without-driver bookings.
+
+**Fix scope** — `/app/backend/server.py`:
+- `/bookings/mine` — batch fetch counterparty ids for paid bookings (line ~2758) and other_party assignment (line ~2776).
+- `/bookings/{id}` — auth check + other-party lookup (lines ~2787, ~2798).
+- `/bookings/{id}/status` — auth + push-notification other-id (lines ~2820, ~2830).
+- `/tracking/{id}` POST + GET — driver-only owner check + auth (lines ~2863, ~2886).
+- `/bookings/{id}/messages` POST + GET + `/mark-read` — auth + other-id push (lines ~2961, ~2989, ~3027, ~3062).
+- `/messages/summary` — counterparty resolution (lines ~3175, ~3188).
+- POD upload + get — driver-only check + auth (lines ~3313, ~3345).
+- `/bookings/{id}/complete` — guarded `driver_id` before `$inc total_jobs` and driver email lookup.
+- `/bookings/{id}/review` — auth + target selection (lines ~3383, ~3387).
+
+**Pattern**: `b["driver_id"]` → `b.get("driver_id")` (also `b["customer_id"]` where paired). Bid iteration (lines 2319/2325) and driver_message block (line 3278, already inside `if b.get("driver_id"):` guard) intentionally left untouched.
+
+**Verified**:
+- `python -m py_compile server.py` → SYNTAX OK.
+- Backend restarted cleanly.
+- Live curl smoke: `/bookings/mine` (customer=40, driver=6), `/messages/summary` (13 threads), `/messages/unread-count`, `/bookings/{id}` on a **paid booking with `driver_id=None`** all return HTTP 200 — the exact scenario that used to KeyError.
+- Foreign-user 403 checks still enforced correctly.
+- `test_booking_fees.py` + `test_booking_fee_bands.py` + `test_final_qa_r17_weight_fallback.py`: 30 tests pass; the 18 errors are pre-existing conftest bootstrap 401s (bcrypt version mismatch in test admin login), unrelated to this hardening.
+
+**Deferred / DO NOT START until user manual QA passes**:
+- Mapbox migration (RouteMap, DriverLiveMap, Available Jobs Map).
+- `server.py` router/model/service decomposition (~6000 lines).
+- Native iOS/Android builds.
+
+**System ready for user's full manual production QA sweep.**

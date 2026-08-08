@@ -2755,7 +2755,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
     other_ids: list[str] = []
     for b in bookings:
         if b.get("payment_status") == "paid":
-            other_ids.append(b["driver_id"] if user["role"] == "customer" else b["customer_id"])
+            other_ids.append(b.get("driver_id") if user["role"] == "customer" else b.get("customer_id"))
     jobs = await db.jobs.find({"id": {"$in": job_ids}}, {"_id": 0}).to_list(len(job_ids) or 1)
     jobs_map = {j["id"]: j for j in jobs}
     users = await db.users.find(
@@ -2773,7 +2773,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
             b["assigned_driver_name"] = job.get("assigned_driver_name")
             b["assigned_driver_rating"] = job.get("assigned_driver_rating")
         if include_private:
-            other_id = b["driver_id"] if user["role"] == "customer" else b["customer_id"]
+            other_id = b.get("driver_id") if user["role"] == "customer" else b.get("customer_id")
             other = users_map.get(other_id)
             b["other_party"] = user_to_public(other) if other else None
     return bookings
@@ -2784,7 +2784,7 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["role"] not in ("admin",) and user["id"] not in (b["customer_id"], b["driver_id"]):
+    if user["role"] not in ("admin",) and user["id"] not in (b.get("customer_id"), b.get("driver_id")):
         raise HTTPException(status_code=403, detail="Forbidden")
     job = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
     include_private = b.get("payment_status") == "paid" or user["role"] == "admin"
@@ -2795,7 +2795,7 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
         b["assigned_driver_name"] = job.get("assigned_driver_name")
         b["assigned_driver_rating"] = job.get("assigned_driver_rating")
     if include_private:
-        other_id = b["driver_id"] if user["id"] == b["customer_id"] else b["customer_id"]
+        other_id = b.get("driver_id") if user["id"] == b.get("customer_id") else b.get("customer_id")
         other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0})
         b["other_party"] = user_to_public(other) if other else None
     # Admin: surface Stripe reference IDs + refund history for the payment
@@ -2817,7 +2817,7 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["driver_id"], b["customer_id"]) and user["role"] != "admin":
+    if user["id"] not in (b.get("driver_id"), b.get("customer_id")) and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
     valid = ["travelling", "arrived", "collected", "on_route", "delivered", "cancelled"]
     if payload.status not in valid:
@@ -2827,7 +2827,7 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
                                                                  "updated_at": now_iso()}})
     await db.jobs.update_one({"id": b["job_id"]}, {"$set": {"status": payload.status}})
 
-    other_id = b["customer_id"] if user["id"] == b["driver_id"] else b["driver_id"]
+    other_id = b.get("customer_id") if user["id"] == b.get("driver_id") else b.get("driver_id")
     await push_notification(other_id, f"Booking {payload.status}",
                              f"Booking status updated to {payload.status.replace('_', ' ')}.",
                              {"booking_id": booking_id})
@@ -2860,7 +2860,7 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
 async def update_location(booking_id: str, payload: LocationUpdate,
                            user: dict = Depends(require_role("driver"))):
     b = await db.bookings.find_one({"id": booking_id})
-    if not b or b["driver_id"] != user["id"]:
+    if not b or b.get("driver_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Not found")
     doc = {
         "id": new_id(),
@@ -2883,7 +2883,7 @@ async def get_tracking(booking_id: str, user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["customer_id"], b["driver_id"]) and user["role"] != "admin":
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")) and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
     trail = await db.tracking.find({"booking_id": booking_id}, {"_id": 0}) \
                              .sort("created_at", 1).to_list(500)
@@ -2958,7 +2958,7 @@ async def send_message(booking_id: str, payload: MessageCreate,
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["customer_id"], b["driver_id"]):
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")):
         raise HTTPException(status_code=403, detail="Forbidden")
     if b.get("payment_status") != "paid":
         raise HTTPException(status_code=403, detail="Chat unlocks after deposit payment")
@@ -2986,7 +2986,7 @@ async def send_message(booking_id: str, payload: MessageCreate,
         "created_at": now_iso(),
     }
     await db.messages.insert_one(msg)
-    other_id = b["customer_id"] if user["id"] == b["driver_id"] else b["driver_id"]
+    other_id = b.get("customer_id") if user["id"] == b.get("driver_id") else b.get("driver_id")
     await push_notification(other_id, f"Message from {user['name']}",
                              payload.text or "Sent a photo", {"booking_id": booking_id})
 
@@ -3024,7 +3024,7 @@ async def list_messages(booking_id: str, user: dict = Depends(get_current_user))
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["customer_id"], b["driver_id"]) and user["role"] != "admin":
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")) and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
     if b.get("payment_status") != "paid":
         return []
@@ -3059,7 +3059,7 @@ async def mark_messages_read(booking_id: str, user: dict = Depends(get_current_u
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["customer_id"], b["driver_id"]):
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")):
         raise HTTPException(status_code=403, detail="Forbidden")
     now = now_iso()
     result = await db.messages.update_many(
@@ -3172,7 +3172,7 @@ async def messages_summary(user: dict = Depends(get_current_user)):
         ):
             jobs[j["id"]] = j
     other_ids = list({
-        (b["driver_id"] if b["customer_id"] == user["id"] else b["customer_id"])
+        (b.get("driver_id") if b.get("customer_id") == user["id"] else b.get("customer_id"))
         for b in bookings
     })
     others = {}
@@ -3185,7 +3185,7 @@ async def messages_summary(user: dict = Depends(get_current_user)):
 
     out = []
     for b in bookings:
-        other_id = b["driver_id"] if b["customer_id"] == user["id"] else b["customer_id"]
+        other_id = b.get("driver_id") if b.get("customer_id") == user["id"] else b.get("customer_id")
         other = others.get(other_id) or {}
         job = jobs.get(b.get("job_id")) or {}
         last = latest_by_bk.get(b["id"])
@@ -3310,7 +3310,7 @@ async def booking_activity(booking_id: str, user: dict = Depends(get_current_use
 async def upload_pod(booking_id: str, payload: PODUpload,
                       user: dict = Depends(require_role("driver"))):
     b = await db.bookings.find_one({"id": booking_id})
-    if not b or b["driver_id"] != user["id"]:
+    if not b or b.get("driver_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Not found")
     doc = {
         "id": new_id(),
@@ -3342,7 +3342,7 @@ async def get_pod(booking_id: str, user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Not found")
-    if user["id"] not in (b["customer_id"], b["driver_id"]) and user["role"] != "admin":
+    if user["id"] not in (b.get("customer_id"), b.get("driver_id")) and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
     pod = await db.pods.find_one({"booking_id": booking_id}, {"_id": 0})
     return pod
@@ -3356,13 +3356,16 @@ async def complete_booking(booking_id: str, user: dict = Depends(require_role("c
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "completed",
                                                                 "completed_at": now_iso()}})
     await db.jobs.update_one({"id": b["job_id"]}, {"$set": {"status": "completed"}})
-    await db.users.update_one({"id": b["driver_id"]}, {"$inc": {"total_jobs": 1}})
+    driver_id = b.get("driver_id")
+    if driver_id:
+        await db.users.update_one({"id": driver_id}, {"$inc": {"total_jobs": 1}})
     # Session E — completion confirmation email.
     try:
         from services.email import send_booking_completed
         fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
-        driver = await db.users.find_one({"id": b["driver_id"]}, {"_id": 0, "password_hash": 0}) or {}
+        driver = await db.users.find_one({"id": driver_id}, {"_id": 0, "password_hash": 0}) if driver_id else None
+        driver = driver or {}
         if fresh_b and user:
             fresh_b["job"] = job_doc
             await send_booking_completed(db, user=user, booking=fresh_b, driver=driver)
@@ -3380,11 +3383,11 @@ async def complete_booking(booking_id: str, user: dict = Depends(require_role("c
 async def create_review(booking_id: str, payload: ReviewCreate,
                          user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id})
-    if not b or user["id"] not in (b["customer_id"], b["driver_id"]):
+    if not b or user["id"] not in (b.get("customer_id"), b.get("driver_id")):
         raise HTTPException(status_code=404, detail="Not found")
     if b.get("status") not in ("completed", "pod_uploaded"):
         raise HTTPException(status_code=400, detail="Booking not completed yet")
-    target_id = b["driver_id"] if user["id"] == b["customer_id"] else b["customer_id"]
+    target_id = b.get("driver_id") if user["id"] == b.get("customer_id") else b.get("customer_id")
     doc = {
         "id": new_id(),
         "booking_id": booking_id,
