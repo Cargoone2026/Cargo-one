@@ -916,3 +916,30 @@ Focus: guarantee the backend-derived `recommended_vehicle` (Suitable Vehicle / R
 - `email_log._send_and_log` should persist a `text_snippet` (first 500 chars) so future audits don't need re-rendering to fact-check body content.
 - `_derive_suitable_vehicle` uses substring matches (`'bike' in vtype`) — swap to a whitelist mapping when we tidy the taxonomy.
 
+
+### Phase — ROUND 10: Admin & Customer Bug Sweep ✅ COMPLETE (Feb 2026)
+User-reported six live bugs across admin + customer portals. All six shipped and verified. Report: `/app/test_reports/iteration_final_qa_r10.json` (17/17 backend + 5/5 UI Playwright, zero regressions).
+
+**Backend**
+- `POST /jobs/{id}/accept` (fixed-price accept) now fires a customer email (`customer_driver_accepted`) so customers are nudged to pay the deposit even if they miss the in-app bell. Notification data payload carries `{job_id, kind:'job_accepted'}` so the customer app can deep-link.
+- `_send_and_log` gains optional `from_addr` + `reply_to` so admin-desk replies leave Cargo One from `admin@cargoone.co.uk` regardless of the admin's local mail client.
+- New helpers: `render_customer_driver_accepted` / `send_customer_driver_accepted_email` and `send_admin_contact_reply` (services/email.py).
+- New endpoints: `GET /admin/jobs/{id}` (full envelope: job + customer + driver + bids + booking; derives suitable-vehicle on the fly), `GET /admin/users/{id}` (unified drilldown across roles with recent jobs + bookings), `POST /admin/contact-messages/{id}/reply` (server-side send + stamps `replied_at/replied_by_name/last_reply_status`).
+
+**Frontend**
+- Customer **Bookings** — accepted-but-unbooked jobs no longer vanish. `openJobs` filter now `["posted","accepted"]` + deduped against the customer's real bookings by `job_id`. Customer can find the accepted job and pay deposit to confirm.
+- Customer **Messages / Notifications** — reads `?tab=` query so the Bell can deep-open the Updates tab. Selecting a notification renders a new "Open booking / Open job" CTA (`data-testid=notification-open-link`) that routes on `data.booking_id` OR `data.job_id`. The Bell button on Dashboard now hrefs to `?tab=notifications`.
+- Admin **Jobs** (rewritten) — clickable rows (`admin-job-open-<id>`) open a details modal (`admin-job-modal`) with StatusPill, JobExtras (Suitable-Vehicle chip), customer card, assigned-driver card with "Open driver" shortcut, bids list, and booking snapshot.
+- Admin **Users** (rewritten) — tab strip `All / Customers / Drivers / Admins`, role badges per row (blue/amber/red), click-through modal (`admin-user-modal`) with stats, recent jobs & bookings, and Driver-only "Open driver" link.
+- Admin **Dispatch Monitor** — Refresh button now disables + spins the icon + swaps label to "Refreshing…" while `/admin/dispatch/active` is in flight (visual feedback so users know the click landed).
+- Admin **Queues** — mailto: replaced with a "Reply from admin@cargoone.co.uk" server-send modal (`contact-reply-modal`) that POSTs to `/admin/contact-messages/{id}/reply`. A "Replied" pill (`contact-replied-<id>`) renders once the message has been answered.
+
+**Files changed**
+- Backend: `server.py` (accept-flow email nudge + admin drilldowns + admin reply endpoint), `services/email.py` (from_addr/reply_to, 2 new helpers), `tests/test_final_qa_r10.py` (new — 17 cases).
+- Frontend: `pages/portal/customer/Bookings.jsx` (filter), `Dashboard.jsx` (Bell), `Messages.jsx` (tab query + open link); `pages/portal/admin/Jobs.jsx` (rewritten), `Users.jsx` (rewritten), `DispatchMonitor.jsx` (refresh state), `Queues.jsx` (reply modal).
+
+**Deferred (non-blocking)**
+- `email_log` still doesn't persist a `text_snippet` — makes wording audits harder (called out in R9 & R10).
+- `server.py` now 5610 lines — split /admin routes into a dedicated router module.
+- `customer_driver_accepted` wiring is limited to fixed-price accept (ASAP path has driver_booking_accepted already covering the driver side).
+
