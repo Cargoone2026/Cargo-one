@@ -31,6 +31,18 @@ export default function CustomerAsapRequest() {
   const [note, setNote] = useState("");
   const [transportCategory, setTransportCategory] = useState("");
   const [transportDescription, setTransportDescription] = useState("");
+  // Round 15+ — optional "Booking details" for ASAP transport so the driver
+  // knows if the load needs a forklift or extra hands, and can size the van
+  // properly. All fields are optional; empty → falls back to the default
+  // hardcoded 20kg used by the ASAP price quote. Recovery mode is untouched
+  // because vehicle_details already covers what the driver needs.
+  const [needsForklift, setNeedsForklift] = useState(false);
+  const [needsLoadingHelp, setNeedsLoadingHelp] = useState(false);
+  const [asapWeightKg, setAsapWeightKg] = useState("");
+  const [asapItemCount, setAsapItemCount] = useState("");
+  const [asapLengthM, setAsapLengthM] = useState("");
+  const [asapWidthM, setAsapWidthM] = useState("");
+  const [asapHeightM, setAsapHeightM] = useState("");
   const [photos, setPhotos] = useState([]); // Round 3 — multi-photo attachment for BOTH transport + recovery
   const [vehicle, setVehicle] = useState({
     make: "", model: "", registration: "", condition: "will_not_start",
@@ -254,7 +266,22 @@ export default function CustomerAsapRequest() {
           dropoff_town: dropoff.town || "Dropoff",
           dropoff_lat: dropoff.lat,
           dropoff_lng: dropoff.lng,
-          weight_kg: mode === "breakdown_recovery" ? 1500 : 20,
+          weight_kg: mode === "breakdown_recovery"
+            ? 1500
+            : (asapWeightKg ? Number(asapWeightKg) : 20),
+          // Round 15+ — persist optional booking-details on ASAP transport
+          // jobs so JobExtras renders the full chip row (forklift / loading
+          // help / weight / items / L·W·H) on the driver's offer card and
+          // the customer's booking detail. Recovery mode leaves these null.
+          needs_forklift: mode === "transport" ? needsForklift : false,
+          needs_loading_help: mode === "transport" ? needsLoadingHelp : false,
+          item_count: mode === "transport" && asapItemCount ? Number(asapItemCount) : null,
+          dimensions_l_m: mode === "transport" && asapLengthM ? Number(asapLengthM) : null,
+          dimensions_w_m: mode === "transport" && asapWidthM ? Number(asapWidthM) : null,
+          dimensions_h_m: mode === "transport" && asapHeightM ? Number(asapHeightM) : null,
+          volume_m3: mode === "transport" && asapLengthM && asapWidthM && asapHeightM
+            ? Number(asapLengthM) * Number(asapWidthM) * Number(asapHeightM)
+            : null,
           collection_date: new Date().toISOString(),
           delivery_date: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
           pricing_type: "fixed",
@@ -481,6 +508,94 @@ export default function CustomerAsapRequest() {
           <p className="mt-1 text-[11px] text-neutral-500">
             Drivers see this before they accept — the clearer, the faster you'll be matched.
           </p>
+        </section>
+      )}
+
+      {mode === "transport" && (
+        <section className="mb-6" data-testid="asap-loading-details">
+          <details className="rounded-2xl border border-neutral-200 bg-white p-3">
+            <summary
+              className="cursor-pointer text-sm font-medium text-neutral-800"
+              data-testid="asap-loading-details-toggle"
+            >
+              Loading details (optional)
+              <span className="ml-2 text-[11px] text-neutral-500">
+                Forklift · loading help · weight · items · dimensions
+              </span>
+            </summary>
+            <div className="mt-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  checked={needsForklift}
+                  onChange={(e) => setNeedsForklift(e.target.checked)}
+                  data-testid="asap-forklift"
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                Forklift / loading equipment required
+              </label>
+              <label className="flex items-center gap-2 text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  checked={needsLoadingHelp}
+                  onChange={(e) => setNeedsLoadingHelp(e.target.checked)}
+                  data-testid="asap-loading-help"
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                Loading assistance (tail lift / extra hands)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  value={asapWeightKg}
+                  onChange={(e) => setAsapWeightKg(e.target.value)}
+                  placeholder="Weight (kg)"
+                  data-testid="asap-weight"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  value={asapItemCount}
+                  onChange={(e) => setAsapItemCount(e.target.value)}
+                  placeholder="Number of items"
+                  data-testid="asap-item-count"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={asapLengthM}
+                  onChange={(e) => setAsapLengthM(e.target.value)}
+                  placeholder="Length (m)"
+                  data-testid="asap-length"
+                />
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={asapWidthM}
+                  onChange={(e) => setAsapWidthM(e.target.value)}
+                  placeholder="Width (m)"
+                  data-testid="asap-width"
+                />
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={asapHeightM}
+                  onChange={(e) => setAsapHeightM(e.target.value)}
+                  placeholder="Height (m)"
+                  data-testid="asap-height"
+                />
+              </div>
+              <p className="text-[11px] text-neutral-500">
+                Sharing these upfront helps the driver bring the right van and equipment first time.
+              </p>
+            </div>
+          </details>
         </section>
       )}
 

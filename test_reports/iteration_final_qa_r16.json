@@ -1,0 +1,27 @@
+{
+  "summary": "R16 P0 CLOSED. ASAP Transport now collects & forwards the seven optional loading-detail fields (needs_forklift, needs_loading_help, weight_kg, item_count, dimensions_l/w/h_m, volume_m3) and ASAP Recovery is unaffected. Backend: 5/5 pytest cases in /app/backend/tests/test_final_qa_r16.py PASS — (1) ASAP transport POST /api/jobs with all 7 fields round-trips them exactly + service_timing='asap' + service_type='transport'; (2) GET /api/jobs/mine echoes the same fields for the customer; (3) GET /api/admin/jobs/{id} echoes them for admin; (4) ASAP breakdown_recovery POST persists needs_forklift=False / needs_loading_help=False and keeps vehicle_details intact; (5) Minimal ASAP transport POST (no R16 fields) still returns 200 with safe defaults (False / None). Frontend (Playwright, 1400x900, testcustomer): (i) /customer/asap mode='transport' renders data-testid='asap-loading-details' + 'asap-loading-details-toggle' + the six/seven inner testids (asap-forklift, asap-loading-help, asap-weight, asap-item-count, asap-length, asap-width, asap-height); checkboxes toggle True and numeric fields accept 420 / 5 / 1.2 / 1.0 / 1.5 correctly. (ii) mode='breakdown_recovery' — asap-loading-details is NOT rendered (count=0) while asap-recovery-fields IS rendered — confirming the transport-only guard. Wizard→Stripe redirect intentionally short-circuited per main-agent note (backend curl already proved the POST body). Regression: R15 pytest still 5/5 pass unchanged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r16.py",
+    "/app/test_reports/pytest/r16.xml",
+    "/app/test_reports/r16_asap_transport.jpg",
+    "/app/test_reports/r16_asap_recovery.jpg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AsapRequest.jsx submit body correctly gates R16 fields on mode==='transport' — recovery hard-codes needs_forklift/needs_loading_help to false and nulls out item_count/dimensions, matching the R16 contract and preventing leakage.",
+    "The volume_m3 in the submit is derived at post-time from L*W*H only when all three are provided — matches how the /jobs/mine chip renderer treats dims.",
+    "JobExtras.jsx and JobCreate are untouched this round (as expected from R15); pure additive change on the ASAP wizard surface — clean, low-risk delta.",
+    "The collapsible <details> element hides the block by default, which keeps the ASAP hero UX fast while still exposing the fields — good UX default for an 'optional' section.",
+    "Nit (non-blocking, pre-existing): the wizard still hard-codes a fallback weight_kg=20 when the customer skips the section. Consider passing null so the server default drives, but this is a legacy behaviour and not in scope for R16."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (5/5 R16 + 5/5 R15 regression)", "frontend": "100% (transport section + 7 inner testids render; recovery correctly hides section)"},
+  "test_credentials": "Used /app/memory/test_credentials.md. Login route is /auth/login, button label is 'Log in'.",
+  "seed_data_creation": "Three throw-away jobs posted by testcustomer via pytest: 1 ASAP transport with all R16 fields, 1 ASAP breakdown_recovery, 1 minimal ASAP transport. All titled with 'TEST_R16' prefix — safe to leave in preview / easy to bulk-clean by title prefix.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "R16 fix is fully closed. /app/backend/tests/test_final_qa_r16.py is the canonical regression for the ASAP JobCreate boundary + recovery-mode isolation — run alongside R15 whenever AsapRequest.jsx submit body or JobCreate is touched. Google Places autocomplete was skipped in the Playwright pass (main-agent-permitted) — the assertion target was section presence + inner testids + input acceptance, since backend round-trip is separately covered by pytest.",
+  "rca of the issue": "Root cause was the ASAP wizard silently omitting the seven booking-detail fields from its POST /api/jobs body while the JobCreate model (widened in R15) already accepted them — so the values were lost between UI intent and server persistence. Fix: (i) AsapRequest.jsx added state hooks for the seven inputs (L39-45), the transport-only collapsible section (L515-599) with the 7 documented testids, and forwards the values from the submit body (L272-284) with the recovery-mode guard that forces forklift/loading_help to false; (ii) no backend change needed (R15 already declared them on JobCreate). Verified via 5-case pytest round-trip and dual-mode Playwright section presence check."
+}
