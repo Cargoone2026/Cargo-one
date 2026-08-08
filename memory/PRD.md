@@ -1043,3 +1043,33 @@ Single-issue R13 follow-up. Report: `/app/test_reports/iteration_final_qa_r14.js
 **Deferred (non-blocking)**
 - AsapRequest still hard-codes a fallback `weight_kg=20` when the customer skips the section (legacy behaviour; consider passing `null` and letting the server default drive it).
 
+
+### Phase — ROUND 17: Pre-Redeploy Verification + ASAP Weight-Fallback Cleanup ✅ COMPLETE (Feb 2026)
+
+**Pre-redeploy verification** — real-browser Playwright across all 4 flows + all 3 role views, 100% chip parity:
+
+| Job Type       | Customer | Driver | Admin | Chips Rendered                                                                 |
+|----------------|:--------:|:------:|:-----:|--------------------------------------------------------------------------------|
+| Scheduled Fixed  | ✅ | ✅ | ✅ | forklift · loading · weight · items · L·W·H · vehicle                          |
+| Scheduled Bid    | ✅ | ✅ | ✅ | (forklift=false hides) loading · weight · items · L·W·H · vehicle              |
+| ASAP Transport   | ✅ | ✅ | ✅ | forklift · loading · weight · items · L·W·H · vehicle · transport-cat · note   |
+| ASAP Recovery    | ✅ | ✅ | ✅ | vehicle · recovery-details block (transport chips intentionally hidden)        |
+
+ASAP-Transport-specific check (per user's list): Forklift ✅ · Loading assistance ✅ · Weight ✅ · Items ✅ · Transport category ✅ · L ✅ · W ✅ · H ✅ · Suitable vehicle ✅ · Cargo/description (via note chip) ✅.
+
+**ASAP weight-fallback investigation + fix**
+Investigation of `server.py::_quote_math` confirmed the pricing multiplier is only applied when `weight_kg > 500` (L1313) — the previous hard-coded 20 kg (transport) and 1500 kg (recovery) fallbacks in `AsapRequest.jsx` were pricing-neutral but **misleading in the UI** (JobExtras rendered a "20 kg" chip when the customer never supplied a weight).
+Fix: `AsapRequest.jsx` now sends `weight_kg: null` when the customer skips the section (transport) and always `null` for recovery (vehicle_details is authoritative there). `_derive_suitable_vehicle` already uses `transport_category` / `vehicle_details.type` before falling back to weight, so the recommended-vehicle output is unchanged.
+
+**Regression tests** — `/app/backend/tests/test_final_qa_r17_weight_fallback.py` (9/9 pass):
+- 6 × parameterised: `/quote/estimate` returns the SAME price for weight ∈ {0, 1, 20, 100, 250, 500} kg vs a null baseline (pricing not skewed by the old 20 kg fallback).
+- Sanity: 1500 kg quote > un-weighted baseline (threshold at >500 kg still enforced).
+- ASAP transport POST with `weight_kg=null` persists as null AND still derives a vehicle from `transport_category`.
+- ASAP recovery POST with `weight_kg=null` derives a Recovery vehicle from `vehicle_details.type`.
+
+**Redeploy** — **manual step required from user**: hit the "Deploy" button in the chat UI to push R15 → R17 to cargoone.co.uk. I cannot deploy on your behalf.
+
+**Files changed**
+- Frontend: `pages/portal/customer/AsapRequest.jsx` (weight_kg fallback → null).
+- Tests: `tests/test_final_qa_r17_weight_fallback.py` (new, 9 cases).
+

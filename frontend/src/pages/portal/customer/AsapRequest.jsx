@@ -266,9 +266,18 @@ export default function CustomerAsapRequest() {
           dropoff_town: dropoff.town || "Dropoff",
           dropoff_lat: dropoff.lat,
           dropoff_lng: dropoff.lng,
+          // Round 17 — pass through the customer's actual weight when they
+          // supplied one, otherwise send NULL so JobExtras hides the "kg"
+          // chip and _derive_suitable_vehicle falls back to the transport
+          // category (transport) or vehicle_details.type (recovery) which is
+          // already guaranteed to be set on the ASAP flow. This removes the
+          // misleading 20 kg / 1500 kg hard-coded fallback. Price is NOT
+          // affected — the backend weight-multiplier only kicks in above 500
+          // kg (see server.py::_quote_math) and ASAP ships a client-computed
+          // fixed_price anyway.
           weight_kg: mode === "breakdown_recovery"
-            ? 1500
-            : (asapWeightKg ? Number(asapWeightKg) : 20),
+            ? null
+            : (asapWeightKg ? Number(asapWeightKg) : null),
           // Round 15+ — persist optional booking-details on ASAP transport
           // jobs so JobExtras renders the full chip row (forklift / loading
           // help / weight / items / L·W·H) on the driver's offer card and
