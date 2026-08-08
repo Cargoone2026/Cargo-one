@@ -987,3 +987,22 @@ Applied server-side in `register_user` (drivers mandatory, customers structural-
 - Backend: `server.py` (import re + `is_valid_phone` helper, register + update_me guards, `/admin/drivers-missing-phone`), `tests/test_final_qa_r12.py` (new, 24 cases).
 - Frontend: `pages/portal/driver/Notifications.jsx` (new), `pages/portal/driver/Dashboard.jsx` (Bell + badge), `App.js` (route), `pages/auth/Register.jsx` (validator), `pages/portal/driver/Profile.jsx` (validator), `pages/portal/admin/Users.jsx` (banner + nested-button refactor).
 
+
+### Phase — ROUND 13: Ops Nudge + Notification Chime ✅ COMPLETE (Feb 2026)
+Two R12 follow-ups shipped. Report: `/app/test_reports/iteration_final_qa_r13.json` (7/7 backend pytest + 24/24 R12 regression + 2/2 Playwright, zero regressions).
+
+**Ops Chase Emails (P0)**
+- New Resend template `driver_add_phone_nudge` (subject "Add your phone to keep receiving Cargo One jobs") with HTML + text fallback, CTA button routing to `APP_ORIGIN/driver/profile`.
+- New endpoint `POST /admin/drivers-missing-phone/nudge` — iterates every driver failing `is_valid_phone`, sends the nudge template, stamps each user with `nudged_add_phone_at`, `nudged_add_phone_by_id`, `nudged_add_phone_last_status`. 24-h dedupe means clicking twice within a day skips already-emailed drivers. Response: `{ok, flagged, sent, skipped, failed, skipped_reasons}`.
+- Admin `Users.jsx` amber banner gains a **Email all N drivers** button (`admin-nudge-missing-phone`) with `window.confirm` gate, pulsing spinner during flight, and a result pill (`admin-nudge-result`) showing `Emailed X · queued Y · failed Z`.
+- Preview surfaced 331 flagged drivers on first call (all skipped via `provider_offline` because RESEND_API_KEY is blank); production will actually send.
+
+**Notification Chime (P0)**
+- New hook `useNotificationChime` — mirrors `useMessageChime` (2-note 880/1320 Hz Web-Audio bing, unlock-on-gesture, primed-ref gate so first poll never chimes) but reads `/notifications` and persists preference under its own key `cargoone_notification_chime_enabled` so message- and notification-chimes don't fight.
+- `Driver Dashboard` mirrors the hook's `unread` count into the existing bell badge.
+- `Driver Notifications` page gains a header toggle (`driver-notif-chime-toggle`, Volume2/VolumeX icons with `aria-pressed`) and re-fetches the notification list on every `chime.unread` change so the pane stays live.
+
+**Files changed**
+- Backend: `server.py::admin_nudge_drivers_missing_phone` (new endpoint w/ 24h dedupe), `services/email.py` (2 new helpers), `tests/test_final_qa_r13.py` (new — 7 cases).
+- Frontend: `hooks/useNotificationChime.js` (new), `pages/portal/driver/Dashboard.jsx` (hook mirror), `pages/portal/driver/Notifications.jsx` (chime toggle + live re-fetch), `pages/portal/admin/Users.jsx` (nudge button + result pill).
+
