@@ -1089,3 +1089,38 @@ Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:j
 **Files changed**
 - `pages/portal/customer/Dispatch.jsx` (rewritten — display layer only).
 
+
+### Phase — ROUND 19 + 20: List/Map Toggle · Persistent ASAP · Cancel-and-Refund · Extra Filters ✅ COMPLETE (Feb 2026)
+
+**Scope note** — Mapbox migration was started then explicitly DEFERRED by the user. `mapbox-gl` npm package installed but every active import in `RouteMap.jsx` / `DriverLiveMap.jsx` was reverted to the Google Maps path. `MapboxMap.jsx` remains in the tree as orphaned code, referenced by nothing at runtime. Mapbox will run as a dedicated phase after production QA.
+
+**R19 — Persistent Finding-a-driver + Cancel/Refund + Driver List/Map toggle** (`/app/test_reports/iteration_final_qa_r19.json`, 11/11 backend + 95% Playwright)
+- **Persistent ASAP state**: removed the sessionStorage-gated bounce from `BookingDetail.jsx` and introduced a new shared `AsapDispatchPanel.jsx`. Panel polls `/customer/dispatch/{jobId}` every 4 s and is now rendered INLINE at `/customer/booking/:id` whenever `service_timing='asap' && payment_status='paid' && !assigned_driver_id && !cancelled_at`. Survives refresh, back-nav, bg/fg. Standalone `/customer/dispatch/:jobId` still works via a thin wrapper. Panel switches heading to "Still looking for a driver — we're now searching nationwide" once `current_search_radius_miles >= 500`.
+- **Backend Cancel-and-Refund**: new `POST /customer/bookings/{booking_id}/cancel-and-refund` with two atomic conditional updates (jobs row AND bookings row) so it cannot complete if a driver claims in the same instant — perfect race safety. Fires `stripe.Refund.create`, records audit trail on `payment_transactions.refunds` and `bookings.refunds`, sends `send_refund_confirmation` email. Validates ownership, ASAP-only, paid, unclaimed, not-already-cancelled. 401 / 403 / 404 / 400 / 409 / 200 matrix all covered.
+- **Driver Available-Jobs List/Map toggle**: `Jobs.jsx` gains `viewMode` state + `driver-jobs-viewmode` toggle. Map reuses the existing `DriverLiveMap` (Google Maps — untouched). Tapping a pin opens `driver-jobs-map-sheet` bottom sheet with title, route, distances, price chip and `AcceptanceInfo` chips + `View Job` link. Both views consume the same `filtered` array so eligibility filters apply identically.
+
+**R20 — Extra filter dimensions** (`/app/test_reports/iteration_final_qa_r20.json`, 23/23 Playwright, zero regressions)
+- New state: `vehicleSize`, `tripBand`, `serviceType`, `timing`, `forkliftOnly`, `loadingHelpOnly`.
+- New filter chips inside the existing advanced-filters panel:
+  - Vehicle size: Small Van / Large Van / Luton / 7.5T Box / 3.5T Recovery / Heavy Recovery / Motorcycle Recovery (matched against `job.recommended_vehicle` slug)
+  - Trip length: Short <25 mi / Medium 25–100 mi / Long >100 mi (matched against `job.distance_miles`)
+  - Service: Transport / Recovery (matched against `job.service_type`)
+  - Timing: ASAP / Scheduled (matched against `job.service_timing`)
+  - Cargo aids: Forklift required / Loading help required (boolean flags)
+- `activeFilterCount` and `resetAll` both widened. All filters apply to both List AND Map (verified: List/Map count identity holds).
+
+**Files changed (R19 + R20)**
+- Backend: `server.py` — new `POST /customer/bookings/{booking_id}/cancel-and-refund` (~150 LOC of atomic transitions + Stripe refund + audit).
+- Backend tests: `tests/test_final_qa_r19_dispatch_refund.py` (11 cases, incl. concurrent-race).
+- Frontend NEW: `components/ui-portal/AsapDispatchPanel.jsx` (shared panel + cancel-confirm modal).
+- Frontend NEW (orphaned): `components/ui-portal/MapboxMap.jsx` (deferred).
+- Frontend UPDATED: `pages/portal/customer/BookingDetail.jsx` (inline panel + removed bounce), `pages/portal/customer/Dispatch.jsx` (thin wrapper), `pages/portal/driver/Jobs.jsx` (List/Map toggle + bottom sheet + R20 filters).
+- Frontend UNCHANGED: `RouteMap.jsx`, `DriverLiveMap.jsx` (Google Maps preserved), Post-a-Job geocoder, all backend dispatch/queue logic.
+
+**Deferred (non-blocking)**
+- Mapbox migration — user will approve after production QA.
+- `Jobs.jsx` is 711 lines — nearing the split threshold; consider extracting advanced-filters panel + map-sheet in a future round.
+- Preview seed has zero recovery + zero ASAP jobs visible to `testdriver@example.com`, so positive-case coverage of those two chips relies on you seeding one recovery + one ASAP job before manual QA.
+
+**Deployment** — not deployed automatically. Redeploy via the "Deploy" button in the chat UI when your manual QA is ready.
+
