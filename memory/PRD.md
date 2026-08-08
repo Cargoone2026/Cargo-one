@@ -943,3 +943,25 @@ User-reported six live bugs across admin + customer portals. All six shipped and
 - `server.py` now 5610 lines — split /admin routes into a dedicated router module.
 - `customer_driver_accepted` wiring is limited to fixed-price accept (ASAP path has driver_booking_accepted already covering the driver side).
 
+
+### Phase — ROUND 11: Driver-Phone + Mobile Notifications ✅ COMPLETE (Feb 2026)
+Two live production bugs reported from cargoone.co.uk. Report: `/app/test_reports/iteration_final_qa_r11.json` (8/8 backend pytest + 3/3 Playwright flows, zero regressions).
+
+**Bug 1 — Customer couldn't call driver after normal fixed-price accept**
+Root cause: drivers could self-register without a phone. `other_party.phone` came through as null so the call button was suppressed. Fixes:
+- `POST /auth/register` now rejects driver signups without a valid phone (≥7 chars) — 400 with human-readable copy. Customer signups remain phone-optional.
+- `PUT /auth/me` blocks drivers from clearing their phone (empty / null / non-string → 400).
+- Register form marks Phone as **required** for drivers with an inline hint.
+- Driver **Profile** now renders a persistent amber `driver-phone-missing-banner` for existing drivers whose row lacks a phone, with a one-tap CTA opening the edit form. Inline validation on save enforces `≥7 chars`.
+- Customer `BookingDetail` — when the driver's phone genuinely isn't on file, the party card now renders a `party-chat-fallback` button (message icon) that switches the booking view to the Chat tab so the customer can still reach the driver.
+
+**Bug 2 — Notifications on mobile didn't open when tapped**
+Root cause: two-pane grid stacked list-then-detail on mobile so the detail was off-screen below and the tap looked like it "did nothing" beyond marking the row read. Fixes:
+- On `<md` viewports the notifications list and detail are now **mutually exclusive**: tap a row → list hides, detail full-screen with `notification-back-button` (ArrowLeft) in the header. Tap Back → detail hides, list restored.
+- On `md+` viewports the classic two-pane layout is preserved and the Back button stays hidden.
+- Auto-select-first-notification is gated to `window.innerWidth ≥ 768` so mobile users see the list first.
+
+**Files changed**
+- Backend: `server.py::register_user` (driver-phone required), `server.py::update_me` (driver-phone-lock), `tests/test_final_qa_r11.py` (new — 9 cases).
+- Frontend: `pages/auth/Register.jsx` (driver-required label + guard), `pages/portal/driver/Profile.jsx` (missing-phone banner + save-side validation), `pages/portal/customer/BookingDetail.jsx` (chat fallback), `pages/portal/customer/Messages.jsx` (mobile list/detail switch + back button + gated auto-select).
+
