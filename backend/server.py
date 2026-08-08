@@ -279,6 +279,18 @@ class JobCreate(BaseModel):
     dropoff_place_id: Optional[str] = None
     weight_kg: Optional[float] = None
     dimensions: Optional[str] = None
+    # Round 15 — persist the individual dimension components + item count +
+    # loading-aid flags so JobExtras can render the "Booking details" chip
+    # row (forklift / loading assistance / weight / items / L·W·H) on ALL
+    # posted jobs, not just ASAP. Previously these were captured in the
+    # PostJob wizard state but silently dropped at the Pydantic boundary.
+    dimensions_l_m: Optional[float] = None
+    dimensions_w_m: Optional[float] = None
+    dimensions_h_m: Optional[float] = None
+    volume_m3: Optional[float] = None
+    item_count: Optional[int] = None
+    needs_forklift: Optional[bool] = False
+    needs_loading_help: Optional[bool] = False
     collection_date: str
     delivery_date: str
     pricing_type: str  # fixed | bidding

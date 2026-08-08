@@ -217,6 +217,19 @@ export default function CustomerPostJob() {
         dropoff_place_id: dropoff.place_id || null,
         weight_kg: weightKg ? Number(weightKg) : null,
         dimensions: [lengthM, widthM, heightM].filter(Boolean).join("×") || null,
+        // Round 15 — persist the individual dimension components + item
+        // count + loading-aid flags so JobExtras can render the full
+        // "Booking details" chip row on the customer job detail and the
+        // driver's offer card. Previously these were captured in state but
+        // never posted, so forklift / loading-help / L·W·H chips silently
+        // never appeared on scheduled (bid + fixed) jobs.
+        dimensions_l_m: lengthM ? Number(lengthM) : null,
+        dimensions_w_m: widthM ? Number(widthM) : null,
+        dimensions_h_m: heightM ? Number(heightM) : null,
+        volume_m3: volumeFromDims(lengthM, widthM, heightM),
+        item_count: itemCount ? Number(itemCount) : null,
+        needs_forklift: needsForklift,
+        needs_loading_help: needsLoadingHelp,
         collection_date: collectionDate,
         delivery_date: deliveryDate,
         pricing_type: pricingType,
