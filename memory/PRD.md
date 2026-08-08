@@ -1022,3 +1022,24 @@ Single-issue R13 follow-up. Report: `/app/test_reports/iteration_final_qa_r14.js
 **Deferred (non-blocking)**
 - Two `useNotificationChime` instances co-exist when both Dashboard + Messages are mounted; harmless (primedRef gate + separate refs) but a minor duplicate 15 s call. Consider hoisting to context if it gets noisy.
 
+
+### Phase — ROUND 15 + 16: Booking Details Chip Row ✅ COMPLETE (Feb 2026)
+
+**R15 — Scheduled jobs (fixed + bidding)** (`/app/test_reports/iteration_final_qa_r15.json`)
+- Root cause: the PostJob wizard captured `needs_forklift`, `needs_loading_help`, individual L/W/H dims and `item_count` in state but never posted them, and the backend `JobCreate` Pydantic model didn't declare them so Pydantic silently discarded any that leaked through.
+- Fix: widened `JobCreate` (server.py L281-296) + widened PostJob.jsx `submit()` body (L218-240). No JobExtras change needed — it was already reading the fields correctly.
+- 5/5 backend pytest + 6/6 Playwright chip render (customer / driver / admin modal). Zero regressions.
+
+**R16 — ASAP jobs** (`/app/test_reports/iteration_final_qa_r16.json`)
+- Same fields were missing on the AsapRequest wizard even after R15's backend fix.
+- Fix: new collapsible **Loading details (optional)** section on AsapRequest Transport mode with testids `asap-loading-details` / `asap-loading-details-toggle` and 6 inner inputs (`asap-forklift`, `asap-loading-help`, `asap-weight`, `asap-item-count`, `asap-length`, `asap-width`, `asap-height`). Values forwarded in submit body gated on `mode==='transport'`; recovery mode forces `needs_forklift/loading_help=false` and nulls item/dim fields so the section correctly hides.
+- 5/5 backend pytest + 2/2 Playwright (transport section renders + recovery hides). Zero regressions. R15 pytest still 5/5 pass.
+
+**Files changed (R15 + R16)**
+- Backend: `server.py::JobCreate` (R15).
+- Frontend: `pages/portal/customer/PostJob.jsx` (R15 submit body), `pages/portal/customer/AsapRequest.jsx` (R16 state + section + submit gate).
+- Tests: `tests/test_final_qa_r15.py` (5 cases), `tests/test_final_qa_r16.py` (5 cases).
+
+**Deferred (non-blocking)**
+- AsapRequest still hard-codes a fallback `weight_kg=20` when the customer skips the section (legacy behaviour; consider passing `null` and letting the server default drive it).
+
