@@ -24,6 +24,7 @@ import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 import { RecentActivity } from "@/components/ui-portal/RecentActivity";
+import { AsapDispatchPanel } from "@/components/ui-portal/AsapDispatchPanel";
 
 const ACTIVE_STATUSES = new Set([
   "deposit_paid",
@@ -97,30 +98,15 @@ export default function CustomerBookingDetail() {
     }
   }, []);
 
-  // ASAP flow — after deposit is paid and no driver assigned yet on THIS
-  // booking, bounce the customer to /customer/dispatch/{jobId} so they see
-  // the live "searching for a driver" screen. Guarded by a session flag so
-  // we only fire the redirect ONCE per booking (otherwise, when the Dispatch
-  // page later hands control back to us after a driver claim, we'd loop).
+  // ASAP flow — after deposit is paid and no driver assigned yet, the
+  // Finding-a-driver panel is embedded inline below (see JSX). No more
+  // sessionStorage-gated bounce to /customer/dispatch — the URL must stay
+  // stable across nav/refresh/backgrounding so /customer/booking/:id is
+  // always the source of truth. R19 fix.
   useEffect(() => {
-    if (!b) return;
-    if (b.service_timing !== "asap") return;
-    if (b.payment_status !== "paid") return;
-    if (b.assigned_driver_id) return;
-    if (paymentPollActive) return;
-    // Once per booking — the Dispatch page owns the "searching" experience.
-    // If the customer later comes back to this URL directly, we respect that.
-    let alreadyBounced = false;
-    try {
-      alreadyBounced = sessionStorage.getItem(`asap-bounced:${b.id}`) === "1";
-    } catch { /* ignore */ }
-    if (alreadyBounced) return;
-    let jobId = null;
-    try { jobId = sessionStorage.getItem(`asap:${b.id}`); } catch { /* ignore */ }
-    jobId = jobId || b.job_id;
-    if (!jobId) return;
-    try { sessionStorage.setItem(`asap-bounced:${b.id}`, "1"); } catch { /* ignore */ }
-    navigate(`/customer/dispatch/${jobId}`, { replace: true });
+    // Kept as a stub so linters don't strip the removed hook — if we ever
+    // need to trigger side-effects on the ASAP-unclaimed transition, this
+    // is the place.
   }, [b, paymentPollActive, navigate]);
 
   // Poll tracking every 12s while shipment is en route
@@ -326,6 +312,17 @@ export default function CustomerBookingDetail() {
         <h1 className="flex-1 text-[20px] font-bold text-[#111111]">Booking</h1>
         <StatusPill status={b.status} />
       </header>
+
+      {b.service_timing === "asap" && b.payment_status === "paid" && !b.assigned_driver_id && !b.cancelled_at ? (
+        <div className="mx-4 mt-4 md:mx-8" data-testid="asap-dispatch-inline">
+          <AsapDispatchPanel
+            jobId={b.job_id}
+            bookingId={b.id}
+            onDriverFound={() => load()}
+            onCancelled={() => navigate("/customer/bookings")}
+          />
+        </div>
+      ) : null}
 
       {paymentPollActive ? (
         <div

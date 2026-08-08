@@ -15,6 +15,8 @@ import {
 import { api } from "@/lib/api";
 import { useCapabilities, useCategories } from "@/hooks/useCatalog";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
+import { DriverLiveMap } from "@/components/ui-portal/DriverLiveMap";
+import { List as ListIcon, Map as MapIcon } from "lucide-react";
 
 const RADII = [10, 20, 40, 75, 250];
 const SORTS = [
@@ -39,6 +41,8 @@ export default function DriverJobs() {
   const [selectedCaps, setSelectedCaps] = useState([]);
   const [sort, setSort] = useState("nearest");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [viewMode, setViewMode] = useState("list"); // list | map
+  const [selectedJob, setSelectedJob] = useState(null); // map bottom-sheet
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,6 +152,34 @@ export default function DriverJobs() {
           {filtered.length} of {jobs.length}
         </span>
       </header>
+
+      {/* R19 — List / Map toggle. Both views consume the SAME `filtered`
+          array so eligibility + capability filters (from useCapabilities,
+          category, pricing, radius, min/max price) apply identically. */}
+      <div className="mx-4 mt-3 flex gap-1 rounded-full bg-[#F4F4F4] p-1 md:mx-8" data-testid="driver-jobs-viewmode">
+        <button
+          type="button"
+          onClick={() => setViewMode("list")}
+          data-testid="driver-jobs-view-list"
+          aria-pressed={viewMode === "list"}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-semibold transition-colors ${
+            viewMode === "list" ? "bg-[#111111] text-white" : "text-[#6B7280]"
+          }`}
+        >
+          <ListIcon className="h-4 w-4" /> List
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("map")}
+          data-testid="driver-jobs-view-map"
+          aria-pressed={viewMode === "map"}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-semibold transition-colors ${
+            viewMode === "map" ? "bg-[#111111] text-white" : "text-[#6B7280]"
+          }`}
+        >
+          <MapIcon className="h-4 w-4" /> Map
+        </button>
+      </div>
 
       <div className="mx-4 mt-3 flex items-center gap-2 md:mx-8">
         <div className="flex flex-1 items-center gap-2 rounded-[12px] bg-[#F4F4F4] px-3 py-2">
@@ -296,7 +328,8 @@ export default function DriverJobs() {
       )}
 
       {/* List */}
-      <ul className="mx-4 mt-3 space-y-3 md:mx-8">
+      {viewMode === "list" && (
+      <ul className="mx-4 mt-3 space-y-3 md:mx-8" data-testid="driver-jobs-list">
         {filtered.length === 0 ? (
           <li
             className="flex flex-col items-center gap-2 py-12 text-center"
@@ -391,6 +424,113 @@ export default function DriverJobs() {
           ))
         )}
       </ul>
+      )}
+
+      {/* Map view — uses the SAME `filtered` dataset so eligibility
+          filters, radius, price min/max and capability rules produce
+          the identical job set as the List. Selecting a pin opens a
+          mobile-friendly bottom sheet with the full preview + View Job. */}
+      {viewMode === "map" && (
+        <div className="mx-4 mt-3 md:mx-8" data-testid="driver-jobs-map">
+          <div className="relative h-[520px] w-full overflow-hidden rounded-2xl border border-[#E5E7EB]">
+            <DriverLiveMap
+              lat={driverLoc?.lat}
+              lng={driverLoc?.lng}
+              offers={filtered
+                .filter((j) => Number.isFinite(j.pickup_lat) && Number.isFinite(j.pickup_lng))
+                .map((j) => ({
+                  ...j,
+                  job_id: j.id,
+                  id: j.id,
+                }))
+              }
+              onOfferClick={(j) => setSelectedJob(j)}
+              className="h-full"
+              showSweep={false}
+            />
+            {filtered.length === 0 && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+                <div className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-[#6B7280] shadow">
+                  No eligible jobs in this filter
+                </div>
+              </div>
+            )}
+          </div>
+          {selectedJob ? (
+            <MapJobBottomSheet
+              job={selectedJob}
+              onClose={() => setSelectedJob(null)}
+            />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bottom-sheet preview of a job marker. Shows enough to decide but
+    respects existing privacy — pickup town only, not full address. */
+function MapJobBottomSheet({ job, onClose }) {
+  const price = job.pricing_type === "fixed" ? job.fixed_price : (job.suggested_price || job.max_budget);
+  const priceLabel = job.pricing_type === "fixed" ? "Earn" : "Max bid";
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      data-testid="driver-jobs-map-sheet"
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[#D62828]">
+              {job.service_timing === "asap" ? "ASAP" : "Scheduled"}
+              {" · "}
+              {job.service_type === "breakdown_recovery" ? "Recovery" : "Transport"}
+              {" · "}
+              {job.pricing_type === "fixed" ? "Fixed" : "Bidding"}
+            </p>
+            <h3 className="mt-0.5 truncate text-[17px] font-bold text-[#111111]">
+              {job.title || `${job.pickup_town} → ${job.dropoff_town}`}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            data-testid="driver-jobs-map-sheet-close"
+            className="rounded-full p-1 hover:bg-[#F4F4F4]"
+          >
+            <XIcon className="h-4 w-4 text-[#6B7280]" />
+          </button>
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-[14px] text-[#111111]">
+          <span className="h-2 w-2 rounded-full bg-[#16A34A]" />
+          <span className="truncate">{job.pickup_town}</span>
+          <span className="text-[#9CA3AF]">→</span>
+          <span className="truncate">{job.dropoff_town}</span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#6B7280]">
+          <span>{job.distance_miles} mi job</span>
+          <span>·</span>
+          <span>{job.distance_from_driver} mi away</span>
+          <span className="ml-auto rounded-full bg-[#F4F4F4] px-2 py-0.5 text-[11px] font-bold text-[#111111]">
+            {priceLabel} £{Number(price || 0).toFixed(2)}
+          </span>
+        </div>
+        <div className="mt-3">
+          <AcceptanceInfo job={job} dense testIdPrefix={`driver-jobs-map-sheet-${job.id}`} />
+        </div>
+        <Link
+          to={`/driver/job/${job.id}`}
+          data-testid="driver-jobs-map-sheet-view"
+          className="mt-4 flex w-full items-center justify-center rounded-full bg-[#111111] px-4 py-3 text-[14px] font-semibold text-white hover:bg-[#D62828]"
+        >
+          View Job
+        </Link>
+      </div>
     </div>
   );
 }

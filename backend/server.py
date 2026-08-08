@@ -3995,6 +3995,198 @@ async def admin_dispatch_log(job_id: str,
 
 
 
+@api.post("/customer/bookings/{booking_id}/cancel-and-refund")
+async def customer_cancel_and_refund(
+    booking_id: str,
+    payload: dict = Body(default={}),
+    user: dict = Depends(require_role("customer")),
+):
+    """Customer self-service cancel + full-refund for an ASAP booking that
+    is still WAITING for a driver.
+
+    Race-safe design:
+      1. Atomically claim the booking with a conditional update — only
+         succeeds if the booking is still unclaimed AND paid AND ASAP AND
+         not already cancelled/refunded. Any driver claim happening at the
+         same instant will race on their own conditional update at
+         `POST /jobs/:id/claim` (server.py::claim_asap_job) — whichever
+         update lands first wins. If the driver got there first the
+         refund path here returns 409.
+      2. On successful claim, mark the associated job cancelled so any
+         driver still holding a stale offer for it gets a 409 the moment
+         they try to accept.
+      3. Fire the Stripe refund exactly like the admin endpoint (same
+         helper path).
+      4. Audit-log the customer-initiated refund entry.
+    """
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("customer_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not your booking")
+
+    job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if (job.get("service_timing") or "").lower() != "asap":
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint is only for ASAP bookings. Use the admin refund flow for other bookings.",
+        )
+    if b.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Booking has not been paid")
+    if b.get("refund_status") in ("refunded", "succeeded", "pending", "in_progress"):
+        raise HTTPException(status_code=409, detail="Refund already recorded or in progress")
+    if b.get("cancelled_at"):
+        raise HTTPException(status_code=409, detail="Booking already cancelled")
+    if job.get("assigned_driver_id"):
+        raise HTTPException(status_code=409,
+                            detail="A driver has just accepted this job — cancellation is no longer available.")
+
+    # ---- ATOMIC CLAIM: only proceed if the job is still unclaimed ---------
+    job_claim = await db.jobs.update_one(
+        {
+            "id": job["id"],
+            "assigned_driver_id": {"$in": [None, ""]},
+            "status": {"$nin": ["accepted", "in_progress", "completed", "cancelled"]},
+        },
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": now_iso(),
+            "cancelled_by": "customer",
+            "cancelled_by_id": user["id"],
+        }},
+    )
+    if job_claim.modified_count == 0:
+        # A driver won the race
+        raise HTTPException(
+            status_code=409,
+            detail="A driver has just accepted this job — cancellation is no longer available.",
+        )
+
+    # ---- ATOMIC BOOKING CLAIM: guard the refund side of the transition ---
+    b_claim = await db.bookings.update_one(
+        {
+            "id": booking_id,
+            "cancelled_at": None,
+            "refund_status": {"$in": [None, "", "failed"]},
+        },
+        {"$set": {
+            "cancelled_at": now_iso(),
+            "cancelled_by": "customer",
+            "cancelled_by_id": user["id"],
+            "refund_status": "in_progress",
+            "refund_requested_at": now_iso(),
+            "refund_requested_by": user["id"],
+        }},
+    )
+    if b_claim.modified_count == 0:
+        # Should not happen thanks to the job-claim above — but bail safely.
+        raise HTTPException(status_code=409, detail="Cancellation already in progress")
+
+    # ---- STRIPE REFUND ---------------------------------------------------
+    session_id = b.get("stripe_session_id")
+    txn = await db.payment_transactions.find_one({"session_id": session_id}) if session_id else None
+    pi_id = (txn or {}).get("payment_intent_id")
+    refund_id = None
+    refund_state = "failed"
+    stripe_err: str | None = None
+    try:
+        import stripe as _stripe
+        _stripe.api_key = STRIPE_API_KEY
+
+        if not pi_id and session_id:
+            try:
+                s_obj = _stripe.checkout.Session.retrieve(session_id)
+                pi_id = s_obj.get("payment_intent") if isinstance(s_obj, dict) else getattr(s_obj, "payment_intent", None)
+                if pi_id and txn:
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id},
+                        {"$set": {"payment_intent_id": pi_id, "updated_at": now_iso()}},
+                    )
+            except Exception:
+                pi_id = pi_id or None
+
+        if not pi_id:
+            raise RuntimeError("No payment_intent recorded on this booking — cannot refund")
+
+        refund_obj = _stripe.Refund.create(
+            payment_intent=pi_id,
+            reason="requested_by_customer",
+            metadata={
+                "booking_id": booking_id,
+                "customer_id": user["id"],
+                "cargoone_reason": "customer_asap_cancel_full_refund",
+            },
+        )
+        refund_id = refund_obj.get("id") if isinstance(refund_obj, dict) else getattr(refund_obj, "id", None)
+        stripe_status = refund_obj.get("status") if isinstance(refund_obj, dict) else getattr(refund_obj, "status", None)
+        refund_state = "succeeded" if stripe_status == "succeeded" else (stripe_status or "pending")
+    except Exception as e:
+        stripe_err = str(e)
+        refund_state = "failed"
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"refund_status": "failed",
+                      "refund_failed_at": now_iso(),
+                      "refund_error": stripe_err[:500]}},
+        )
+        logger.warning("Customer refund failed for booking %s: %s", booking_id, stripe_err)
+
+    audit_entry = {
+        "id": new_id(),
+        "at": now_iso(),
+        "customer_id": user["id"],
+        "customer_name": user.get("name"),
+        "amount": b.get("deposit_amount") or (txn or {}).get("amount"),
+        "reason": "customer_asap_cancel_full_refund",
+        "state": refund_state,
+        "stripe_refund_id": refund_id,
+        "payment_intent_id": pi_id,
+        "error": stripe_err,
+    }
+    if txn:
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$push": {"refunds": audit_entry}, "$set": {"updated_at": now_iso()}},
+        )
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"refund_status": refund_state,
+                  "refunded_at": now_iso() if refund_state == "succeeded" else None,
+                  "stripe_refund_id": refund_id,
+                  "refund_amount": audit_entry["amount"] if refund_state == "succeeded" else None},
+         "$push": {"refunds": audit_entry}},
+    )
+    if refund_state == "failed":
+        # Booking is cancelled either way — but tell the customer refund failed
+        raise HTTPException(status_code=502, detail=f"Booking cancelled but refund failed: {stripe_err}. Support has been notified.")
+
+    # ---- CONFIRMATION EMAIL ---------------------------------------------
+    try:
+        from services.email import send_refund_confirmation
+        fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0}) if b.get("job_id") else None
+        if fresh_b:
+            fresh_b["job"] = job_doc
+            await send_refund_confirmation(
+                db, user=user, booking=fresh_b,
+                amount=float(audit_entry["amount"] or 0),
+            )
+    except Exception:
+        logger.exception("customer refund-confirmation email failed; continuing")
+
+    return {
+        "ok": True,
+        "booking_id": booking_id,
+        "job_id": job["id"],
+        "refund_state": refund_state,
+        "stripe_refund_id": refund_id,
+        "cancelled_at": now_iso(),
+    }
+
+
 @api.post("/admin/bookings/{booking_id}/refund")
 async def admin_refund_booking(booking_id: str, payload: dict = Body(default={}),
                                 user: dict = Depends(require_role("admin"))):
