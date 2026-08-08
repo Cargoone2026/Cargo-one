@@ -3485,6 +3485,66 @@ async def admin_drivers_missing_phone(_: dict = Depends(require_role("admin"))):
     }
 
 
+@api.post("/admin/drivers-missing-phone/nudge")
+async def admin_nudge_drivers_missing_phone(admin: dict = Depends(require_role("admin"))):
+    """One-tap ops action — Resend an "add your phone" nudge to EVERY driver
+    whose phone is missing or malformed. Rate-guarded per-driver by 24 h
+    via `nudged_add_phone_at`; the same admin clicking twice within a day
+    is a no-op for already-nudged drivers.
+    """
+    drivers = await db.users.find(
+        {"role": "driver"},
+        {"_id": 0, "password_hash": 0},
+    ).to_list(2000)
+    flagged = [d for d in drivers if not is_valid_phone((d.get("phone") or "").strip())]
+    from services.email import send_driver_add_phone_nudge_email
+
+    now = datetime.now(timezone.utc)
+    dedupe_cutoff = now - timedelta(hours=24)
+    sent = skipped = failed = 0
+    skipped_reasons: list[str] = []
+    for d in flagged:
+        last = d.get("nudged_add_phone_at")
+        try:
+            last_dt = datetime.fromisoformat(last) if isinstance(last, str) else None
+        except Exception:
+            last_dt = None
+        if last_dt and last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        if last_dt and last_dt > dedupe_cutoff:
+            skipped += 1
+            skipped_reasons.append("dedupe_24h")
+            continue
+        result = await send_driver_add_phone_nudge_email(db, driver=d)
+        r_status = result.get("status")
+        if r_status == "sent":
+            sent += 1
+        elif r_status == "skipped":
+            skipped += 1
+            skipped_reasons.append(result.get("reason") or "provider_offline")
+        else:
+            failed += 1
+        # Stamp the nudge time only for sent/skipped-by-provider so a real
+        # failure can be retried next click.
+        if r_status in ("sent", "skipped"):
+            await db.users.update_one(
+                {"id": d["id"]},
+                {"$set": {
+                    "nudged_add_phone_at": now.isoformat(),
+                    "nudged_add_phone_by_id": admin.get("id"),
+                    "nudged_add_phone_last_status": r_status,
+                }},
+            )
+    return {
+        "ok": True,
+        "flagged": len(flagged),
+        "sent": sent,
+        "skipped": skipped,
+        "failed": failed,
+        "skipped_reasons": skipped_reasons[:10],
+    }
+
+
 @api.get("/admin/users/{user_id}")
 async def admin_user_detail(user_id: str,
                               _: dict = Depends(require_role("admin"))):

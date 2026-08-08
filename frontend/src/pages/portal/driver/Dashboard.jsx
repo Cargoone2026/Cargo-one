@@ -24,6 +24,7 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { GlobalSearchModal } from "@/components/ui-portal/GlobalSearchModal";
 import { Button } from "@/components/ui-portal/Button";
 import { useMessageChime } from "@/hooks/useMessageChime";
+import { useNotificationChime } from "@/hooks/useNotificationChime";
 
 export default function DriverDashboard() {
   const { user } = useAuth();
@@ -37,6 +38,11 @@ export default function DriverDashboard() {
   // /messages/unread-count every 15 s and beeps when the count rises. The
   // driver can toggle it from the card below.
   const chime = useMessageChime({ enabled: true });
+  // Round 12+ — driver global chime on new notifications. Polls
+  // /notifications every 15 s and beeps when the unread count rises. Uses
+  // its OWN localStorage toggle so drivers can silence messages while
+  // keeping notifications audible (or vice-versa).
+  const notifChime = useNotificationChime({ enabled: true });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +64,12 @@ export default function DriverDashboard() {
   useEffect(() => {
     setMsgUnread(chime.unread);
   }, [chime.unread]);
+
+  // Mirror the notification-chime hook into the bell badge so the count
+  // stays live without a second /notifications fetch.
+  useEffect(() => {
+    setNotifUnread(notifChime.unread);
+  }, [notifChime.unread]);
 
   useEffect(() => {
     load();

@@ -1211,3 +1211,63 @@ async def send_admin_contact_reply(
         template="admin_contact_reply",
         from_addr=admin_from, reply_to=reply_to,
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Round 13 — Ops backfill: nudge drivers to add a phone number
+# ---------------------------------------------------------------------------
+
+def render_driver_add_phone_nudge(*, driver_name: str, profile_url: str) -> tuple[str, str, str]:
+    """Nudge email to drivers whose phone number is missing / malformed."""
+    subject = "Add your phone to keep receiving Cargo One jobs"
+    body_html = f"""
+      <p style="margin:0 0 14px;font-size:15px;">Hi {driver_name or 'there'},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.65;color:#374151;">
+        A quick heads-up — <strong>your Cargo One account is missing a valid
+        phone number</strong>. Customers can only reach you by phone once a
+        booking is confirmed, so without one you'll appear
+        harder-to-reach and may miss dispatch calls.
+      </p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#374151;">
+        It takes 30 seconds — tap the button below, sign in, and add a UK
+        mobile (07…) or an international number in the format +44…
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
+        <tr><td align="center">
+          <a href="{profile_url}" style="display:inline-block;background:{_BRAND_ACCENT};color:#ffffff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none;">
+            Add my phone number
+          </a>
+        </td></tr>
+      </table>
+      <p style="margin:20px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Already added? You can ignore this email — this nudge is sent once
+        by our ops team when the account audit flags a missing number.
+      </p>
+    """
+    text = "\n".join([
+        f"Hi {driver_name or 'there'},", "",
+        "Your Cargo One account is missing a valid phone number.",
+        "Customers can only reach you by phone once a booking is confirmed.", "",
+        f"Add your phone here: {profile_url}", "",
+        "Already added? Ignore this — the ops audit only mails once.",
+        "", "— Cargo One",
+    ])
+    html = _shell(title=subject, preview="Add your phone so customers can reach you.", body_html=body_html)
+    return subject, html, text
+
+
+async def send_driver_add_phone_nudge_email(db, *, driver: dict) -> dict:
+    to = driver.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    profile_url = f"{_APP_ORIGIN}/driver/profile"
+    subject, html, text = render_driver_add_phone_nudge(
+        driver_name=driver.get("name") or "",
+        profile_url=profile_url,
+    )
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="driver_add_phone_nudge",
+        user_id=driver.get("id"),
+    )

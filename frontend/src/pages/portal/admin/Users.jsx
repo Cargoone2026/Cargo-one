@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle } from "lucide-react";
+import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle, Send } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
@@ -19,6 +19,28 @@ export default function AdminUsers() {
   const [busy, setBusy] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [phoneless, setPhoneless] = useState(null); // {count,total_drivers,drivers}
+  const [nudgeResult, setNudgeResult] = useState(null);
+  const [nudging, setNudging] = useState(false);
+
+  const runNudge = useCallback(async () => {
+    // eslint-disable-next-line no-alert
+    if (!phoneless || !window.confirm(
+      `Send an "add your phone" email to ${phoneless.count} flagged driver${
+        phoneless.count === 1 ? "" : "s"
+      }? Drivers already emailed in the last 24 h will be skipped.`,
+    )) return;
+    setNudging(true);
+    setNudgeResult(null);
+    try {
+      const r = await api("/admin/drivers-missing-phone/nudge", { method: "POST" });
+      setNudgeResult(r);
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert(e?.message || "Nudge failed");
+    } finally {
+      setNudging(false);
+    }
+  }, [phoneless]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +118,26 @@ export default function AdminUsers() {
             <p className="mt-0.5">
               These drivers cannot be called by customers after a booking. Chase them via email so they can add or fix their phone.
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={runNudge}
+                disabled={nudging}
+                data-testid="admin-nudge-missing-phone"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#111111] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#D62828] disabled:opacity-60"
+              >
+                <Send className={`h-3.5 w-3.5 ${nudging ? "animate-pulse" : ""}`} />
+                {nudging ? "Emailing…" : `Email all ${phoneless.count} drivers`}
+              </button>
+              {nudgeResult ? (
+                <span
+                  className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#111111]"
+                  data-testid="admin-nudge-result"
+                >
+                  Emailed {nudgeResult.sent} · queued {nudgeResult.skipped} · failed {nudgeResult.failed}
+                </span>
+              ) : null}
+            </div>
             <details className="mt-2 rounded-[8px] bg-white px-3 py-2 text-[12px] text-[#111111]">
               <summary
                 className="cursor-pointer text-[12px] font-semibold text-[#111111]"

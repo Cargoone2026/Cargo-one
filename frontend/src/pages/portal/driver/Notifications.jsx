@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, MessagesSquare, ArrowLeft, ExternalLink } from "lucide-react";
+import { Bell, MessagesSquare, ArrowLeft, ExternalLink, Volume2, VolumeX } from "lucide-react";
 import { api } from "@/lib/api";
+import { useNotificationChime } from "@/hooks/useNotificationChime";
 
 /**
  * Driver notifications inbox — mirrors the customer Messages Updates tab UX.
@@ -17,6 +18,10 @@ export default function DriverNotifications() {
   const [notes, setNotes] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Live-refresh the list every 15 s via the chime hook. The hook returns
+  // the current unread count but ALSO drives the page's list refresh by
+  // exposing a rising count — we just re-fetch on mount + on chime tick.
+  const chime = useNotificationChime({ enabled: true });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +48,14 @@ export default function DriverNotifications() {
     load();
   }, [load]);
 
+  // Re-fetch the notification list whenever the chime tick reports a new
+  // unread count (rising or falling) — keeps the panel live without a
+  // second poll loop.
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chime.unread]);
+
   const markRead = useCallback(async (id) => {
     try {
       await api(`/notifications/${id}/read`, { method: "POST" });
@@ -62,12 +75,29 @@ export default function DriverNotifications() {
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="driver-notifications">
       <header className="bg-[#111111] px-4 pt-6 pb-4 md:px-8">
-        <h1 className="text-[26px] font-bold text-white tracking-tight">
-          Notifications
-        </h1>
-        <p className="mt-0.5 text-[13px] text-white/60">
-          Updates from dispatch, bookings and payments.
-        </p>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[26px] font-bold text-white tracking-tight">
+              Notifications
+            </h1>
+            <p className="mt-0.5 text-[13px] text-white/60">
+              Updates from dispatch, bookings and payments.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => chime.setEnabled(!chime.enabled)}
+            aria-label={chime.enabled ? "Mute notification chime" : "Unmute notification chime"}
+            aria-pressed={chime.enabled}
+            data-testid="driver-notif-chime-toggle"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+              chime.enabled ? "bg-white/10 text-white hover:bg-white/20" : "bg-white/5 text-white/50 hover:bg-white/10"
+            }`}
+            title={chime.enabled ? "Chime on new notifications" : "Chime muted"}
+          >
+            {chime.enabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
+        </div>
       </header>
 
       <div className="mx-auto grid max-w-[960px] gap-4 px-4 pt-4 md:grid-cols-[minmax(260px,320px)_1fr] md:px-8">
