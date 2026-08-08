@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { api } from "@/lib/api";
+import { isValidPhone } from "@/lib/validators";
 import { ChangePasswordModal } from "@/components/ui-portal/ChangePasswordModal";
 
 export default function DriverProfile() {
@@ -35,8 +36,10 @@ export default function DriverProfile() {
     setSaving(true);
     setErr(null);
     const trimmedPhone = form.phone.trim();
-    if (trimmedPhone.length < 7) {
-      setErr("A valid phone number is required so customers can reach you after booking.");
+    if (!isValidPhone(trimmedPhone)) {
+      setErr(
+        "Enter a valid phone number (e.g. 07700 900123 or +44 7700 900123).",
+      );
       setSaving(false);
       return;
     }
@@ -54,7 +57,7 @@ export default function DriverProfile() {
     }
   };
 
-  const phoneMissing = !user.phone || user.phone.trim().length < 7;
+  const phoneMissing = !isValidPhone((user.phone || "").trim());
 
   const initials = (user.name || "?")
     .split(" ")

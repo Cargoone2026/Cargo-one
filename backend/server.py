@@ -7,6 +7,7 @@ Roles: customer, driver, admin.
 import logging
 import math
 import os
+import re
 import secrets
 import hmac
 import time
@@ -441,6 +442,36 @@ def haversine_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> float
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+# ---------------------------------------------------------------------------
+# Phone-number validation (R12) — mirrors /app/frontend/src/lib/validators.js
+# ---------------------------------------------------------------------------
+_PHONE_STRIP_RE = re.compile(r"[\s\-().]")
+_PHONE_UK_RE = re.compile(r"^0\d{9,10}$")
+_PHONE_INTL_RE = re.compile(r"^\+\d{7,15}$")
+_PHONE_INTL00_RE = re.compile(r"^00\d{7,15}$")
+
+
+def is_valid_phone(raw) -> bool:
+    """UK + E.164 phone validator.
+
+    Accepts:
+      * UK mobile / landline: 07/01/02/03 + 9-10 further digits (10-11 total)
+      * International:        +[country][subscriber], 8-15 digits after +
+      * 00-prefixed intl:     00[country][subscriber], 9-17 digits after 00
+    Spaces, dashes and parentheses are stripped before checking.
+    """
+    if not raw or not isinstance(raw, str):
+        return False
+    digits = _PHONE_STRIP_RE.sub("", raw)
+    if not digits:
+        return False
+    if digits.startswith("+"):
+        return bool(_PHONE_INTL_RE.match(digits))
+    if digits.startswith("00"):
+        return bool(_PHONE_INTL00_RE.match(digits))
+    return bool(_PHONE_UK_RE.match(digits))
+
+
 def public_job(job: dict, include_private: bool = False) -> dict:
     """Return job dict; hides exact addresses/contact until deposit paid."""
     out = {k: v for k, v in job.items() if k not in ("_id",)}
@@ -697,16 +728,22 @@ async def register(payload: UserRegister, response: Response):
             status_code=400,
             detail="Invalid role — only customer or driver accounts can be self-registered.",
         )
-    # Drivers MUST supply a phone at signup — customers need to be able to
-    # reach them once a booking is confirmed. This was previously optional,
-    # which produced ghost drivers that customers could not call.
+    # Drivers MUST supply a valid UK/E.164 phone at signup — customers need
+    # to be able to reach them once a booking is confirmed. This was
+    # previously optional, which produced ghost drivers that customers could
+    # not call.
     if payload.role == "driver":
-        phone = (payload.phone or "").strip()
-        if len(phone) < 7:
+        if not is_valid_phone(payload.phone or ""):
             raise HTTPException(
                 status_code=400,
-                detail="A valid phone number is required for driver accounts so customers can reach you after booking.",
+                detail="A valid UK or international phone number is required for driver accounts so customers can reach you after booking.",
             )
+    # Customer-side sanity check: if provided, must be structurally valid.
+    elif payload.phone and not is_valid_phone(payload.phone):
+        raise HTTPException(
+            status_code=400,
+            detail="The phone number entered doesn't look valid. Use a UK mobile (e.g. 07700 900123) or international format (e.g. +44 7700 900123).",
+        )
 
     user = {
         "id": new_id(),
@@ -911,13 +948,24 @@ async def update_me(update: dict, user: dict = Depends(get_current_user)):
     }
     patch = {k: v for k, v in update.items() if k in allowed}
     # Drivers must not be able to clear their phone — customers need it to
-    # reach them post-booking.
+    # reach them post-booking. Also reject structurally invalid formats
+    # (e.g. "1234567") using the shared UK/E.164 validator.
     if user.get("role") == "driver" and "phone" in patch:
         phone_val = (patch["phone"] or "").strip() if isinstance(patch["phone"], str) else ""
-        if len(phone_val) < 7:
+        if not is_valid_phone(phone_val):
             raise HTTPException(
                 status_code=400,
-                detail="Drivers must keep a valid phone number on file so customers can reach you.",
+                detail="A valid UK or international phone number is required for driver accounts (e.g. 07700 900123 or +44 7700 900123).",
+            )
+        patch["phone"] = phone_val
+    # Customers may clear or update their phone but if provided it must be
+    # structurally valid.
+    elif "phone" in patch and patch["phone"]:
+        phone_val = (patch["phone"] or "").strip() if isinstance(patch["phone"], str) else ""
+        if phone_val and not is_valid_phone(phone_val):
+            raise HTTPException(
+                status_code=400,
+                detail="The phone number entered doesn't look valid. Use a UK mobile (e.g. 07700 900123) or international format (e.g. +44 7700 900123).",
             )
         patch["phone"] = phone_val
     if patch:
@@ -3417,6 +3465,24 @@ async def admin_list_users(role: Optional[str] = None,
     users = await db.users.find(q, {"_id": 0, "password_hash": 0}) \
                             .sort("created_at", -1).to_list(500)
     return users
+
+
+@api.get("/admin/drivers-missing-phone")
+async def admin_drivers_missing_phone(_: dict = Depends(require_role("admin"))):
+    """Ops backfill helper — every driver on file whose `phone` field is
+    empty or fails our UK/E.164 validator. Sorted newest first. Returned
+    fields are safe for the admin console; passwords + tokens excluded.
+    """
+    drivers = await db.users.find(
+        {"role": "driver"},
+        {"_id": 0, "password_hash": 0},
+    ).sort("created_at", -1).to_list(2000)
+    flagged = [d for d in drivers if not is_valid_phone((d.get("phone") or "").strip())]
+    return {
+        "count": len(flagged),
+        "total_drivers": len(drivers),
+        "drivers": flagged,
+    }
 
 
 @api.get("/admin/users/{user_id}")

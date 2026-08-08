@@ -50,6 +50,7 @@ import DriverFleet from "@/pages/portal/driver/Fleet";
 import DriverDocuments from "@/pages/portal/driver/Documents";
 import DriverProfile from "@/pages/portal/driver/Profile";
 import DriverLive from "@/pages/portal/driver/Live";
+import DriverNotifications from "@/pages/portal/driver/Notifications";
 import { DriverLayout } from "@/layouts/DriverLayout";
 
 // Admin portal — Stage 2C
@@ -190,6 +191,7 @@ export default function App() {
             <Route path="/driver/fleet" element={<Driver Page={DriverFleet} />} />
             <Route path="/driver/documents" element={<Driver Page={DriverDocuments} />} />
             <Route path="/driver/profile" element={<Driver Page={DriverProfile} />} />
+            <Route path="/driver/notifications" element={<Driver Page={DriverNotifications} />} />
             <Route path="/driver/*" element={<Driver Page={DriverDashboard} />} />
 
             {/* Admin portal — Stage 2C */}

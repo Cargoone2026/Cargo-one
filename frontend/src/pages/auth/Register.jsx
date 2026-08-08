@@ -55,9 +55,15 @@ export default function Register() {
       setError("Name, email and password are required.");
       return;
     }
-    if (role === "driver" && !form.phone.trim()) {
-      setError("Drivers must add a phone number — customers need to be able to reach you after booking.");
-      return;
+    if (role === "driver") {
+      if (!form.phone.trim()) {
+        setError("Drivers must add a phone number — customers need to be able to reach you after booking.");
+        return;
+      }
+      if (!isValidPhone(form.phone)) {
+        setError("Please enter a valid phone number (e.g. 07700 900 123 or +44 7700 900123).");
+        return;
+      }
     }
     if (form.phone && !isValidPhone(form.phone)) {
       setError("Please enter a valid phone number (e.g. 07700 900 123 or +44 7700 900123).");

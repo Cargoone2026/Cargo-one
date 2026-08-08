@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck } from "lucide-react";
+import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
@@ -18,14 +18,19 @@ export default function AdminUsers() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(null);
   const [openId, setOpenId] = useState(null);
+  const [phoneless, setPhoneless] = useState(null); // {count,total_drivers,drivers}
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const tabDef = ROLE_TABS.find((t) => t.key === tab);
       const path = tabDef?.role ? `/admin/users?role=${tabDef.role}` : "/admin/users";
-      const list = await api(path).catch(() => []);
+      const [list, missing] = await Promise.all([
+        api(path).catch(() => []),
+        api("/admin/drivers-missing-phone").catch(() => null),
+      ]);
       setUsers(Array.isArray(list) ? list : []);
+      setPhoneless(missing);
     } finally {
       setLoading(false);
     }
@@ -77,6 +82,56 @@ export default function AdminUsers() {
           {filtered.length} of {users.length}
         </span>
       </header>
+
+      {phoneless && phoneless.count > 0 ? (
+        <div
+          className="mx-4 mt-3 flex items-start gap-3 rounded-[12px] border border-[#F59E0B] bg-[#FFFBEB] p-3 md:mx-8"
+          data-testid="admin-drivers-missing-phone-banner"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#B45309]" />
+          <div className="min-w-0 flex-1 text-[13px] text-[#92400E]">
+            <p className="font-semibold">
+              {phoneless.count} driver{phoneless.count === 1 ? "" : "s"} missing a valid phone
+            </p>
+            <p className="mt-0.5">
+              These drivers cannot be called by customers after a booking. Chase them via email so they can add or fix their phone.
+            </p>
+            <details className="mt-2 rounded-[8px] bg-white px-3 py-2 text-[12px] text-[#111111]">
+              <summary
+                className="cursor-pointer text-[12px] font-semibold text-[#111111]"
+                data-testid="admin-drivers-missing-phone-toggle"
+              >
+                Show list
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {phoneless.drivers.slice(0, 50).map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center gap-2"
+                    data-testid={`admin-driver-missing-phone-${d.id}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(d.id)}
+                      className="min-w-0 flex-1 truncate text-left hover:underline"
+                    >
+                      {d.name || "—"} · <span className="text-[#6B7280]">{d.email}</span>
+                    </button>
+                    <span className="shrink-0 rounded-full bg-[#F4F4F4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#6B7280]">
+                      {d.status || "active"}
+                    </span>
+                  </li>
+                ))}
+                {phoneless.drivers.length > 50 ? (
+                  <li className="text-[11px] italic text-[#6B7280]">
+                    …and {phoneless.drivers.length - 50} more
+                  </li>
+                ) : null}
+              </ul>
+            </details>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mx-4 mt-3 flex flex-wrap gap-1 rounded-full bg-[#F4F4F4] p-1 md:mx-8" data-testid="admin-users-tabs">
         {ROLE_TABS.map((t) => (

@@ -16,6 +16,7 @@ import {
   MessagesSquare,
   Volume2,
   VolumeX,
+  Bell,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -29,6 +30,7 @@ export default function DriverDashboard() {
   const navigate = useNavigate();
   const [dash, setDash] = useState({});
   const [msgUnread, setMsgUnread] = useState(0);
+  const [notifUnread, setNotifUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   // Round 4 — driver global chime on new messages. Polls
@@ -39,8 +41,13 @@ export default function DriverDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api("/driver/dashboard").catch(() => ({}));
+      const [d, notes] = await Promise.all([
+        api("/driver/dashboard").catch(() => ({})),
+        api("/notifications").catch(() => []),
+      ]);
       setDash(d || {});
+      const list = Array.isArray(notes) ? notes : [];
+      setNotifUnread(list.filter((n) => !n.read).length);
     } finally {
       setLoading(false);
     }
@@ -108,6 +115,22 @@ export default function DriverDashboard() {
           >
             <Search className="h-5 w-5 text-white" />
           </button>
+          <Link
+            to="/driver/notifications"
+            aria-label="Notifications"
+            data-testid="driver-notifications-button"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
+          >
+            <Bell className="h-5 w-5 text-white" />
+            {notifUnread > 0 && (
+              <span
+                className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#D62828] px-1 text-[10px] font-bold text-white"
+                data-testid="driver-notifications-badge"
+              >
+                {notifUnread > 99 ? "99+" : notifUnread}
+              </span>
+            )}
+          </Link>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusDotColor }} />
             {statusLabel}
