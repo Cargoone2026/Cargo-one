@@ -16,9 +16,11 @@ export default function AdminDispatchMonitor() {
   const [logRows, setLogRows] = useState({});
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState(null);
 
   const load = useCallback(async () => {
+    setRefreshing(true);
     try {
       const r = await api("/admin/dispatch/active");
       setData(r);
@@ -27,6 +29,7 @@ export default function AdminDispatchMonitor() {
       setErr(e?.message || "Load failed");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -76,11 +79,12 @@ export default function AdminDispatchMonitor() {
           <button
             type="button"
             onClick={load}
+            disabled={refreshing}
             data-testid="dispatch-refresh"
-            className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] px-3 py-1.5 text-[12px] font-semibold text-[#111111] hover:border-[#111111]"
+            className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] px-3 py-1.5 text-[12px] font-semibold text-[#111111] hover:border-[#111111] disabled:opacity-60"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
 

@@ -1467,8 +1467,23 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
         job["customer_id"],
         "Driver accepted your job",
         f"{user['name']} accepted your {job['title']} job. Pay deposit to confirm.",
-        {"job_id": job_id},
+        {"job_id": job_id, "kind": "job_accepted"},
     )
+    # Round 10 — email the customer so they can pay the deposit even if they
+    # miss the in-app notification. Guarded — email failure NEVER blocks the
+    # accept (the atomic claim has already committed above).
+    try:
+        from services.email import send_customer_driver_accepted_email
+        cust = await db.users.find_one({"id": job["customer_id"]},
+                                         {"_id": 0, "password_hash": 0})
+        # Refresh job so accepted_price is populated for the email body.
+        fresh_job = await db.jobs.find_one({"id": job_id}, {"_id": 0}) or job
+        if cust:
+            await send_customer_driver_accepted_email(
+                db, customer=cust, driver=user, job=fresh_job,
+            )
+    except Exception:
+        logger.exception("customer-driver-accepted email failed; continuing")
     return {"ok": True}
 
 
@@ -3384,6 +3399,45 @@ async def admin_list_users(role: Optional[str] = None,
     return users
 
 
+@api.get("/admin/users/{user_id}")
+async def admin_user_detail(user_id: str,
+                              _: dict = Depends(require_role("admin"))):
+    """Unified drilldown for admin All Users page — works for customer,
+    driver and admin roles. Includes recent jobs (as customer), recent
+    bookings (customer + driver), and full profile.
+    """
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    role = target.get("role")
+    recent_jobs: list = []
+    recent_bookings: list = []
+    if role == "customer":
+        recent_jobs = await db.jobs.find(
+            {"customer_id": user_id}, {"_id": 0}
+        ).sort("created_at", -1).to_list(20)
+        recent_bookings = await db.bookings.find(
+            {"customer_id": user_id}, {"_id": 0}
+        ).sort("created_at", -1).to_list(20)
+    elif role == "driver":
+        recent_bookings = await db.bookings.find(
+            {"driver_id": user_id}, {"_id": 0}
+        ).sort("created_at", -1).to_list(20)
+    # Attach compact job summary to each booking for the modal card
+    for b in recent_bookings:
+        j = await db.jobs.find_one(
+            {"id": b.get("job_id")},
+            {"_id": 0, "title": 1, "pickup_town": 1, "dropoff_town": 1,
+             "service_type": 1, "service_timing": 1, "recommended_vehicle": 1},
+        ) if b.get("job_id") else None
+        b["job"] = j
+    return {
+        "user": target,
+        "recent_jobs": recent_jobs,
+        "recent_bookings": recent_bookings,
+    }
+
+
 @api.post("/admin/users/{user_id}/approve")
 async def admin_approve(user_id: str, actor: dict = Depends(require_role("admin"))):
     target = await db.users.find_one({"id": user_id})
@@ -3612,6 +3666,41 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
 async def admin_list_jobs(user: dict = Depends(require_role("admin"))):
     jobs = await db.jobs.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return jobs
+
+
+@api.get("/admin/jobs/{job_id}")
+async def admin_job_detail(job_id: str,
+                             _: dict = Depends(require_role("admin"))):
+    """Full job drilldown for the Admin Jobs page — includes customer,
+    assigned driver, bids and the booking (if one exists).
+    """
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # Ensure suitable-vehicle is populated even for historic jobs.
+    if not job.get("recommended_vehicle"):
+        job["recommended_vehicle"] = _derive_suitable_vehicle(job)
+    customer = await db.users.find_one(
+        {"id": job.get("customer_id")},
+        {"_id": 0, "password_hash": 0},
+    ) if job.get("customer_id") else None
+    driver = None
+    if job.get("assigned_driver_id"):
+        driver = await db.users.find_one(
+            {"id": job["assigned_driver_id"]},
+            {"_id": 0, "password_hash": 0},
+        )
+    bids = await db.bids.find(
+        {"job_id": job_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    booking = await db.bookings.find_one({"job_id": job_id}, {"_id": 0})
+    return {
+        "job": job,
+        "customer": customer,
+        "driver": driver,
+        "bids": bids,
+        "booking": booking,
+    }
 
 
 @api.get("/admin/bookings")
@@ -5229,6 +5318,45 @@ async def newsletter_subscribe(payload: NewsletterSignup):
 async def admin_contact_messages(_: dict = Depends(require_role("admin"))):
     msgs = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return msgs
+
+
+@api.post("/admin/contact-messages/{msg_id}/reply")
+async def admin_reply_contact_message(
+    msg_id: str,
+    payload: dict = Body(...),
+    admin: dict = Depends(require_role("admin")),
+):
+    """Server-side reply — sends via Resend so the message always leaves
+    Cargo One from `admin@cargoone.co.uk` regardless of the admin's local
+    mail client (fixes the M365 mailto sender-mismatch issue).
+    """
+    msg = await db.contact_messages.find_one({"id": msg_id}, {"_id": 0})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    to = (payload.get("to") or msg.get("email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="No recipient email on record")
+    subject = (payload.get("subject") or f"Re: {msg.get('subject') or 'your Cargo One enquiry'}").strip()
+    body_text = (payload.get("body") or "").strip()
+    if len(body_text) < 5:
+        raise HTTPException(status_code=400, detail="Reply body is too short")
+    from services.email import send_admin_contact_reply
+    result = await send_admin_contact_reply(
+        db, to=to, name=msg.get("name"), subject=subject, body_text=body_text,
+        original_subject=msg.get("subject"), original_message=msg.get("message"),
+        admin_name=admin.get("name"),
+    )
+    # Track that this message has been replied to (audit trail).
+    await db.contact_messages.update_one(
+        {"id": msg_id},
+        {"$set": {
+            "replied_at": now_iso(),
+            "replied_by_id": admin.get("id"),
+            "replied_by_name": admin.get("name"),
+            "last_reply_status": result.get("status"),
+        }},
+    )
+    return {"ok": True, **result}
 
 
 @api.get("/admin/newsletter-subscribers")

@@ -33,9 +33,22 @@ export default function CustomerBookings() {
 
   const active = useMemo(() => items.filter((b) => !PAST.has(b.status)), [items]);
   const past = useMemo(() => items.filter((b) => PAST.has(b.status)), [items]);
+  // Jobs remain visible in "Active" while awaiting a driver (`posted`) AND
+  // after a driver has accepted (`accepted`) — up to the point the customer
+  // creates a booking (which then takes over via `items`). Historically we
+  // filtered `posted` only, which made accepted fixed-price jobs vanish
+  // before the customer had a chance to pay the deposit.
+  const bookedJobIds = useMemo(
+    () => new Set(items.map((b) => b.job_id).filter(Boolean)),
+    [items],
+  );
   const openJobs = useMemo(
-    () => jobs.filter((j) => j.status === "posted").map((j) => ({ ...j, _isJob: true })),
-    [jobs],
+    () =>
+      jobs
+        .filter((j) => ["posted", "accepted"].includes(j.status))
+        .filter((j) => !bookedJobIds.has(j.id))
+        .map((j) => ({ ...j, _isJob: true })),
+    [jobs, bookedJobIds],
   );
 
   const display = useMemo(() => {

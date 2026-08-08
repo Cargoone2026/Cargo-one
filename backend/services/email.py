@@ -52,11 +52,19 @@ async def _send_and_log(
     template: str,
     booking_id: str | None = None,
     user_id: str | None = None,
+    from_addr: str | None = None,
+    reply_to: str | None = None,
 ) -> dict[str, Any]:
     """Fire a Resend email in a background thread and audit-log the outcome.
 
     NEVER raises — a failure at any layer is captured on the log doc.
+
+    `from_addr` overrides the default `EMAIL_FROM` for this send (e.g. so
+    admin-desk replies leave the customer's inbox with `admin@cargoone.co.uk`
+    as the visible sender). `reply_to` lets replies route back to a specific
+    mailbox regardless of the from address.
     """
+    sender = from_addr or _sender()
     entry: dict[str, Any] = {
         "at": _now_iso(),
         "to": to,
@@ -65,7 +73,8 @@ async def _send_and_log(
         "user_id": user_id,
         "subject": subject,
         "provider": "resend",
-        "sender": _sender(),
+        "sender": sender,
+        "reply_to": reply_to,
         "status": "pending",
         "provider_id": None,
         "error": None,
@@ -83,9 +92,11 @@ async def _send_and_log(
 
     try:
         resend.api_key = os.environ["RESEND_API_KEY"]
-        params = {"from": _sender(), "to": [to], "subject": subject, "html": html}
+        params = {"from": sender, "to": [to], "subject": subject, "html": html}
         if text:
             params["text"] = text
+        if reply_to:
+            params["reply_to"] = reply_to
         resp = await asyncio.to_thread(resend.Emails.send, params)
         entry["status"] = "sent"
         entry["provider_id"] = resp.get("id") if isinstance(resp, dict) else None
@@ -1061,3 +1072,142 @@ async def send_driver_booking_accepted_email(
         booking_id=booking_id, user_id=driver.get("id"),
     )
 
+
+
+# ---------------------------------------------------------------------------
+# Round 10 — Fixed-price accept notification (customer)
+# ---------------------------------------------------------------------------
+
+def render_customer_driver_accepted(
+    *,
+    customer_name: str,
+    driver_name: str,
+    job_title: str,
+    pickup: str,
+    dropoff: str,
+    accepted_price: float,
+    pay_deposit_url: str,
+) -> tuple[str, str, str]:
+    """Customer email: a driver accepted a fixed-price job — pay to confirm."""
+    subject = f"Driver accepted your job — pay deposit to confirm"
+    amount_line = f"£{float(accepted_price):.2f}" if accepted_price else "—"
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {customer_name or 'there'},</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#374151;">
+        Great news — <strong>{driver_name or 'a Cargo One driver'}</strong> has
+        accepted your job <strong>{job_title or ''}</strong>. To lock the
+        booking in and share collection details, please pay the deposit now.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+        <tr><td style="padding:14px 16px;">
+          <table width="100%" style="font-size:13px;color:#374151;">
+            <tr><td style="width:42%;color:{_BRAND_MUTED};padding:6px 0;">Driver</td>
+                <td style="color:#111111;font-weight:600;padding:6px 0;">{driver_name or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Pickup</td>
+                <td style="color:#111111;padding:6px 0;">{pickup or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Drop-off</td>
+                <td style="color:#111111;padding:6px 0;">{dropoff or '—'}</td></tr>
+            <tr><td style="color:{_BRAND_MUTED};padding:6px 0;">Accepted price</td>
+                <td style="color:#111111;font-weight:700;padding:6px 0;">{amount_line}</td></tr>
+          </table>
+        </td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;"><tr><td align="center">
+        <a href="{pay_deposit_url}" style="display:inline-block;background:{_BRAND_ACCENT};color:#ffffff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none;">Pay deposit & confirm</a>
+      </td></tr></table>
+      <p style="margin:22px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Your driver is on standby. The booking is held for you — pay the
+        booking fee now to release collection details.
+      </p>
+    """
+    text = "\n".join([
+        subject, "",
+        f"Driver:  {driver_name or '—'}",
+        f"Job:     {job_title or '—'}",
+        f"Pickup:  {pickup or '—'}",
+        f"Drop-off:{dropoff or '—'}",
+        f"Price:   {amount_line}", "",
+        f"Pay & confirm: {pay_deposit_url}",
+        "", "— Cargo One",
+    ])
+    html = _shell(title=subject,
+                  preview=f"{driver_name or 'A driver'} accepted your Cargo One job",
+                  body_html=body)
+    return subject, html, text
+
+
+async def send_customer_driver_accepted_email(
+    db, *, customer: dict, driver: dict, job: dict,
+) -> dict:
+    to = customer.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    job_id = job.get("id") or ""
+    pay_deposit_url = f"{_APP_ORIGIN}/customer/job/{job_id}"
+    subject, html, text = render_customer_driver_accepted(
+        customer_name=customer.get("name") or "",
+        driver_name=driver.get("name") or "",
+        job_title=job.get("title") or "",
+        pickup=(job.get("pickup_town") or job.get("pickup_address") or ""),
+        dropoff=(job.get("dropoff_town") or job.get("dropoff_address") or ""),
+        accepted_price=float(job.get("accepted_price") or job.get("fixed_price") or 0),
+        pay_deposit_url=pay_deposit_url,
+    )
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="customer_driver_accepted",
+        user_id=customer.get("id"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Round 10 — Admin reply-to-contact-message (server-side, from admin@)
+# ---------------------------------------------------------------------------
+
+async def send_admin_contact_reply(
+    db, *, to: str, name: str | None, subject: str, body_text: str,
+    original_subject: str | None = None, original_message: str | None = None,
+    admin_name: str | None = None,
+) -> dict:
+    """Admin-desk reply routed through Resend so it always leaves Cargo One
+    from `admin@cargoone.co.uk` regardless of the admin's local mail client.
+    """
+    admin_from = os.environ.get("ADMIN_REPLY_FROM") or "admin@cargoone.co.uk"
+    reply_to = admin_from
+    quoted = ""
+    if original_message:
+        quoted_lines = "\n".join(f"&gt; {ln}" for ln in original_message.splitlines())
+        quoted = (
+            f'<hr style="border:0;border-top:1px solid #eeeeee;margin:22px 0;">'
+            f'<p style="margin:0 0 6px;font-size:12px;color:{_BRAND_MUTED};">'
+            f'On {datetime.now(timezone.utc).strftime("%d %b %Y")} you wrote:'
+            f'{" — " + original_subject if original_subject else ""}</p>'
+            f'<pre style="margin:0;font-family:inherit;font-size:12px;color:{_BRAND_MUTED};white-space:pre-wrap;">'
+            f'{quoted_lines}</pre>'
+        )
+    safe_body = "".join(
+        f'<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:#111111;">{para}</p>'
+        for para in body_text.strip().split("\n\n") if para.strip()
+    ) or f'<p style="margin:0 0 14px;font-size:14px;color:#111111;">{body_text}</p>'
+    signoff = (
+        f'<p style="margin:22px 0 0;font-size:14px;color:#111111;">Kind regards,<br>'
+        f'{admin_name or "The Cargo One team"}<br>'
+        f'<a href="mailto:{admin_from}" style="color:{_BRAND_ACCENT};text-decoration:none;">{admin_from}</a></p>'
+    )
+    body_html = (
+        f'<p style="margin:0 0 14px;font-size:15px;">Hi {name or "there"},</p>'
+        f'{safe_body}{signoff}{quoted}'
+    )
+    html = _shell(title=subject, preview=body_text[:120], body_html=body_html)
+    text = "\n".join([
+        f"Hi {name or 'there'},", "",
+        body_text.strip(), "",
+        f"Kind regards,",
+        admin_name or "The Cargo One team",
+        admin_from,
+    ])
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="admin_contact_reply",
+        from_addr=admin_from, reply_to=reply_to,
+    )

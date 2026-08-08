@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Mail, Inbox, MailCheck, Reply, Phone, MessageCircle } from "lucide-react";
+import { Mail, Inbox, MailCheck, Reply, Phone, MessageCircle, X as XIcon, Send, CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 
 /**
@@ -18,6 +18,7 @@ export default function AdminQueues() {
   const [contact, setContact] = useState([]);
   const [subs, setSubs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [replyMsg, setReplyMsg] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,13 +75,6 @@ export default function AdminQueues() {
             </li>
           ) : (
             contact.map((m) => {
-              const subjectLine = m.subject
-                ? `Re: ${m.subject}`
-                : `Re: your Cargo One enquiry`;
-              const bodyLine = `Hi ${m.name || "there"},\n\nThanks for getting in touch with Cargo One. Regarding your message:\n\n> ${(m.message || "").split("\n").join("\n> ")}\n\n`;
-              const mailto = m.email
-                ? `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(bodyLine)}`
-                : null;
               const digits = (m.phone || "").replace(/[^0-9+]/g, "");
               const telHref = digits ? `tel:${digits}` : null;
               const waHref = digits
@@ -101,9 +95,20 @@ export default function AdminQueues() {
                         {m.email} {m.phone ? `· ${m.phone}` : ""}
                       </p>
                     </div>
-                    <span className="text-[11px] text-[#9CA3AF]">
-                      {m.created_at ? new Date(m.created_at).toLocaleString() : ""}
-                    </span>
+                    <div className="text-right">
+                      <span className="block text-[11px] text-[#9CA3AF]">
+                        {m.created_at ? new Date(m.created_at).toLocaleString() : ""}
+                      </span>
+                      {m.replied_at ? (
+                        <span
+                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#DCFCE7] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#166534]"
+                          data-testid={`contact-replied-${m.id}`}
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          Replied
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   {m.subject && (
                     <p className="mt-1 text-[13px] font-semibold text-[#111111]">
@@ -116,15 +121,16 @@ export default function AdminQueues() {
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#F3F4F6] pt-3">
-                    {mailto && (
-                      <a
-                        href={mailto}
+                    {m.email && (
+                      <button
+                        type="button"
+                        onClick={() => setReplyMsg(m)}
                         data-testid={`contact-reply-${m.id}`}
                         className="inline-flex items-center gap-1.5 rounded-full bg-[#111111] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#D62828]"
                       >
                         <Reply className="h-3.5 w-3.5" />
-                        Reply by email
-                      </a>
+                        Reply from admin@cargoone.co.uk
+                      </button>
                     )}
                     {telHref && (
                       <a
@@ -148,7 +154,7 @@ export default function AdminQueues() {
                         WhatsApp
                       </a>
                     )}
-                    {!mailto && !telHref && (
+                    {!m.email && !telHref && (
                       <span className="text-[11px] text-[#9CA3AF]">
                         No contact channel provided.
                       </span>
@@ -200,6 +206,140 @@ export default function AdminQueues() {
           )}
         </ul>
       )}
+
+      {replyMsg ? (
+        <ReplyModal
+          msg={replyMsg}
+          onClose={() => setReplyMsg(null)}
+          onSent={async () => {
+            setReplyMsg(null);
+            await load();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReplyModal({ msg, onClose, onSent }) {
+  const [subject, setSubject] = useState(msg.subject ? `Re: ${msg.subject}` : "Re: your Cargo One enquiry");
+  const [body, setBody] = useState(
+    `Hi ${msg.name || "there"},\n\nThanks for getting in touch with Cargo One.\n\n`,
+  );
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState(null);
+  const [ok, setOk] = useState(null);
+
+  const send = async () => {
+    setErr(null);
+    setOk(null);
+    if (body.trim().length < 5) {
+      setErr("Please write a reply of at least 5 characters.");
+      return;
+    }
+    setSending(true);
+    try {
+      const r = await api(`/admin/contact-messages/${msg.id}/reply`, {
+        method: "POST",
+        body: { subject: subject.trim(), body: body.trim() },
+      });
+      if (r.status === "skipped") {
+        setOk("Reply queued (email provider offline in preview — will send once redeployed).");
+      } else if (r.status === "failed") {
+        setErr(r.error || "Provider rejected the message. Please try again.");
+      } else {
+        setOk("Reply sent from admin@cargoone.co.uk.");
+      }
+      setTimeout(onSent, 1200);
+    } catch (e) {
+      setErr(e?.message || "Send failed");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-10"
+      onClick={onClose}
+      data-testid="contact-reply-modal"
+    >
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-[16px] bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#F3F4F6] px-5 py-3">
+          <div>
+            <h3 className="text-[16px] font-semibold text-[#111111]">Reply to {msg.name || msg.email}</h3>
+            <p className="text-[11px] text-[#6B7280]">
+              From: <strong>admin@cargoone.co.uk</strong> · To: <strong>{msg.email}</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            data-testid="contact-reply-close"
+            className="rounded-full p-1 hover:bg-[#F4F4F4]"
+          >
+            <XIcon className="h-4 w-4 text-[#6B7280]" />
+          </button>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-[0.5px] text-[#6B7280]">Subject</span>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              data-testid="contact-reply-subject"
+              className="mt-1 w-full rounded-[10px] border border-[#E5E7EB] px-3 py-2 text-[14px] outline-none focus:border-[#111111]"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-[0.5px] text-[#6B7280]">Message</span>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              data-testid="contact-reply-body"
+              className="mt-1 w-full rounded-[10px] border border-[#E5E7EB] px-3 py-2 text-[14px] outline-none focus:border-[#111111]"
+            />
+          </label>
+          {msg.message ? (
+            <details className="rounded-[10px] bg-[#F9FAFB] p-3 text-[12px] text-[#6B7280]">
+              <summary className="cursor-pointer font-semibold">Original message</summary>
+              <p className="mt-1 whitespace-pre-wrap">{msg.message}</p>
+            </details>
+          ) : null}
+          {err ? (
+            <p className="text-[13px] text-[#DC2626]" data-testid="contact-reply-error">{err}</p>
+          ) : null}
+          {ok ? (
+            <p className="text-[13px] text-[#166534]" data-testid="contact-reply-success">{ok}</p>
+          ) : null}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-[#F3F4F6] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            data-testid="contact-reply-cancel"
+            className="rounded-full border border-[#E5E7EB] px-4 py-1.5 text-[13px] font-semibold text-[#111111] hover:border-[#111111]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={send}
+            disabled={sending}
+            data-testid="contact-reply-send"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#D62828] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+          >
+            <Send className="h-3.5 w-3.5" />
+            {sending ? "Sending…" : "Send reply"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

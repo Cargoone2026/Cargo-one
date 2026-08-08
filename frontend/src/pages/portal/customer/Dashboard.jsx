@@ -91,7 +91,7 @@ export default function CustomerDashboard() {
             <Search className="h-5 w-5 text-[#111111]" />
           </button>
           <Link
-            to="/customer/messages"
+            to="/customer/messages?tab=notifications"
             data-testid="notifications-button"
             aria-label="Notifications"
             className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#F4F4F4] hover:bg-[#E5E7EB]"

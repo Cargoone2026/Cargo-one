@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Bell, MessagesSquare, Lock, MessageCircle } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Bell, MessagesSquare, Lock, MessageCircle, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 
 /**
@@ -14,7 +14,9 @@ import { api } from "@/lib/api";
  *  - "Notifications" — the classic system inbox backed by /notifications.
  */
 export default function CustomerMessages() {
-  const [tab, setTab] = useState("conversations"); // conversations | notifications
+  const [params] = useSearchParams();
+  const initialTab = params.get("tab") === "notifications" ? "notifications" : "conversations";
+  const [tab, setTab] = useState(initialTab); // conversations | notifications
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [notes, setNotes] = useState([]);
@@ -328,6 +330,29 @@ function NotificationsPane({ listItems, loading, selected, onPick, draft, setDra
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 text-[14px] leading-relaxed text-[#111111]">
               {selected.body}
+              {(() => {
+                const d = selected.data || {};
+                const bookingId = d.booking_id;
+                const jobId = d.job_id;
+                const target = bookingId
+                  ? `/customer/booking/${bookingId}`
+                  : jobId
+                  ? `/customer/job/${jobId}`
+                  : null;
+                if (!target) return null;
+                return (
+                  <div className="mt-4">
+                    <Link
+                      to={target}
+                      data-testid="notification-open-link"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#111111] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#D62828]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {bookingId ? "Open booking" : "Open job"}
+                    </Link>
+                  </div>
+                );
+              })()}
             </div>
             <div
               className="border-t border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3"
