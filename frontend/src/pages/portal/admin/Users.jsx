@@ -183,11 +183,18 @@ export default function AdminUsers() {
         ) : (
           filtered.map((u) => (
             <li key={u.id} data-testid={`admin-user-${u.id}`}>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setOpenId(u.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setOpenId(u.id);
+                  }
+                }}
                 data-testid={`admin-user-open-${u.id}`}
-                className="flex w-full items-center gap-3 rounded-[12px] border border-[#E5E7EB] p-4 text-left transition-colors hover:border-[#111111]"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-[12px] border border-[#E5E7EB] p-4 text-left transition-colors hover:border-[#111111] focus:border-[#111111] focus:outline-none"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white">
                   {(u.name || "?")[0]?.toUpperCase()}
@@ -232,7 +239,7 @@ export default function AdminUsers() {
                     <Ban className="h-4 w-4" />
                   </button>
                 )}
-              </button>
+              </div>
             </li>
           ))
         )}

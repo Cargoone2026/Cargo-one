@@ -965,3 +965,25 @@ Root cause: two-pane grid stacked list-then-detail on mobile so the detail was o
 - Backend: `server.py::register_user` (driver-phone required), `server.py::update_me` (driver-phone-lock), `tests/test_final_qa_r11.py` (new — 9 cases).
 - Frontend: `pages/auth/Register.jsx` (driver-required label + guard), `pages/portal/driver/Profile.jsx` (missing-phone banner + save-side validation), `pages/portal/customer/BookingDetail.jsx` (chat fallback), `pages/portal/customer/Messages.jsx` (mobile list/detail switch + back button + gated auto-select).
 
+
+### Phase — ROUND 12: Driver Inbox + Phone Validator + Ops Backfill ✅ COMPLETE (Feb 2026)
+Three R11 follow-ups shipped. Report: `/app/test_reports/iteration_final_qa_r12.json` (24/24 backend pytest + 3/3 Playwright flows, zero regressions).
+
+**Driver Notifications Inbox** — brand-new `/driver/notifications` page mirrors the customer Messages Updates tab UX. Bell button on Driver Dashboard header with unread badge (`driver-notifications-button` + `driver-notifications-badge`). Mobile: mutually-exclusive list ↔ detail with `driver-notification-back-button` arrow. Desktop: two-pane layout with auto-select-newest. Deep-link CTA (`driver-notification-open-link`) routes to `/driver/booking/:id` or `/driver/job/:id` depending on payload. Route wired in `App.js`.
+
+**Phone Validator (UK / E.164)** — replaced `len<7` with a shared regex that mirrors `/app/frontend/src/lib/validators.js::isValidPhone` verbatim:
+- UK domestic: `^0\d{9,10}$`
+- International: `^\+\d{7,15}$`
+- 00-prefixed: `^00\d{7,15}$`
+- Space/dash/paren stripped before validation
+Applied server-side in `register_user` (drivers mandatory, customers structural-check) and `update_me` (drivers cannot clear, customers can). Applied client-side in `Register.jsx` (driver path) and `driver/Profile.jsx` (save + `phoneMissing` gate).
+
+**Admin Backfill — Missing Phones** — new endpoint `GET /admin/drivers-missing-phone` returns `{count, total_drivers, drivers}`. Rendered in `admin/Users.jsx` as an amber banner (`admin-drivers-missing-phone-banner`) that toggles to reveal the full list; each row (`admin-driver-missing-phone-<id>`) opens the existing UserDetailModal for one-tap chase-up. In preview this surfaces 331/500 legacy drivers to chase.
+
+**Also fixed inline this round**
+- Nested `<button>` HTML violation in `admin/Users.jsx` (flagged by R12 testing agent) — outer clickable row now `<div role="button">` with Enter/Space keyboard handler; suspend button lives as a real sibling.
+
+**Files changed**
+- Backend: `server.py` (import re + `is_valid_phone` helper, register + update_me guards, `/admin/drivers-missing-phone`), `tests/test_final_qa_r12.py` (new, 24 cases).
+- Frontend: `pages/portal/driver/Notifications.jsx` (new), `pages/portal/driver/Dashboard.jsx` (Bell + badge), `App.js` (route), `pages/auth/Register.jsx` (validator), `pages/portal/driver/Profile.jsx` (validator), `pages/portal/admin/Users.jsx` (banner + nested-button refactor).
+
