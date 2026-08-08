@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useNotificationChime } from "@/hooks/useNotificationChime";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { GlobalSearchModal } from "@/components/ui-portal/GlobalSearchModal";
 
@@ -37,6 +38,11 @@ export default function CustomerDashboard() {
   const [msgUnread, setMsgUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Round 13+ — customer global chime on new notifications (driver accepted,
+  // arrived, POD uploaded, etc.). Reflects live unread count into the bell
+  // badge below and pings on rising count. Uses its own storage key so it
+  // never collides with the driver-side or message-side chimes.
+  const notifChime = useNotificationChime({ enabled: true });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,7 +71,10 @@ export default function CustomerDashboard() {
       ),
     [bookings],
   );
-  const unreadCount = notes.filter((n) => !n.read).length;
+  const unreadCount = Math.max(
+    notifChime.unread,
+    notes.filter((n) => !n.read).length,
+  );
   const firstName = (user?.name || "").split(" ")[0] || "there";
 
   return (

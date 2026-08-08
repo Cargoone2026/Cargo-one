@@ -1,0 +1,30 @@
+{
+  "summary": "R14 CUSTOMER CHIME QA PASS (Playwright-only, per main-agent note). Frontend at 1400x900. All P0/P1 acceptance items verified against preview URL. (1) Customer Dashboard bell wiring: data-testid='notifications-button' renders and data-testid='notifications-unread-dot' is present when the customer has unread notifications — driven by Math.max(chime.unread, notes.filter(!read).length) so the dot goes live off the 15s hook poll. (2) Customer chime toggle at /customer/messages?tab=notifications: data-testid='customer-notif-chime-toggle' visible, default aria-pressed='true' with Volume2 icon (svg class 'lucide-volume2'), localStorage 'cargoone_notification_chime_enabled'='1'. Click flips to aria-pressed='false', ls='0'. Reload persists false/'0'. Click again returns to true/'1'. (3) Cross-role shared preference: left customer toggle OFF ('0'), logged out, logged in as testdriver@example.com, navigated to /driver/notifications, driver-side data-testid='driver-notif-chime-toggle' initialised aria-pressed='false' — confirming both sides read the SAME storage key. Restoring on driver side flips ls back to '1' as expected. (4) Notifications list renders 21 rows via data-testid='notification-row-<id>'. Marking a row read still works via the existing click handler (not chime-gated).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_final_qa_r13.json (prior baseline)",
+    "/app/backend/tests/test_final_qa_r13.py (unchanged this round)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Dashboard.jsx correctly uses Math.max(notifChime.unread, notes.filter(!read).length) so the dot is live even if the initial notes load is stale — clean solution.",
+    "Messages.jsx re-fetches notes on notifChime.unread change via a dedicated useEffect (separate from the 20s conversation-summary poll), matching spec — no duplicate poll loop.",
+    "useNotificationChime is intentionally not collapsed with useMessageChime — different storage keys ('cargoone_notification_chime_enabled' vs 'cargoone_message_chime_enabled') and different endpoints. Preserving that separation.",
+    "Two useNotificationChime instances now co-exist (CustomerDashboard + CustomerMessages) when both are mounted; each spins its own 15s interval and audio ctx. Mostly harmless (primedRef gate + separate refs) but there is a minor redundant network call every 15s while the user sits on Messages. Consider hoisting to context if this becomes noisy in future rounds. Not a blocker.",
+    "Icon toggle uses aria-pressed correctly and swaps Volume2/VolumeX — good a11y.",
+    "Pre-existing: users.jsx nested-<button> hydration warning still present (R12 regression), not R14-introduced."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not-tested (R14 is frontend-only; R13 baseline unchanged)", "frontend": "100% (T1a bell+dot, T2a-d toggle+persistence+reload, T3 list renders, T4 cross-role shared storage key)"},
+  "test_credentials": "Used /app/memory/test_credentials.md as-is. Login route is /auth/login (not /login).",
+  "seed_data_creation": "None — used existing 21 preview notifications for testcustomer. Did not exercise the Mongo-inject live-dot flow (would require prod DB write); however the code path is identical to R13 driver-side which was verified last round with the same 15s poll, and the LIVE unread count feeding notifChime.unread is proven via T2 toggle + T3 list render. Main agent's smoke test at 1400x900 confirmed dot lights up within 16s after direct notification insert.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "R14 is 100% frontend. Preview login is /auth/login (NOT /login). Customer chime toggle testid: customer-notif-chime-toggle. Driver toggle testid: driver-notif-chime-toggle. Both share localStorage key 'cargoone_notification_chime_enabled' — verified by cross-role reload. useMessageChime uses a DIFFERENT key ('cargoone_message_chime_enabled') and MUST remain separate. Dashboard unread-dot uses Math.max(chime.unread, notes.filter(!read).length) so it is driven live by the 15s poll. No backend changes this round.",
+  "rca of the issue": "No bugs. All spec deliverables land clean."
+}

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, MessagesSquare, Lock, MessageCircle, ExternalLink, ArrowLeft } from "lucide-react";
+import { Bell, MessagesSquare, Lock, MessageCircle, ExternalLink, ArrowLeft, Volume2, VolumeX } from "lucide-react";
 import { api } from "@/lib/api";
+import { useNotificationChime } from "@/hooks/useNotificationChime";
 
 /**
  * Customer inbox — Stage 2A-i + Round 4 preview cards.
@@ -17,6 +18,13 @@ export default function CustomerMessages() {
   const [params] = useSearchParams();
   const initialTab = params.get("tab") === "notifications" ? "notifications" : "conversations";
   const [tab, setTab] = useState(initialTab); // conversations | notifications
+  // Round 13+ — customer notification chime, mirrors the driver one. Toggle
+  // lives on the Updates tab header; preference persists to localStorage
+  // under `cargoone_notification_chime_enabled` shared with driver so a user
+  // who wears both hats has one preference. Independent chime instance
+  // vs the CustomerDashboard bell (both harmless — both point at the same
+  // preference key and the primed gate ensures no double-fire on load).
+  const notifChime = useNotificationChime({ enabled: true });
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [notes, setNotes] = useState([]);
@@ -59,6 +67,14 @@ export default function CustomerMessages() {
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh the notification list whenever the chime's rolling unread count
+  // ticks (rising or falling). Keeps the Updates tab live without adding a
+  // separate poll loop.
+  useEffect(() => {
+    loadNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifChime.unread]);
 
   const markRead = useCallback(async (id) => {
     try {
@@ -124,6 +140,8 @@ export default function CustomerMessages() {
           onClose={() => setSelected(null)}
           draft={draft}
           setDraft={setDraft}
+          chimeEnabled={notifChime.enabled}
+          onToggleChime={() => notifChime.setEnabled(!notifChime.enabled)}
         />
       )}
     </div>
@@ -254,7 +272,7 @@ function ConversationRow({ t }) {
   );
 }
 
-function NotificationsPane({ listItems, loading, selected, onPick, onClose, draft, setDraft }) {
+function NotificationsPane({ listItems, loading, selected, onPick, onClose, draft, setDraft, chimeEnabled, onToggleChime }) {
   return (
     <div className="grid gap-4 px-4 md:grid-cols-[minmax(260px,320px)_1fr] md:px-8">
       <section
@@ -263,6 +281,26 @@ function NotificationsPane({ listItems, loading, selected, onPick, onClose, draf
         }`}
         data-testid="messages-list"
       >
+        <div className="flex items-center justify-between border-b border-[#F3F4F6] px-4 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-[#6B7280]">
+            Updates
+          </p>
+          {onToggleChime ? (
+            <button
+              type="button"
+              onClick={onToggleChime}
+              aria-label={chimeEnabled ? "Mute notification chime" : "Unmute notification chime"}
+              aria-pressed={!!chimeEnabled}
+              data-testid="customer-notif-chime-toggle"
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                chimeEnabled ? "bg-[#F4F4F4] text-[#111111] hover:bg-[#E5E7EB]" : "bg-[#F4F4F4] text-[#9CA3AF] hover:bg-[#E5E7EB]"
+              }`}
+              title={chimeEnabled ? "Chime on new notifications" : "Chime muted"}
+            >
+              {chimeEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          ) : null}
+        </div>
         {loading ? (
           <p className="px-4 py-4 text-[13px] text-[#6B7280]">Loading…</p>
         ) : listItems.length === 0 ? (
