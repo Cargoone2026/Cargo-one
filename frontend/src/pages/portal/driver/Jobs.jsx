@@ -43,6 +43,14 @@ export default function DriverJobs() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [viewMode, setViewMode] = useState("list"); // list | map
   const [selectedJob, setSelectedJob] = useState(null); // map bottom-sheet
+  // R20 — extra filter dimensions requested by ops:
+  // vehicle size, trip length band, service type, timing, cargo aids.
+  const [vehicleSize, setVehicleSize] = useState("all"); // all | small_van | large_van | luton | 7_5t | recovery_3_5t | recovery_heavy | motorcycle
+  const [tripBand, setTripBand] = useState("all");       // all | short | medium | long
+  const [serviceType, setServiceType] = useState("all"); // all | transport | breakdown_recovery
+  const [timing, setTiming] = useState("all");           // all | asap | scheduled
+  const [forkliftOnly, setForkliftOnly] = useState(false);
+  const [loadingHelpOnly, setLoadingHelpOnly] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +107,12 @@ export default function DriverJobs() {
     setMaxPrice("");
     setSelectedCaps([]);
     setSort("nearest");
+    setVehicleSize("all");
+    setTripBand("all");
+    setServiceType("all");
+    setTiming("all");
+    setForkliftOnly(false);
+    setLoadingHelpOnly(false);
   };
 
   const filtered = useMemo(() => {
@@ -124,6 +138,41 @@ export default function DriverJobs() {
         const ok = selectedCaps.every((c) => jobCaps.includes(c));
         if (!ok) return false;
       }
+      // R20 — vehicle size (matches `recommended_vehicle` slug)
+      if (vehicleSize !== "all") {
+        const label = String(j.recommended_vehicle || j.vehicle_label || "").toLowerCase();
+        const slug = label.replace(/\s+/g, "_").replace(/[.]/g, "").replace(/[^a-z0-9_]/g, "");
+        // slug examples: small_van, large_van, luton_van, 75t_box_truck,
+        // 35t_recovery_truck, motorcycle_recovery, heavy_recovery
+        const map = {
+          small_van: (s) => s.includes("small_van"),
+          large_van: (s) => s.includes("large_van"),
+          luton: (s) => s.includes("luton"),
+          "7_5t": (s) => s.includes("75t") || s.includes("7_5t"),
+          recovery_3_5t: (s) => s.includes("35t_recovery") || s.includes("3_5t_recovery"),
+          recovery_heavy: (s) => s.includes("heavy_recovery"),
+          motorcycle: (s) => s.includes("motorcycle"),
+        };
+        const fn = map[vehicleSize];
+        if (fn && !fn(slug)) return false;
+      }
+      // R20 — trip length band
+      if (tripBand !== "all") {
+        const d = Number(j.distance_miles || 0);
+        if (tripBand === "short" && d >= 25) return false;
+        if (tripBand === "medium" && (d < 25 || d > 100)) return false;
+        if (tripBand === "long" && d <= 100) return false;
+      }
+      // R20 — service type (transport vs recovery)
+      if (serviceType !== "all" && (j.service_type || "").toLowerCase() !== serviceType) return false;
+      // R20 — timing (ASAP vs scheduled)
+      if (timing !== "all") {
+        const jt = (j.service_timing || "scheduled").toLowerCase();
+        if (jt !== timing) return false;
+      }
+      // R20 — cargo aids
+      if (forkliftOnly && !j.needs_forklift) return false;
+      if (loadingHelpOnly && !j.needs_loading_help) return false;
       return true;
     });
     const sorted = [...list];
@@ -134,7 +183,7 @@ export default function DriverJobs() {
       sorted.sort((a, b) => price(b) - price(a));
     } else if (sort === "distance_asc") sorted.sort((a, b) => (a.distance_miles ?? 999) - (b.distance_miles ?? 999));
     return sorted;
-  }, [jobs, category, pricing, minPrice, maxPrice, query, selectedCaps, sort]);
+  }, [jobs, category, pricing, minPrice, maxPrice, query, selectedCaps, sort, vehicleSize, tripBand, serviceType, timing, forkliftOnly, loadingHelpOnly]);
 
   const activeFilterCount = [
     category ? 1 : 0,
@@ -142,6 +191,12 @@ export default function DriverJobs() {
     minPrice ? 1 : 0,
     maxPrice ? 1 : 0,
     selectedCaps.length,
+    vehicleSize !== "all" ? 1 : 0,
+    tripBand !== "all" ? 1 : 0,
+    serviceType !== "all" ? 1 : 0,
+    timing !== "all" ? 1 : 0,
+    forkliftOnly ? 1 : 0,
+    loadingHelpOnly ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   return (
@@ -313,6 +368,92 @@ export default function DriverJobs() {
               ))}
             </FilterRow>
           )}
+          <FilterRow label="Vehicle size">
+            {[
+              ["all", "All"],
+              ["small_van", "Small Van"],
+              ["large_van", "Large Van"],
+              ["luton", "Luton Van"],
+              ["7_5t", "7.5T Box Truck"],
+              ["recovery_3_5t", "3.5T Recovery"],
+              ["recovery_heavy", "Heavy Recovery"],
+              ["motorcycle", "Motorcycle Recovery"],
+            ].map(([key, label]) => (
+              <Chip
+                key={key}
+                active={vehicleSize === key}
+                onClick={() => setVehicleSize(key)}
+                testID={`vehicle-size-${key}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </FilterRow>
+          <FilterRow label="Trip length">
+            {[
+              ["all", "Any"],
+              ["short", "Short (<25 mi)"],
+              ["medium", "Medium (25–100 mi)"],
+              ["long", "Long (>100 mi)"],
+            ].map(([key, label]) => (
+              <Chip
+                key={key}
+                active={tripBand === key}
+                onClick={() => setTripBand(key)}
+                testID={`trip-band-${key}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </FilterRow>
+          <FilterRow label="Service">
+            {[
+              ["all", "All"],
+              ["transport", "Transport"],
+              ["breakdown_recovery", "Recovery"],
+            ].map(([key, label]) => (
+              <Chip
+                key={key}
+                active={serviceType === key}
+                onClick={() => setServiceType(key)}
+                testID={`service-type-${key}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </FilterRow>
+          <FilterRow label="Timing">
+            {[
+              ["all", "All"],
+              ["asap", "ASAP"],
+              ["scheduled", "Scheduled"],
+            ].map(([key, label]) => (
+              <Chip
+                key={key}
+                active={timing === key}
+                onClick={() => setTiming(key)}
+                testID={`timing-${key}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </FilterRow>
+          <FilterRow label="Cargo aids">
+            <Chip
+              active={forkliftOnly}
+              onClick={() => setForkliftOnly((v) => !v)}
+              testID="forklift-only"
+            >
+              Forklift required
+            </Chip>
+            <Chip
+              active={loadingHelpOnly}
+              onClick={() => setLoadingHelpOnly((v) => !v)}
+              testID="loading-help-only"
+            >
+              Loading help required
+            </Chip>
+          </FilterRow>
           {activeFilterCount > 0 && (
             <button
               type="button"
