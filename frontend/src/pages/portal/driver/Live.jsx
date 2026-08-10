@@ -325,73 +325,104 @@ export default function DriverLive() {
 
         {online && offers.length === 0 && (
           <div
-            className="rounded-2xl bg-white border border-neutral-200 p-4 mb-4"
+            className="relative overflow-hidden rounded-2xl border border-neutral-800/70 bg-[#0A0A0A] p-6 text-white mb-4 shadow-[0_20px_60px_-30px_rgba(234,88,12,0.35)]"
             data-testid="driver-live-idle-dashboard"
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-sm text-neutral-600">
-                <MapPin className="h-4 w-4 text-neutral-500" />
-                <span data-testid="driver-live-town">
+            {/* Ambient glow — mirrors AsapDispatchPanel's premium feel */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full bg-[#EA580C]/10 blur-3xl"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-[#EA580C]/5 blur-3xl"
+            />
+
+            {/* Header row — location + status pill */}
+            <div className="relative mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[13px] text-white/70">
+                <MapPin className="h-4 w-4 text-white/50" />
+                <span data-testid="driver-live-town" className="truncate">
                   {town || "Locating you…"}
                 </span>
               </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.6px] text-emerald-300">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                Online
+              </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            {/* Pulsing radar pin — visual only, mirrors the customer "Finding a driver" pin */}
+            <div className="relative flex flex-col items-center py-4">
+              <div className="relative flex items-center justify-center">
+                <span className="absolute h-40 w-40 animate-ping rounded-full bg-[#EA580C]/20 [animation-duration:2.6s]" />
+                <span className="absolute h-28 w-28 animate-ping rounded-full bg-[#EA580C]/30 [animation-duration:2s]" />
+                <span className="absolute h-32 w-32 rounded-full bg-[#EA580C]/15 blur-2xl" />
+                <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-[#EA580C] shadow-[0_10px_40px_-8px_rgba(234,88,12,0.7)]">
+                  <Zap className="h-10 w-10 text-black" strokeWidth={2.4} />
+                </span>
+              </div>
+              <p className="mt-8 text-center text-[22px] font-bold tracking-tight text-white sm:text-[26px]">
+                Searching for nearby jobs…
+              </p>
+              <p className="mt-2 text-center text-[13px] text-white/50">
+                We'll ping you the instant a matching ASAP job lands in your area.
+              </p>
+            </div>
+
+            {/* Stats — same three cards, restyled onto the dark hero */}
+            <div className="relative mt-6 grid grid-cols-3 gap-3">
               <div
-                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
                 data-testid="driver-live-stat-time"
               >
-                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
                   <Clock className="h-3 w-3" /> Time online
                 </div>
-                <div className="text-xl font-semibold tabular-nums">
+                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
                   {formatDuration(sessionSecs)}
                 </div>
               </div>
               <div
-                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
                 data-testid="driver-live-stat-jobs"
               >
-                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
                   <Package className="h-3 w-3" /> Today's jobs
                 </div>
-                <div className="text-xl font-semibold tabular-nums">
+                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
                   {todayStats.jobs}
                 </div>
               </div>
               <div
-                className="rounded-xl bg-neutral-50 border border-neutral-100 p-3"
+                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
                 data-testid="driver-live-stat-earnings"
               >
-                <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
                   <PoundSterling className="h-3 w-3" /> Today's earnings
                 </div>
-                <div className="text-xl font-semibold tabular-nums">
+                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
                   £{todayStats.earnings}
                 </div>
               </div>
             </div>
 
+            {/* Signal + dispatch pills — same testID, restyled */}
             <div
-              className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-600"
+              className="relative mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/60"
               data-testid="driver-live-status-panel"
             >
-              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                Online
+              <span className="inline-flex items-center gap-1">
+                <Signal className="h-3 w-3 text-emerald-300" /> GPS connected
               </span>
               <span className="inline-flex items-center gap-1">
-                <Signal className="h-3 w-3 text-emerald-600" /> GPS connected
+                <Radio className="h-3 w-3 text-emerald-300" /> Dispatch ready
               </span>
-              <span className="inline-flex items-center gap-1">
-                <Radio className="h-3 w-3 text-emerald-600" /> Dispatch ready
-              </span>
-              <span className="inline-flex items-center gap-1 text-neutral-500">
-                <Search className="h-3 w-3" /> Searching for nearby jobs…
+              <span className="inline-flex items-center gap-1 text-white/40">
+                <ShieldCheck className="h-3 w-3" /> Your live location is only used while online
               </span>
             </div>
           </div>

@@ -59,6 +59,9 @@ export default function CustomerBookingDetail() {
   const [payLoading, setPayLoading] = useState(false);
   const [tab, setTab] = useState("overview");
   const [showReview, setShowReview] = useState(false);
+  // R23 — my submitted review + counterparty's review of me (for reply UI).
+  const [myReview, setMyReview] = useState(null);
+  const [reviewOfMe, setReviewOfMe] = useState(null);
   const [paymentPollActive, setPaymentPollActive] = useState(false);
   const [err, setErr] = useState(null);
   const pollRef = useRef(null);
@@ -78,6 +81,25 @@ export default function CustomerBookingDetail() {
         setTracking(t);
         setMessages(Array.isArray(m) ? m : []);
         setPod(p);
+      }
+      // R23 — pull the customer's own submitted review + the driver's
+      // review of the customer (so we can render a reply CTA if any).
+      if (["completed", "pod_uploaded"].includes(bk?.status)) {
+        try {
+          const mine = await api(`/bookings/${id}/review/mine`);
+          setMyReview(mine || null);
+        } catch {
+          setMyReview(null);
+        }
+        try {
+          const allForMe = await api(`/users/${bk.customer_id}/reviews`);
+          const forThisBooking = (Array.isArray(allForMe) ? allForMe : []).find(
+            (r) => r.booking_id === id,
+          );
+          setReviewOfMe(forThisBooking || null);
+        } catch {
+          setReviewOfMe(null);
+        }
       }
     } catch {
       // silent
@@ -577,7 +599,7 @@ export default function CustomerBookingDetail() {
               />
             )}
 
-            {paid && b.status === "completed" && b.other_party && (
+            {paid && b.status === "completed" && b.other_party && !myReview && (
               <Button
                 title="Leave a review"
                 variant="secondary"
@@ -585,6 +607,64 @@ export default function CustomerBookingDetail() {
                 testID="leave-review-button"
               />
             )}
+
+            {/* R23 — Once the customer has reviewed, hide the CTA and render
+                the submitted review inline. Backend also enforces the
+                one-review-per-(booking, from_id) invariant. */}
+            {paid && b.status === "completed" && myReview ? (
+              <div
+                className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+                data-testid="customer-my-review-card"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-[#6B7280]">
+                    Your review
+                  </span>
+                  <span
+                    className="text-[15px] font-bold text-[#E55E00]"
+                    data-testid="customer-my-review-stars"
+                  >
+                    {"★".repeat(myReview.rating || 0)}
+                    {"☆".repeat(5 - (myReview.rating || 0))}
+                  </span>
+                </div>
+                {myReview.comment ? (
+                  <p className="mt-2 text-[13px] leading-6 text-[#374151]">
+                    {myReview.comment}
+                  </p>
+                ) : null}
+                {myReview.reply ? (
+                  <div
+                    className="mt-2 rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-2 text-[12px] text-[#374151]"
+                    data-testid="customer-my-review-driver-reply"
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#6B7280]">
+                      Driver's reply
+                    </span>
+                    <p className="mt-1">{myReview.reply}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* R23 — Driver's review of the customer (if any). Customer can
+                reply exactly once — mirrors the driver-side reply UI. */}
+            {paid && b.status === "completed" && reviewOfMe ? (
+              <ReviewOfMeCard
+                review={reviewOfMe}
+                onReplied={async () => {
+                  try {
+                    const allForMe = await api(`/users/${b.customer_id}/reviews`);
+                    const forThis = (Array.isArray(allForMe) ? allForMe : []).find(
+                      (r) => r.booking_id === id,
+                    );
+                    setReviewOfMe(forThis || null);
+                  } catch {
+                    /* keep prior value */
+                  }
+                }}
+              />
+            ) : null}
           </div>
         )}
 
@@ -886,6 +966,107 @@ function PodBlock({ label, children }) {
         {label}
       </p>
       {children}
+    </div>
+  );
+}
+
+
+function ReviewOfMeCard({ review, onReplied }) {
+  const [replying, setReplying] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const stars =
+    "★".repeat(review.rating || 0) + "☆".repeat(5 - (review.rating || 0));
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (!text.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/reviews/${review.id}/reply`, {
+        method: "POST",
+        body: { text: text.trim() },
+      });
+      setReplying(false);
+      setText("");
+      onReplied?.();
+    } catch (ex) {
+      setErr(ex?.message || "Could not send reply.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+      data-testid="customer-review-of-me-card"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-[#6B7280]">
+          Your driver reviewed you
+        </span>
+        <span
+          className="text-[15px] font-bold text-[#E55E00]"
+          data-testid="customer-review-of-me-stars"
+        >
+          {stars}
+        </span>
+      </div>
+      {review.comment ? (
+        <p className="mt-2 text-[13px] leading-6 text-[#374151]">
+          {review.comment}
+        </p>
+      ) : null}
+      {review.reply ? (
+        <div className="mt-2 rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-2 text-[12px] text-[#374151]" data-testid="customer-review-of-me-reply">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#6B7280]">
+            Your reply
+          </span>
+          <p className="mt-1">{review.reply}</p>
+        </div>
+      ) : replying ? (
+        <form onSubmit={submit} className="mt-2" data-testid="customer-review-reply-form">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={1000}
+            rows={2}
+            placeholder="Write a short reply…"
+            className="w-full rounded-[10px] border border-[#E5E7EB] p-2 text-[13px] focus:border-[#D62828] focus:outline-none"
+            data-testid="customer-review-reply-input"
+          />
+          {err ? <p className="mt-1 text-[12px] text-[#DC2626]">{err}</p> : null}
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setReplying(false)}
+              className="rounded-full px-3 py-1 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F3F4F6]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !text.trim()}
+              className="rounded-full bg-[#111111] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[#D62828] disabled:opacity-60"
+              data-testid="customer-review-reply-submit"
+            >
+              {busy ? "Sending…" : "Post reply"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setReplying(true)}
+          className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#111111] underline hover:text-[#D62828]"
+          data-testid="customer-review-reply-btn"
+        >
+          Reply
+        </button>
+      )}
     </div>
   );
 }

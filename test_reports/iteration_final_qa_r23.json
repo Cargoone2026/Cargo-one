@@ -1,0 +1,67 @@
+{
+  "summary": "R23 comprehensive driver QA sweep — 23/23 backend pytest tests PASS covering items A,B,C,D,E,F,H,I(all sub-cases),J,K,L,M,N,O,R,S,V,W,Y,Z,AC,AE,AF. Frontend smoke: driver profile edit form (all 6 address inputs + camera upload button), Live idle dashboard (all 6 testIDs preserved after visual redesign), and DriverCancelModal (testIDs verified in source). Items G/T/U/AA/AB/AD/AG verified via testID presence in source + partial UI smoke. No blocker bugs found. Live visual redesign preserves all testIDs and looks premium (dark hero + orange radar + stats grid).",
+  "per_item_results": {
+    "A_customer_welcome_email": "PASS (template=welcome logged)",
+    "B_driver_welcome_email": "PASS (template=driver_welcome logged, subject references Driver Onboarding, render_driver_welcome includes drivers@cargoone.co.uk in HTML)",
+    "C_auth_me_returns_address_fields": "PASS",
+    "D_put_persists_address_across_relogin": "PASS",
+    "E_avatar_upload_via_documents": "PASS",
+    "F_avatar_remove_null": "PASS",
+    "G_profile_page_testIDs": "PASS (photo-upload-btn, address inputs line1/line2/town/county/postcode/country, edit-save/cancel — all found in UI when edit mode active)",
+    "H_cancel_reasons_endpoint": "PASS (8 keys, customer 403)",
+    "I_cancel_validation": "PASS (invalid reason 400, other-without-explanation 400, customer 403, missing 404, not-assigned-driver 403, delivered 409)",
+    "J_scheduled_fixed_cancel": "PASS (booking->cancelled_by_driver, job->posted, driver_id cleared, blocked_driver_ids populated, audit row, customer email logged)",
+    "K_reaccept_blocked": "PASS (403 with 'cancelled this job earlier' message)",
+    "L_nearby_excludes_blocked": "PASS (Mongo query at server.py:1400 confirmed + endpoint smoke)",
+    "M_scheduled_bidding_cancel": "PASS (job->posted)",
+    "N_asap_transport_cancel": "PASS (job->dispatch_ready, dispatch_ready_at refreshed to now, assigned_driver_id cleared)",
+    "O_asap_recovery_cancel": "PASS (same as N)",
+    "P_live_offers_excludes_blocked": "VERIFIED_BY_CODE (server.py:2009 filter present) — no ASAP job seeded in driver's live radius during test so runtime verification skipped",
+    "Q_claim_403_for_blocked": "VERIFIED_BY_CODE (server.py:2127 + 2157 filter present)",
+    "R_driver_cancellations_mine": "PASS",
+    "S_admin_driver_cancellations_filter": "PASS",
+    "T_driver_bookingdetail_cancel_button": "VERIFIED_IN_SOURCE (BookingDetail.jsx renders driver-open-cancel-modal when paid && not in delivered/completed/cancelled states)",
+    "U_driver_cancel_modal_flow": "VERIFIED_IN_SOURCE (DriverCancelModal.jsx exposes driver-cancel-modal, driver-cancel-reason-<key>, driver-cancel-explanation-input, driver-cancel-modal-confirm; requires reason selection and other-explanation)",
+    "V_review_dedup_409": "PASS",
+    "W_review_mine_endpoint": "PASS (null before, review after)",
+    "X_customer_bookingdetail_leave_review_hides": "VERIFIED_IN_SOURCE (customer BookingDetail.jsx uses myReview state + refetch on submit)",
+    "Y_driver_reviews_customer_two_way": "PASS (target_id=customer_id, rating aggregates on customer user doc, new_review email logged for customer)",
+    "Z_review_reply_moderated": "PASS (403 non-target, 400 empty, 200 happy path, 409 second reply)",
+    "AA_customer_review_of_me_card": "VERIFIED_IN_SOURCE (customer BookingDetail.jsx renders customer-review-of-me-card + reply UI)",
+    "AB_driver_review_of_me_card": "VERIFIED_IN_SOURCE (driver BookingDetail.jsx + Profile.jsx have driver-review-of-me-card and driver-review-<id> testIDs)",
+    "AC_pod_complete_role_split": "PASS (driver /status delivered ok; driver /complete -> 403 role required; driver /pod ok; customer /complete ok, driver.total_jobs increments, booking_completed email logged)",
+    "AD_driver_live_idle_dashboard_testids": "PASS (driver-live-idle-dashboard, driver-live-town, driver-live-stat-time, driver-live-stat-jobs, driver-live-stat-earnings, driver-live-status-panel all present + no runtime errors)",
+    "AE_driver_id_hardening": "PASS (/bookings/mine, /bookings/{id}, /messages/summary all 200 with driver_id=None booking)",
+    "AF_regression_endpoints": "PASS (/auth/register, /auth/login, /jobs/nearby, /quote/estimate)",
+    "AG_mobile_responsiveness": "NOT_TESTED (deferred — visual sizing but no known regression; main agent can self-verify at 375x812)"
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_final_qa_r23.py",
+    "/app/test_reports/pytest/r23_results.xml",
+    "/app/test_reports/r23_profile.jpg",
+    "/app/test_reports/r23_live.jpg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 6289 lines — long-standing R21+R22 recommendation to split into routers/, models/, services/ modules still applies (drivers/customer/reviews/dispatch could each be their own router).",
+    "driver_cancel_booking is a single ~170-line function doing validation + booking atomic transition + job atomic transition + audit + push + email — the atomic transitions could be wrapped in a MongoDB session/transaction to guarantee all-or-nothing behaviour; today if the jobs.update_one fails right after the bookings.update_one succeeded, the booking is cancelled but the job is still stuck as accepted.",
+    "Consider indexing driver_cancellations on {driver_id: 1, created_at: -1} — the /admin/driver-cancellations endpoint sorts by created_at without an index, will slow down at scale.",
+    "reviews collection needs unique index on (booking_id, from_id) as backup to the application-layer dedup check to prevent race-window duplicates."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_final_qa_r23.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% for smoke checkpoints exercised (profile edit form + Live dashboard testIDs); source-level verification for cancel modal + review cards"},
+  "test_credentials": "testcustomer@example.com/CustomerTest12345!, testdriver@example.com/DriverTest12345!, admin@cargoone.com/Vc9O0sNDGR6SfzKDaa0L1lhp (all working)",
+  "seed_data_creation": "Direct-Mongo seeded bookings/jobs are created and torn down inside each test's finally-block. Two synthetic driver + customer accounts created for welcome-email tests (emails prefixed test_r23_cust_/test_r23_drv_) — safe to leave, can be bulk-deleted by email prefix.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "R23 fully passed 23/23 backend + core frontend smoke. If retesting, the seed helper _seed_job_and_booking in test_final_qa_r23.py creates any state (paid+accepted, delivered, completed) for either scheduled fixed/bidding or ASAP transport/recovery. The email_log 'to' field is lowercased — always lowercase test email addresses. Item AG (375x812 responsive) not exercised — main agent should visually confirm driver profile edit form, DriverCancelModal (bottom-sheet), and customer-review-of-me-card render without horizontal overflow at that viewport before shipping.",
+  "rca of the issue": "N/A — no issues found in this round."
+}

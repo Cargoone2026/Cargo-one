@@ -355,6 +355,61 @@ def render_welcome(*, name: str) -> tuple[str, str, str]:
     return subject, _shell(title=subject, preview="Welcome to Cargo One — let's get moving.", body_html=body), text
 
 
+def render_driver_welcome(*, name: str) -> tuple[str, str, str]:
+    """Dedicated welcome email for drivers — different CTA + onboarding steps."""
+    subject = "Welcome to Cargo One — Driver Onboarding"
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {name or 'there'},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#374151;">
+        Welcome to the Cargo One driver network. You've joined a community of
+        professional drivers moving deliveries and recovery jobs across the UK.
+        Before you can start accepting jobs, we need to verify a few things.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;margin:8px 0 16px;">
+        <tr><td style="padding:16px 18px;">
+          <p style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:{_BRAND_ACCENT};font-weight:700;">Get verified</p>
+          <ol style="margin:0 0 0 18px;padding:0;font-size:14px;line-height:1.7;color:#374151;">
+            <li>Upload your driving licence, insurance, vehicle registration and vehicle photos.</li>
+            <li>Add a clear profile photo so customers can recognise you.</li>
+            <li>Provide proof of address for verification.</li>
+            <li>Our team reviews within 24 hours on business days.</li>
+          </ol>
+        </td></tr>
+      </table>
+      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#374151;">Once approved, you'll be able to:</p>
+      <ul style="margin:0 0 20px 18px;padding:0;font-size:14px;line-height:1.7;color:#374151;">
+        <li>See nearby scheduled jobs and submit bids.</li>
+        <li>Accept ASAP transport and vehicle recovery jobs in real time.</li>
+        <li>Track earnings, manage your fleet, and communicate with customers directly.</li>
+      </ul>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr><td>
+          <a href="https://cargoone.co.uk/driver" style="display:inline-block;padding:14px 28px;background:{_BRAND_ACCENT};color:#ffffff;text-decoration:none;font-weight:600;border-radius:8px;font-size:14px;">
+            Open Driver Portal
+          </a>
+        </td></tr>
+      </table>
+      <p style="margin:16px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Driver support: <a href="mailto:drivers@cargoone.co.uk" style="color:{_BRAND_ACCENT};">drivers@cargoone.co.uk</a>
+        · General support: <a href="mailto:support@cargoone.co.uk" style="color:{_BRAND_ACCENT};">support@cargoone.co.uk</a>
+      </p>
+    """
+    text = (f"Hi {name or 'there'},\n\n"
+            "Welcome to Cargo One — the UK's driver network for deliveries and\n"
+            "vehicle recovery.\n\n"
+            "GET VERIFIED\n"
+            "1. Upload your driving licence, insurance, vehicle registration and\n"
+            "   vehicle photos.\n"
+            "2. Add a clear profile photo.\n"
+            "3. Provide proof of address.\n"
+            "4. We review within 24 hours on business days.\n\n"
+            "Open your Driver Portal: https://cargoone.co.uk/driver\n\n"
+            "Driver support: drivers@cargoone.co.uk\n"
+            "General support: support@cargoone.co.uk\n\n"
+            "Cargo One")
+    return subject, _shell(title=subject, preview="Welcome to Cargo One — let's get you verified and on the road.", body_html=body), text
+
+
 def _booking_route_block(pickup: str, dropoff: str, service_type: str) -> str:
     label = "Vehicle Recovery" if service_type == "breakdown_recovery" else "Delivery"
     return f"""
@@ -579,9 +634,16 @@ async def send_welcome(db, *, user: dict) -> dict:
     to = user.get("email")
     if not to:
         return {"status": "skipped", "reason": "no_email"}
-    subject, html, text = render_welcome(name=user.get("name") or "")
+    # Drivers get a dedicated welcome template with onboarding steps + Driver
+    # portal CTA. Customers keep the existing consumer-facing template.
+    if (user.get("role") or "").lower() == "driver":
+        subject, html, text = render_driver_welcome(name=user.get("name") or "")
+        template = "driver_welcome"
+    else:
+        subject, html, text = render_welcome(name=user.get("name") or "")
+        template = "welcome"
     return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
-                                template="welcome", user_id=user.get("id"))
+                                template=template, user_id=user.get("id"))
 
 
 def _job_bits(booking: dict) -> dict:
@@ -1271,3 +1333,145 @@ async def send_driver_add_phone_nudge_email(db, *, driver: dict) -> dict:
         template="driver_add_phone_nudge",
         user_id=driver.get("id"),
     )
+
+
+# ---------------------------------------------------------------------------
+# R23 — driver-cancellation + review notification templates
+# ---------------------------------------------------------------------------
+
+def render_driver_cancelled_booking(*, name: str, booking_ref: str,
+                                     pickup: str, dropoff: str,
+                                     reason_label: str,
+                                     reassigning: bool,
+                                     is_asap: bool) -> tuple[str, str, str]:
+    """Sent to the CUSTOMER when a driver cancels their accepted job."""
+    subject = f"Driver cancelled — Cargo One booking {booking_ref[:8]}"
+    next_step = (
+        "We're already searching for another eligible driver — you'll get an "
+        "update as soon as someone accepts."
+        if reassigning and is_asap else
+        "Your job has been returned to the marketplace and other eligible "
+        "drivers can now accept it."
+        if reassigning else
+        "No further action is needed from you right now. If you'd like a full "
+        "refund of your deposit, you can cancel the booking from your dashboard."
+    )
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {name or 'there'},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#374151;">
+        Unfortunately, the driver assigned to your booking has cancelled.
+        We're sorry for the disruption.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+        <tr><td style="padding:16px 18px;">
+          <table width="100%"><tr>
+            <td style="font-size:11px;color:{_BRAND_MUTED};letter-spacing:0.6px;text-transform:uppercase;">Booking</td>
+            <td align="right" style="font-size:11px;color:{_BRAND_ACCENT};font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">Driver cancelled</td>
+          </tr></table>
+          <p style="margin:6px 0 12px;font-family:monospace;font-size:13px;color:#374151;">{booking_ref}</p>
+          <div style="border-top:1px solid #eeeeee;padding-top:12px;font-size:13px;color:#374151;">
+            <div style="padding:4px 0;"><span style="color:{_BRAND_MUTED};">From:</span> {pickup}</div>
+            <div style="padding:4px 0;"><span style="color:{_BRAND_MUTED};">To:</span> {dropoff}</div>
+            <div style="padding:4px 0;"><span style="color:{_BRAND_MUTED};">Reason:</span> {reason_label}</div>
+          </div>
+        </td></tr>
+      </table>
+      <p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#374151;">{next_step}</p>
+      {_support_line()}
+    """
+    text = (f"Hi {name or 'there'},\n\n"
+            f"The driver assigned to Cargo One booking {booking_ref} has cancelled.\n"
+            f"Reason: {reason_label}\n\n{next_step}\n\n"
+            "support@cargoone.co.uk\nCargo One")
+    return subject, _shell(title=subject, preview="A driver has cancelled — here's what happens next.", body_html=body), text
+
+
+async def send_driver_cancelled_booking(db, *, user: dict, booking: dict,
+                                         reason_label: str, reassigning: bool,
+                                         is_asap: bool) -> dict:
+    to = user.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    jb = _job_bits(booking)
+    subject, html, text = render_driver_cancelled_booking(
+        name=user.get("name") or "",
+        booking_ref=booking.get("id") or "",
+        pickup=jb["pickup"], dropoff=jb["dropoff"],
+        reason_label=reason_label or "Not specified",
+        reassigning=reassigning, is_asap=is_asap,
+    )
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="driver_cancelled_booking",
+                                booking_id=booking.get("id"),
+                                user_id=user.get("id"))
+
+
+def render_new_review(*, name: str, booking_ref: str, from_name: str,
+                       rating: int, comment: str | None,
+                       portal_url: str, target_role: str) -> tuple[str, str, str]:
+    role_label = "Driver" if target_role == "driver" else "Customer"
+    subject = f"New review from {from_name} — Cargo One"
+    stars = "★" * max(1, min(5, rating)) + "☆" * (5 - max(1, min(5, rating)))
+    comment_block = ""
+    if comment:
+        safe = comment[:800]
+        comment_block = f"""
+        <p style="margin:12px 0 0;padding:12px 14px;background:#fafafa;border-left:3px solid {_BRAND_ACCENT};font-size:13px;color:#374151;line-height:1.6;font-style:italic;">
+          "{safe}"
+        </p>
+        """
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {name or 'there'},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#374151;">
+        {from_name or 'A user'} just left you a review on Cargo One.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eeeeee;border-radius:10px;">
+        <tr><td style="padding:16px 18px;">
+          <table width="100%"><tr>
+            <td style="font-size:11px;color:{_BRAND_MUTED};letter-spacing:0.6px;text-transform:uppercase;">Booking</td>
+            <td align="right" style="font-size:11px;color:{_BRAND_ACCENT};font-weight:700;text-transform:uppercase;letter-spacing:0.6px;">{role_label} review</td>
+          </tr></table>
+          <p style="margin:6px 0 8px;font-family:monospace;font-size:13px;color:#374151;">{booking_ref}</p>
+          <p style="margin:8px 0 0;font-size:22px;color:{_BRAND_ACCENT};letter-spacing:2px;">{stars}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:{_BRAND_MUTED};">Rating: {rating} / 5</p>
+          {comment_block}
+        </td></tr>
+      </table>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr><td>
+          <a href="{portal_url}" style="display:inline-block;padding:14px 28px;background:{_BRAND_ACCENT};color:#ffffff;text-decoration:none;font-weight:600;border-radius:8px;font-size:14px;">
+            View review & reply
+          </a>
+        </td></tr>
+      </table>
+      {_support_line()}
+    """
+    text = (f"Hi {name or 'there'},\n\n"
+            f"{from_name or 'A user'} left you a {rating}-star review on Cargo One.\n"
+            f"Booking: {booking_ref}\n\n"
+            f'{"Comment: " + comment if comment else ""}\n\n'
+            f"View & reply: {portal_url}\n\nCargo One")
+    return subject, _shell(title=subject, preview=f"{rating}-star review from {from_name}", body_html=body), text
+
+
+async def send_new_review(db, *, target_user: dict, from_user: dict,
+                            booking: dict, rating: int, comment: str | None) -> dict:
+    to = target_user.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    target_role = (target_user.get("role") or "").lower()
+    portal_path = "/driver/profile" if target_role == "driver" else "/customer/profile"
+    portal_url = f"{_APP_ORIGIN}{portal_path}"
+    subject, html, text = render_new_review(
+        name=target_user.get("name") or "",
+        booking_ref=booking.get("id") or "",
+        from_name=from_user.get("name") or "A user",
+        rating=int(rating or 5),
+        comment=comment,
+        portal_url=portal_url,
+        target_role=target_role,
+    )
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="new_review",
+                                booking_id=booking.get("id"),
+                                user_id=target_user.get("id"))

@@ -27,6 +27,8 @@ import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { SignaturePad } from "@/components/ui-portal/SignaturePad";
+import { DriverCancelModal } from "@/components/ui-portal/DriverCancelModal";
+import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 
 const STATUS_FLOW = [
   { key: "travelling", label: "Start Trip to Pickup" },
@@ -69,6 +71,13 @@ export default function DriverBookingDetail() {
   const [podSubmitting, setPodSubmitting] = useState(false);
   const [podErr, setPodErr] = useState(null);
 
+  // R23 — driver cancellation modal
+  const [showCancel, setShowCancel] = useState(false);
+  // R23 — driver review flow (leave for customer + view customer review of me)
+  const [showReview, setShowReview] = useState(false);
+  const [myReview, setMyReview] = useState(null);
+  const [reviewOfMe, setReviewOfMe] = useState(null);
+
   // Tracking control state
   const [trackingOn, setTrackingOn] = useState(false);
   const [locErr, setLocErr] = useState(null);
@@ -93,6 +102,23 @@ export default function DriverBookingDetail() {
         setTracking(t);
         setMessages(Array.isArray(m) ? m : []);
         setPod(p);
+      }
+      // R23 — driver's own review of the customer + customer's review of the driver
+      if (["completed", "pod_uploaded"].includes(bk?.status)) {
+        try {
+          const mine = await api(`/bookings/${id}/review/mine`);
+          setMyReview(mine || null);
+        } catch { setMyReview(null); }
+        try {
+          const drvId = bk.driver_id || bk.assigned_driver_id;
+          if (drvId) {
+            const allForMe = await api(`/users/${drvId}/reviews`);
+            const forThis = (Array.isArray(allForMe) ? allForMe : []).find(
+              (r) => r.booking_id === id,
+            );
+            setReviewOfMe(forThis || null);
+          }
+        } catch { setReviewOfMe(null); }
       }
     } catch {
       // silent
@@ -588,6 +614,72 @@ export default function DriverBookingDetail() {
                 testID="go-to-pod-tab"
               />
             )}
+
+            {/* R23 — Driver cancellation. Available on any accepted booking
+                that hasn't yet been delivered or completed. Deliberately
+                de-emphasised style so drivers don't tap it by mistake. */}
+            {paid && !["delivered", "pod_uploaded", "completed", "cancelled", "cancelled_by_driver"].includes(b.status) && (
+              <button
+                type="button"
+                onClick={() => setShowCancel(true)}
+                data-testid="driver-open-cancel-modal"
+                className="mt-1 w-full rounded-[12px] border border-[#E5E7EB] py-3 text-[13px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2]"
+              >
+                Cancel this job
+              </button>
+            )}
+
+            {/* R23 — Driver leaves a review for the customer once completed.
+                Uses the same ReviewModal component as the customer flow.
+                Hidden once the driver has submitted their review. */}
+            {paid && b.status === "completed" && !myReview && (
+              <Button
+                title="Leave a review for the customer"
+                variant="secondary"
+                onClick={() => setShowReview(true)}
+                testID="driver-leave-review-button"
+              />
+            )}
+
+            {paid && b.status === "completed" && myReview ? (
+              <div
+                className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+                data-testid="driver-my-review-card"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-[#6B7280]">
+                    Your review of the customer
+                  </span>
+                  <span
+                    className="text-[15px] font-bold text-[#E55E00]"
+                    data-testid="driver-my-review-stars"
+                  >
+                    {"★".repeat(myReview.rating || 0)}
+                    {"☆".repeat(5 - (myReview.rating || 0))}
+                  </span>
+                </div>
+                {myReview.comment ? (
+                  <p className="mt-2 text-[13px] leading-6 text-[#374151]">
+                    {myReview.comment}
+                  </p>
+                ) : null}
+                {myReview.reply ? (
+                  <div className="mt-2 rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-2 text-[12px] text-[#374151]" data-testid="driver-my-review-customer-reply">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#6B7280]">
+                      Customer's reply
+                    </span>
+                    <p className="mt-1">{myReview.reply}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {paid && b.status === "completed" && reviewOfMe ? (
+              <DriverReviewOfMeCard
+                review={reviewOfMe}
+                onReplied={load}
+              />
+            ) : null}
           </div>
         )}
 
@@ -823,6 +915,28 @@ export default function DriverBookingDetail() {
           </div>
         )}
       </div>
+      <DriverCancelModal
+        open={showCancel}
+        onClose={() => setShowCancel(false)}
+        bookingId={id}
+        onCancelled={async (res) => {
+          setShowCancel(false);
+          // Refresh booking so the UI reflects the cancelled_by_driver
+          // state; then bounce to My Jobs after a beat so the driver
+          // sees confirmation without a stale header.
+          await load();
+          setTimeout(() => navigate("/driver/my-jobs", { replace: true }), 800);
+        }}
+      />
+      {b?.other_party && (
+        <ReviewModal
+          open={showReview}
+          bookingId={b.id}
+          targetName={b.other_party?.name || "the customer"}
+          onClose={() => setShowReview(false)}
+          onSubmitted={load}
+        />
+      )}
     </div>
   );
 }
@@ -907,3 +1021,101 @@ function Check({ ok, label }) {
     </div>
   );
 }
+
+function DriverReviewOfMeCard({ review, onReplied }) {
+  const [replying, setReplying] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const stars = "★".repeat(review.rating || 0) + "☆".repeat(5 - (review.rating || 0));
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (!text.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/reviews/${review.id}/reply`, {
+        method: "POST",
+        body: { text: text.trim() },
+      });
+      setReplying(false);
+      setText("");
+      onReplied?.();
+    } catch (ex) {
+      setErr(ex?.message || "Could not send reply.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+      data-testid="driver-review-of-me-card"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.6px] text-[#6B7280]">
+          Customer reviewed you
+        </span>
+        <span
+          className="text-[15px] font-bold text-[#E55E00]"
+          data-testid="driver-review-of-me-stars"
+        >
+          {stars}
+        </span>
+      </div>
+      {review.comment ? (
+        <p className="mt-2 text-[13px] leading-6 text-[#374151]">{review.comment}</p>
+      ) : null}
+      {review.reply ? (
+        <div className="mt-2 rounded-[10px] border border-[#E5E7EB] bg-[#F9FAFB] p-2 text-[12px] text-[#374151]" data-testid="driver-review-of-me-reply">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#6B7280]">
+            Your reply
+          </span>
+          <p className="mt-1">{review.reply}</p>
+        </div>
+      ) : replying ? (
+        <form onSubmit={submit} className="mt-2" data-testid="driver-booking-review-reply-form">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={1000}
+            rows={2}
+            placeholder="Write a short reply…"
+            className="w-full rounded-[10px] border border-[#E5E7EB] p-2 text-[13px] focus:border-[#D62828] focus:outline-none"
+            data-testid="driver-booking-review-reply-input"
+          />
+          {err ? <p className="mt-1 text-[12px] text-[#DC2626]">{err}</p> : null}
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setReplying(false)}
+              className="rounded-full px-3 py-1 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F3F4F6]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !text.trim()}
+              className="rounded-full bg-[#111111] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[#D62828] disabled:opacity-60"
+              data-testid="driver-booking-review-reply-submit"
+            >
+              {busy ? "Sending…" : "Post reply"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setReplying(true)}
+          className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#111111] underline hover:text-[#D62828]"
+          data-testid="driver-booking-review-reply-btn"
+        >
+          Reply
+        </button>
+      )}
+    </div>
+  );
+}
+

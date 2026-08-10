@@ -342,6 +342,28 @@ class ReviewCreate(BaseModel):
     photos: list[str] = Field(default_factory=list)  # base64 attachments
 
 
+class ReviewReplyCreate(BaseModel):
+    text: str  # reply body — one reply per review, hard-capped at 1000 chars server-side
+
+
+# R23 — controlled cancellation reasons for driver-initiated cancels
+DRIVER_CANCEL_REASONS = {
+    "vehicle_issue": "Vehicle issue",
+    "breakdown": "Breakdown",
+    "unable_to_complete": "Unable to safely complete the job",
+    "vehicle_unsuitable": "Vehicle unsuitable",
+    "customer_or_location": "Customer/location issue",
+    "personal_emergency": "Personal emergency",
+    "route_or_access": "Route/access issue",
+    "other": "Other",
+}
+
+
+class DriverCancelBody(BaseModel):
+    reason: str  # must be one of DRIVER_CANCEL_REASONS keys
+    explanation: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -1374,7 +1396,8 @@ async def nearby_jobs(
     # scheduled endpoint and bypass the atomic dispatch flow. Legacy jobs
     # (no `service_timing` field) remain visible via `$ne "asap"`.
     all_jobs = await db.jobs.find(
-        {"status": "posted", "service_timing": {"$ne": "asap"}},
+        {"status": "posted", "service_timing": {"$ne": "asap"},
+         "blocked_driver_ids": {"$ne": user.get("id")}},
         {"_id": 0},
     ).sort("created_at", -1).to_list(500)
     result: list[dict] = []
@@ -1530,8 +1553,16 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
 
     # Atomic claim — conditional update guards the read-then-update race that
     # would otherwise let two drivers both flip `status=posted` → `accepted`.
+    # R23: also refuse if this driver previously cancelled this job (see
+    # blocked_driver_ids populated by /driver/bookings/{id}/cancel).
+    if user["id"] in (job.get("blocked_driver_ids") or []):
+        raise HTTPException(
+            status_code=403,
+            detail="You cancelled this job earlier and cannot re-accept it. Please pick a different job.",
+        )
     result = await db.jobs.update_one(
-        {"id": job_id, "status": "posted", "assigned_driver_id": None},
+        {"id": job_id, "status": "posted", "assigned_driver_id": None,
+         "blocked_driver_ids": {"$ne": user["id"]}},
         {"$set": {
             "status": "accepted",
             "assigned_driver_id": user["id"],
@@ -1969,11 +2000,13 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
         return {"offers": [], "reason": "busy_on_asap"}
 
     # Candidate query — index-friendly (service_timing + status + assigned_driver_id).
+    # R23: exclude jobs where this driver is on the blocked list (they cancelled it earlier).
     candidates = await db.jobs.find(
         {"service_timing": "asap",
          "status": {"$in": ["confirmed", "dispatch_ready"]},
          "assigned_driver_id": None,
-         "cancelled_at": {"$exists": False}},
+         "cancelled_at": {"$exists": False},
+         "blocked_driver_ids": {"$ne": user["id"]}},
         {"_id": 0},
     ).sort("dispatch_ready_at", 1).to_list(200)
 
@@ -2090,6 +2123,12 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
         raise HTTPException(status_code=403, detail="Driver location too stale")
     if not _driver_is_capable(driver, job):
         raise HTTPException(status_code=403, detail="Driver not capable for this job")
+    # R23: driver cannot re-claim a job they previously cancelled.
+    if user["id"] in (job.get("blocked_driver_ids") or []):
+        raise HTTPException(
+            status_code=403,
+            detail="You cancelled this job earlier and cannot re-accept it.",
+        )
 
     # Guard busy rule at claim time too.
     busy = await db.jobs.find_one({
@@ -2115,6 +2154,7 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
             "status": {"$in": ["confirmed", "dispatch_ready"]},
             "assigned_driver_id": None,
             "cancelled_at": {"$exists": False},
+            "blocked_driver_ids": {"$ne": user["id"]},
         },
         {"$set": {
             "status": "accepted",   # transition into existing fulfilment lifecycle
@@ -3388,16 +3428,29 @@ async def create_review(booking_id: str, payload: ReviewCreate,
     if b.get("status") not in ("completed", "pod_uploaded"):
         raise HTTPException(status_code=400, detail="Booking not completed yet")
     target_id = b.get("driver_id") if user["id"] == b.get("customer_id") else b.get("customer_id")
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Counterparty not available for review")
+    # R23: one review per (from_id, booking_id). Backend must reject duplicates
+    # regardless of any client-side guard.
+    dupe = await db.reviews.find_one({"booking_id": booking_id, "from_id": user["id"]})
+    if dupe:
+        raise HTTPException(
+            status_code=409,
+            detail="You have already reviewed this booking.",
+        )
     doc = {
         "id": new_id(),
         "booking_id": booking_id,
         "from_id": user["id"],
         "from_name": user["name"],
+        "from_role": user.get("role"),
         "target_id": target_id,
         "rating": max(1, min(5, payload.rating)),
         "comment": payload.comment,
         "photos": payload.photos,
         "verified_delivery": True,
+        "reply": None,
+        "reply_at": None,
         "created_at": now_iso(),
     }
     await db.reviews.insert_one(doc)
@@ -3411,7 +3464,77 @@ async def create_review(booking_id: str, payload: ReviewCreate,
             {"id": target_id},
             {"$set": {"rating": round(agg[0]["avg"], 2), "review_count": agg[0]["n"]}},
         )
+    # R23: email the target with a new-review notification, and push in-app.
+    try:
+        target = await db.users.find_one({"id": target_id}, {"_id": 0, "password_hash": 0})
+        await push_notification(
+            target_id,
+            "New review received",
+            f"You have a new {doc['rating']}-star review from {user.get('name') or 'a customer'}.",
+            {"booking_id": booking_id, "review_id": doc["id"]},
+        )
+        if target:
+            from services.email import send_new_review
+            await send_new_review(
+                db, target_user=target, from_user=user, booking=b,
+                rating=doc["rating"], comment=doc.get("comment"),
+            )
+    except Exception:
+        logger.exception("new-review notification failed; continuing")
     return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api.get("/bookings/{booking_id}/review/mine")
+async def get_my_review_for_booking(booking_id: str,
+                                     user: dict = Depends(get_current_user)):
+    """Return the review the CURRENT user has already submitted for this
+    booking, if any. Used by the frontend to hide the 'Leave review' button
+    and instead render the submitted review immediately, without a listing.
+    """
+    rev = await db.reviews.find_one(
+        {"booking_id": booking_id, "from_id": user["id"]}, {"_id": 0},
+    )
+    return rev  # may be None — client renders CTA in that case
+
+
+@api.post("/reviews/{review_id}/reply")
+async def reply_to_review(review_id: str, payload: ReviewReplyCreate,
+                            user: dict = Depends(get_current_user)):
+    """Single reply per review — only the target (person being reviewed)
+    can reply, and only once. Reply is soft-moderated for off-platform
+    contact patterns like every other user-generated text field."""
+    rev = await db.reviews.find_one({"id": review_id})
+    if not rev:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if rev.get("target_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Only the reviewed user can reply")
+    if rev.get("reply"):
+        raise HTTPException(status_code=409, detail="You have already replied to this review")
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Reply text required")
+    if len(text) > 1000:
+        text = text[:1000]
+    from services.moderation import sanitise
+    clean_text, _blocked, _hits = sanitise(text)
+    now = now_iso()
+    await db.reviews.update_one(
+        {"id": review_id, "reply": None},
+        {"$set": {"reply": clean_text, "reply_at": now,
+                  "reply_by": user["id"], "reply_by_name": user["name"]}},
+    )
+    # Notify the original reviewer (in-app only — a reply doesn't need a full
+    # branded email, though push_notification will still log it).
+    try:
+        await push_notification(
+            rev.get("from_id"),
+            "Your review received a reply",
+            "The person you reviewed has replied to your review.",
+            {"booking_id": rev.get("booking_id"), "review_id": review_id},
+        )
+    except Exception:
+        logger.exception("review-reply push failed; continuing")
+    return {"ok": True, "reply": clean_text, "reply_at": now}
 
 
 @api.get("/users/{user_id}/reviews")
@@ -4188,6 +4311,210 @@ async def customer_cancel_and_refund(
         "stripe_refund_id": refund_id,
         "cancelled_at": now_iso(),
     }
+
+
+@api.post("/driver/bookings/{booking_id}/cancel")
+async def driver_cancel_booking(
+    booking_id: str,
+    payload: DriverCancelBody,
+    user: dict = Depends(require_role("driver")),
+):
+    """Driver-initiated cancellation for an accepted booking (all job types).
+
+    Server-authoritative state machine:
+      1. Validates the caller IS the assigned driver on this booking.
+      2. Reason must be one of DRIVER_CANCEL_REASONS. If 'other', a short
+         explanation is required.
+      3. Refuses if the booking is already delivered/pod_uploaded/completed
+         or already cancelled.
+      4. Atomic booking transition + atomic job transition:
+           * Booking → status="cancelled_by_driver", driver_id cleared.
+           * Job → for ASAP: back to status="dispatch_ready" so the dispatch
+             loop picks it up again; assigned_driver_* cleared;
+             accepted_price kept. For scheduled fixed/bidding: back to
+             status="posted" so it re-enters the marketplace list.
+           * blocked_driver_ids append the current driver — they cannot
+             re-accept this same job.
+      5. Never refunds automatically. Deposit stays put; customer can hit
+         the existing /customer/bookings/{id}/cancel-and-refund endpoint
+         if they no longer want the booking.
+      6. Audit log entry in `driver_cancellations` for admin review.
+      7. Notifies customer (in-app + email).
+    """
+    # ---- reason validation ---------------------------------------------
+    reason_key = (payload.reason or "").strip().lower()
+    if reason_key not in DRIVER_CANCEL_REASONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid reason. Choose one of: {sorted(DRIVER_CANCEL_REASONS.keys())}",
+        )
+    explanation = (payload.explanation or "").strip()
+    if reason_key == "other" and not explanation:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a short explanation when choosing 'Other'.",
+        )
+    reason_label = DRIVER_CANCEL_REASONS[reason_key]
+
+    # ---- fetch + auth --------------------------------------------------
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("driver_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned driver on this booking")
+    if b.get("status") in ("cancelled", "cancelled_by_driver", "completed", "pod_uploaded"):
+        raise HTTPException(status_code=409, detail="This booking can no longer be cancelled")
+    if b.get("status") == "delivered":
+        raise HTTPException(status_code=409, detail="Delivery already completed — cancel not allowed")
+
+    job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
+    if not job:
+        raise HTTPException(status_code=404, detail="Underlying job not found")
+
+    is_asap = (job.get("service_timing") or "").lower() == "asap"
+    now = now_iso()
+
+    # ---- ATOMIC BOOKING TRANSITION -------------------------------------
+    booking_claim = await db.bookings.update_one(
+        {"id": booking_id, "driver_id": user["id"],
+         "status": {"$nin": ["cancelled", "cancelled_by_driver", "completed", "pod_uploaded", "delivered"]}},
+        {"$set": {
+            "status": "cancelled_by_driver",
+            "driver_cancelled_at": now,
+            "driver_cancel_reason": reason_key,
+            "driver_cancel_reason_label": reason_label,
+            "driver_cancel_explanation": explanation or None,
+            "previous_driver_id": user["id"],
+            "driver_id": None,
+        }},
+    )
+    if booking_claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Booking state changed — cancellation rejected")
+
+    # ---- ATOMIC JOB TRANSITION -----------------------------------------
+    reassigning = True
+    if is_asap:
+        job_update = {
+            "status": "dispatch_ready",
+            "assigned_driver_id": None,
+            "assigned_driver_name": None,
+            "assigned_driver_rating": None,
+            "accepted_at": None,
+            "dispatch_claimed_at": None,
+            "dispatch_ready_at": now,
+            "last_driver_cancel_at": now,
+        }
+    else:
+        job_update = {
+            "status": "posted",
+            "assigned_driver_id": None,
+            "assigned_driver_name": None,
+            "assigned_driver_rating": None,
+            "accepted_at": None,
+            "last_driver_cancel_at": now,
+        }
+    await db.jobs.update_one(
+        {"id": job["id"]},
+        {"$set": job_update,
+         "$addToSet": {"blocked_driver_ids": user["id"]}},
+    )
+
+    # ---- AUDIT LOG -----------------------------------------------------
+    audit_doc = {
+        "id": new_id(),
+        "booking_id": booking_id,
+        "job_id": job["id"],
+        "driver_id": user["id"],
+        "driver_name": user.get("name"),
+        "customer_id": b.get("customer_id"),
+        "service_timing": job.get("service_timing"),
+        "pricing_type": job.get("pricing_type"),
+        "service_type": job.get("service_type"),
+        "reason": reason_key,
+        "reason_label": reason_label,
+        "explanation": explanation or None,
+        "booking_status_before": b.get("status"),
+        "created_at": now,
+    }
+    await db.driver_cancellations.insert_one(audit_doc)
+
+    # ---- CUSTOMER NOTIFICATION (push + email) --------------------------
+    try:
+        await push_notification(
+            b.get("customer_id"),
+            "Driver has cancelled — we're on it",
+            (f"Your driver had to cancel ({reason_label}). "
+             + ("We're searching for another driver now." if reassigning and is_asap
+                else "Your job is back on the marketplace for eligible drivers.")),
+            {"booking_id": booking_id, "job_id": job["id"], "driver_cancelled": True},
+        )
+    except Exception:
+        logger.exception("driver-cancel push notification failed; continuing")
+
+    try:
+        cust = await db.users.find_one({"id": b.get("customer_id")},
+                                          {"_id": 0, "password_hash": 0})
+        fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        job_doc = await db.jobs.find_one({"id": job["id"]}, {"_id": 0})
+        if cust and fresh_b:
+            fresh_b["job"] = job_doc
+            from services.email import send_driver_cancelled_booking
+            await send_driver_cancelled_booking(
+                db, user=cust, booking=fresh_b,
+                reason_label=reason_label,
+                reassigning=reassigning, is_asap=is_asap,
+            )
+    except Exception:
+        logger.exception("driver-cancel customer email failed; continuing")
+
+    cancel_count = await db.driver_cancellations.count_documents({"driver_id": user["id"]})
+
+    return {
+        "ok": True,
+        "booking_id": booking_id,
+        "job_id": job["id"],
+        "reassigning_to_pool": reassigning,
+        "is_asap": is_asap,
+        "reason": reason_key,
+        "reason_label": reason_label,
+        "driver_cancel_count_total": cancel_count,
+    }
+
+
+@api.get("/driver/cancellations/mine")
+async def driver_my_cancellations(user: dict = Depends(require_role("driver"))):
+    """Driver's own cancellation history — powers the account-protection
+    warning banner ('you have cancelled N jobs') without inventing a
+    suspension threshold."""
+    rows = await db.driver_cancellations.find(
+        {"driver_id": user["id"]}, {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+    return {"count": len(rows), "cancellations": rows}
+
+
+@api.get("/driver/cancel-reasons")
+async def driver_cancel_reasons(_user: dict = Depends(require_role("driver"))):
+    """Expose the fixed reason list so the driver UI never hardcodes it."""
+    return {"reasons": [{"key": k, "label": v} for k, v in DRIVER_CANCEL_REASONS.items()]}
+
+
+@api.get("/admin/driver-cancellations")
+async def admin_driver_cancellations(
+    driver_id: Optional[str] = None,
+    user: dict = Depends(require_role("admin")),
+):
+    """Admin view of driver cancellations. Optional driver_id filter for the
+    driver detail view; without a filter returns the last 500 cancellations
+    system-wide."""
+    q: dict = {}
+    if driver_id:
+        q["driver_id"] = driver_id
+    rows = await db.driver_cancellations.find(q, {"_id": 0}) \
+                                          .sort("created_at", -1) \
+                                          .to_list(500)
+    return {"count": len(rows), "cancellations": rows}
+
+
 
 
 @api.post("/admin/bookings/{booking_id}/refund")
@@ -5738,6 +6065,15 @@ async def seed_startup():
         await db.jobs.create_index([("service_timing", 1), ("status", 1),
                                        ("assigned_driver_id", 1)])
         await db.jobs.create_index([("dispatch_ready_at", -1)])
+        # R23 — audit-log index for admin lookups + driver's own history
+        await db.driver_cancellations.create_index(
+            [("driver_id", 1), ("created_at", -1)]
+        )
+        # R23 — safety net against duplicate reviews (application layer already
+        # rejects with 409, but this closes the race window under load).
+        await db.reviews.create_index(
+            [("booking_id", 1), ("from_id", 1)], unique=True
+        )
     except Exception as e:  # noqa: BLE001
         logger.warning("Dispatch index creation skipped: %s", e)
 

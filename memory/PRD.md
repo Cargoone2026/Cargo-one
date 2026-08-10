@@ -1158,3 +1158,64 @@ Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:j
 - Native iOS/Android builds.
 
 **System ready for user's full manual production QA sweep.**
+
+
+---
+
+## R23 — Driver QA Sweep (Welcome email · Profile address & avatar · Cancellation · POD/Complete · Reviews · Live redesign) ✅ COMPLETE (Feb 2026)
+
+**Testing agent verdict**: 23/23 backend pytest PASS · frontend testID/source smoke PASS · zero critical/minor bugs · zero action items.
+
+### Backend changes (`/app/backend/server.py`, `/app/backend/services/email.py`)
+- **Dedicated driver welcome email**: new `render_driver_welcome()` in `services/email.py`; `send_welcome()` branches on role so drivers receive onboarding language + `drivers@cargoone.co.uk` support + Driver Portal CTA; customers keep the existing template.
+- **Driver cancellation endpoint** `POST /driver/bookings/{booking_id}/cancel`:
+  - Reason must be one of 8 controlled keys (`DRIVER_CANCEL_REASONS`); `other` requires explanation.
+  - Atomic booking transition → `cancelled_by_driver` + clear `driver_id`.
+  - ASAP jobs → `status="dispatch_ready"`, `dispatch_ready_at=now` (radius ladder restart), assigned_driver_* cleared.
+  - Scheduled fixed/bidding jobs → `status="posted"`, back on the marketplace.
+  - `$addToSet` current driver into `blocked_driver_ids` → they cannot re-accept the same job.
+  - Never auto-refunds; deposit stays put; customer can still use `/customer/bookings/{id}/cancel-and-refund` to reclaim.
+  - Audit row inserted into `driver_cancellations`.
+  - Customer notified via `push_notification` + `send_driver_cancelled_booking` email (template `driver_cancelled_booking`).
+- **Blocked-driver enforcement** across `/jobs/nearby`, `/jobs/{id}/accept`, `/driver/live/offers`, `/jobs/{id}/claim` — a driver who cancelled a job is filtered out of every discovery/accept path for that job.
+- **Companion endpoints**: `GET /driver/cancel-reasons`, `GET /driver/cancellations/mine`, `GET /admin/driver-cancellations`.
+- **Review dedup**: `POST /bookings/{id}/review` now returns 409 if the caller already reviewed this booking; safety-net unique index added on `reviews (booking_id, from_id)`.
+- **Two-way reviews**: `create_review` already accepted either party; email + push wired to notify target via new `send_new_review` template.
+- **Review reply**: new `POST /reviews/{review_id}/reply` — single reply per review, only target can reply, reply is sanitised via existing `moderation.sanitise`, in-app push to original reviewer.
+- **New endpoint** `GET /bookings/{id}/review/mine` — the client uses this to hide the leave-review CTA when the user has already submitted.
+- **Startup indexes** — added `driver_cancellations(driver_id, created_at)` and unique `reviews(booking_id, from_id)`.
+
+### Frontend changes
+- **`/app/frontend/src/pages/portal/driver/Profile.jsx`** — full rewrite:
+  - Editable avatar with camera button (upload / replace / remove), reuses the customer-side image-resize helper.
+  - Six-field registered address section (line1, line2, town, county, postcode, country) with UK-postcode + E.164 phone validators.
+  - Reviews-received section with inline reply UI.
+  - Informational cancellation-count banner (no threshold-based suspension).
+- **`/app/frontend/src/components/ui-portal/DriverCancelModal.jsx`** — new shared bottom-sheet:
+  - Pulls reasons from `/driver/cancel-reasons` (with static fallback for offline).
+  - Two-step flow: pick reason → confirm with account-protection warning.
+  - Explanation required when 'Other' selected.
+- **Driver `BookingDetail.jsx`** — wired cancel button + modal for any paid, pre-delivered booking; added leave-review-for-customer flow with `DriverReviewOfMeCard` reply widget.
+- **Customer `BookingDetail.jsx`** — hides `leave-review-button` once `myReview` is set; renders submitted review card with the driver's reply if any; renders `ReviewOfMeCard` (driver's review of customer) with single-reply UI.
+- **Driver Live idle-state visual upgrade** (`Live.jsx`) — dark hero card, radar pulse pin (Zap icon), premium "Searching for nearby jobs…" copy, glassmorphic stat cards, all testIDs (`driver-live-idle-dashboard`, `driver-live-town`, `driver-live-stat-time/jobs/earnings`, `driver-live-status-panel`) preserved. Functionality untouched.
+
+### Notification audit
+- **In-app + email** for driver accepted, driver cancelled (new), completed, POD, new review (new), review reply (in-app only).
+- Every email send is wrapped in `try/except logger.exception` — email failure never blocks the core flow.
+
+### Security / state validation
+- Authorization enforced on every new endpoint (`require_role`, ownership checks).
+- Atomic booking + job transitions guarded by conditional `$nin` state filters.
+- Rate-limit-friendly: `blocked_driver_ids` filter is index-friendly (falls under the composite `service_timing, status, assigned_driver_id` index).
+
+### Deferred (per user instruction)
+- Mapbox migration.
+- `server.py` decomposition (~6289 lines).
+- Native iOS/Android builds.
+- Deployment (user does this manually).
+
+### Manual QA still required from user
+- Cross-browser + mobile Safari review-reply flow.
+- Real Resend delivery of `driver_welcome`, `driver_cancelled_booking`, `new_review` templates.
+- Full production journey with real Stripe payment + driver cancel + reassignment.
+- Verify Admin driver-detail page shows registered address + review history (no admin UI wiring in this round — endpoint exists at `/admin/driver-cancellations`).
