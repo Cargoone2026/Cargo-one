@@ -12,6 +12,7 @@ import {
   Inbox,
   User as UserIcon,
   Layers,
+  AlertTriangle,
 } from "lucide-react";
 
 const ADMIN_NAV = [
@@ -24,6 +25,7 @@ const ADMIN_NAV = [
   { label: "Catalog", href: "/admin/catalog", icon: Layers },
   { label: "Fee Bands", href: "/admin/deposit-bands", icon: Wallet },
   { label: "Booking-Fee %", href: "/admin/booking-fee-bands", icon: Wallet },
+  { label: "Cancellations", href: "/admin/driver-cancellations", icon: AlertTriangle },
   { label: "Queues", href: "/admin/queues", icon: Inbox },
   { label: "Profile", href: "/admin/profile", icon: UserIcon },
 ];

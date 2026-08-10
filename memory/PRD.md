@@ -1219,3 +1219,33 @@ Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:j
 - Real Resend delivery of `driver_welcome`, `driver_cancelled_booking`, `new_review` templates.
 - Full production journey with real Stripe payment + driver cancel + reassignment.
 - Verify Admin driver-detail page shows registered address + review history (no admin UI wiring in this round — endpoint exists at `/admin/driver-cancellations`).
+
+---
+
+## R24 — Admin Cancellations View ✅ COMPLETE (Feb 2026)
+
+**Files added / modified**:
+- `/app/frontend/src/pages/portal/admin/DriverCancellations.jsx` (new)
+- `/app/frontend/src/pages/portal/admin/DriverDetail.jsx` (recent-cancellations section + count stat)
+- `/app/frontend/src/App.js` (route: `/admin/driver-cancellations`)
+- `/app/frontend/src/layouts/AdminLayout.jsx` (sidebar entry "Cancellations")
+
+**Features shipped**:
+- **List view** at `/admin/driver-cancellations` with:
+  - Three-stat header (total, unique drivers, top driver by count)
+  - Client-side search (driver, booking, reason, explanation)
+  - Filters: reason, service_timing
+  - Row → detail drawer with all audit fields (driver id, booking id, reason, explanation, timing, pricing, service, state before cancel, timestamp)
+  - Detail drawer actions: "Show all cancellations by this driver" (URL param) + "Open driver profile"
+- **Driver-scoped list** via `?driver_id=<id>` (hits `/admin/driver-cancellations?driver_id=`)
+- **Driver Detail integration**: replaces the placeholder "Vehicles" stat card with a live **Cancellations count**, plus a "Recent cancellations" section showing the last 5 rows and a "View all" link that jumps to the filtered list.
+- Sidebar entry with AlertTriangle icon.
+
+**Verified**:
+- Admin GET `/admin/driver-cancellations` → 200
+- Admin GET with driver_id filter → 200
+- Driver GET → 403 (role guard intact)
+- Full E2E screenshots: list renders with seeded row (later cleaned up), detail drawer opens with all fields, driver-detail page shows the recent-cancellations section with correct count.
+
+No backend changes required — this round is 100% frontend on top of the R23 endpoint.
+

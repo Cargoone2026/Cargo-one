@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import {
   ChevronLeft,
   AlertTriangle,
@@ -45,6 +45,8 @@ export default function AdminDriverDetail() {
   const [reason, setReason] = useState("");
   const [reasonDocs, setReasonDocs] = useState([]);
   const [busy, setBusy] = useState(false);
+  // R23 — surface driver cancellation history + count on the admin detail page.
+  const [cancels, setCancels] = useState({ count: 0, cancellations: [] });
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -53,6 +55,15 @@ export default function AdminDriverDetail() {
     try {
       const res = await api(`/admin/drivers/${id}`);
       setData(res);
+      try {
+        const canc = await api(`/admin/driver-cancellations?driver_id=${encodeURIComponent(id)}`);
+        setCancels({
+          count: canc?.count || 0,
+          cancellations: canc?.cancellations || [],
+        });
+      } catch {
+        setCancels({ count: 0, cancellations: [] });
+      }
     } catch (e) {
       setErr(e?.message || "Could not load driver");
     } finally {
@@ -224,8 +235,65 @@ export default function AdminDriverDetail() {
           <Stat label="Bookings" value={String(stats.completed_bookings ?? 0)} />
           <Stat label="Earnings" value={`£${Number(stats.total_earnings ?? 0).toFixed(0)}`} />
           <Stat label="Rating" value={`${Number(stats.rating ?? user.rating ?? 5).toFixed(1)}★`} />
-          <Stat label="Vehicles" value={String(fleet.length)} />
+          <Stat
+            label="Cancellations"
+            value={String(cancels.count)}
+            testID="driver-cancellation-count"
+          />
         </div>
+
+        {/* R23 — Cancellation history preview (last 5 rows). Full list on the
+            dedicated Cancellations page filtered by this driver. */}
+        {cancels.count > 0 ? (
+          <section
+            className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
+            data-testid="driver-cancellation-history-section"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-[#DC2626]" />
+                <h3 className="text-[15px] font-bold text-[#111111]">
+                  Recent cancellations
+                </h3>
+                <span className="rounded-full bg-[#FEF2F2] px-2 py-0.5 text-[11px] font-semibold text-[#DC2626]">
+                  {cancels.count} total
+                </span>
+              </div>
+              <Link
+                to={`/admin/driver-cancellations?driver_id=${encodeURIComponent(id)}`}
+                data-testid="admin-view-all-cancellations"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#111111] underline hover:text-[#D62828]"
+              >
+                View all
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <ul className="divide-y divide-[#F3F4F6]">
+              {cancels.cancellations.slice(0, 5).map((c) => (
+                <li key={c.id} className="py-2" data-testid={`driver-cancel-row-${c.id}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-[#111111]">
+                        {c.reason_label || c.reason}
+                      </p>
+                      {c.explanation ? (
+                        <p className="mt-0.5 text-[12px] italic text-[#6B7280]">
+                          "{c.explanation}"
+                        </p>
+                      ) : null}
+                      <p className="mt-0.5 text-[11px] text-[#9CA3AF]">
+                        {(c.service_timing || "").toUpperCase() || "—"} · Booking {c.booking_id?.slice(0, 8)}…
+                      </p>
+                    </div>
+                    <span className="whitespace-nowrap text-[11px] text-[#6B7280]">
+                      {formatWhen(c.created_at)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* Action bar */}
         {user.role === "driver" && (
@@ -481,11 +549,26 @@ export default function AdminDriverDetail() {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, testID }) {
   return (
-    <div className="rounded-[10px] bg-[#F9FAFB] p-3">
+    <div className="rounded-[10px] bg-[#F9FAFB] p-3" data-testid={testID}>
       <p className="text-[18px] font-bold text-[#111111]">{value}</p>
       <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#6B7280]">{label}</p>
     </div>
   );
+}
+
+function formatWhen(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    if (diff < 60_000) return "just now";
+    if (diff < 3600_000) return `${Math.round(diff / 60_000)}m ago`;
+    if (diff < 86400_000) return `${Math.round(diff / 3600_000)}h ago`;
+    if (diff < 7 * 86400_000) return `${Math.round(diff / 86400_000)}d ago`;
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  } catch (_e) {
+    return iso;
+  }
 }
