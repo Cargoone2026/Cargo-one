@@ -128,38 +128,29 @@ export default function CustomerAsapRequest() {
     return true;
   }, [pickup, dropoff, mode, vehicle]);
 
-  // Estimated commercial values shown to the customer BEFORE payment. Backend
-  // recomputes authoritatively on job creation — this is a hint only. Follows
-  // the same formula as the server's `create_job` suggested price.
-  //
-  // Round 3 fix: `estimatedDeposit` was previously computed client-side with
-  // a stale `min(£25, max(£10, total*0.125))` heuristic which no longer
-  // matches the dynamic `booking_fee_bands` tiers (10–15%) that Stripe and
-  // the confirmation page use. We now defer to `/api/booking-fee-bands/preview`
-  // for the definitive band-based fee and fall back only when the network
-  // call hasn't returned yet.
+  // R25 — SINGLE SOURCE OF TRUTH.
+  // The server's `/api/pricing/quote` engine (via `POST /pricing/quote`,
+  // called upstream in the quote effect below) is the ONLY price the
+  // customer ever sees or pays. This memo just extracts the fields — it
+  // NEVER recomputes. The prior client-side max(30, distance*1.5*mult)
+  // formula produced totals that diverged from what actually got charged
+  // and has been deleted (R25 pricing audit finding #3).
   const { estimatedTotal, estimatedDeposit, feePercent } = useMemo(() => {
-    if (!pickup || !dropoff) return { estimatedTotal: 0, estimatedDeposit: 0, feePercent: null };
-    let total;
-    if (quote && quote.suggested_price) {
-      const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
-      total = Math.max(30, Math.round(quote.suggested_price * mult));
-    } else {
-      const distance = haversineMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
-      const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
-      total = Math.max(30, Math.round(distance * 1.5 * mult));
+    if (!pickup || !dropoff || !quote?.driver_charge) {
+      return { estimatedTotal: 0, estimatedDeposit: 0, feePercent: null };
     }
-    // Prefer backend booking-fee-band preview (single source of truth). While
-    // it loads we show the 10% floor from the band schema — never the old
-    // 12.5% heuristic — so the number can only move down, not up, once the
-    // preview resolves.
-    const previewMatches = feePreview && feePreview.driver_charge === total;
-    const deposit = previewMatches
-      ? Number(feePreview.booking_fee || 0)
-      : Math.round(total * 0.10);
-    const percent = previewMatches ? Number(feePreview.booking_fee_percent) : null;
-    return { estimatedTotal: total, estimatedDeposit: deposit, feePercent: percent };
-  }, [pickup, dropoff, mode, quote, feePreview]);
+    return {
+      estimatedTotal: Number(quote.driver_charge),
+      // The engine returns `booking_fee_preview` (already band-aware);
+      // fall back to /booking-fee-bands/preview only if the field is
+      // missing (older backends). Both use identical band logic.
+      estimatedDeposit: Number(
+        quote.booking_fee_preview ??
+          (feePreview?.driver_charge === quote.driver_charge ? feePreview.booking_fee : 0),
+      ),
+      feePercent: quote.booking_fee_percent ?? feePreview?.booking_fee_percent ?? null,
+    };
+  }, [pickup, dropoff, quote, feePreview]);
 
   // Refresh authoritative booking-fee preview whenever the driver charge
   // changes. Debounced (300 ms) and abortable so quick edits don't spam
@@ -183,30 +174,63 @@ export default function CustomerAsapRequest() {
     return () => { clearTimeout(t); ac.abort(); };
   }, [estimatedTotal]);
 
-  // Live quote fetch — hit /api/quote/estimate whenever both endpoints are set.
-  // Debounced so quick edits don't spam the backend. Backend uses Google
-  // Distance Matrix when the maps key is configured, else Haversine.
+  // R25 — Fetch the authoritative quote from `/pricing/quote` whenever
+  // any priced input changes. This endpoint is the single source of
+  // truth. Debounced 350 ms; aborts on unmount + on input churn so
+  // out-of-order responses can never overwrite a fresher price.
   useEffect(() => {
     if (!pickup || !dropoff) { setQuote(null); return undefined; }
     let cancelled = false;
     const t = setTimeout(async () => {
       setQuoteLoading(true);
       try {
-        const category = mode === "breakdown_recovery" ? "cars_vehicles" : "parcels";
-        const q = await api(
-          `/quote/estimate?pickup_lat=${pickup.lat}&pickup_lng=${pickup.lng}` +
-          `&dropoff_lat=${dropoff.lat}&dropoff_lng=${dropoff.lng}` +
-          `&category=${category}`
-        );
+        const cat = mode === "breakdown_recovery"
+          ? "cars_vehicles"
+          : (transportCategory === "furniture"        ? "furniture_delivery" :
+             transportCategory === "pallets"          ? "freight_haulage"    :
+             transportCategory === "machinery"        ? "freight_haulage"    :
+             transportCategory                        ? transportCategory    :
+             "package_delivery");
+        const q = await api("/pricing/quote", {
+          method: "POST",
+          body: {
+            pickup_lat: pickup.lat,
+            pickup_lng: pickup.lng,
+            dropoff_lat: dropoff.lat,
+            dropoff_lng: dropoff.lng,
+            service_type: mode,
+            service_timing: "asap",
+            transport_category: mode === "transport" ? cat : null,
+            weight_kg: mode === "transport" && asapWeightKg ? Number(asapWeightKg) : null,
+            volume_m3: mode === "transport" && asapLengthM && asapWidthM && asapHeightM
+              ? Number(asapLengthM) * Number(asapWidthM) * Number(asapHeightM)
+              : null,
+            item_count: mode === "transport" && asapItemCount ? Number(asapItemCount) : null,
+            needs_forklift: mode === "transport" ? Boolean(needsForklift) : false,
+            needs_loading_help: mode === "transport" ? Boolean(needsLoadingHelp) : false,
+            vehicle_details: mode === "breakdown_recovery" ? vehicle : null,
+          },
+        });
         if (!cancelled) setQuote(q);
-      } catch {
-        // Non-fatal — fall back to Haversine hint.
+      } catch (e) {
+        if (!cancelled) {
+          // Surface pricing-engine validation errors (e.g. impossible
+          // weight/dims) directly to the customer. Everything else stays
+          // silent so a network hiccup doesn't kill the form.
+          const raw = e?.message || "";
+          if (/weight|dimensions|volume|distance|capacity|item/i.test(raw)) {
+            setErr(raw);
+          }
+          setQuote(null);
+        }
       } finally {
         if (!cancelled) setQuoteLoading(false);
       }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [pickup, dropoff, mode]);
+  }, [pickup, dropoff, mode, transportCategory, asapWeightKg,
+      asapLengthM, asapWidthM, asapHeightM, asapItemCount,
+      needsForklift, needsLoadingHelp, vehicle]);
 
   const onSubmit = useCallback(async () => {
     // Explicit user-friendly validation — never surface raw backend JSON.
@@ -227,15 +251,15 @@ export default function CustomerAsapRequest() {
     setSubmitting(true);
     setErr(null);
     try {
-      // Category maps sensibly: breakdown → cars; transport → parcels default.
-      const category = mode === "breakdown_recovery" ? "cars" : "parcels";
-      const distanceMiles = haversineMiles(
-        pickup.lat, pickup.lng, dropoff.lat, dropoff.lng
-      );
-      // Suggested fixed price mirrors backend formula (max(30, 1.5 * dist * mult))
-      // ONLY as an initial hint — backend recomputes authoritatively.
-      const mult = mode === "breakdown_recovery" ? 2.0 : 1.0;
-      const suggested = Math.max(30, Math.round(distanceMiles * 1.5 * mult));
+      // R25 — DO NOT compute a client-side price. The server's
+      // create_job endpoint now calls services.pricing.calculate_quote
+      // and overwrites any client-supplied fixed_price so historical
+      // haversine-only leakage is impossible. The `estimatedTotal` shown
+      // to the user in the summary card is the same authoritative value
+      // (fetched via /pricing/quote above); we send it back so the
+      // server can log any client/server disagreement, but the server
+      // always wins.
+      const suggested = Number(quote?.driver_charge ?? estimatedTotal ?? 0);
 
       const created = await api("/jobs", {
         method: "POST",
@@ -332,7 +356,7 @@ export default function CustomerAsapRequest() {
       setErr(friendly);
       setSubmitting(false);
     }
-  }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription]);
+  }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription, asapWeightKg, asapItemCount, asapLengthM, asapWidthM, asapHeightM, needsForklift, needsLoadingHelp, quote, estimatedTotal]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6" data-testid="customer-asap-request">

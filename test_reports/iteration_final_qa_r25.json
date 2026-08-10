@@ -1,0 +1,43 @@
+{
+  "summary": "R25 pricing-engine audit + certification tests executed. Ran /app/backend/tests/test_pricing_engine.py (49 unit tests including UK-market benchmark table): all 49 passed. Wrote new /app/backend/tests/test_final_qa_r25.py with 26 HTTP-level integration tests hitting the live preview API: 25 passed, 1 legitimate finding (see backend_issues.minor). Frontend AsapRequest.jsx source-reviewed and portal login smoke-tested — no client-side haversine price computation, price and booking-fee preview come exclusively from /pricing/quote response fields (driver_charge, booking_fee_preview, customer_total_preview).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/pricing/quote",
+        "issue": "Spec row P says 1500kg → luton_van but engine returns 3_5t_truck. Root cause: luton_van capacity_kg=1200 in DEFAULT_PRICING_CONFIG, and _pick_transport_vehicle escalates to 3_5t_truck when weight > 1200. Either raise luton_van.capacity_kg to 1500 (matches real-world 3.5t chassis) OR update the R25 spec/vehicle tier table to reflect that 1500kg is genuinely a 3.5t truck job. Not a functional bug — the picker is deliberately conservative — but the spec/config are inconsistent. All other weight/volume tiers in section P/Q match the spec exactly (250, 500, 1000, 2000, 4000 kg and 0.5, 5, 10, 17, 28 m³)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pricing_engine.py",
+    "/app/backend/tests/test_final_qa_r25.py",
+    "/app/test_reports/pytest/r25_pricing_engine.xml",
+    "/app/test_reports/pytest/r25_http.xml"
+  ],
+  "action_items": [
+    "Decide luton_van policy: either raise luton_van capacity_kg from 1200 to 1500 in DEFAULT_PRICING_CONFIG so 1500kg → luton_van matches the R25 spec, or update the R25 tier documentation to say 1500kg → 3_5t_truck (current engine behaviour). Note the current 1200kg boundary matches typical UK Luton payload."
+  ],
+  "critical_code_review_comments": [
+    "services/pricing.py is exemplary: single source of truth, dataclass PricingBreakdown, immutable snapshot, code=... error taxonomy, no double-multiplication, minimum-charge floor, distance_source propagated. No changes suggested.",
+    "server.py POST /pricing/quote correctly wraps PricingError into 422 with detail={code,message} — matches spec.",
+    "GET /quote/estimate is confirmed as a thin adapter — same engine call — divergence-elimination test H passes: identical driver_charge across both endpoints for identical inputs.",
+    "AsapRequest.jsx line 143-148 correctly reads driver_charge and booking_fee_preview from quote response. haversineMiles() usage on line 709 is purely a *distance display* fallback for the summary card and does NOT feed pricing — spec requirement V is satisfied.",
+    "Consider adding an explicit test_uk_benchmark row for 1500kg to lock the picker behaviour once the spec/config decision above is made."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_final_qa_r25.py (NEW — HTTP integration test file)"
+  ],
+  "success_rate": {"backend": "98.7% (74/75 tests: 49 unit + 25/26 http)", "frontend": "code-review + login smoke passed"},
+  "test_credentials": "used /app/memory/test_credentials.md — testcustomer login OK on live preview",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "R25 pricing engine is production-ready. Only open item is the 1500kg tier discrepancy (config vs spec). If luton_van capacity is raised to 1500, re-run test_final_qa_r25.py::test_P_weight_tier_picker[1500-luton_van] to confirm green. Full flows (I/J/K/M/N/V/W) not exercised via UI due to address-search modal complexity — recommend the main agent's own e2e harness or a Playwright helper that pokes React state directly if a deeper UI regression is needed. All P0 R25 acceptance items verified at the engine + HTTP layer.",
+  "rca of the issue": "1500kg tier mismatch RCA: services/pricing._pick_transport_vehicle uses `if w > 1200 or v > 18: return '3_5t_truck'`. The threshold 1200 aligns with luton_van's own capacity_kg=1200 in DEFAULT_PRICING_CONFIG. The R25 spec asserts 1500kg should still be luton_van, but that would exceed the vehicle's declared payload capacity. Recommended mitigation: update luton_van.capacity_kg to 1500 (many real Luton bodies do haul 1400–1500kg) AND change the picker threshold to `w > 1500 or v > 18`. Alternatively accept the current, more conservative behaviour and update the spec document."
+}

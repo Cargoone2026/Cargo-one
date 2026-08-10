@@ -592,6 +592,34 @@ async def google_distance_matrix(origin: tuple[float, float],
         return None
 
 
+async def resolve_route(pickup_lat: float, pickup_lng: float,
+                          dropoff_lat: float, dropoff_lng: float) -> tuple[float, float, str]:
+    """Single entrypoint for turning coordinates into
+    (distance_miles, duration_minutes, distance_source). Every quote path
+    calls THIS — not google_distance_matrix directly — so the "which
+    source did we use" tag is consistent across the codebase.
+
+    Sources returned:
+      * ``google_road``          — Google Distance Matrix (preferred).
+      * ``haversine_fallback``   — straight-line, lower-confidence.
+    """
+    gmaps = await google_distance_matrix(
+        (pickup_lat, pickup_lng), (dropoff_lat, dropoff_lng),
+    )
+    if gmaps:
+        return (
+            round(gmaps["distance_meters"] / 1609.34, 2),
+            round(gmaps["duration_seconds"] / 60, 1),
+            "google_road",
+        )
+    d = round(haversine_miles(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng), 2)
+    # Assume 35 mph avg on mixed roads + 10 min buffer — deliberately
+    # conservative so pricing based on haversine isn't underquoting time.
+    t = round((d / 35.0) * 60 + 10, 1)
+    return (d, t, "haversine_fallback")
+
+
+
 # ---------------------------------------------------------------------------
 # Booking-fee bands — Session F (percentage tiers)
 # ---------------------------------------------------------------------------
@@ -1201,9 +1229,6 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     data["service_timing"] = service_timing
     data["service_type"] = service_type
 
-    distance = haversine_miles(
-        data["pickup_lat"], data["pickup_lng"], data["dropoff_lat"], data["dropoff_lng"]
-    )
     # Classify route so we can flag international jobs for manual pricing review.
     route_class = classify_route(
         data.get("pickup_country_code"),
@@ -1213,15 +1238,61 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     if not data.get("pickup_country_code") and not data.get("dropoff_country_code"):
         route_class = "domestic_uk"
 
-    # Quote suggestion: base £1.5/mile + category multiplier
-    category_mult = {
-        "furniture": 1.2, "pallets": 1.4, "cars": 2.0, "motorcycles": 1.5,
-        "house_moves": 1.6, "parcels": 1.0, "freight": 1.8, "documents": 0.8,
-        "boats": 2.5, "machinery": 2.2,
-    }.get(data["category"], 1.2)
-    if service_type == "breakdown_recovery":
-        category_mult = max(category_mult, 2.0)  # recovery premium already baked into commercial rules
-    suggested_price = round(max(30, distance * 1.5 * category_mult), 2)
+    # R25 — Single authoritative pricing path. Legacy per-mile Haversine +
+    # ad-hoc category multipliers are DELETED. Every job's `suggested_price`
+    # now comes from `services.pricing.calculate_quote`. Historical jobs
+    # are NEVER touched.
+    distance_miles: float = 0.0
+    duration_minutes: float = 0.0
+    distance_source: str = "haversine_fallback"
+    suggested_price = None
+    pricing_snapshot: Optional[dict] = None
+    pricing_line_items: Optional[list] = None
+
+    if route_class == "domestic_uk":
+        from services.pricing import calculate_quote, PricingError
+        distance_miles, duration_minutes, distance_source = await resolve_route(
+            data["pickup_lat"], data["pickup_lng"],
+            data["dropoff_lat"], data["dropoff_lng"],
+        )
+        # Normalise the customer-facing category slug (legacy → new).
+        raw_category = data.get("category") or data.get("transport_category")
+        normalized_category = LEGACY_CATEGORY_MAP.get(raw_category, raw_category)
+
+        try:
+            breakdown = await calculate_quote(
+                db,
+                distance_miles=distance_miles,
+                duration_minutes=duration_minutes,
+                distance_source=distance_source,
+                service_type=service_type,
+                service_timing=service_timing,
+                transport_category=normalized_category,
+                weight_kg=data.get("weight_kg"),
+                volume_m3=(
+                    (data.get("length_m") or 0) * (data.get("width_m") or 0) * (data.get("height_m") or 0)
+                    if data.get("length_m") and data.get("width_m") and data.get("height_m")
+                    else None
+                ),
+                item_count=data.get("item_count"),
+                needs_forklift=bool(data.get("needs_forklift")),
+                needs_loading_help=bool(data.get("needs_loading_help")),
+                vehicle_details=data.get("vehicle_details"),
+            )
+        except PricingError as exc:
+            raise HTTPException(status_code=422, detail={
+                "code": exc.code, "message": str(exc),
+            })
+
+        suggested_price = breakdown.driver_charge
+        pricing_snapshot = breakdown.pricing_snapshot
+        pricing_line_items = [asdict_line_item(li) for li in breakdown.line_items]
+    else:
+        # Non-UK route — record haversine for admin sanity but never quote.
+        distance_miles = round(
+            haversine_miles(data["pickup_lat"], data["pickup_lng"],
+                            data["dropoff_lat"], data["dropoff_lng"]), 1,
+        )
 
     job = {
         "id": new_id(),
@@ -1229,8 +1300,15 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
         "customer_name": user["name"],
         "customer_rating": user.get("rating", 5.0),
         "status": "posted" if route_class == "domestic_uk" else "awaiting_manual_quote",
-        "distance_miles": round(distance, 1),
-        "suggested_price": suggested_price if route_class == "domestic_uk" else None,
+        "distance_miles": round(distance_miles, 1),
+        "duration_minutes": duration_minutes,
+        "distance_source": distance_source,
+        "suggested_price": suggested_price,
+        # R25 — persist immutable pricing snapshot on the JOB record so
+        # historical calculations survive future admin config changes.
+        "pricing_snapshot": pricing_snapshot,
+        "pricing_line_items": pricing_line_items,
+        "pricing_engine_version": (pricing_snapshot or {}).get("engine_version"),
         "route_class": route_class,
         "assigned_driver_id": None,
         "accepted_price": None,
@@ -1241,6 +1319,12 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     # the multi-round bidding lifecycle. Guard commercial rules explicitly.
     if service_timing == "asap" and job.get("pricing_type") != "fixed":
         raise HTTPException(status_code=400, detail="ASAP requests must be fixed-price")
+    # For ASAP + fixed-price scheduled jobs, ALWAYS overwrite any
+    # client-supplied fixed_price with the authoritative engine value —
+    # historic bug (R25 audit) allowed the client to submit its own
+    # haversine-only price. The server is the single source of truth.
+    if suggested_price is not None and job.get("pricing_type") == "fixed":
+        job["fixed_price"] = suggested_price
     # Round 9 fix — always populate a Suitable Vehicle label. ASAP jobs
     # posted by customers rarely include one explicitly; without it the
     # driver's offer card / booking detail can't render the vehicle row.
@@ -1248,6 +1332,13 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     # (recovery) with sensible fallbacks so the field is NEVER empty.
     if not job.get("recommended_vehicle"):
         job["recommended_vehicle"] = _derive_suitable_vehicle(job)
+    # Prefer the engine's resolved vehicle label when one is available —
+    # keeps the "Suitable vehicle" chip aligned with the pricing.
+    if pricing_snapshot and (pricing_snapshot.get("resolved_vehicle_key")):
+        veh_key = pricing_snapshot["resolved_vehicle_key"]
+        veh_row = pricing_snapshot.get("vehicle_rate_card") or {}
+        job["recommended_vehicle"] = veh_row.get("label") or job["recommended_vehicle"]
+        job["recommended_vehicle_key"] = veh_key
 
     await db.jobs.insert_one(job)
     return public_job(job, include_private=True)
@@ -1259,6 +1350,101 @@ async def my_jobs(user: dict = Depends(require_role("customer"))):
     return jobs
 
 
+# ---------------------------------------------------------------------------
+# R25 — Authoritative pricing endpoint. Every frontend that needs a price
+# calls THIS. The legacy /quote/estimate below is preserved as a thin
+# adapter around the same engine so no client breaks.
+# ---------------------------------------------------------------------------
+
+
+class PricingQuoteBody(BaseModel):
+    pickup_lat: float
+    pickup_lng: float
+    dropoff_lat: float
+    dropoff_lng: float
+    service_type: Optional[str] = "transport"        # "transport" | "breakdown_recovery"
+    service_timing: Optional[str] = "scheduled"      # "scheduled" | "asap"
+    transport_category: Optional[str] = None
+    weight_kg: Optional[float] = None
+    volume_m3: Optional[float] = None
+    item_count: Optional[int] = None
+    needs_forklift: Optional[bool] = False
+    needs_loading_help: Optional[bool] = False
+    vehicle_details: Optional[dict] = None
+    requested_vehicle_key: Optional[str] = None
+    pickup_country_code: Optional[str] = None
+    dropoff_country_code: Optional[str] = None
+
+
+@api.post("/pricing/quote")
+async def pricing_quote(payload: PricingQuoteBody,
+                          user: dict = Depends(get_current_user)):
+    """The one true quote endpoint. Every client — customer ASAP form,
+    scheduled job composer, admin re-quote — calls this and displays the
+    returned figures verbatim. Booking-fee band is applied ON TOP by
+    /bookings creation using the same driver_charge value."""
+    from services.pricing import calculate_quote, PricingError
+
+    # International routes: keep the manual-review contract; do NOT quote.
+    route_class = classify_route(payload.pickup_country_code, payload.dropoff_country_code)
+    if not payload.pickup_country_code and not payload.dropoff_country_code:
+        route_class = "domestic_uk"
+    if route_class not in ("domestic_uk",):
+        return {
+            "requires_manual_review": True,
+            "route_class": route_class,
+            "manual_review_message": (
+                "This corridor doesn't have configured pricing yet. "
+                "Our team will provide a bespoke quote within one business day."
+            ),
+        }
+
+    distance_miles, duration_minutes, distance_source = await resolve_route(
+        payload.pickup_lat, payload.pickup_lng,
+        payload.dropoff_lat, payload.dropoff_lng,
+    )
+
+    try:
+        breakdown = await calculate_quote(
+            db,
+            distance_miles=distance_miles,
+            duration_minutes=duration_minutes,
+            distance_source=distance_source,
+            service_type=(payload.service_type or "transport"),
+            service_timing=(payload.service_timing or "scheduled"),
+            transport_category=payload.transport_category,
+            weight_kg=payload.weight_kg,
+            volume_m3=payload.volume_m3,
+            item_count=payload.item_count,
+            needs_forklift=bool(payload.needs_forklift),
+            needs_loading_help=bool(payload.needs_loading_help),
+            vehicle_details=payload.vehicle_details,
+            requested_vehicle_key=payload.requested_vehicle_key,
+        )
+    except PricingError as exc:
+        raise HTTPException(status_code=422, detail={
+            "code": exc.code,
+            "message": str(exc),
+        })
+
+    # Preview the booking-fee band that WILL apply if this quote becomes a
+    # booking — customers see the total up front rather than only at Stripe.
+    fee_detail = await calculate_booking_fee_detail(breakdown.driver_charge)
+
+    result = breakdown.to_dict()
+    result.update({
+        "route_class": "domestic_uk",
+        "requires_manual_review": False,
+        "booking_fee_preview": fee_detail["amount"],
+        "booking_fee_percent": fee_detail["percent"],
+        "booking_fee_source": fee_detail["source"],
+        "customer_total_preview": round(breakdown.driver_charge + fee_detail["amount"], 2),
+    })
+    return result
+
+
+
+
 @api.get("/quote/estimate")
 async def quote_estimate(pickup_lat: float, pickup_lng: float,
                           dropoff_lat: float, dropoff_lng: float,
@@ -1267,104 +1453,92 @@ async def quote_estimate(pickup_lat: float, pickup_lng: float,
                           volume_m3: Optional[float] = None,
                           pickup_country_code: Optional[str] = None,
                           dropoff_country_code: Optional[str] = None,
+                          service_type: str = "transport",
+                          service_timing: str = "scheduled",
                           user: dict = Depends(get_current_user)):
-    """Estimate distance, duration, vehicle & suggested price for a route.
-
-    Route classification (via markets.classify_route) is included in the
-    response so the frontend can render a "manual review required" state
-    for international routes that don't yet have configured pricing.
-    Existing UK jobs remain fully backwards compatible — the endpoint
-    still accepts calls without country codes and returns a UK price
-    quote when only lat/lng are provided.
+    """Legacy quote endpoint — retained for backwards compatibility with
+    the scheduled PostJob form. R25 rerouted this through the authoritative
+    pricing engine so it can never diverge from `POST /pricing/quote`.
     """
+    from services.pricing import calculate_quote, PricingError
+
     route_class = classify_route(pickup_country_code, dropoff_country_code)
-    # Preserve pre-existing behaviour: if the caller didn't send country
-    # codes at all, treat the route as domestic-UK (legacy contract).
     if not pickup_country_code and not dropoff_country_code:
         route_class = "domestic_uk"
-
-    # Try Google Distance Matrix first
-    gmaps = await google_distance_matrix(
-        (pickup_lat, pickup_lng), (dropoff_lat, dropoff_lng),
-    )
-    if gmaps:
-        distance_miles = round(gmaps["distance_meters"] / 1609.34, 1)
-        duration_minutes = round(gmaps["duration_seconds"] / 60, 0)
-        source = "google"
-    else:
-        distance_miles = round(
-            haversine_miles(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng), 1,
-        )
-        # Assume 40 mph avg on mixed roads + 10 min buffer
-        duration_minutes = round((distance_miles / 40.0) * 60 + 10, 0)
-        source = "haversine"
-
-    # Category multipliers keyed by NEW slugs. Fall back to legacy map, then to 1.2.
-    category_mult = {
-        # Light / same-day
-        "documents": 0.8, "parcels": 1.0, "same_day_express": 1.2,
-        # Standard
-        "furniture_delivery": 1.2, "single_items": 1.1, "auction_marketplace": 1.2,
-        "garden_outdoor": 1.2, "retail_business": 1.2, "office_commercial": 1.4,
-        "house_removals": 1.6, "long_distance_uk": 1.3,
-        # Freight & pallets
-        "pallets": 1.4, "freight": 1.8, "event_equipment": 1.5,
-        # Heavy / specialist
-        "motorcycles": 1.5, "cars_vehicles": 2.0, "vans": 2.0,
-        "machinery_plant": 2.2, "agricultural": 2.2, "building_materials": 1.8,
-        "boats_marine": 2.5, "shipping_containers": 2.6,
-        "caravans": 2.0, "static_caravans": 3.0, "fragile_high_value": 1.8,
-        "other": 1.2,
-    }
-    # Support legacy category slugs gracefully
-    normalized = LEGACY_CATEGORY_MAP.get(category, category)
-    mult = category_mult.get(normalized, 1.2)
-    suggested_price = round(max(30, distance_miles * 1.5 * mult), 2)
-
-    # Look up the category doc + pick the first default vehicle as the recommendation
-    cat_doc = await db.service_categories.find_one({"key": normalized, "active": True})
-    vehicle_label = "Van"
-    if cat_doc:
-        default_keys = cat_doc.get("default_vehicles") or []
-        if default_keys:
-            veh = await db.vehicle_types.find_one({"key": default_keys[0], "active": True})
-            if veh:
-                vehicle_label = veh.get("name") or vehicle_label
-
-    # Adjust price if the customer has hinted at volume/weight
-    if weight_kg and weight_kg > 500:
-        suggested_price = round(suggested_price * (1 + min(2.0, weight_kg / 3000.0)), 2)
-    if volume_m3 and volume_m3 > 10:
-        suggested_price = round(suggested_price * (1 + min(1.5, volume_m3 / 40.0)), 2)
-
-    # International-review handling — do NOT invent pricing for routes we
-    # don't have a configured rule for.
     needs_manual_review = route_class in ("international", "domestic_other", "unsupported")
     origin_name = market_name(pickup_country_code) if pickup_country_code else "United Kingdom"
     dest_name = market_name(dropoff_country_code) if dropoff_country_code else "United Kingdom"
 
+    distance_miles, duration_minutes, source = await resolve_route(
+        pickup_lat, pickup_lng, dropoff_lat, dropoff_lng,
+    )
+
+    if needs_manual_review:
+        return {
+            "distance_miles": distance_miles,
+            "duration_minutes": duration_minutes,
+            "suggested_price": None,
+            "vehicle": "Manual review required",
+            "category_key": LEGACY_CATEGORY_MAP.get(category, category),
+            "source": source,
+            "distance_source": source,
+            "route_class": route_class,
+            "origin_country_code": (pickup_country_code or "GB"),
+            "destination_country_code": (dropoff_country_code or "GB"),
+            "origin_country": origin_name,
+            "destination_country": dest_name,
+            "requires_manual_review": True,
+            "manual_review_message": (
+                f"{origin_name} → {dest_name} routes are supported architecturally but "
+                "pricing for this corridor hasn't been configured yet. Our team will "
+                "provide a bespoke quote within one business day."
+            ),
+        }
+
+    normalized_cat = LEGACY_CATEGORY_MAP.get(category, category)
+    try:
+        breakdown = await calculate_quote(
+            db,
+            distance_miles=distance_miles,
+            duration_minutes=duration_minutes,
+            distance_source=source,
+            service_type=service_type,
+            service_timing=service_timing,
+            transport_category=normalized_cat,
+            weight_kg=weight_kg,
+            volume_m3=volume_m3,
+        )
+    except PricingError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
+
     return {
         "distance_miles": distance_miles,
         "duration_minutes": duration_minutes,
-        "suggested_price": None if needs_manual_review else suggested_price,
-        "vehicle": vehicle_label,
-        "category_key": normalized,
+        "suggested_price": breakdown.driver_charge,
+        "vehicle": breakdown.resolved_vehicle_label,
+        "vehicle_key": breakdown.resolved_vehicle_key,
+        "category_key": normalized_cat,
         "source": source,
-        # Route classification (new — clients can render an international
-        # quote-review card when this is not "domestic_uk").
+        "distance_source": source,
         "route_class": route_class,
         "origin_country_code": (pickup_country_code or "GB"),
         "destination_country_code": (dropoff_country_code or "GB"),
         "origin_country": origin_name,
         "destination_country": dest_name,
-        "requires_manual_review": needs_manual_review,
-        "manual_review_message": (
-            f"{origin_name} → {dest_name} routes are supported architecturally but "
-            "pricing for this corridor hasn't been configured yet. Our team will "
-            "provide a bespoke quote within one business day."
-            if needs_manual_review else None
-        ),
+        "requires_manual_review": False,
+        "manual_review_message": None,
+        # New authoritative fields — clients that upgrade get the full
+        # breakdown; the legacy fields above keep working meanwhile.
+        "line_items": [asdict_line_item(li) for li in breakdown.line_items],
+        "pricing_snapshot": breakdown.pricing_snapshot,
+        "low_confidence_distance": breakdown.low_confidence_distance,
+        "engine_version": breakdown.engine_version,
     }
+
+
+def asdict_line_item(li):
+    return {"key": li.key, "label": li.label, "amount": li.amount, "detail": li.detail}
+
 
 
 @api.get("/jobs/nearby")
@@ -2460,6 +2634,12 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         "stripe_session_id": None,
         "service_timing": job.get("service_timing", "scheduled"),
         "service_type": job.get("service_type", "transport"),
+        # R25 — Copy the job's authoritative pricing_snapshot onto the
+        # booking so historical records are self-describing even if the
+        # job doc is later archived. Never mutated after insert.
+        "pricing_snapshot": job.get("pricing_snapshot"),
+        "pricing_engine_version": job.get("pricing_engine_version"),
+        "distance_source": job.get("distance_source"),
         "created_at": now_iso(),
     }
     await db.bookings.insert_one(booking)

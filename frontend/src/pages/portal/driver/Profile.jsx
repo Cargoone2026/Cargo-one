@@ -78,6 +78,40 @@ export default function DriverProfile() {
     return () => { alive = false; };
   }, [user?.id]);
 
+  const uploadPhoto = useCallback(
+    async (file) => {
+      if (!file) return;
+      setPhotoErr(null);
+      setPhotoBusy(true);
+      try {
+        const dataUrl = await readAndResize(file, 512, 0.85);
+        await api("/users/me/documents", {
+          method: "POST",
+          body: { doc_type: "profile_photo", base64: dataUrl },
+        });
+        await refresh();
+      } catch (ex) {
+        setPhotoErr(ex?.message || "Could not upload photo. Please try a different image.");
+      } finally {
+        setPhotoBusy(false);
+      }
+    },
+    [refresh],
+  );
+
+  const removePhoto = useCallback(async () => {
+    setPhotoErr(null);
+    setPhotoBusy(true);
+    try {
+      await api("/auth/me", { method: "PUT", body: { profile_photo: null } });
+      await refresh();
+    } catch (ex) {
+      setPhotoErr(ex?.message || "Could not remove photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }, [refresh]);
+
   if (!user) return null;
 
   const save = async (e) => {
@@ -117,40 +151,6 @@ export default function DriverProfile() {
       setSaving(false);
     }
   };
-
-  const uploadPhoto = useCallback(
-    async (file) => {
-      if (!file) return;
-      setPhotoErr(null);
-      setPhotoBusy(true);
-      try {
-        const dataUrl = await readAndResize(file, 512, 0.85);
-        await api("/users/me/documents", {
-          method: "POST",
-          body: { doc_type: "profile_photo", base64: dataUrl },
-        });
-        await refresh();
-      } catch (ex) {
-        setPhotoErr(ex?.message || "Could not upload photo. Please try a different image.");
-      } finally {
-        setPhotoBusy(false);
-      }
-    },
-    [refresh],
-  );
-
-  const removePhoto = useCallback(async () => {
-    setPhotoErr(null);
-    setPhotoBusy(true);
-    try {
-      await api("/auth/me", { method: "PUT", body: { profile_photo: null } });
-      await refresh();
-    } catch (ex) {
-      setPhotoErr(ex?.message || "Could not remove photo.");
-    } finally {
-      setPhotoBusy(false);
-    }
-  }, [refresh]);
 
   const phoneMissing = !isValidPhone((user.phone || "").trim());
 

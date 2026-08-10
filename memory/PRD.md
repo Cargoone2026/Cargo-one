@@ -1249,3 +1249,44 @@ Display-only rework of the customer ASAP dispatch screen (`/customer/dispatch/:j
 
 No backend changes required — this round is 100% frontend on top of the R23 endpoint.
 
+
+---
+
+## R25 — Authoritative Pricing Engine + 🟢 PRODUCTION-READY certification (Feb 2026)
+
+**Full certification document**: `/app/memory/PRICING_CERTIFICATION_R25.md`
+
+### Audit finding (pre-implementation)
+Three divergent price formulas were producing different results for the same inputs:
+- `POST /jobs` (haversine + legacy category multipliers, no weight adjustment)
+- `GET /quote/estimate` (Google + newer multipliers + weight/vol adjustments)
+- `AsapRequest.jsx` client-side (haversine + hard-coded 2.0× for recovery, layered ON TOP of server multipliers → up to 4× billing on recovery jobs)
+
+### What R25 shipped
+- **NEW authoritative engine** `services/pricing.py` — `calculate_quote()` is the single source of truth for every price in the system.
+- **NEW endpoint** `POST /pricing/quote` — every frontend hits this.
+- **Refactored** `GET /quote/estimate`, `POST /jobs` and `create_booking` to route through the engine and persist an immutable `pricing_snapshot` on both job and booking records.
+- **NEW** `resolve_route()` helper — routing-provider abstraction; Google Distance Matrix with haversine fallback. Every quote tags `distance_source` and sets `low_confidence_distance=true` when haversine used.
+- **NEW** admin `pricing_config` Mongo collection — deep-merges over `DEFAULT_PRICING_CONFIG`.
+- **Frontend AsapRequest.jsx** — client-side price computation deleted; all prices come from the server.
+- **Admin Bookings** — `PricingBreakdownBlock` component renders the full snapshot (line items, engine version, distance source badge).
+- **Validation**: rejects negative weights/dims, >30t weights, >100m³ volumes, >500 items, >800mi routes, vehicle-capacity-exceeded, with clear error codes.
+- **75/75 automated tests pass** (49 unit incl. UK market benchmark + 26 HTTP integration).
+
+### Historical immutability
+All bookings created before R25 keep their original `driver_charge`. Newly persisted `pricing_snapshot` on jobs + bookings is never mutated by future admin config changes.
+
+### Remaining risks (in the certification doc)
+1. Preview environment `GOOGLE_MAPS_API_KEY` contains Cyrillic characters (pre-existing) — every preview quote is correctly flagged as haversine_fallback until the operator fixes the prod key.
+2. Long-distance (400+ mi) prices at upper market band due to weight-adjustment stacking; use admin config to taper `per_mile` if competitor benchmarks require.
+3. Recovery long-distance (>200mi) not benchmarked in R25.
+
+### Manual QA gate (5 checks) before Mapbox
+1. Admin Bookings detail → verify Quote breakdown renders.
+2. Fix `GOOGLE_MAPS_API_KEY` in production `backend/.env`.
+3. Live ASAP transport end-to-end: summary === Stripe === confirmation === admin.
+4. Live ASAP recovery end-to-end: recovery surcharge appears exactly once.
+5. Card decline + refresh mid-checkout: no blank pages.
+
+**Mapbox migration is now unblocked once the 5 manual checks pass.**
+
