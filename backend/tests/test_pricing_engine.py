@@ -230,6 +230,94 @@ def test_recovery_double_multiplication_bug_regression(db_no_override):
     assert line_keys.count("recovery_surcharge") == 1
 
 
+def test_R251_recovery_ignores_transport_category(db_no_override):
+    """R25.1 — recovery service_type MUST NOT apply transport category
+    multipliers on top of the recovery rate card. That double-counted the
+    'recovery is expensive' premium and produced £1,068 for the 120mi
+    ASAP recovery reported in production (target ~£790).
+
+    Guarantee: passing transport_category='cars_vehicles' to a recovery
+    job produces the EXACT same driver_charge as passing None.
+    """
+    with_cat = _run(_quote(
+        db_no_override, distance_miles=119.6, duration_minutes=130,
+        service_type="breakdown_recovery", service_timing="asap",
+        transport_category="cars_vehicles",
+        vehicle_details={"type": "car"},
+    ))
+    without_cat = _run(_quote(
+        db_no_override, distance_miles=119.6, duration_minutes=130,
+        service_type="breakdown_recovery", service_timing="asap",
+        transport_category=None,
+        vehicle_details={"type": "car"},
+    ))
+    assert with_cat.driver_charge == without_cat.driver_charge, (
+        f"Recovery double-count bug — with cars_vehicles=£{with_cat.driver_charge}, "
+        f"without=£{without_cat.driver_charge}"
+    )
+    # And the price must land in the calibrated UK band for 120mi recovery
+    # ASAP (£700–900 based on RAC/Nationwide public rates Nov 2025).
+    assert 700 <= with_cat.driver_charge <= 900, (
+        f"120mi ASAP recovery £{with_cat.driver_charge} outside UK market band 700-900"
+    )
+    # Snapshot must show category_multiplier of 1.0 for recovery, even
+    # though a non-1.0 category was passed in.
+    assert with_cat.pricing_snapshot["category_multiplier"] == 1.0
+
+
+def test_R251_recovery_ignores_all_transport_categories(db_no_override):
+    """Belt-and-braces: no transport category can leak into a recovery
+    quote regardless of value."""
+    baseline = _run(_quote(
+        db_no_override, distance_miles=50, duration_minutes=90,
+        service_type="breakdown_recovery", service_timing="asap",
+        transport_category=None, vehicle_details={"type": "car"},
+    )).driver_charge
+    for cat in ("cars_vehicles", "vans", "boats_marine", "shipping_containers",
+                "machinery", "freight", "house_moves"):
+        b = _run(_quote(
+            db_no_override, distance_miles=50, duration_minutes=90,
+            service_type="breakdown_recovery", service_timing="asap",
+            transport_category=cat, vehicle_details={"type": "car"},
+        ))
+        assert b.driver_charge == baseline, (
+            f"Recovery with category={cat!r} leaked into price: "
+            f"£{b.driver_charge} vs baseline £{baseline}"
+        )
+
+
+def test_R251_transport_category_still_applies_to_transport(db_no_override):
+    """Sanity: the fix must ONLY affect recovery. Transport jobs still
+    respect transport_category multipliers."""
+    parcels = _run(_quote(
+        db_no_override, distance_miles=50, duration_minutes=90,
+        service_type="transport", transport_category="parcels",
+    ))
+    house_moves = _run(_quote(
+        db_no_override, distance_miles=50, duration_minutes=90,
+        service_type="transport", transport_category="house_moves",
+    ))
+    assert house_moves.driver_charge > parcels.driver_charge
+
+
+def test_R251_multipliers_applied_exactly_once(db_no_override):
+    """Independent maths check: for a known scenario the final price must
+    equal the sum of the SEPARATE surcharge line items — no hidden extra
+    application. Any duplicate multiplier would break this."""
+    b = _run(_quote(
+        db_no_override, distance_miles=119.6, duration_minutes=130,
+        service_type="breakdown_recovery", service_timing="asap",
+        vehicle_details={"type": "car"},
+    ))
+    line_keys = [li.key for li in b.line_items]
+    # Recovery surcharge appears exactly once
+    assert line_keys.count("recovery_surcharge") == 1
+    # ASAP surcharge appears exactly once
+    assert line_keys.count("asap_surcharge") == 1
+    # No category line item appears for recovery
+    assert "category" not in line_keys
+
+
 # ---------------------------------------------------------------------------
 # 7. Validation (impossible inputs)
 # ---------------------------------------------------------------------------

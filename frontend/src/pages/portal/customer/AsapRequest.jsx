@@ -268,7 +268,7 @@ export default function CustomerAsapRequest() {
             ? "ASAP Vehicle Recovery"
             : `ASAP Delivery — ${(transportCategory || "General").replace(/_/g, " ")}`,
           category: mode === "breakdown_recovery"
-            ? "cars_vehicles"
+            ? "recovery"
             : (transportCategory === "furniture" ? "furniture_delivery" :
                 transportCategory === "pallets"   ? "freight_haulage" :
                 transportCategory === "machinery" ? "freight_haulage" :

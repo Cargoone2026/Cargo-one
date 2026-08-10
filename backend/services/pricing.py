@@ -486,9 +486,18 @@ async def calculate_quote(
     subtotal_route = base + distance_charge + time_charge
 
     # ---- 4. Category / weight / volume adjustments ---------------------
-    category_mult = float(
-        cfg["category_multipliers"].get(transport_category or "", 1.0)
-    )
+    # R25.1 — Recovery has its OWN specialist rate card + `recovery_multiplier`.
+    # Applying a transport category multiplier (e.g. cars_vehicles=1.35) on
+    # top double-counts the "vehicle recovery is expensive" premium and
+    # produces the £1,068 for a 120mi recovery bug reported in production.
+    # For recovery service_type we deliberately ignore `transport_category`
+    # — a category mult only makes sense for transport work.
+    if service_type == "breakdown_recovery":
+        category_mult = 1.0
+    else:
+        category_mult = float(
+            cfg["category_multipliers"].get(transport_category or "", 1.0)
+        )
     weight_add = _band_lookup(cfg["weight_bands"], "kg", float(weight_kg or 0))
     volume_add = _band_lookup(cfg["volume_bands"], "m3", float(volume_m3 or 0))
     adjustment = subtotal_route * category_mult * (1.0 + weight_add + volume_add)

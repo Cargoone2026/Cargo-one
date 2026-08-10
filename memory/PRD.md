@@ -1290,3 +1290,73 @@ All bookings created before R25 keep their original `driver_charge`. Newly persi
 
 **Mapbox migration is now unblocked once the 5 manual checks pass.**
 
+
+---
+
+## R25.1 — Recovery Double-Multiplication Bug Fix (Feb 2026)
+
+**Reported by operator manual QA**: ASAP Recovery to Smethwick (119.6mi, 2h10) showed **£1,068.50 driver + £106.85 fee = £1,175.35 total**. Two problems:
+1. Price too high vs UK market (~£700–900 band).
+2. Price displayed on the quote screen differed from the price at booking / Stripe.
+
+### Root cause
+
+The pricing engine was applying the **transport** category multiplier (`cars_vehicles = 1.35`) on top of the dedicated **recovery rate card** + `recovery_multiplier` (1.30) + `asap_multiplier` (1.20). Triple-stacking the "recovery is expensive" premium:
+
+```
+£75 base + 120mi × £2.80 + 130min × £0.75 = £508.50 route
+× 1.35 (cars_vehicles category)  ← BUG: transport mult applied to recovery
+× 1.30 (recovery_multiplier)
+× 1.20 (asap_multiplier)
+= £1,070 driver charge
+```
+
+The screen-to-screen divergence was a downstream effect:
+- `/pricing/quote` received `transport_category=null` from the AsapRequest form (correct) → £791.
+- `/jobs` received `category="cars_vehicles"` from the same form (wrong) → £1,068.
+
+### Fix
+
+Two-line engine change (`services/pricing.py`):
+
+```python
+if service_type == "breakdown_recovery":
+    category_mult = 1.0     # recovery ignores transport_category entirely
+else:
+    category_mult = cfg["category_multipliers"].get(transport_category or "", 1.0)
+```
+
+Defensive frontend change (`AsapRequest.jsx`): recovery submissions now send `category="recovery"` instead of `"cars_vehicles"` — belt-and-braces so if any other path adds a category lookup in the future, it can't leak into recovery.
+
+### Post-fix numbers (verified end-to-end HTTP integration)
+
+Exact Smethwick scenario (105mi haversine — production Google-road would be 119.6mi):
+- **Screen 1 `/pricing/quote`**: driver £797.85 · fee £95.74 · total £893.59
+- **Screen 2 `/jobs` fixed_price**: **£797.85** ✅ matches
+- **Screen 3 `/bookings`**: driver £797.85 · fee £95.74 · deposit £95.74 · total £893.59 ✅ matches
+
+Three screens agree. Stripe collects deposit = booking fee = £95.74. Driver receives balance = £797.85 on delivery.
+
+### Historical prices preserved
+
+R25.1 changes only the LIVE engine; the immutable `pricing_snapshot` persisted on existing jobs + bookings is unchanged. No historical booking was rewritten.
+
+### Regression coverage
+
+- **57/57 pricing tests pass** (49 existing + 4 new unit tests + 4 new HTTP integration tests).
+- New tests specifically prove:
+  - Recovery with `transport_category='cars_vehicles'` produces the SAME driver_charge as with `transport_category=null`.
+  - Recovery with ANY transport category leaks NOTHING into the price.
+  - Transport category multipliers STILL apply to transport jobs (regression not introduced).
+  - Screen 1 == Screen 2 == Screen 3 for the exact Smethwick scenario.
+  - 120mi ASAP recovery lands in the £700–900 UK market band.
+
+### Files changed
+
+- `/app/backend/services/pricing.py` — recovery ignores transport_category.
+- `/app/frontend/src/pages/portal/customer/AsapRequest.jsx` — sends `category="recovery"` for recovery jobs.
+- `/app/backend/tests/test_pricing_engine.py` — 4 new unit tests.
+- `/app/backend/tests/test_final_qa_r25_1_screen_consistency.py` — 4 new HTTP integration tests.
+
+**Mapbox migration remains BLOCKED until the operator manually re-verifies one live ASAP Recovery booking end-to-end.**
+
