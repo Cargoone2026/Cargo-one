@@ -1250,43 +1250,78 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     pricing_line_items: Optional[list] = None
 
     if route_class == "domestic_uk":
-        from services.pricing import calculate_quote, PricingError
+        # R26 — ASAP jobs route through services/asap_pricing.py; scheduled
+        # continues through services/pricing.py. This isolation protects
+        # existing Bidding + Fixed Price pricing from any ASAP changes.
         distance_miles, duration_minutes, distance_source = await resolve_route(
             data["pickup_lat"], data["pickup_lng"],
             data["dropoff_lat"], data["dropoff_lng"],
         )
-        # Normalise the customer-facing category slug (legacy → new).
         raw_category = data.get("category") or data.get("transport_category")
         normalized_category = LEGACY_CATEGORY_MAP.get(raw_category, raw_category)
 
-        try:
-            breakdown = await calculate_quote(
-                db,
-                distance_miles=distance_miles,
-                duration_minutes=duration_minutes,
-                distance_source=distance_source,
-                service_type=service_type,
-                service_timing=service_timing,
-                transport_category=normalized_category,
-                weight_kg=data.get("weight_kg"),
-                volume_m3=(
-                    (data.get("length_m") or 0) * (data.get("width_m") or 0) * (data.get("height_m") or 0)
-                    if data.get("length_m") and data.get("width_m") and data.get("height_m")
-                    else None
-                ),
-                item_count=data.get("item_count"),
-                needs_forklift=bool(data.get("needs_forklift")),
-                needs_loading_help=bool(data.get("needs_loading_help")),
-                vehicle_details=data.get("vehicle_details"),
-            )
-        except PricingError as exc:
-            raise HTTPException(status_code=422, detail={
-                "code": exc.code, "message": str(exc),
-            })
-
-        suggested_price = breakdown.driver_charge
-        pricing_snapshot = breakdown.pricing_snapshot
-        pricing_line_items = [asdict_line_item(li) for li in breakdown.line_items]
+        if service_timing == "asap":
+            from services.asap_pricing import calculate_asap_quote, AsapPricingError
+            try:
+                b = await calculate_asap_quote(
+                    db,
+                    distance_miles=distance_miles,
+                    duration_minutes=duration_minutes,
+                    distance_source=distance_source,
+                    pickup_lat=data["pickup_lat"], pickup_lng=data["pickup_lng"],
+                    service_type=service_type,
+                    urgency=data.get("urgency"),
+                    collection_within_minutes=data.get("collection_within_minutes"),
+                    requested_vehicle_key=data.get("requested_vehicle_key"),
+                    vehicle_class=(data.get("vehicle_details") or {}).get("weight_class")
+                                    or (data.get("vehicle_details") or {}).get("type"),
+                    weight_kg=data.get("weight_kg"),
+                    volume_m3=(
+                        (data.get("length_m") or 0) * (data.get("width_m") or 0) * (data.get("height_m") or 0)
+                        if data.get("length_m") and data.get("width_m") and data.get("height_m")
+                        else None),
+                    pallets=data.get("pallets"),
+                    item_count=data.get("item_count"),
+                    loading_help=bool(data.get("needs_loading_help")),
+                    calculate_booking_fee_detail=calculate_booking_fee_detail,
+                )
+            except AsapPricingError as exc:
+                raise HTTPException(status_code=422, detail={
+                    "code": exc.code, "message": str(exc)})
+            suggested_price = b.driver_charge
+            pricing_snapshot = b.pricing_snapshot
+            pricing_line_items = [asdict_line_item(li) for li in b.line_items]
+            recommended_vehicle_label = b.resolved_vehicle_label
+            recommended_vehicle_key = b.resolved_vehicle_key
+        else:
+            from services.pricing import calculate_quote, PricingError
+            try:
+                breakdown = await calculate_quote(
+                    db,
+                    distance_miles=distance_miles,
+                    duration_minutes=duration_minutes,
+                    distance_source=distance_source,
+                    service_type=service_type,
+                    service_timing=service_timing,
+                    transport_category=normalized_category,
+                    weight_kg=data.get("weight_kg"),
+                    volume_m3=(
+                        (data.get("length_m") or 0) * (data.get("width_m") or 0) * (data.get("height_m") or 0)
+                        if data.get("length_m") and data.get("width_m") and data.get("height_m")
+                        else None),
+                    item_count=data.get("item_count"),
+                    needs_forklift=bool(data.get("needs_forklift")),
+                    needs_loading_help=bool(data.get("needs_loading_help")),
+                    vehicle_details=data.get("vehicle_details"),
+                )
+            except PricingError as exc:
+                raise HTTPException(status_code=422, detail={
+                    "code": exc.code, "message": str(exc)})
+            suggested_price = breakdown.driver_charge
+            pricing_snapshot = breakdown.pricing_snapshot
+            pricing_line_items = [asdict_line_item(li) for li in breakdown.line_items]
+            recommended_vehicle_label = breakdown.resolved_vehicle_label
+            recommended_vehicle_key = breakdown.resolved_vehicle_key
     else:
         # Non-UK route — record haversine for admin sanity but never quote.
         distance_miles = round(
@@ -1334,7 +1369,10 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
         job["recommended_vehicle"] = _derive_suitable_vehicle(job)
     # Prefer the engine's resolved vehicle label when one is available —
     # keeps the "Suitable vehicle" chip aligned with the pricing.
-    if pricing_snapshot and (pricing_snapshot.get("resolved_vehicle_key")):
+    if 'recommended_vehicle_label' in dir() and recommended_vehicle_label:
+        job["recommended_vehicle"] = recommended_vehicle_label
+        job["recommended_vehicle_key"] = recommended_vehicle_key
+    elif pricing_snapshot and (pricing_snapshot.get("resolved_vehicle_key")):
         veh_key = pricing_snapshot["resolved_vehicle_key"]
         veh_row = pricing_snapshot.get("vehicle_rate_card") or {}
         job["recommended_vehicle"] = veh_row.get("label") or job["recommended_vehicle"]
@@ -1355,6 +1393,96 @@ async def my_jobs(user: dict = Depends(require_role("customer"))):
 # calls THIS. The legacy /quote/estimate below is preserved as a thin
 # adapter around the same engine so no client breaks.
 # ---------------------------------------------------------------------------
+
+
+
+# ---------------------------------------------------------------------------
+# R26 — ASAP-only pricing engine V1 (services/asap_pricing.py). Scheduled
+# Fixed / Bidding paths continue to use services/pricing.py — untouched.
+# ---------------------------------------------------------------------------
+
+
+class AsapQuoteBody(BaseModel):
+    pickup_lat: float
+    pickup_lng: float
+    dropoff_lat: float
+    dropoff_lng: float
+    service_type: Optional[str] = "transport"
+    urgency: Optional[str] = "asap"
+    collection_within_minutes: Optional[int] = None
+    when_iso: Optional[str] = None
+    requested_vehicle_key: Optional[str] = None
+    vehicle_class: Optional[str] = None
+    weight_kg: Optional[float] = None
+    volume_m3: Optional[float] = None
+    pallets: Optional[int] = None
+    item_count: Optional[int] = None
+    waiting_minutes: Optional[int] = None
+    extra_stops: Optional[int] = None
+    loading_help: Optional[bool] = False
+    tail_lift_needed: Optional[bool] = False
+    nearest_driver_distance_mi: Optional[float] = None
+    pickup_country_code: Optional[str] = None
+
+
+@api.post("/asap/quote")
+async def asap_quote(payload: AsapQuoteBody,
+                       user: dict = Depends(get_current_user)):
+    """Authoritative ASAP quote. Scheduled/Bidding continue to use
+    /pricing/quote — this endpoint is ASAP-only."""
+    from services.asap_pricing import calculate_asap_quote, AsapPricingError
+    distance_miles, duration_minutes, distance_source = await resolve_route(
+        payload.pickup_lat, payload.pickup_lng,
+        payload.dropoff_lat, payload.dropoff_lng,
+    )
+    try:
+        b = await calculate_asap_quote(
+            db,
+            distance_miles=distance_miles,
+            duration_minutes=duration_minutes,
+            distance_source=distance_source,
+            pickup_lat=payload.pickup_lat, pickup_lng=payload.pickup_lng,
+            service_type=payload.service_type or "transport",
+            urgency=payload.urgency,
+            collection_within_minutes=payload.collection_within_minutes,
+            when_iso=payload.when_iso,
+            requested_vehicle_key=payload.requested_vehicle_key,
+            vehicle_class=payload.vehicle_class,
+            weight_kg=payload.weight_kg, volume_m3=payload.volume_m3,
+            pallets=payload.pallets, item_count=payload.item_count,
+            waiting_minutes=payload.waiting_minutes,
+            extra_stops=payload.extra_stops,
+            loading_help=bool(payload.loading_help),
+            tail_lift_needed=bool(payload.tail_lift_needed),
+            nearest_driver_distance_mi=payload.nearest_driver_distance_mi,
+            pickup_country_code=payload.pickup_country_code,
+            calculate_booking_fee_detail=calculate_booking_fee_detail,
+        )
+    except AsapPricingError as exc:
+        raise HTTPException(status_code=422,
+                              detail={"code": exc.code, "message": str(exc)})
+
+    # Audit-log every ASAP quote for future analytics (spec §44).
+    try:
+        await db.asap_quote_audit.insert_one({
+            "id": new_id(),
+            "user_id": user["id"],
+            "pricing_engine_version": b.engine_version,
+            "distance_miles": distance_miles,
+            "distance_source": distance_source,
+            "driver_charge": b.driver_charge,
+            "booking_fee_percent": b.booking_fee_percent,
+            "booking_fee": b.booking_fee,
+            "customer_total": b.customer_total,
+            "resolved_vehicle_key": b.resolved_vehicle_key,
+            "snapshot": b.pricing_snapshot,
+            "created_at": now_iso(),
+        })
+    except Exception:
+        logger.exception("asap_quote_audit insert failed; continuing")
+    return b.to_dict()
+
+
 
 
 class PricingQuoteBody(BaseModel):
@@ -1383,6 +1511,56 @@ async def pricing_quote(payload: PricingQuoteBody,
     scheduled job composer, admin re-quote — calls this and displays the
     returned figures verbatim. Booking-fee band is applied ON TOP by
     /bookings creation using the same driver_charge value."""
+    # R26 — ASAP mode routes through the V1 ASAP engine so /pricing/quote
+    # and /jobs and /bookings never disagree. Scheduled continues via
+    # services/pricing.py.
+    if (payload.service_timing or "scheduled") == "asap":
+        from services.asap_pricing import calculate_asap_quote, AsapPricingError
+        distance_miles, duration_minutes, distance_source = await resolve_route(
+            payload.pickup_lat, payload.pickup_lng,
+            payload.dropoff_lat, payload.dropoff_lng,
+        )
+        try:
+            b = await calculate_asap_quote(
+                db,
+                distance_miles=distance_miles,
+                duration_minutes=duration_minutes,
+                distance_source=distance_source,
+                pickup_lat=payload.pickup_lat, pickup_lng=payload.pickup_lng,
+                service_type=payload.service_type or "transport",
+                urgency="asap",
+                requested_vehicle_key=payload.requested_vehicle_key,
+                vehicle_class=(payload.vehicle_details or {}).get("weight_class")
+                                or (payload.vehicle_details or {}).get("type"),
+                weight_kg=payload.weight_kg,
+                volume_m3=payload.volume_m3,
+                item_count=payload.item_count,
+                loading_help=bool(payload.needs_loading_help),
+                calculate_booking_fee_detail=calculate_booking_fee_detail,
+            )
+        except AsapPricingError as exc:
+            raise HTTPException(status_code=422,
+                                  detail={"code": exc.code, "message": str(exc)})
+        result = b.to_dict()
+        # Preserve legacy /pricing/quote response fields for backwards compat.
+        result.update({
+            "route_class": "domestic_uk",
+            "requires_manual_review": b.manual_review,
+            "subtotal": b.driver_charge,
+            "distance_miles": distance_miles,
+            "duration_minutes": duration_minutes,
+            "distance_source": distance_source,
+            "resolved_vehicle_key": b.resolved_vehicle_key,
+            "resolved_vehicle_label": b.resolved_vehicle_label,
+            "low_confidence_distance": distance_source == "haversine_fallback",
+            "service_timing": "asap",
+            "service_type": payload.service_type or "transport",
+            "booking_fee_preview": b.booking_fee,
+            "customer_total_preview": b.customer_total,
+            "booking_fee_source": "bands",
+        })
+        return result
+
     from services.pricing import calculate_quote, PricingError
 
     # International routes: keep the manual-review contract; do NOT quote.

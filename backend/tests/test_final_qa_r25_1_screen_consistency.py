@@ -54,13 +54,16 @@ SMETHWICK_ROUTE = {
 
 def test_R251_smethwick_recovery_below_1000(cust_token):
     """The bug produced £1,068 — the fix must land the same journey below
-    £1,000 driver charge and inside a defensible UK recovery band."""
+    £1,000 driver charge. R26 note: ASAP now routes through V1 engine which
+    has a different snapshot shape; this test uses service_timing=scheduled
+    to keep exercising the R25 (services/pricing.py) engine which still
+    handles scheduled Fixed + Bidding."""
     r = requests.post(f"{API}/pricing/quote", headers={
         "Authorization": f"Bearer {cust_token}"
     }, json={
         **SMETHWICK_ROUTE,
         "service_type": "breakdown_recovery",
-        "service_timing": "asap",
+        "service_timing": "scheduled",
         "transport_category": "cars_vehicles",   # the buggy input
         "vehicle_details": {"type": "car"},
     }, timeout=15)
@@ -72,7 +75,7 @@ def test_R251_smethwick_recovery_below_1000(cust_token):
     )
     assert q["pricing_snapshot"]["category_multiplier"] == 1.0
     assert q["pricing_snapshot"]["recovery_multiplier"] == 1.30
-    assert q["pricing_snapshot"]["asap_multiplier"] == 1.20
+    assert q["pricing_snapshot"]["asap_multiplier"] is None
 
 
 def test_R251_recovery_category_ignored_in_quote(cust_token):
@@ -190,13 +193,13 @@ def test_R251_transport_price_regression_not_broken(cust_token):
     parcels = requests.post(f"{API}/pricing/quote", headers=headers, json={
         **SMETHWICK_ROUTE,
         "service_type": "transport",
-        "service_timing": "asap",
+        "service_timing": "scheduled",
         "transport_category": "parcels",
     }, timeout=15).json()
     house_moves = requests.post(f"{API}/pricing/quote", headers=headers, json={
         **SMETHWICK_ROUTE,
         "service_type": "transport",
-        "service_timing": "asap",
+        "service_timing": "scheduled",
         "transport_category": "house_moves",
     }, timeout=15).json()
     assert house_moves["driver_charge"] > parcels["driver_charge"], (

@@ -1360,3 +1360,59 @@ R25.1 changes only the LIVE engine; the immutable `pricing_snapshot` persisted o
 
 **Mapbox migration remains BLOCKED until the operator manually re-verifies one live ASAP Recovery booking end-to-end.**
 
+
+---
+
+## R26 — ASAP Pricing Engine V1 (Feb 2026)
+
+**Scope**: ASAP Transport + ASAP Recovery only. Scheduled Fixed and Bidding untouched. Existing Booking Fee Bands untouched (used as commercial layer on top).
+
+### What ships
+- **NEW `services/asap_pricing.py`** (~500 LOC) — engine `ASAP-V1.0` with:
+  - 20 transport vehicle classes + 12 recovery vehicle classes (tail-lift = separate class, not surcharge).
+  - Progressive mileage curves — goods (100/94/88/82/76/72%) + heavy (100/95/90/85%).
+  - ASAP premium **15%** (down from R25's 20%).
+  - Collection-window urgency uplifts (5/8/12/15/20/25%).
+  - Night uplifts (20:00–02:00 = +8/+15/+20%).
+  - Weekend +8% Sat / +15% Sun.
+  - UK bank holiday calendar with per-day uplifts (default +15%, Christmas +50%, etc.).
+  - Live driver-supply uplift — counts eligible drivers within vehicle-specific wide radius.
+  - Dead-mileage uplift for recovery (repositioning cost).
+  - Waiting (per-class £/30min block after 15min free), extra stops (£15/£12/£10), loading help (per-class).
+  - Multiplier stacking capped at +50% (heavy: +80%).
+  - Regional multipliers (UK/IE/NI/EU).
+  - Vehicle auto-pick tiers by weight/volume/pallets.
+  - Immutable pricing_snapshot with every input, uplift, rate, driver_charge_pre_min, minimum_charge, driver_charge_rounded, booking_fee_percent, booking_fee, customer_total, engine_version.
+  - Booking fee delegated to existing `calculate_booking_fee_detail` — NEVER duplicated.
+  - Validation: negative/absurd weight, volume, items, distance → clear error codes.
+- **NEW endpoint `POST /asap/quote`** — server-authoritative ASAP quotes with every quote persisted in new `asap_quote_audit` collection.
+- **`POST /jobs` for ASAP** now routes through V1 engine; scheduled continues through `services/pricing.py` (isolated).
+- **`POST /pricing/quote` for `service_timing=asap`** now also routes through V1 engine so `/pricing/quote` and `/jobs` and `/bookings` never disagree.
+- **Frontend `AsapRequest.jsx`** — calls `POST /asap/quote`, displays returned `driver_charge` and `booking_fee` verbatim.
+
+### Verified end-to-end
+Smethwick recovery scenario (the £1,068 production bug):
+- `/asap/quote` → £295
+- `/pricing/quote` → £295
+- `/jobs.fixed_price` → £295
+- Three-way consistency ✅
+
+### Test coverage
+**85/85 tests pass**: 28 new R26 (unit + HTTP integration) + 8 R25.1 (updated to point at scheduled path) + 49 R25 regression. Covers: progressive mileage, ASAP 15% premium, +50% cap, recovery isolation from transport categories, vehicle auto-pick, validation, snapshot immutability, screen consistency, audit-log persistence, booking-fee band delegation, scheduled path untouched.
+
+### Historical immutability
+Every existing job/booking keeps its original `pricing_snapshot` — R26 only affects newly-created ASAP quotes.
+
+### Deferred (per user)
+- Tolls (route-specific)
+- International ferry/eurotunnel actual crossings (regional multiplier is in)
+- Driver acceptance escalation (£98→£102 mechanism)
+- Customer-facing VAT surface
+- ML
+- Admin rate-card editing UI (config lives in Mongo `asap_pricing_config`, editable via direct Mongo update or a future admin page)
+
+### Manual QA gate before certification
+User to run one live ASAP Transport + one live ASAP Recovery booking end-to-end and confirm the quote screen, booking screen, Stripe amount, confirmation and admin breakdown all agree.
+
+**Mapbox migration STILL BLOCKED** until user manually signs off R26.
+

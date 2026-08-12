@@ -1,0 +1,53 @@
+{
+  "summary": "R26 ASAP Pricing Engine V1 validated end-to-end. Wrote /app/backend/tests/test_asap_pricing_r26.py — 28/28 passing across direct engine unit tests + HTTP integration (A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,T all green). Regression: 105/106 legacy tests pass; the pre-existing R25.1 test_R251_screens_agree_end_to_end FAILS because /pricing/quote (old services/pricing.py) still owns ASAP preview and diverges from /jobs.fixed_price (now routed via asap_pricing.py). Frontend AsapRequest.jsx already migrated to POST /asap/quote (verified by code inspection). No self-fixes required — engine + endpoint are working per spec.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/pricing/quote (service_timing=asap)",
+        "issue": "Old services/pricing.py engine still handles /pricing/quote for ASAP mode; /jobs (service_timing=asap) is now routed through the new services/asap_pricing.py engine. Any client that still previews via /pricing/quote gets a different driver_charge than the one it will be charged. Breaks R25.1 screen-consistency guard (£797.85 preview vs £295.00 job).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "services/asap_pricing.py:_time_uplifts",
+        "issue": "Type hint says '-> tuple[float, float, str]' but function returns a 4-tuple (night, weekend, bh_label, bh). Callers unpack 4 correctly — cosmetic only."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_asap_pricing_r26.py",
+    "/app/test_reports/pytest/r26.xml"
+  ],
+  "action_items": [
+    "Route /api/pricing/quote through services/asap_pricing.calculate_asap_quote when payload.service_timing == 'asap' so /pricing/quote and /jobs give identical driver_charge (fixes R25.1 test_R251_screens_agree_end_to_end regression). Alternative: officially deprecate the ASAP branch of /pricing/quote and update the R25.1 test to preview via /asap/quote — but note the FE contract for backwards compatibility.",
+    "Fix cosmetic type hint on _time_uplifts (declare 4-tuple)."
+  ],
+  "critical_code_review_comments": [
+    "services/asap_pricing.py is a clean, well-structured 688-LOC module with defaults, config override, immutable snapshot, and delegated booking-fee — no DRY violations found.",
+    "Recovery is fully isolated from transport rate cards + transport_category multipliers — R25.1 regression correctly guarded inside the engine (E test green).",
+    "ASAP premium 0.15 lives in urgency_levels.asap; the default_urgency='asap' selector makes it the natural default.",
+    "Uplift stacking is capped correctly (heavy=0.80, else 0.50) via min(raw, ceiling); capped flag is written into snapshot and surfaced as a line item.",
+    "Progressive mileage bands correctly gate distance; verified 300mi LWB = £267 (not £450 flat).",
+    "asap_quote_audit collection persists every /asap/quote call with a full snapshot — Q verified.",
+    "/api/pricing/quote still runs ASAP through legacy engine → HIGH-priority action item to unify or explicitly deprecate ASAP on /pricing/quote."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_asap_pricing_r26.py"
+  ],
+  "success_rate": {
+    "backend": "99% (28/28 new R26 + 105/106 regression)",
+    "frontend": "verified via code inspection (AsapRequest.jsx calls POST /asap/quote and renders driver_charge/booking_fee)"
+  },
+  "test_credentials": "testcustomer@example.com / CustomerTest12345! (used for all authenticated HTTP tests)",
+  "seed_data_creation": "none — screen-consistency test creates+deletes its own job & booking",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full R26 acceptance covered in /app/backend/tests/test_asap_pricing_r26.py (28 tests). Only regression: R25.1 test_R251_screens_agree_end_to_end — /pricing/quote (old engine) diverges from /jobs (new asap engine) when service_timing='asap'. After main agent fixes /pricing/quote routing, re-run: `cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_asap_pricing_r26.py tests/test_final_qa_r25_1_screen_consistency.py -v`.",
+  "rca of the issue": "R26 refactored POST /jobs to branch service_timing=='asap' to services/asap_pricing.calculate_asap_quote, but POST /pricing/quote was left untouched — it still calls services/pricing.calculate_quote for every payload regardless of service_timing. The R25.1 screen-consistency test previews via /pricing/quote then creates a job via /jobs; the two now use different engines and therefore return different driver_charge values (£797.85 vs £295.00 for Smethwick recovery). Mitigation: inside POST /pricing/quote handler, add the same service_timing=='asap' branch that /jobs already has, delegating to calculate_asap_quote when appropriate. This gives us a single ASAP source of truth across preview and job creation."
+}

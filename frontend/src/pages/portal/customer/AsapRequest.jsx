@@ -191,7 +191,7 @@ export default function CustomerAsapRequest() {
              transportCategory === "machinery"        ? "freight_haulage"    :
              transportCategory                        ? transportCategory    :
              "package_delivery");
-        const q = await api("/pricing/quote", {
+        const q = await api("/asap/quote", {
           method: "POST",
           body: {
             pickup_lat: pickup.lat,
@@ -199,19 +199,29 @@ export default function CustomerAsapRequest() {
             dropoff_lat: dropoff.lat,
             dropoff_lng: dropoff.lng,
             service_type: mode,
-            service_timing: "asap",
-            transport_category: mode === "transport" ? cat : null,
+            urgency: "asap",
+            vehicle_class: mode === "breakdown_recovery"
+              ? (vehicle?.weight_class || vehicle?.type || null)
+              : null,
             weight_kg: mode === "transport" && asapWeightKg ? Number(asapWeightKg) : null,
             volume_m3: mode === "transport" && asapLengthM && asapWidthM && asapHeightM
               ? Number(asapLengthM) * Number(asapWidthM) * Number(asapHeightM)
               : null,
             item_count: mode === "transport" && asapItemCount ? Number(asapItemCount) : null,
-            needs_forklift: mode === "transport" ? Boolean(needsForklift) : false,
-            needs_loading_help: mode === "transport" ? Boolean(needsLoadingHelp) : false,
-            vehicle_details: mode === "breakdown_recovery" ? vehicle : null,
+            loading_help: mode === "transport" ? Boolean(needsLoadingHelp) : false,
+            tail_lift_needed: mode === "transport" ? Boolean(needsForklift) : false,
           },
         });
-        if (!cancelled) setQuote(q);
+        // Map new ASAP-engine response into the existing shape the summary
+        // card expects. driver_charge is authoritative; booking_fee comes
+        // straight from the engine (existing bands, applied once).
+        if (!cancelled) setQuote({
+          ...q,
+          suggested_price: q.driver_charge,      // legacy alias
+          booking_fee_preview: q.booking_fee,
+          booking_fee_percent: q.booking_fee_percent,
+          customer_total_preview: q.customer_total,
+        });
       } catch (e) {
         if (!cancelled) {
           // Surface pricing-engine validation errors (e.g. impossible
