@@ -1457,3 +1457,35 @@ Ran all six owner-mandated pre-production checks. Result: 4 PASS, 2 NEEDS FIX, 1
 
 **Mapbox migration STILL BLOCKED** until owner manually signs off R26.
 
+
+
+## R26.2 — Customer-facing ASAP TRANSPORT vehicle picker (Feb 2026)
+
+### What shipped
+- **Backend:** new `GET /api/asap/vehicles` returns a display catalogue for both transport (20) and recovery (12) classes; each entry has key/label/minimum_charge/per_mile/requires_manual_review/tail_lift. Live-reads admin overrides from `asap_pricing_config` if present.
+- **Backend:** `_pick_transport_vehicle` now uses a `transport_vehicle_size_ranks` table to detect when the customer picks a class strictly smaller than the auto-recommended minimum for their load. In that case the engine raises `AsapPricingError(code="vehicle_too_small")` with a message naming the requested vehicle AND the recommended class.
+- **Backend:** `JobCreate` model + `AsapQuoteBody` accept `requested_vehicle_key` (validated by the engine; unknown keys silently fall back to auto-recommend).
+- **Frontend:** new dropdown in `AsapRequest.jsx` (`[data-testid=asap-vehicle-select]`) lists all 20 transport classes with "Recommend a vehicle for me" as default. Picks are forwarded to both `/api/asap/quote` and `/api/jobs`. Auto-attaches `tail_lift_needed=true` when a Tail-Lift class is selected. Renders a friendly, parsed message when the engine returns `vehicle_too_small`.
+- **Frontend:** `AddressAutocomplete` now accepts either `testID` or `data-testid` as prop.
+
+### Verified by testing agent (Playwright, live preview)
+Sign-off scenario: **LWB Van 25 mi ASAP → £70.00 / £10.50 @ 15% / £80.50**.
+Recovery scenario: **3.5T Recovery 25 mi ASAP → £110.00 / £16.50 @ 15% / £126.50**.
+Both flows drove: quote → summary panel → confirm button → `/api/jobs` 200 → `/api/bookings` 200 → `/deposit` 200 → Stripe checkout with the exact fee amount. Stopped BEFORE card entry as instructed.
+Vehicle-too-small validation surfaces a plain-English error naming the too-small class and the recommended class.
+Articulated HGV 25 mi → £400 / £52.00 @ 13% / £452.00 with `resolved_vehicle_key="articulated_hgv"`.
+Seven per-vehicle API smoke tests all green.
+International guardrail (R26.1) still fires on both endpoints.
+
+### Test coverage
+**174 pricing + fee + snapshot + E2E-certification tests pass, 0 fail** (up from 162 after R26.2 UI). Files:
+- `backend/tests/test_asap_pricing_r26_2.py` — 41 tests
+- `backend/tests/test_r26_2_e2e_certification.py` — 12 tests (created by testing agent)
+- Plus R26/R26.1/R25.1/booking-fee bands.
+
+### Open items (all NON-BLOCKING for R26)
+- **Stripe payment step**: owner clicks 4242 4242 4242 4242 on the two captured `cs_test_…` checkout sessions from either the R26.1 or R26.2 E2E, then testing agent can be re-invoked to verify booking-confirmed → BookingDetail → admin → driver → Mongo `pricing_snapshot`.
+- **AsapRequest.jsx size**: file is now 920 lines. R26.3 candidate — cosmetic refactor, no behaviour change.
+
+### Frozen since R26 shipped
+Recovery pricing • Booking Fee Bands • Fixed pricing • Bidding • Scheduled pricing • R26.1 dead-mileage logic • International guardrail • Pricing snapshot architecture • Stripe integration • Historical bookings • RouteMap • DriverLiveMap • Available Jobs Map. Mapbox migration remains **HARD-BLOCKED** until owner says "R26 signed off".

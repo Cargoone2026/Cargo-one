@@ -306,6 +306,8 @@ class JobCreate(BaseModel):
     # Session G-1 — ASAP transport-details (what is being sent + free text)
     transport_category: Optional[str] = None
     transport_description: Optional[str] = None
+    # R26.2 — ASAP customer-picked vehicle class. Null = auto-recommend.
+    requested_vehicle_key: Optional[str] = None
 
 
 class BidCreate(BaseModel):
@@ -1424,6 +1426,38 @@ class AsapQuoteBody(BaseModel):
     nearest_driver_distance_mi: Optional[float] = None
     pickup_country_code: Optional[str] = None
     dropoff_country_code: Optional[str] = None
+
+
+@api.get("/asap/vehicles")
+async def asap_vehicles_catalog():
+    """Public read-only catalog for the customer-facing ASAP vehicle
+    picker (R26.2). Returns transport + recovery classes with their
+    labels, keys, minimum charge and per-mile rate. The pricing engine
+    remains authoritative — this endpoint is display metadata only."""
+    from services.asap_pricing import ASAP_DEFAULT_CONFIG
+    def _fmt(vs):
+        return [
+            {
+                "key": k,
+                "label": v["label"],
+                "minimum_charge": v["minimum_charge"],
+                "per_mile": v["per_mile"],
+                "requires_manual_review": bool(v.get("manual_review")),
+                "tail_lift": k.endswith("_tail_lift"),
+            }
+            for k, v in vs.items()
+        ]
+    cfg = ASAP_DEFAULT_CONFIG
+    # Admin override lives in Mongo asap_pricing_config.transport_vehicles /
+    # recovery_vehicles. Read it live so admin edits reflect immediately.
+    override = await db.asap_pricing_config.find_one({"_id": "active"}) or {}
+    transport_vehicles = override.get("transport_vehicles") or cfg["transport_vehicles"]
+    recovery_vehicles  = override.get("recovery_vehicles")  or cfg["recovery_vehicles"]
+    return {
+        "engine_version": cfg["version"],
+        "transport": _fmt(transport_vehicles),
+        "recovery":  _fmt(recovery_vehicles),
+    }
 
 
 @api.post("/asap/quote")

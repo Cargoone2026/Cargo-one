@@ -44,6 +44,12 @@ export default function CustomerAsapRequest() {
   const [asapWidthM, setAsapWidthM] = useState("");
   const [asapHeightM, setAsapHeightM] = useState("");
   const [photos, setPhotos] = useState([]); // Round 3 — multi-photo attachment for BOTH transport + recovery
+  // R26.2 — Customer-picked ASAP TRANSPORT vehicle class. Empty string
+  // means "auto-recommend" and the engine will pick the smallest suitable
+  // class. When set, the backend validates the choice against the load
+  // and returns a `vehicle_too_small` error if unsuitable.
+  const [transportVehicleKey, setTransportVehicleKey] = useState("");
+  const [transportVehicles, setTransportVehicles] = useState([]);
   const [vehicle, setVehicle] = useState({
     make: "", model: "", registration: "", condition: "will_not_start",
     rolls: "unknown", steers: "unknown", brakes: "unknown",
@@ -128,6 +134,25 @@ export default function CustomerAsapRequest() {
     return true;
   }, [pickup, dropoff, mode, vehicle]);
 
+  // R26.2 — Fetch the authoritative ASAP vehicle catalog once on mount so
+  // the customer-facing picker shows the exact 20 transport classes the
+  // pricing engine knows about. Falls back silently to a small built-in
+  // list if the endpoint isn't reachable (preview only).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cat = await api("/asap/vehicles");
+        if (!cancelled && Array.isArray(cat?.transport)) {
+          setTransportVehicles(cat.transport);
+        }
+      } catch {
+        if (!cancelled) setTransportVehicles([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // R25 — SINGLE SOURCE OF TRUTH.
   // The server's `/api/pricing/quote` engine (via `POST /pricing/quote`,
   // called upstream in the quote effect below) is the ONLY price the
@@ -205,6 +230,10 @@ export default function CustomerAsapRequest() {
             dropoff_country_code: dropoff.country_code || null,
             service_type: mode,
             urgency: "asap",
+            // R26.2 — customer-picked transport class; empty = auto-recommend
+            requested_vehicle_key: mode === "transport"
+              ? (transportVehicleKey || null)
+              : null,
             vehicle_class: mode === "breakdown_recovery"
               ? (vehicle?.weight_class || vehicle?.type || null)
               : null,
@@ -214,7 +243,12 @@ export default function CustomerAsapRequest() {
               : null,
             item_count: mode === "transport" && asapItemCount ? Number(asapItemCount) : null,
             loading_help: mode === "transport" ? Boolean(needsLoadingHelp) : false,
-            tail_lift_needed: mode === "transport" ? Boolean(needsForklift) : false,
+            // R26.2 — a tail-lift is required IF the customer either
+            // opted in via the checkbox OR picked a Tail-Lift vehicle
+            // class (Luton Tail Lift / 3.5T Rigid TL / 7.5T Rigid TL).
+            tail_lift_needed: mode === "transport"
+              ? (Boolean(needsForklift) || (transportVehicleKey || "").endsWith("_tail_lift"))
+              : false,
           },
         });
         // R26.1 — international ASAP is blocked from instant pricing.
@@ -227,6 +261,9 @@ export default function CustomerAsapRequest() {
           }
           return;
         }
+        // Clear any previous error (e.g. vehicle-too-small) now that we
+        // received a valid priced quote.
+        if (!cancelled) setErr(null);
         // Map new ASAP-engine response into the existing shape the summary
         // card expects. driver_charge is authoritative; booking_fee comes
         // straight from the engine (existing bands, applied once).
@@ -240,11 +277,18 @@ export default function CustomerAsapRequest() {
       } catch (e) {
         if (!cancelled) {
           // Surface pricing-engine validation errors (e.g. impossible
-          // weight/dims) directly to the customer. Everything else stays
-          // silent so a network hiccup doesn't kill the form.
-          const raw = e?.message || "";
-          if (/weight|dimensions|volume|distance|capacity|item/i.test(raw)) {
-            setErr(raw);
+          // weight/dims, or "vehicle too small for your load") directly
+          // to the customer. Prefer the parsed `.message` field over the
+          // raw JSON blob so the banner reads like plain English.
+          let raw = e?.message || "";
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object") {
+              raw = parsed.message || parsed.detail?.message || parsed.detail || raw;
+            }
+          } catch { /* not JSON — leave raw as-is */ }
+          if (/weight|dimensions|volume|distance|capacity|item|too small|recommend/i.test(String(raw))) {
+            setErr(String(raw));
           }
           setQuote(null);
         }
@@ -253,7 +297,7 @@ export default function CustomerAsapRequest() {
       }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [pickup, dropoff, mode, transportCategory, asapWeightKg,
+  }, [pickup, dropoff, mode, transportCategory, transportVehicleKey, asapWeightKg,
       asapLengthM, asapWidthM, asapHeightM, asapItemCount,
       needsForklift, needsLoadingHelp, vehicle]);
 
@@ -344,6 +388,13 @@ export default function CustomerAsapRequest() {
           delivery_date: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
           pricing_type: "fixed",
           fixed_price: suggested,
+          // R26.2 — persist the customer's ASAP transport vehicle pick
+          // so the /jobs pricing path uses the same class the quote
+          // screen showed, and downstream (driver offer, admin, snapshot)
+          // all agree.
+          requested_vehicle_key: mode === "transport"
+            ? (transportVehicleKey || null)
+            : null,
           photos: photos && photos.length ? photos : undefined,
         },
       });
@@ -381,7 +432,7 @@ export default function CustomerAsapRequest() {
       setErr(friendly);
       setSubmitting(false);
     }
-  }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription, asapWeightKg, asapItemCount, asapLengthM, asapWidthM, asapHeightM, needsForklift, needsLoadingHelp, quote, estimatedTotal]);
+  }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription, transportVehicleKey, asapWeightKg, asapItemCount, asapLengthM, asapWidthM, asapHeightM, needsForklift, needsLoadingHelp, quote, estimatedTotal]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6" data-testid="customer-asap-request">
@@ -565,6 +616,54 @@ export default function CustomerAsapRequest() {
           />
           <p className="mt-1 text-[11px] text-neutral-500">
             Drivers see this before they accept — the clearer, the faster you'll be matched.
+          </p>
+        </section>
+      )}
+
+      {mode === "transport" && (
+        <section className="mb-6" data-testid="asap-vehicle-picker">
+          <label className="text-sm font-medium mb-2 block">
+            Which vehicle do you need?
+          </label>
+          <select
+            value={transportVehicleKey}
+            onChange={(e) => setTransportVehicleKey(e.target.value)}
+            data-testid="asap-vehicle-select"
+            className="block w-full rounded-lg border border-neutral-200 bg-white p-2 text-sm"
+          >
+            <option value="">Recommend a vehicle for me (based on load)</option>
+            {transportVehicles.length > 0
+              ? transportVehicles.map((v) => (
+                  <option key={v.key} value={v.key} data-testid={`asap-vehicle-option-${v.key}`}>
+                    {v.label} — min £{Number(v.minimum_charge).toFixed(0)} · £{Number(v.per_mile).toFixed(2)}/mi
+                  </option>
+                ))
+              : /* Fallback list keeps the picker usable when /asap/vehicles hasn't loaded yet */
+                [
+                  ["car", "Car"], ["small_van", "Small Van"], ["lwb_van", "LWB Van"],
+                  ["elwb_van", "ELWB Van"], ["pickup", "Pickup"],
+                  ["luton", "Luton"], ["luton_tail_lift", "Luton Tail Lift"],
+                  ["3_5t_rigid", "3.5T Rigid"], ["3_5t_rigid_tail_lift", "3.5T Rigid Tail Lift"],
+                  ["5t_rigid", "5T Rigid"], ["7_5t_rigid", "7.5T Rigid"],
+                  ["7_5t_rigid_tail_lift", "7.5T Rigid Tail Lift"],
+                  ["10_18t_rigid", "10–18T Rigid"], ["26t_rigid", "26T Rigid"],
+                  ["32t_rigid", "32T Rigid"], ["multi_axle_rigid", "Other Multi-Axle Rigid"],
+                  ["tractor_unit", "Tractor Unit"], ["semi_trailer", "Semi-Trailer"],
+                  ["articulated_hgv", "Articulated HGV"], ["heavy_haul_combo", "Heavy-Haul Combination"],
+                ].map(([k, l]) => (
+                  <option key={k} value={k} data-testid={`asap-vehicle-option-${k}`}>{l}</option>
+                ))}
+          </select>
+          {transportVehicleKey && quote?.resolved_vehicle_key
+            && quote.resolved_vehicle_key !== transportVehicleKey && (
+              <p className="mt-1 text-[11px] text-amber-600" data-testid="asap-vehicle-note">
+                Priced as <b>{quote.resolved_vehicle_key.replace(/_/g, " ")}</b> — the engine may
+                have adjusted your choice.
+              </p>
+            )}
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Tail-lift vehicles are separate classes — pick a "Tail Lift" variant if you need one.
+            Leave on "Recommend" and we'll size to your load below.
           </p>
         </section>
       )}

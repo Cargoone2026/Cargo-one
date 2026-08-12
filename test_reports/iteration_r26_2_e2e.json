@@ -1,0 +1,61 @@
+{
+  "summary": "R26.2 customer-facing ASAP vehicle picker certification. Backend: /api/asap/vehicles catalog + 7 per-vehicle smoke quotes + LWB Van canonical + Recovery canonical + vehicle_too_small + international guardrail = 12/12 pytest tests PASSED. Frontend E2E: LWB Van (£70/£10.50@15%/£80.50) and Recovery (£110/£16.50@15%/£126.50) both drove correct quote body, correct summary panel, correct submit-button label, /api/jobs 200 → /api/bookings 200 → /deposit 200 → Stripe redirect with the exact £ deposit shown on the Stripe page. Vehicle-too-small correctly hides the price summary and shows an error containing 'too small', 'recommend', 'Car', and '7.5T Rigid'. Articulated HGV → £400/£52@13%/£452 with resolved_vehicle_key='articulated_hgv'. Auto-recommend (empty picker) → car @ £39/£5.85 (see note). STOPPED before entering the Stripe test card as instructed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AddressAutocomplete",
+        "issue": "AsapRequest.jsx passes `data-testid=\"asap-pickup\"` and `data-testid=\"asap-dropoff\"` to <AddressAutocomplete/> but the component's prop is `testID`, not `data-testid`. As a result the pickup/dropoff-scoped test ids (asap-pickup, asap-pickup-open, asap-pickup-modal, asap-dropoff, asap-dropoff-open, asap-dropoff-modal) never render — both fall back to the generic `address-open` / `address-modal`, making pickup vs dropoff undistinguishable in tests and breaking the picker's stated data-testid contract. Fix: rename the prop to `testID` at the call sites (AsapRequest.jsx L503 and L524) or accept `data-testid` inside AddressAutocomplete.",
+        "selector": "[data-testid=asap-pickup-open], [data-testid=asap-dropoff-open]",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "AsapRequest error banner",
+        "issue": "When the pricing engine returns a 422 with `detail={code, message}` (e.g. vehicle_too_small), the frontend surfaces the raw serialised object string in the red banner — the user sees the literal JSON '{\"code\":\"vehicle_too_small\",\"message\":\"Car is too small for your load…\"}' instead of just the human message. Assertion still passes because the substrings 'too small'/'recommend'/'Car'/'7.5T Rigid' are present, but the banner is ugly. Fix: in the /asap/quote catch on L283-286 of AsapRequest.jsx, try JSON.parse(raw) and prefer parsed.message when available (same treatment onSubmit already does for high-level errors).",
+        "selector": "[data-testid=asap-error]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_r26_2_e2e_certification.py",
+    "/app/test_reports/pytest/r26_2_api.xml",
+    "/app/test_reports/r26_2_lwb_summary.png",
+    "/app/test_reports/r26_2_lwb_stripe.png",
+    "/app/test_reports/r26_2_recovery_summary.png",
+    "/app/test_reports/r26_2_recovery_stripe.png",
+    "/app/test_reports/r26_2_vehicle_too_small.png"
+  ],
+  "action_items": [
+    "(Optional/LOW) In AsapRequest.jsx swap `data-testid` → `testID` on the two <AddressAutocomplete/> instances so the picker-scoped testids advertised for automation actually render.",
+    "(Optional/LOW) Prettify the vehicle_too_small error banner — surface `detail.message`, not the JSON blob."
+  ],
+  "critical_code_review_comments": [
+    "AsapRequest.jsx is 920 lines — approaching the 700-line split threshold; consider extracting the summary panel and the loading-details section into their own components.",
+    "Server L1428-1465 correctly serves catalog live from asap_pricing_config override with a clean fallback — no _id leakage."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_r26_2_e2e_certification.py (created)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "testcustomer@example.com / CustomerTest12345!  (as supplied; login → /customer OK)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sign-off scenario is FULLY GREEN. All 8 review items verified. Two minor cosmetic frontend nits recorded (testID prop mismatch on AddressAutocomplete + raw-JSON error banner text); neither blocks any assertion. Backend pytest file /app/backend/tests/test_r26_2_e2e_certification.py doubles as a regression pack — remember to run it with `-o addopts=` because pytest.ini forces xdist parallel which can flake on the login fixture. Do NOT retest without re-mocking /api/geo/autocomplete + /api/geo/details as the backend GOOGLE_MAPS_API_KEY still contains Cyrillic homoglyphs.",
+  "captured_evidence": {
+    "lwb_van_quote":       {"engine_version": "ASAP-V1.0", "resolved_vehicle_key": "lwb_van",        "driver_charge": 70.0,  "booking_fee": 10.5,  "booking_fee_percent": 15.0, "customer_total": 80.5},
+    "recovery_quote":      {"engine_version": "ASAP-V1.0", "resolved_vehicle_key": "3_5t_recovery",  "driver_charge": 110.0, "booking_fee": 16.5,  "booking_fee_percent": 15.0, "customer_total": 126.5},
+    "articulated_hgv":     {"engine_version": "ASAP-V1.0", "resolved_vehicle_key": "articulated_hgv","driver_charge": 400.0, "booking_fee": 52.0,  "booking_fee_percent": 13.0, "customer_total": 452.0},
+    "auto_recommend_observed":  {"resolved_vehicle_key": "car", "driver_charge": 39.0, "booking_fee": 5.85, "booking_fee_percent": 15.0, "customer_total": 44.85, "note": "review item #6 expected £35 but engine returned £39; item explicitly states this is 'not a bug' — auto path picks cheapest suitable class."},
+    "vehicle_too_small_banner": "Car is too small for your load (2000 kg · 0.0 m³ · 0 pallets). We recommend at least 7.5T Rigid. Please pick that vehicle or a larger one.",
+    "international_guardrail_gb_ie_asap_lwbvan": {"requires_manual_review": true, "route_class": "international", "engine_version": "ASAP-V1.0"},
+    "lwb_van_stripe_url_prefix":  "https://checkout.stripe.com/c/pay/cs_test_a18CbHXFI3RzrpODtTrHPhcw6aoE0hHJtxgESl6ydZLhsb6shkT1aalCYU",
+    "recovery_stripe_url_prefix": "https://checkout.stripe.com/c/pay/cs_test_a11qPhiB4cWAECDJeUpU3IObtzyCsutsbxE44R0PB96o1FPEPCdkVD6yI4",
+    "stripe_deposits_shown_gbp":  {"lwb_van": "£10.50 ✓", "recovery": "£16.50 ✓"},
+    "vehicle_options_in_dropdown": 20,
+    "pytest_summary": "12 passed in 2.26s (test_r26_2_e2e_certification.py)"
+  }
+}

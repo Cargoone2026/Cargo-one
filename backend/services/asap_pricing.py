@@ -260,6 +260,34 @@ ASAP_DEFAULT_CONFIG: dict = {
         [999999, 999, 999, "articulated_hgv"],
     ],
 
+    # ---- Size ranking for customer-picked vehicles (R26.2) -------------
+    # Larger rank = larger vehicle. Used by _pick_transport_vehicle to
+    # detect when a customer picks a class too small for their load, and
+    # by the recommendation banner. Tail-lift variants share the rank of
+    # their base class — they're the same size, just with a tail lift.
+    "transport_vehicle_size_ranks": {
+        "car":                    0,
+        "small_van":              1,
+        "pickup":                 1,
+        "lwb_van":                2,
+        "elwb_van":               3,
+        "luton":                  4,
+        "luton_tail_lift":        4,
+        "3_5t_rigid":             5,
+        "3_5t_rigid_tail_lift":   5,
+        "5t_rigid":               5,
+        "7_5t_rigid":             6,
+        "7_5t_rigid_tail_lift":   6,
+        "10_18t_rigid":           7,
+        "26t_rigid":              8,
+        "32t_rigid":              9,
+        "multi_axle_rigid":       9,
+        "tractor_unit":           9,
+        "semi_trailer":           9,
+        "articulated_hgv":        10,
+        "heavy_haul_combo":       10,
+    },
+
     # ---- Validation guards ---------------------------------------------
     "max_weight_kg": 40000,
     "max_volume_m3": 100,
@@ -412,14 +440,38 @@ def _collection_window_uplift(cfg: dict, minutes: Optional[int]) -> float:
 
 
 def _pick_transport_vehicle(cfg: dict, *, weight_kg, volume_m3, pallets, requested):
-    if requested and requested in cfg["transport_vehicles"]:
-        return requested
+    """Return the vehicle_key to price against.
+
+    Auto-pick behaviour (no `requested`): scan `transport_auto_pick_tiers`
+    for the smallest tier that can carry the load.
+
+    Customer-picked (with `requested`): honour the request unless it is
+    strictly SMALLER than the auto-picked minimum for the same load. In
+    that case raise AsapPricingError so the customer sees an explicit
+    "too small — try X" message instead of a silent upgrade or an
+    over-charge for an unsafe pick.
+    """
     w = float(weight_kg or 0); v = float(volume_m3 or 0); p = int(pallets or 0)
+    auto_key = "articulated_hgv"
     for row in cfg["transport_auto_pick_tiers"]:
         max_w, max_v, max_p, key = row
         if w <= max_w and v <= max_v and p <= max_p:
-            return key
-    return "articulated_hgv"
+            auto_key = key
+            break
+    if requested and requested in cfg["transport_vehicles"]:
+        ranks = cfg.get("transport_vehicle_size_ranks", {})
+        if ranks.get(requested, 0) < ranks.get(auto_key, 0):
+            req_label = cfg["transport_vehicles"][requested]["label"]
+            auto_label = cfg["transport_vehicles"][auto_key]["label"]
+            raise AsapPricingError(
+                f"{req_label} is too small for your load "
+                f"({w:.0f} kg · {v:.1f} m³ · {p} pallets). "
+                f"We recommend at least {auto_label}. "
+                f"Please pick that vehicle or a larger one.",
+                code="vehicle_too_small",
+            )
+        return requested
+    return auto_key
 
 
 def _pick_recovery_vehicle(cfg: dict, *, requested, vehicle_class, weight_kg):

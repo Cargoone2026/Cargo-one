@@ -30,11 +30,16 @@ export function AddressAutocomplete({
   placeholder,
   onSelect,
   testID,
+  ["data-testid"]: dataTestId, // R26.2 — accept `data-testid` too so
+                                // callers don't have to remember which prop
+                                // wins. Both prop names resolve to the same
+                                // effective test id downstream.
 }) {
+  const effectiveTestID = testID || dataTestId;
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="mb-3" data-testid={testID}>
+    <div className="mb-3" data-testid={effectiveTestID}>
       <span className="mb-1 block text-[13px] font-semibold text-[#111111]">
         {label}
       </span>
@@ -42,7 +47,7 @@ export function AddressAutocomplete({
         type="button"
         onClick={() => setOpen(true)}
         className="flex w-full items-center gap-2 rounded-[12px] border border-[#E5E7EB] bg-white px-3 py-3 text-left hover:border-[#111111]"
-        data-testid={testID ? `${testID}-open` : "address-open"}
+        data-testid={effectiveTestID ? `${effectiveTestID}-open` : "address-open"}
       >
         <MapPin className="h-5 w-5 text-[#6B7280]" />
         <span className="flex-1 min-w-0">
@@ -72,7 +77,7 @@ export function AddressAutocomplete({
             onSelect(place);
             setOpen(false);
           }}
-          testID={testID}
+          testID={effectiveTestID}
         />
       ) : null}
     </div>
