@@ -1416,3 +1416,44 @@ User to run one live ASAP Transport + one live ASAP Recovery booking end-to-end 
 
 **Mapbox migration STILL BLOCKED** until user manually signs off R26.
 
+
+## R26.1 — Pre-Production Audit + Transport Dead-Mileage + International Guardrail (Feb 2026)
+
+### R26 audit findings (`memory/R26_CERTIFICATION.md`)
+Ran all six owner-mandated pre-production checks. Result: 4 PASS, 2 NEEDS FIX, 1 BLOCKED FOR MANUAL ACTION.
+
+- 🟢 **20 Transport vehicle classes + 12 Recovery classes** — all present, tail-lift pairs isolated, no double-charge, distinct rate cards.
+- 🟢 **Booking-fee boundary tests (149.99/150/150.01, 299.99/300/300.01, 599.99/600/600.01)** — every value maps to the correct band. Engine delegates entirely to `calculate_booking_fee_detail`.
+- 🟢 **Pricing snapshot completeness** — 15 top-level + 20 input + 14 uplift keys. Immutable (written once at job/booking creation).
+- 🟢 **Multiplier cap** — normal +50%, heavy +80%, `capped` flag surfaced.
+- 🟢 **Three-way endpoint consistency** — `/asap/quote`, `/pricing/quote` (asap), `/jobs` all reach the same `calculate_asap_quote`.
+- 🔴 **Transport dead-mileage** — only recovery had a repositioning table.
+- 🔴 **International ASAP guardrail** — `/jobs` gated it correctly, but `/asap/quote` and `/pricing/quote` (asap) returned fabricated instant prices for GB→IE / GB→EU coordinates.
+
+### R26.1 mini-patch shipped
+1. Added `dead_mileage_bands_transport` (lighter than recovery: 0/10/20/30/50 mi bands, 0/10/20/30/40% uplift). Engine now applies dead-mileage for BOTH transport and recovery when `nearest_driver_distance_mi` is supplied. Recovery bands untouched. Transport cap peaks at +40% (well under +50% overall ceiling).
+2. `POST /asap/quote` and `POST /pricing/quote` (service_timing=asap) now call `classify_route()` at entry and short-circuit non-`domestic_uk` routes to `{requires_manual_review: true, route_class, manual_review_message}`. `POST /jobs` behaviour unchanged. `AsapQuoteBody` gained `dropoff_country_code`. Legacy contract preserved: callers omitting both country codes are still treated as domestic UK.
+3. Frontend `AsapRequest.jsx` now forwards `pickup_country_code`/`dropoff_country_code` from AddressAutocomplete and renders the friendly `manual_review_message` when the guardrail fires.
+4. 29-test regression suite added (`backend/tests/test_asap_pricing_r26_1.py`) covering all bands, the recovery-unchanged guard, vehicle rate-card unchanged, international guardrail on both endpoints, domestic still-priced, three-way consistency, snapshot immutability.
+
+### Verified end-to-end (testing agent, live preview)
+- Transport ASAP flow: quote → summary panel → deposit button → Stripe checkout — every surface displays the exact figures returned by `/api/asap/quote` (£39 / £5.85 / £44.85 in the test scenario). Zero divergence.
+- Recovery ASAP flow: £110 / £16.50 / £126.50 — matches R26.1 certification expected numbers exactly.
+- Three-way domestic ASAP: `/asap/quote` and `/pricing/quote (asap)` return byte-identical figures.
+- International guardrail: both endpoints return manual-review response for GB→IE; no fabricated instant price.
+- Two live unpaid Stripe test sessions created for owner to complete the payment step.
+
+### Test coverage
+**121 pricing/fee tests pass** (29 new R26.1 + 33 R26 + 43 R25 + 8 R25.1 + 8 booking-fee bands). No regressions.
+
+### Production readiness
+✅ **READY FOR MANUAL E2E COMPLETION.** Only blocker: owner clicks Stripe TEST card on the two captured checkout URLs and re-invokes the testing agent to certify post-payment surfaces (booking-confirmed → BookingDetail → admin → driver → Mongo `pricing_snapshot`).
+
+### R26.2 candidates (non-blocker follow-ups, testing-agent findings)
+- Add vehicle picker to ASAP TRANSPORT flow (currently defaults to smallest suitable class).
+- `AddressAutocomplete` component silently drops `data-testid` (reads only `testID`).
+- `/api/asap/quote` returns `distance_miles: null` on frontend network calls (backend logs the real distance). Cosmetic — pricing unaffected.
+- Preview-only: `GOOGLE_MAPS_API_KEY` in `/app/backend/.env` has Cyrillic homoglyphs.
+
+**Mapbox migration STILL BLOCKED** until owner manually signs off R26.
+

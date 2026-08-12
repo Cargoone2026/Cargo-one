@@ -1423,6 +1423,7 @@ class AsapQuoteBody(BaseModel):
     tail_lift_needed: Optional[bool] = False
     nearest_driver_distance_mi: Optional[float] = None
     pickup_country_code: Optional[str] = None
+    dropoff_country_code: Optional[str] = None
 
 
 @api.post("/asap/quote")
@@ -1431,6 +1432,24 @@ async def asap_quote(payload: AsapQuoteBody,
     """Authoritative ASAP quote. Scheduled/Bidding continue to use
     /pricing/quote — this endpoint is ASAP-only."""
     from services.asap_pricing import calculate_asap_quote, AsapPricingError
+    # R26.1 — mirror the domestic-only guardrail enforced by POST /jobs.
+    # We do NOT yet compute ferry/toll/Eurotunnel/overnight costs so an
+    # international ASAP MUST be routed to manual review, never returned
+    # as a guaranteed instant price.
+    dropoff_cc = getattr(payload, "dropoff_country_code", None)
+    rc = classify_route(payload.pickup_country_code, dropoff_cc)
+    if not payload.pickup_country_code and not dropoff_cc:
+        rc = "domestic_uk"
+    if rc != "domestic_uk":
+        return {
+            "requires_manual_review": True,
+            "route_class": rc,
+            "engine_version": "ASAP-V1.0",
+            "manual_review_message": (
+                "International ASAP requires operator confirmation for "
+                "ferry, toll and Eurotunnel costs."
+            ),
+        }
     distance_miles, duration_minutes, distance_source = await resolve_route(
         payload.pickup_lat, payload.pickup_lng,
         payload.dropoff_lat, payload.dropoff_lng,
@@ -1515,6 +1534,22 @@ async def pricing_quote(payload: PricingQuoteBody,
     # and /jobs and /bookings never disagree. Scheduled continues via
     # services/pricing.py.
     if (payload.service_timing or "scheduled") == "asap":
+        # R26.1 — mirror the domestic-only guardrail enforced by POST /jobs.
+        # Never return a guaranteed instant price for an international ASAP
+        # route because ferry/toll/Eurotunnel are not modelled yet.
+        rc = classify_route(payload.pickup_country_code, payload.dropoff_country_code)
+        if not payload.pickup_country_code and not payload.dropoff_country_code:
+            rc = "domestic_uk"
+        if rc != "domestic_uk":
+            return {
+                "requires_manual_review": True,
+                "route_class": rc,
+                "engine_version": "ASAP-V1.0",
+                "manual_review_message": (
+                    "International ASAP requires operator confirmation for "
+                    "ferry, toll and Eurotunnel costs."
+                ),
+            }
         from services.asap_pricing import calculate_asap_quote, AsapPricingError
         distance_miles, duration_minutes, distance_source = await resolve_route(
             payload.pickup_lat, payload.pickup_lng,

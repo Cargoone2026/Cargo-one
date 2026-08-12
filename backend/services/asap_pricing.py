@@ -174,7 +174,7 @@ ASAP_DEFAULT_CONFIG: dict = {
         {"min": 0,   "uplift":  0.30},
     ],
 
-    # ---- Dead mileage — recovery only (spec §19) -----------------------
+    # ---- Dead mileage — recovery (spec §19) ----------------------------
     # Percentage uplift on driver_charge_base (route + extras), keyed by
     # nearest_driver_distance_mi.
     "dead_mileage_bands_recovery": [
@@ -183,6 +183,19 @@ ASAP_DEFAULT_CONFIG: dict = {
         {"max_mi": 30,   "uplift": 0.40},
         {"max_mi": 50,   "uplift": 0.60},
         {"max_mi": None, "uplift": 0.75},
+    ],
+
+    # ---- Dead mileage — transport (R26.1) ------------------------------
+    # Lighter than recovery — transport ASAP dispatch is typically shorter
+    # runs so repositioning bites harder on driver economics but must not
+    # blow through the +50% normal ceiling on its own. Values below leave
+    # sufficient headroom for ASAP+urgency to stack under the cap.
+    "dead_mileage_bands_transport": [
+        {"max_mi": 10,   "uplift": 0.00},
+        {"max_mi": 20,   "uplift": 0.10},
+        {"max_mi": 30,   "uplift": 0.20},
+        {"max_mi": 50,   "uplift": 0.30},
+        {"max_mi": None, "uplift": 0.40},
     ],
 
     # ---- Extras (flat £) -----------------------------------------------
@@ -551,12 +564,15 @@ async def calculate_asap_quote(
 
     base_route = mileage_charge + waiting_charge + stops_charge + loading_charge
 
-    # ---------- 5. Dead mileage (recovery only) ------------------------
+    # ---------- 5. Dead mileage (recovery + transport, R26.1) ----------
     dead_uplift_pct = 0.0
-    if service_type == "breakdown_recovery":
+    if nearest_driver_distance_mi is not None:
+        band_key = ("dead_mileage_bands_recovery"
+                     if service_type == "breakdown_recovery"
+                     else "dead_mileage_bands_transport")
         dead_uplift_pct = _band_lookup(
-            cfg["dead_mileage_bands_recovery"],
-            float(nearest_driver_distance_mi or 0), "mi", "uplift")
+            cfg.get(band_key, []),
+            float(nearest_driver_distance_mi), "mi", "uplift")
 
     # ---------- 6. Multiplicative uplifts (capped stacking) ------------
     asap_uplift = _urgency_uplift(cfg, urgency)

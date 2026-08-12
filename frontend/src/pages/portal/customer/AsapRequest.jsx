@@ -198,6 +198,11 @@ export default function CustomerAsapRequest() {
             pickup_lng: pickup.lng,
             dropoff_lat: dropoff.lat,
             dropoff_lng: dropoff.lng,
+            // R26.1 — forward country codes so the international ASAP
+            // guardrail can fire when autocomplete resolves a non-UK
+            // address. When absent, backend falls back to domestic_uk.
+            pickup_country_code: pickup.country_code || null,
+            dropoff_country_code: dropoff.country_code || null,
             service_type: mode,
             urgency: "asap",
             vehicle_class: mode === "breakdown_recovery"
@@ -212,6 +217,16 @@ export default function CustomerAsapRequest() {
             tail_lift_needed: mode === "transport" ? Boolean(needsForklift) : false,
           },
         });
+        // R26.1 — international ASAP is blocked from instant pricing.
+        // Show a friendly manual-review notice instead of a broken quote.
+        if (q && q.requires_manual_review) {
+          if (!cancelled) {
+            setQuote(null);
+            setErr(q.manual_review_message
+              || "This route requires operator confirmation. Please book as a Scheduled or Fixed-price job.");
+          }
+          return;
+        }
         // Map new ASAP-engine response into the existing shape the summary
         // card expects. driver_charge is authoritative; booking_fee comes
         // straight from the engine (existing bands, applied once).
