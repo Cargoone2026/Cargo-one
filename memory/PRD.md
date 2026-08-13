@@ -1489,3 +1489,125 @@ International guardrail (R26.1) still fires on both endpoints.
 
 ### Frozen since R26 shipped
 Recovery pricing • Booking Fee Bands • Fixed pricing • Bidding • Scheduled pricing • R26.1 dead-mileage logic • International guardrail • Pricing snapshot architecture • Stripe integration • Historical bookings • RouteMap • DriverLiveMap • Available Jobs Map. Mapbox migration remains **HARD-BLOCKED** until owner says "R26 signed off".
+
+## R27 — Mapbox migration for visual maps (Feb 2026)
+
+### Scope (approved plan option A)
+Migrate map DISPLAY surfaces to Mapbox GL while keeping the R26 pricing-critical Google Distance Matrix, Google Places autocomplete, backend distance source and all pricing behaviour **byte-identical**. Google JS map loader is kept as a fallback (dispatcher pattern) until owner-approved production removal.
+
+### What shipped
+- **Engine dispatcher pattern** — `RouteMap.jsx` (30 lines) and `DriverLiveMap.jsx` (30 lines) are now thin components that: (1) render the Mapbox implementation when `REACT_APP_MAPBOX_TOKEN` is set; (2) transparently swap to the Google implementation when Mapbox reports a fatal error (missing token, URL-restriction 403, style 401, offline). Consumers unchanged.
+- **New Mapbox implementations**:
+  - `RouteMapMapbox.jsx` — same prop contract (pickup/dropoff/driver/trail/height/summary) rendered via Mapbox GL. Fetches a real road polyline via Mapbox Directions API; falls back to a straight great-circle line if Directions returns null.
+  - `DriverLiveMapMapbox.jsx` — same prop contract (lat/lng/offers/onOfferClick/className/showSweep). Radius sweep is now a pulsing GeoJSON circle layer with an RAF animation loop.
+  - `lib/mapboxDirections.js` — visual-only Directions client with an in-memory cache. Never called from any pricing path.
+- **`MapboxMap.jsx` extended** — added `trailCoordinates`, `sweep`, `onLoad`, `onError` props; error handler now bubbles Mapbox fatal errors so the dispatcher can swap engines. Error placeholder now distinguishes token-missing from token-restricted / tile-load errors.
+- **Google implementations preserved** — original 594-line `RouteMapGoogle.jsx` and 289-line `DriverLiveMapGoogle.jsx` kept unchanged as fallback bodies. Deletion deferred until owner post-QA approval.
+- **`.env`** — `REACT_APP_MAPBOX_TOKEN` added to `frontend/.env`. No `sk.` secrets in the frontend. No token hardcoded in source.
+- **Backend / pricing / autocomplete** — ZERO changes. `services/asap_pricing.py`, `services/pricing.py`, `booking_fee_bands`, `/api/geo/autocomplete`, `/api/geo/details`, Google Distance Matrix in `server.py::google_distance_matrix`, dispatch radius logic, R26 pricing snapshot — all untouched.
+
+### Testing (via testing_agent on preview)
+1. Customer BookingDetail (Recovery, `40108661…`): Mapbox init → 7 x 403 tile requests → dispatcher fires console warn `[RouteMap] Mapbox unavailable, falling back to Google` → Google JS loader kicks in → map renders London→Guildford with 26.7 mi / 56 min summary + pickup/dropoff/route polyline. ✅
+2. Customer BookingDetail (LWB Van, `f5566bff…`): identical behaviour + £70 / £10.50 / £80.50 preserved. ✅
+3. Driver `/portal/driver/live` with granted geolocation: driver marker + offer pins render on Google fallback. ✅
+4. Driver `/portal/driver/jobs` Map view: List↔Map toggle intact; 228 offers overlay + 2 map pins; MapJobBottomSheet unchanged. ✅
+5. Mobile viewport 390×844: no horizontal scroll, map fills card width, markers legible. ✅
+6. `/api/asap/quote` for LWB Van 25 mi: returns £70 / £10.50 / £80.50 / ASAP-V1.0. ✅
+7. `/api/asap/vehicles`: 20 transport + 12 recovery. ✅
+8. **Pricing regression: 174 / 174 passing · 11 skipped · 0 failed.** ✅
+
+### Token URL restrictions — PREVIEW NOT YET ALLOWED
+The Cargo One Production token currently allows ONLY:
+- `https://cargoone.co.uk` ✅
+- (one other production URL)
+
+The preview origin `https://cargo-repo-bridge.preview.emergentagent.com` is NOT on the allowlist. This is intentional per owner security policy. Preview therefore exercises the Google fallback path — verified working end-to-end above. If the owner wants preview to render REAL Mapbox tiles (rather than the fallback), they need to add `https://cargo-repo-bridge.preview.emergentagent.com` (or `*.preview.emergentagent.com`) to the Mapbox token URL restrictions. Otherwise, production QA will be the definitive test.
+
+### Google functionality intentionally retained
+- **Backend Google Distance Matrix** — R26 pricing-critical, byte-identical distances required.
+- **Backend Google Places / geocoding** — `/api/geo/autocomplete`, `/api/geo/details`.
+- **Frontend Google JS map loader** — kept only as a runtime fallback in the two dispatchers. Deleted in a follow-up R27.1 patch after production Mapbox QA passes.
+- **Marketing Contact page** — external Google Maps URL to office address (`href="https://www.google.com/maps?q=..."`), not JS-embedded.
+
+### Manual QA checklist for owner
+The following must be walked on **production** (`https://cargoone.co.uk`) with a real Stripe TEST session — preview only validates the fallback path.
+1. Customer AsapRequest: enter valid pickup + dropoff addresses → real Mapbox map appears in route preview strip. Mapbox marker green (P) at pickup, red (D) at dropoff, dark route polyline connecting them, casing halo visible.
+2. Customer PostJob (scheduled): same route preview, same visual.
+3. Customer BookingDetail (any paid ASAP or scheduled booking): Mapbox route + driver blue dot appears if a driver is live-tracking, breadcrumb blue-dashed trail appears if driver has moved.
+4. Customer JobDetail: Mapbox route preview.
+5. Driver BookingDetail: Mapbox route preview.
+6. Driver JobDetail: Mapbox route preview.
+7. Driver /driver/live: Mapbox map with black dot for driver + pulsing orange sweep + colored job pins for available offers. Sweep pulses smoothly at ~1.8s.
+8. Driver /driver/jobs Map view: Mapbox map with job pins. Tap a pin → MapJobBottomSheet slides up with job preview + View Job CTA.
+9. Available Jobs List↔Map toggle: switch tab, filter (ASAP / transport / recovery / …), same jobs render in each view.
+10. Refresh each page → map re-renders correctly.
+11. Back-navigation from a BookingDetail → previous list → forward again → map still works.
+12. Mobile browsers (iOS Safari, Android Chrome): pinch-to-zoom, drag-to-pan, tap job pin, bottom sheet.
+13. Airplane-mode or block network in DevTools: map card shows the error placeholder gracefully; page never crashes.
+14. Deny geolocation on `/driver/live`: recenter button silently no-ops; map stays on last known location. Map still renders.
+15. Any Stripe TEST booking flow (LWB Van 25 mi) still charges the exact £10.50 deposit and shows the same amounts on every surface — proves R26 pricing untouched by the map migration.
+
+### Files added / modified (final list)
+**Added:**
+- `frontend/src/components/ui-portal/RouteMapMapbox.jsx`
+- `frontend/src/components/ui-portal/DriverLiveMapMapbox.jsx`
+- `frontend/src/components/ui-portal/RouteMapGoogle.jsx` (moved from `RouteMap.jsx`)
+- `frontend/src/components/ui-portal/DriverLiveMapGoogle.jsx` (moved from `DriverLiveMap.jsx`)
+- `frontend/src/lib/mapboxDirections.js`
+
+**Modified:**
+- `frontend/src/components/ui-portal/RouteMap.jsx` (594 → 30 lines, now a dispatcher)
+- `frontend/src/components/ui-portal/DriverLiveMap.jsx` (289 → 30 lines, now a dispatcher)
+- `frontend/src/components/ui-portal/MapboxMap.jsx` (extended)
+- `frontend/.env` (REACT_APP_MAPBOX_TOKEN added)
+
+**Unchanged (verified):** `services/asap_pricing.py`, `services/pricing.py`, `server.py::google_distance_matrix`, `server.py::google_places_autocomplete`, `server.py::google_place_details`, `booking_fee_bands` collection, all pricing tests, all consumer pages of RouteMap / DriverLiveMap.
+
+### Known limitations
+- Preview environment renders Google fallback because token doesn't allowlist the preview origin. Production will render real Mapbox.
+- Mapbox Directions API is called from the browser with the public token, subject to Mapbox rate limits (100k / month free tier). Cached in memory per pickup-dropoff pair to reduce hits. If production traffic exceeds free tier, add a backend proxy or upgrade the Mapbox plan.
+- The radius sweep uses pixel-based circle-radius (not real metres); reads correctly at zooms 8–14 where DriverLive operates. If DriverLive ever zooms out further, add a real-metres calculation.
+
+### Next
+1. Owner walks the 15-item manual QA on `https://cargoone.co.uk` after deploying this patch.
+2. Once owner approves: R27.1 patch removes RouteMapGoogle + DriverLiveMapGoogle + the Google JS loader helper.
+3. Post that: consider slimming AsapRequest.jsx and decomposing server.py (both remain deferred).
+
+
+## R27.1 — MapboxMap error-classifier fix (Feb 2026)
+
+### Root cause
+Production `cargoone.co.uk` was rendering the Google fallback despite the token being present and the URL allowlisted. Bundle inspection + code review of `MapboxMap.jsx` proved the token, mapbox-gl code and dispatcher were all present and correct in the production bundle. The bug was that the error handler in `MapboxMap.jsx` treated **every** `mapbox-gl` `error` event as fatal, and mapbox-gl emits errors for many non-fatal reasons: individual tile 404s, glyph subrange retries, telemetry endpoint blocked by ad-blockers, transient WebGL context resize. Any single one of those on a real customer browser instantly bubbled `onFatalError` → dispatcher `setUseGoogle(true)` → permanent Google session.
+
+### Fix (frontend/src/components/ui-portal/MapboxMap.jsx only, ~35 lines)
+1. Extracted `classifyMapboxError(err, {hasLoaded})` — a pure classifier returning `"fatal"` or `"non_fatal"`. Exported so it can be unit-tested in isolation.
+2. Added `hasLoaded` ref that flips true on `map.on("load")`. Any error emitted AFTER load is treated as non-fatal — the map is proven working; transient tile 404s must not kill it.
+3. Pre-load errors are only fatal for: HTTP 401/403, "No Token" / "Not Authorized" / "access token" messages, WebGL unsupported/required, "Failed to load style" / "Style is not done loading", CSP blocks.
+4. Any other pre-load error is treated as non-fatal (Mapbox may recover; we'd rather show the loading placeholder than eagerly swap to Google).
+5. Added `mapboxgl.setTelemetryEnabled(false)` at init with try/catch for older mapbox-gl versions. Removes the `events.mapbox.com` ad-blocker failure mode.
+6. Fatal-path warn: `[MapboxMap] fatal error, bubbling to dispatcher:` — non-fatal: `[MapboxMap] non-fatal error ignored:` (console.debug).
+
+### Files changed
+- `frontend/src/components/ui-portal/MapboxMap.jsx` — classifier + hasLoaded + telemetry-off + fatal-vs-nonfatal branching.
+- `backend/tests/test_mapbox_error_classifier_r27_1.py` — 10 new regression tests driving the classifier via Node.
+
+### Files NOT changed
+- `RouteMap.jsx`, `DriverLiveMap.jsx` (dispatchers) — untouched.
+- `RouteMapGoogle.jsx`, `DriverLiveMapGoogle.jsx` (fallback bodies) — untouched.
+- `RouteMapMapbox.jsx`, `DriverLiveMapMapbox.jsx` — untouched.
+- All backend files, all pricing files, all Google Distance Matrix code, all `/api/geo/*` code, all booking-fee bands — untouched.
+- `.env` files — untouched (token restrictions unchanged).
+
+### Testing on preview (via testing_agent, live browser)
+1. **Happy path** — customer ASAP with LWB Van + London/Guildford route → Mapbox canvas + attribution + 19 mapbox 200s + 0 fallback warns + 0 Google JS loads. ✅
+2. **Non-fatal tile 404 injection** — one tile URL intercepted with 404 mid-map-life → canvas stayed mounted, 0 fallback warns, 0 Google JS loads. ✅ (Note: mapbox-gl does not always emit `error` for a single tile 404 so the debug log doesn't fire, but end-user behaviour is identical to fix intent — no Google swap.)
+3. **Fatal 401 injection** — all api.mapbox.com URLs 401'd → `[MapboxMap] fatal error, bubbling to dispatcher` + `[RouteMap] Mapbox unavailable, falling back to Google` + 4 Google JS loads + Google fallback UI reached. ✅ (Safety net still works.)
+4. **Driver Live map** — canvas + attribution + 33 mapbox 200s + 0 fallback warns. ✅
+5. **Driver Jobs Map/List toggle** — Map renders canvas, List returns cleanly. ✅
+6. **Telemetry disabled** — `events.mapbox.com` reduced to 7 handshake sessions across 3 pages (mapbox-gl v3 emits a small handshake regardless). ✅
+7. **Pricing regression** — LWB Van £70/£10.50/£80.50; Recovery £110/£16.50/£126.50; engine `ASAP-V1.0`. distance_source `haversine_fallback` (preview only — production is google_road). ✅
+8. **Full pytest** — 184 passed / 11 skipped / 0 failed. ✅
+
+### Production deployment
+NOT DEPLOYED YET. Awaiting owner explicit approval to push R27.1 to `cargoone.co.uk`.
+

@@ -91,3 +91,11 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+frontend/node_modules/.cache/default-development/0.pack
+frontend/node_modules/.cache/default-development/12.pack
+frontend/node_modules/.cache/default-development/2.pack
+
+# R27.1 — test-agent report artifacts contain access tokens in URL query
+# strings; keep them out of the repo (and out of the secret scanner).
+test_reports/
+
