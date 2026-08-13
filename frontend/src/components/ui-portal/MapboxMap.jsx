@@ -498,13 +498,19 @@ export function MapboxMap({
         // Wrapped in safe() so if classification throws, Mapbox still
         // receives a valid { url } request object and continues.
         transformRequest: function (url, resourceType) {
+          // Observation-only: log every URL for diagnostics but DO NOT
+          // rebuild the request. Returning undefined tells Mapbox to use
+          // the original request unmodified — preserves internal signal,
+          // credentials, headers, referrerPolicy, and collectResourceTiming.
+          // Mapbox docs: "If the callback returns falsy, the original URL
+          // will be used, unmodified."
           safe("transformRequest", function () {
             const kind = classify(url);
             reqCounts[kind] = (reqCounts[kind] || 0) + 1;
-            lastReqUrl = stripToken(url);   // R27.7 — correlated with next error
+            lastReqUrl = stripToken(url);
             emit("req." + kind, { resourceType: resourceType, url: lastReqUrl });
           });
-          return { url: url };
+          return undefined;   // R27.9 — no request rebuilding
         },
       });
       emit("map.constructed", { style: styleUrl });
@@ -573,14 +579,38 @@ export function MapboxMap({
     // ── Full Mapbox lifecycle event surface. Every handler goes through
     //    safe() so a diagnostic throw can NEVER prevent Mapbox from
     //    receiving its own event, or the load/error/fallback path.
-    map.on("load", function () {
+    // ── R27.9 — Multi-signal ready detection.
+    //
+    // mapbox-gl v3 on iOS Safari has documented cases where the `load`
+    // event never fires even though the style is fully loaded and frames
+    // are being rendered (issue #8209 / #6076 / #13438). Additionally,
+    // Mapbox v3 on iOS Safari emits AbortError events during rapid tile
+    // loading — a WebKit browser bug — which pollute the error stream
+    // (mapbox-gl issue #8480 / #10498). Mapbox's own recommendation is
+    // to suppress AbortError.
+    //
+    // We flip `ready=true` via ANY of these signals, whichever fires first:
+    //   (a) `map.on("load")`             — happy path, all browsers
+    //   (b) `map.on("idle")`             — same-tick fallback (issue #13438)
+    //   (c) firstRender + 1500ms no-err  — iOS Safari fallback (issue #8209)
+    //
+    // Once `ready=true`, the R26 hasLoaded guard turns any subsequent
+    // AbortError storm into a non-fatal event that never falls back to
+    // Google. Cleanup on unmount tears down all three watchers.
+    let readyFlipped = false;
+    const flipReady = function (why) {
+      if (readyFlipped) return;
+      readyFlipped = true;
       clearTimeout(loadTimeout);
       hasLoaded.current = true;
       mapLoadedFlag = true;
       setReady(true);
-      emit("map.load", { container: containerSnapshot() });
-      try { console.info("[MAPBOX-DIAG] ✓ map.load fired — Mapbox is live"); } catch (_) { /* noop */ }
+      emit("map.ready", { via: why, container: containerSnapshot() });
+      try { console.info("[MAPBOX-DIAG] ✓ ready via " + why); } catch (_) { /* noop */ }
       onLoad && onLoad();
+    };
+    map.on("load", function () {
+      flipReady("load");
     });
     map.on("style.load", function () {
       styleLoadedFlag = true;
@@ -611,37 +641,79 @@ export function MapboxMap({
         emit("map.data", { n: eventCounts.data, dataType: e && e.dataType });
       }
     });
-    map.on("idle",        function () { idleFlag = true; eventCounts.idle += 1; emit("map.idle", { n: eventCounts.idle }); });
+    map.on("idle", function () {
+      idleFlag = true;
+      eventCounts.idle += 1;
+      emit("map.idle", { n: eventCounts.idle });
+      // R27.9 — treat first idle as effective-ready if `load` never fired.
+      // On iOS Safari mapbox-gl v3 (#8209), `load` is unreliable but
+      // `idle` still fires once the frame settles. Safe on all browsers.
+      if (!readyFlipped) flipReady("idle");
+    });
+    // R27.9 — Render-based ready fallback: after the first render, wait
+    // 1500ms with no NEW Mapbox errors and no ongoing dataloading, then
+    // flip ready. This handles the pathological iOS Safari case where
+    // neither `load` nor `idle` ever fires but tiles ARE painting.
+    let renderReadyTimer = null;
+    let lastErrCountAtRender = 0;
     map.on("render", function () {
       eventCounts.render += 1;
       if (eventCounts.render === 1)  { firstRenderFlag = true; emit("map.render.first"); }
       if (eventCounts.render === 10) { emit("map.render.10"); }
       if (eventCounts.render === 60) { emit("map.render.60"); }
       if (eventCounts.render === 300) { emit("map.render.300"); }
+      // Debounce a ready-flip 1500ms after the last render, if no fresh error hit.
+      if (!readyFlipped) {
+        if (renderReadyTimer) clearTimeout(renderReadyTimer);
+        lastErrCountAtRender = otherErrCount + styleErrCount + tileErrCount;
+        renderReadyTimer = setTimeout(function () {
+          const nowErrs = otherErrCount + styleErrCount + tileErrCount;
+          if (nowErrs === lastErrCountAtRender && firstRenderFlag && !readyFlipped) {
+            flipReady("render-settled");
+          }
+        }, 1500);
+      }
     });
     map.on("webglcontextlost",     function () { emit("map.webglcontextlost"); });
     map.on("webglcontextrestored", function () { emit("map.webglcontextrestored"); });
 
     // R27.8 — Rich per-error capture with FAST-PATH message capture.
-    // The R27.7 build hid MBERR in the overlay because JSON.stringify
-    // on Mapbox's circular `tile` object threw inside safe(), and the
-    // throw happened BEFORE `lastMapboxError = record`. Now we assign
-    // the minimal record FIRST-THING, then enrich; even if enrichment
-    // throws, the overlay still shows the actual error text.
+    // R27.9 — AbortError filter: per Mapbox recommendation (issues #8480,
+    // #10498), the AbortError storm on iOS Safari during rapid tile
+    // loading is a known WebKit bug and Mapbox itself recommends
+    // suppressing it. We still LOG the abort to timeline for debug, but
+    // do not count it against the error counters that trigger fallback.
     map.on("error", function (ev) {
       // ── Fast-path (must not throw). Runs OUTSIDE safe() so React
       //    always sees the state update.
       let fastMsg = "(no message)";
       let fastErrKind = "other";
+      let fastErrType = null;
       try {
         const evObj0 = ev || {};
         const err0 = evObj0.error || evObj0;
         if (err0 && typeof err0.message === "string" && err0.message) fastMsg = err0.message.slice(0, 300);
         else if (typeof err0 === "string") fastMsg = err0.slice(0, 300);
         else fastMsg = safeStr(err0, 300) || "(no message)";
+        fastErrType = err0 && err0.name ? String(err0.name) : null;
         const urlForClass0 = evObj0.url || (err0 && err0.url) || evObj0.sourceId || "";
         fastErrKind = classify(urlForClass0);
       } catch (_) { /* absolute worst case still keeps fastMsg */ }
+
+      // R27.9 — Suppress AbortError entirely (WebKit bug, harmless).
+      // Timeline sees it once with a distinct stage so debug is still
+      // possible, but the fatal-fallback counters never budge.
+      const isAbort = fastErrType === "AbortError"
+        || /^Fetch is aborted$/i.test(fastMsg)
+        || /aborted a request/i.test(fastMsg)
+        || /The operation was aborted/i.test(fastMsg);
+      if (isAbort) {
+        emit("map.error.aborterror.suppressed", { message: fastMsg });
+        // If we're past first-render and abort is the ONLY thing keeping
+        // load from firing, opportunistically flip ready.
+        if (firstRenderFlag && !readyFlipped) flipReady("abort-post-render");
+        return;
+      }
 
       // Bump the appropriate bucket counter and save early record.
       if (fastErrKind === "style") styleErrCount += 1;
@@ -652,6 +724,7 @@ export function MapboxMap({
         timestamp: Date.now() - t0,
         message: fastMsg,
         errKind: fastErrKind,
+        errType: fastErrType,
         precedingStage: lastStage,
         precedingReqUrl: lastReqUrl,
         phase: "early",
@@ -691,7 +764,7 @@ export function MapboxMap({
           sourceId: safeStr(evObj.sourceId, 100),
           tile: safeStr(evObj.tile, 300),      // R27.8 — safe stringifier (handles circular refs)
           url: stripToken(evObj.url || (err && err.url) || ""),
-          errType: err && err.name ? err.name : null,
+          errType: fastErrType,
           errKind: fastErrKind,
           precedingStage: earlyRecord.precedingStage,
           precedingReqUrl: earlyRecord.precedingReqUrl,
@@ -710,7 +783,7 @@ export function MapboxMap({
         { message: finalRec.message, status: finalRec.status },
         { hasLoaded: hasLoaded.current },
       );
-      emit("map.error." + kind, { message: fastMsg, errKind: fastErrKind });
+      emit("map.error." + kind, { message: fastMsg, errKind: fastErrKind, errType: fastErrType });
       if (kind === "fatal") {
         setInitError(new Error(fastMsg));
         onError && onError(new Error(fastMsg));
@@ -722,6 +795,7 @@ export function MapboxMap({
       clearTimeout(loadTimeout);
       clearTimeout(resizeTimeout);
       clearInterval(heartbeat);
+      if (renderReadyTimer) clearTimeout(renderReadyTimer);
       layoutChecks.forEach(clearTimeout);
       safe("cleanup-globals", function () {
         window.removeEventListener("error", onWindowError, { capture: true });
