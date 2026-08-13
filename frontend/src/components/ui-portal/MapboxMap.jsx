@@ -484,7 +484,13 @@ export function MapboxMap({
     }
 
     let map;
-    const styleUrl = "mapbox://styles/mapbox/streets-v12";
+    // R27.10 — downgraded to mapbox-gl v2.15.0 for iOS Safari stability.
+    // Mapbox-gl v3.x has a documented ReferenceError in its minified
+    // render/worker path on iOS Safari WebKit ("Can't find variable: o"),
+    // captured in R27.9 production evidence. v2.15.0 is the last v2
+    // release with years of production track record on iOS Safari.
+    // Style URL must match runtime major version: v2 → streets-v11.
+    const styleUrl = "mapbox://styles/mapbox/streets-v11";
     try {
       map = new mapboxgl.Map({
         container: containerEl,

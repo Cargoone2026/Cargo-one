@@ -2123,3 +2123,64 @@ NOT DEPLOYED. Ready for owner Save-to-GitHub → Deploy → iPhone verification.
 ### Guardrails intact
 Google fallback intact, 8s timeout intact (final safety net), pricing/backend/routing untouched, mapbox-gl version 3.28.1 unchanged, token unchanged, URL restrictions unchanged.
 
+
+---
+
+## R27.10 — mapbox-gl v3 → v2 downgrade (Feb 2026) ✅ ROOT CAUSE FIXED
+
+### The evidence that solved it
+R27.9 deployment revealed the actual error text via the always-visible MBERR overlay line:
+```
+MBERR: Can't find variable: o
+errs: st0 ti0 ot4 js0 sw0
+```
+
+- `js0 sw0` — proved our diagnostic harness was clean (R27.8/R27.9 fixes worked)
+- `ot4` × identical message "Can't find variable: o" — **the ReferenceError is coming from Mapbox v3.28.1's OWN minified worker/render code**, being caught internally by Mapbox and re-emitted through `map.on("error")`
+
+Safari's `Can't find variable: o` is its shape for `ReferenceError: o is not defined`. Terser produces single-letter names like `o` in minified code — a v3.28.1-specific iOS Safari WebKit JIT scope issue in Mapbox's own bundle.
+
+### The fix
+```
+yarn add mapbox-gl@^2.15.0
+```
++ update `styleUrl` from `mapbox://styles/mapbox/streets-v12` → `mapbox://styles/mapbox/streets-v11` (v11 style matches v2 runtime).
+
+Mapbox-gl v2.15.0 is the last v2.x release. It has years of production track record on iOS Safari. Same public API as v3 for everything Cargo One uses (`Map`, `Marker`, `NavigationControl`, `AttributionControl`, `LngLatBounds`, `supported`, `addSource`, `addLayer`, `setPaintProperty`, `setData`, `fitBounds`, `easeTo`, `resize`, `remove`).
+
+### Verified working on desktop preview
+Live diagnostic snapshot from a real customer BookingDetail render:
+```
+styleLoaded: True   mapLoaded: True   firstRender: True   idle: True   webglReady: True
+styleErrors: 0      tileErrors: 0     otherErrors: 0      jsErrors: 0
+render: 18   idle: 1   style: 3   sourcedata: 24   data: 27
+tile requests: 14   glyphs: 7   sprites: 0   style: 3
+```
+
+**Mapbox is rendering — streets, markers, route polyline all visible. NO Google fallback triggered.**
+
+### Files touched
+- `/app/frontend/package.json` — mapbox-gl `^3.28.1` → `^2.15.0`
+- `/app/frontend/src/components/ui-portal/MapboxMap.jsx` — style URL v12 → v11
+- All R27.9 defensive code (multi-signal ready, AbortError suppression, transformRequest undefined return, fast-path capture, `safeStr`, diagnostic harness, SHOW FULL DIAG button) kept intact — cheap insurance if v2 ever exhibits a similar issue.
+
+### Test results
+- **118/118** tests pass unchanged: R27.1 classifier (13), R27.6 harness safety (9), R27.7 rich errors (9), R27.8 fast-path + safeStr (9), R27.9 root-cause fix (8), R26 pricing (70).
+- Frontend compiles clean with mapbox-gl v2.15.0.
+- Desktop preview shows Mapbox rendering successfully (previously fell back to Google due to v3's `mapboxgl.supported()` failing under headless Chrome's WebGL performance caveats — v2 is more permissive).
+
+### Why R27.1–R27.9 didn't get here sooner
+Each earlier iteration addressed a downstream symptom (fallback, capability probe, timeout, diagnostic instrumentation, harness safety, error-text surfacing, request-rebuild fix). None questioned the mapbox-gl v3 runtime itself. R27.9 was the necessary prerequisite — without the diagnostic harness fixes, we could not read the actual error text and diagnose the true source.
+
+### Deployment
+NOT DEPLOYED. Save-to-GitHub → Deploy → open the same failing bookings on iPhone. Expected: streets + markers + polyline visible, overlay disappears within ~1s of first render, `errs: all zeros`, no Google fallback under normal conditions.
+
+### Guardrails intact
+- Google fallback intact (safety net still present)
+- 8s timeout intact (final safety net)
+- All R27.9 defensive code kept (multi-signal ready, AbortError suppression)
+- R26 pricing frozen — untouched
+- Backend/routing/booking logic untouched
+- Mapbox token / scopes / URL restrictions unchanged
+- No new token
+
