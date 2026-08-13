@@ -179,12 +179,14 @@ export function RouteMapMapbox({
         className={`w-full overflow-hidden rounded-2xl border border-neutral-200`}
         data-testid={`${testID}-canvas`}
         onError={(e) => setMapError(e)}
-        // Force the height via inline style; MapboxMap uses className for
-        // rounding + border only.
       />
       <style>{`
-        [data-testid="${testID}-canvas"] { height: ${height}px; }
+        [data-testid="${testID}"] > [data-testid="${testID}-canvas"] { height: ${height}px !important; }
       `}</style>
+      {/* R27.4 — height is enforced two ways for defence-in-depth on iOS Safari:
+          (a) the CSS selector below (in-tree fallback), and (b) the inline
+          style on MapboxMap's minHeight prop (guaranteed non-zero at
+          construction time so Mapbox never sees a 0-height container). */}
     </div>
   );
 }

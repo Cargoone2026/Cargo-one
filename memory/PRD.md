@@ -1691,3 +1691,47 @@ Dispatchers, Google fallback bodies, backend code, pricing, .env, token restrict
 
 ### Deployment status
 NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone verification.
+
+---
+
+## R27.5 — Always-on Mapbox Diagnostic Build (Feb 2026)
+
+### Motivation
+R27.4 gated diagnostic logs behind `?debug_mapbox=1`, so production iPhone sessions produce zero telemetry. Mapbox Console shows the token is receiving traffic (16 map loads, 32 Directions API calls, 1 vector-tile request) with valid URL restrictions — so account/token is NOT the issue. We need to find which of these categories fails on iOS Safari:
+- (A) token/account — ruled out by Mapbox Console
+- (B) style/resource/network
+- (C) iOS WebGL rendering
+- (D) container/layout lifecycle
+
+### Changes (`MapboxMap.jsx`)
+1. **Always-on logging** with `[MAPBOX-DIAG]` prefix — no query-string gate. Every lifecycle event emits a console line with `+Nms` timestamp.
+2. **`transformRequest` interception** — every outbound URL (style JSON, glyphs, sprite, vector tiles) is logged with `access_token=REDACTED`. Never logs the token.
+3. **Full lifecycle surface** — hooks on `load`, `style.load`, `styledata`, `sourcedata`, `dataloading`, `data`, `idle`, `render` (first/10/60), `error`, `webglcontextlost`, `webglcontextrestored`.
+4. **Layout checkpoints** — snapshots container dimensions + computed `display`/`visibility`/`offsetParent`/`isConnected` at `t=0`, `t=100ms`, `t=500ms`, `t=1s`, `t=3s`, `t=7s`.
+5. **Detailed WebGL probe** — logs `vendor`, `renderer`, `MAX_TEXTURE_SIZE`, `MAX_VIEWPORT_DIMS`, `webgl2` support (via `WEBGL_debug_renderer_info`).
+6. **Global timeline** — `window.__mapboxDiag__.current.timeline` = full array of stage events for post-mortem inspection.
+7. **On-screen overlay** — compact black badge in top-left of the map showing current stage, elapsed ms, request counts (s/t/g/sp/o), and errors. Rendered ONLY while `!ready`, so successful Mapbox users never see it. Screenshottable from iPhone without needing Web Inspector.
+
+### Files touched
+- `/app/frontend/src/components/ui-portal/MapboxMap.jsx` — diagnostic instrumentation + overlay.
+
+### Security
+- Access token is NEVER logged — every URL passes through `stripToken()` which replaces `access_token=...` with `access_token=REDACTED`.
+- Overlay renders no PII, no token.
+
+### How to read the diagnostic on iPhone
+1. Open a booking on production. Watch the black overlay in the top-left of the map area.
+2. Screenshot when Google fallback kicks in (~8s).
+3. Compare the badge's final `stage` value against expected progression:
+   - `init.start` → `map.constructed` → `req.style` → `req.glyph`/`req.sprite` → `map.style.load` → `req.tile`×N → `map.render.first` → `map.load` (success).
+4. If final stage is `map.constructed`: WebGL context creation stalled → iOS GPU/WebGL bug.
+5. If final stage is `req.style` with no `map.style.load`: style JSON is fetching but never resolves → network/CORS/tab-suspend issue.
+6. If final stage is `map.style.load` but no `map.render.first`: WebGL renders paused → GPU issue during render.
+7. If final stage is `layout.t*` with `w=0` or `h=0`: container was 0-sized when Mapbox saw it → layout timing bug.
+
+### Deployment status
+NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone verification with new diagnostic overlay screenshot.
+
+### Acceptance criterion (unchanged from user brief)
+Mapbox either renders successfully on the production iPhone, or we have a concrete, evidenced technical reason for the failure. R27.5 provides the evidence-gathering harness; no speculative workaround added.
+

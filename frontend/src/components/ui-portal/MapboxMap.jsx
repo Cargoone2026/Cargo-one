@@ -75,6 +75,18 @@ export function MapboxMap({
   const [tokenMissing, setTokenMissing] = useState(false);
   const [ready, setReady] = useState(false);
   const [initError, setInitError] = useState(null);
+  // R27.5 — Always-on diagnostic overlay state. Updated as lifecycle stages
+  // fire. Rendered on top of the map so the user can screenshot the iPhone
+  // and paste the JSON without needing Safari Web Inspector.
+  const [diag, setDiag] = useState({
+    stage: "boot",
+    elapsed: 0,
+    events: 0,
+    reqs: { style: 0, tile: 0, glyph: 0, sprite: 0, other: 0 },
+    errs: 0,
+    lastErr: null,
+    w: 0, h: 0,
+  });
 
   // Initialise map once
   useEffect(() => {
@@ -94,76 +106,251 @@ export function MapboxMap({
         mapboxgl.setTelemetryEnabled(false);
       }
     } catch { /* older mapbox-gl versions may not expose this — safe to ignore */ }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // R27.5 — DIAGNOSTIC BUILD (always-on, never logs token)
+    //
+    // The R27.4 diagnostic path was gated behind ?debug_mapbox=1 which
+    // means we get no data from a real user on production. This build
+    // logs every Mapbox lifecycle event unconditionally with a
+    // `[MAPBOX-DIAG]` prefix, captures the full event timeline into
+    // `window.__mapboxDiag__`, and renders a compact on-screen overlay
+    // so the user can screenshot from an iPhone without needing Safari
+    // Web Inspector attached.
+    // ─────────────────────────────────────────────────────────────────────
+    const t0 = Date.now();
+    const timeline = [];
+    const reqCounts = { style: 0, tile: 0, glyph: 0, sprite: 0, other: 0 };
+    let errCount = 0;
+    let lastErrMsg = null;
+    let lastStage = "boot";
+
+    const stripToken = (url) => {
+      if (typeof url !== "string") return String(url || "");
+      return url.replace(/([?&])access_token=[^&]+/g, "$1access_token=REDACTED");
+    };
+    const classify = (url) => {
+      const u = String(url || "");
+      if (/\/styles\/v1\//.test(u)) return "style";
+      if (/\/fonts\/v1\//.test(u) || /\.pbf(\?|$)/.test(u) && /glyph/i.test(u)) return "glyph";
+      if (/\/sprites?\//.test(u) || /sprite@?/.test(u)) return "sprite";
+      if (/\/tiles\//.test(u) || /\.mvt(\?|$)/.test(u) || /\.pbf(\?|$)/.test(u)) return "tile";
+      return "other";
+    };
+    const emit = (stage, extra) => {
+      const elapsed = Date.now() - t0;
+      lastStage = stage;
+      const entry = { t: elapsed, stage, ...(extra || {}) };
+      timeline.push(entry);
+      try {
+        // eslint-disable-next-line no-console
+        console.info(`[MAPBOX-DIAG] +${elapsed}ms ${stage}`, extra || "");
+      } catch { /* ignore */ }
+      setDiag((d) => ({
+        ...d,
+        stage,
+        elapsed,
+        events: timeline.length,
+        reqs: { ...reqCounts },
+        errs: errCount,
+        lastErr: lastErrMsg,
+        w: containerRef.current ? containerRef.current.clientWidth : d.w,
+        h: containerRef.current ? containerRef.current.clientHeight : d.h,
+      }));
+    };
+    // Expose full timeline for post-mortem inspection from Safari console.
+    try {
+      window.__mapboxDiag__ = window.__mapboxDiag__ || { instances: [] };
+      window.__mapboxDiag__.current = { t0, timeline, reqCounts, get errs() { return errCount; }, get lastErr() { return lastErrMsg; } };
+      window.__mapboxDiag__.instances.push(window.__mapboxDiag__.current);
+    } catch { /* ignore */ }
+
     // R27.2 — iOS Safari (Low Power Mode / WebGL disabled / GPU blocklist)
     // can silently fail to allocate a WebGL context. mapboxgl.supported()
     // is the canonical up-front capability probe. When false, we skip the
     // Map constructor entirely and bubble a fatal error so the dispatcher
-    // falls back to Google (Google Maps uses raster tiles — works on
-    // every iOS Safari + WebGL-disabled browser).
+    // falls back to Google.
+    let supported = null;
     try {
-      if (typeof mapboxgl.supported === "function"
-          && !mapboxgl.supported({ failIfMajorPerformanceCaveat: true })) {
-        const err = new Error("Mapbox GL unsupported on this browser (WebGL unavailable)");
-        setInitError(err);
-        onError && onError(err);
-        return undefined;
-      }
-    } catch { /* very old / very new mapbox-gl may not expose .supported — proceed anyway */ }
-    if (!containerRef.current) return undefined;
+      supported = typeof mapboxgl.supported === "function"
+        ? mapboxgl.supported({ failIfMajorPerformanceCaveat: false })
+        : null;
+    } catch { supported = null; }
+
+    // Detailed WebGL capability probe — fills gaps that mapboxgl.supported() hides.
+    const glProbe = (() => {
+      try {
+        const c = document.createElement("canvas");
+        const gl2 = c.getContext("webgl2");
+        const gl = gl2 || c.getContext("webgl") || c.getContext("experimental-webgl");
+        if (!gl) return { hasGl: false };
+        const dbgInfo = gl.getExtension && gl.getExtension("WEBGL_debug_renderer_info");
+        return {
+          hasGl: true,
+          webgl2: !!gl2,
+          vendor: dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+          renderer: dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+          maxTex: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+          maxVpDims: (gl.getParameter(gl.MAX_VIEWPORT_DIMS) || []).toString(),
+        };
+      } catch (e) { return { hasGl: false, probeErr: String(e && e.message) }; }
+    })();
+
+    const containerEl = containerRef.current;
+    const containerSnapshot = () => {
+      if (!containerEl) return { present: false };
+      const rect = containerEl.getBoundingClientRect();
+      const cs = window.getComputedStyle ? window.getComputedStyle(containerEl) : {};
+      return {
+        present: true,
+        connected: containerEl.isConnected,
+        offsetParent: !!containerEl.offsetParent,
+        clientW: containerEl.clientWidth,
+        clientH: containerEl.clientHeight,
+        rectW: Math.round(rect.width),
+        rectH: Math.round(rect.height),
+        display: cs.display,
+        visibility: cs.visibility,
+        position: cs.position,
+      };
+    };
+
+    emit("init.start", {
+      ua: navigator.userAgent.slice(0, 140),
+      mapboxVersion: mapboxgl.version || "unknown",
+      supported,
+      dpr: window.devicePixelRatio,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      container: containerSnapshot(),
+      gl: glProbe,
+    });
+
+    if (supported === false) {
+      const err = new Error("Mapbox GL unsupported on this browser (WebGL unavailable)");
+      emit("init.unsupported", { reason: "mapboxgl.supported=false" });
+      setInitError(err);
+      onError && onError(err);
+      return undefined;
+    }
+    if (!containerEl) { emit("init.no-container"); return undefined; }
+
     let map;
+    const styleUrl = "mapbox://styles/mapbox/streets-v12";
     try {
       map = new mapboxgl.Map({
-        container: containerRef.current,
-        style: "mapbox://styles/mapbox/streets-v12",
+        container: containerEl,
+        style: styleUrl,
         center,
         zoom,
         attributionControl: false,
+        preserveDrawingBuffer: false,
+        antialias: false,
+        // R27.5 — transformRequest lets us observe every outbound URL
+        // (style JSON, sprite, glyphs, vector tiles) with the token
+        // stripped. This is the single most valuable data point for
+        // pinpointing where the iOS Safari load stalls: does the style
+        // request even fire? do glyphs 200? do tiles 200?
+        transformRequest: (url, resourceType) => {
+          const kind = classify(url);
+          reqCounts[kind] = (reqCounts[kind] || 0) + 1;
+          emit(`req.${kind}`, { resourceType, url: stripToken(url) });
+          return { url };
+        },
       });
+      emit("map.constructed", { style: styleUrl });
     } catch (e) {
-      // Constructor throwing = truly fatal (WebGL unsupported, bad container, etc.)
+      emit("map.construct.throw", { message: String(e && e.message) });
       setInitError(e);
       onError && onError(e);
       return undefined;
     }
+
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
-    // R27.3 — Load-timeout failsafe: iOS Safari can occasionally accept the
-    // constructor (mapboxgl.supported returned true) but then silently hang
-    // without firing `load` OR `error` (background restore, WebGL context
-    // creation ok'd but paint never happens, or GPU stall). If `load` hasn't
-    // fired within 8 seconds, we treat it as a fatal init failure and let
-    // the dispatcher fall back to Google raster tiles.
+
+    // R27.3 — Load-timeout failsafe: 8-second budget for `load` to fire.
     const loadTimeout = setTimeout(() => {
       if (!hasLoaded.current) {
         const err = new Error("Mapbox failed to load within 8s — likely iOS Safari WebGL init hang");
+        emit("timeout.8s", {
+          stage: lastStage,
+          reqCounts: { ...reqCounts },
+          errs: errCount,
+          lastErr: lastErrMsg,
+          container: containerSnapshot(),
+        });
         // eslint-disable-next-line no-console
-        console.warn("[MapboxMap] load timeout, bubbling to dispatcher:", err.message);
+        console.warn("[MAPBOX-DIAG] 8s load timeout — falling back to Google. Stage at timeout:", lastStage, "Requests:", { ...reqCounts });
         setInitError(err);
         onError && onError(err);
       }
     }, 8000);
+
+    // Layout checkpoints — capture container dimensions at several points to
+    // detect a late layout / 0-height parent that Mapbox saw on construction.
+    const layoutChecks = [100, 500, 1000, 3000, 7000].map((ms) =>
+      setTimeout(() => emit(`layout.t${ms}`, { container: containerSnapshot() }), ms),
+    );
+
+    // R27.4 — Defensive resize after 250ms.
+    const resizeTimeout = setTimeout(() => {
+      try { map.resize(); emit("map.resize.forced"); } catch { /* ignore */ }
+    }, 250);
+
+    // Full Mapbox lifecycle event surface — every stage user asked for.
     map.on("load", () => {
       clearTimeout(loadTimeout);
       hasLoaded.current = true;
       setReady(true);
+      emit("map.load", { container: containerSnapshot() });
+      // eslint-disable-next-line no-console
+      console.info("[MAPBOX-DIAG] ✓ map.load fired — Mapbox is live");
       onLoad && onLoad();
     });
+    map.on("style.load",  () => emit("map.style.load"));
+    map.on("styledata",   (e) => emit("map.styledata", { dataType: e && e.dataType }));
+    map.on("sourcedata",  (e) => emit("map.sourcedata", {
+      sourceId: e && e.sourceId, isSourceLoaded: !!(e && e.isSourceLoaded), sourceDataType: e && e.sourceDataType,
+    }));
+    map.on("dataloading", (e) => emit("map.dataloading", { dataType: e && e.dataType }));
+    map.on("data",        (e) => emit("map.data", { dataType: e && e.dataType }));
+    map.on("idle",        () => emit("map.idle"));
+    let renderCount = 0;
+    map.on("render", () => {
+      renderCount++;
+      if (renderCount === 1) emit("map.render.first");
+      if (renderCount === 10) emit("map.render.10");
+      if (renderCount === 60) emit("map.render.60");
+    });
+    map.on("webglcontextlost",    () => emit("map.webglcontextlost"));
+    map.on("webglcontextrestored",() => emit("map.webglcontextrestored"));
+
     map.on("error", (ev) => {
       const err = ev?.error || ev || new Error("mapbox error");
+      errCount++;
+      lastErrMsg = String(err?.message || err).slice(0, 200);
       const kind = classifyMapboxError(err, { hasLoaded: hasLoaded.current });
+      emit(`map.error.${kind}`, {
+        message: lastErrMsg,
+        status: err?.status || err?.statusCode || null,
+        url: stripToken(err?.url || ev?.sourceId || ""),
+      });
       if (kind === "fatal") {
         // eslint-disable-next-line no-console
-        console.warn("[MapboxMap] fatal error, bubbling to dispatcher:", err?.message || err);
+        console.warn("[MAPBOX-DIAG] fatal error → dispatcher fallback:", lastErrMsg);
         setInitError(err);
         onError && onError(err);
       } else {
         // eslint-disable-next-line no-console
-        console.debug("[MapboxMap] non-fatal error ignored:", err?.message || err);
+        console.debug("[MAPBOX-DIAG] non-fatal error ignored:", lastErrMsg);
       }
     });
+
     mapRef.current = map;
     return () => {
       clearTimeout(loadTimeout);
+      clearTimeout(resizeTimeout);
+      layoutChecks.forEach(clearTimeout);
       if (sweepAnimRef.current) {
         cancelAnimationFrame(sweepAnimRef.current);
         sweepAnimRef.current = null;
@@ -397,8 +584,15 @@ export function MapboxMap({
   }
 
   return (
-    <div className={`relative ${className}`} data-testid={testId}>
-      <div ref={containerRef} className="absolute inset-0" />
+    <div
+      className={`relative ${className}`}
+      data-testid={testId}
+      style={{ minHeight: 200 }}   /* R27.4 — guarantee non-zero container
+        even during the initial React layout tick. iOS Safari reads container
+        dimensions synchronously inside `new mapboxgl.Map()`; a 0-height
+        container is one of the top three causes of silent-hang failures. */
+    >
+      <div ref={containerRef} className="absolute inset-0" style={{ width: "100%", height: "100%" }} />
       {showRecenter && (
         <button
           type="button"
@@ -409,6 +603,24 @@ export function MapboxMap({
         >
           <Navigation className="h-4 w-4 text-neutral-700" />
         </button>
+      )}
+
+      {/* R27.5 — Diagnostic overlay. Renders a compact status badge in the
+          top-left showing what stage Mapbox reached, request counts, and
+          any errors. Removed once `map.load` succeeds so production users
+          who see Mapbox never see it. When the iPhone hangs, the user can
+          screenshot the badge and we know exactly where it stalled. */}
+      {!ready && (
+        <div
+          data-testid={`${testId}-diag`}
+          className="pointer-events-none absolute top-2 left-2 z-20 max-w-[92%] rounded-md bg-black/75 px-2 py-1 font-mono text-[10px] leading-tight text-white shadow"
+        >
+          <div><b>MB</b> v{mapboxgl.version || "?"} · dpr {typeof window !== "undefined" ? window.devicePixelRatio : "?"}</div>
+          <div>stage: <b>{diag.stage}</b> · {diag.elapsed}ms · ev {diag.events}</div>
+          <div>size: {diag.w}×{diag.h}</div>
+          <div>req: s{diag.reqs.style} t{diag.reqs.tile} g{diag.reqs.glyph} sp{diag.reqs.sprite} o{diag.reqs.other}</div>
+          {diag.errs > 0 && <div className="text-amber-300">err×{diag.errs}: {String(diag.lastErr || "").slice(0, 60)}</div>}
+        </div>
       )}
     </div>
   );
