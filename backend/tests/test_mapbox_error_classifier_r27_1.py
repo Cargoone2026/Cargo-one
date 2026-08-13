@@ -90,6 +90,28 @@ def test_fatal_before_load_missing_token():
     assert r == ["fatal", "fatal", "fatal"]
 
 
+def test_fatal_before_load_mapbox_gl_unsupported_capability_probe():
+    """R27.2 — mapboxgl.supported() returning false must route to Google.
+    The exact message emitted by our capability probe is 'Mapbox GL
+    unsupported on this browser (WebGL unavailable)'. It must classify
+    as fatal so the dispatcher swaps to Google."""
+    r = _run_node([
+        {"err": {"message": "Mapbox GL unsupported on this browser (WebGL unavailable)"}, "opts": {"hasLoaded": False}},
+        {"err": {"message": "Mapbox GL unsupported"}, "opts": {"hasLoaded": False}},
+    ])
+    assert r == ["fatal", "fatal"]
+
+
+def test_capability_probe_fatal_short_circuits_pre_load_only():
+    """Even the capability-probe message must NOT flip fallback if the
+    map has already loaded once (defensive — we should never see this
+    post-load, but the hasLoaded guard is the safety rail)."""
+    r = _run_node([
+        {"err": {"message": "Mapbox GL unsupported on this browser (WebGL unavailable)"}, "opts": {"hasLoaded": True}},
+    ])
+    assert r == ["non_fatal"]
+
+
 def test_fatal_before_load_style_load_failure():
     r = _run_node([
         {"err": {"message": "Failed to load style: streets-v12"}, "opts": {"hasLoaded": False}},

@@ -23,7 +23,7 @@ export function classifyMapboxError(err, { hasLoaded = false } = {}) {
   const message = String(err?.message || err?.error?.message || err || "");
   if (status === 401 || status === 403) return "fatal";
   // Genuine fatal signals from mapbox-gl during initial load
-  if (/^(?:No Token|Not Authorized|A valid Mapbox access token|access token is required|WebGL is not supported|WebGL is required|Style is not done loading|Failed to load style|CSP|Content Security Policy)/i.test(message))
+  if (/^(?:No Token|Not Authorized|A valid Mapbox access token|access token is required|WebGL is not supported|WebGL is required|Mapbox GL unsupported|Style is not done loading|Failed to load style|CSP|Content Security Policy)/i.test(message))
     return "fatal";
   // Anything else pre-load is treated as transient/non-fatal — the map
   // might still recover on the next tick. If Mapbox never fires `load`,
@@ -94,6 +94,21 @@ export function MapboxMap({
         mapboxgl.setTelemetryEnabled(false);
       }
     } catch { /* older mapbox-gl versions may not expose this — safe to ignore */ }
+    // R27.2 — iOS Safari (Low Power Mode / WebGL disabled / GPU blocklist)
+    // can silently fail to allocate a WebGL context. mapboxgl.supported()
+    // is the canonical up-front capability probe. When false, we skip the
+    // Map constructor entirely and bubble a fatal error so the dispatcher
+    // falls back to Google (Google Maps uses raster tiles — works on
+    // every iOS Safari + WebGL-disabled browser).
+    try {
+      if (typeof mapboxgl.supported === "function"
+          && !mapboxgl.supported({ failIfMajorPerformanceCaveat: true })) {
+        const err = new Error("Mapbox GL unsupported on this browser (WebGL unavailable)");
+        setInitError(err);
+        onError && onError(err);
+        return undefined;
+      }
+    } catch { /* very old / very new mapbox-gl may not expose .supported — proceed anyway */ }
     if (!containerRef.current) return undefined;
     let map;
     try {

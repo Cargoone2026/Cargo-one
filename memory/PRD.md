@@ -1611,3 +1611,50 @@ Production `cargoone.co.uk` was rendering the Google fallback despite the token 
 ### Production deployment
 NOT DEPLOYED YET. Awaiting owner explicit approval to push R27.1 to `cargoone.co.uk`.
 
+
+## R27.2 — iOS Safari WebGL capability probe (Feb 2026)
+
+### Trigger
+Production iPhone Safari on `cargoone.co.uk` was showing a completely blank map area — no Mapbox tiles, no Google fallback tiles — while pricing/route data resolved correctly (screenshot: Accrington → London £318.73 with a blank white rectangle where the RouteMap should render). Root cause: iOS Safari can silently fail to allocate a WebGL context (Low Power Mode, GPU blocklist, or WebGL disabled in Safari > Advanced). Mapbox GL does not fire an `error` event in that case — it just returns an inert Map. The R27.1 classifier only catches errors, so we ended up with a mounted-but-dead map and no swap to Google.
+
+### Fix (frontend/src/components/ui-portal/MapboxMap.jsx only, ~15 lines)
+Added an upfront capability probe **before** `new mapboxgl.Map()`:
+```js
+if (!mapboxgl.supported({ failIfMajorPerformanceCaveat: true })) {
+  bubble fatal error → dispatcher falls back to Google
+}
+```
+`mapboxgl.supported()` is Mapbox's canonical probe — it verifies WebGL is available AND performant enough to render. When it returns false, we skip the constructor entirely and route via the existing fatal path (same code path as 401/403 URL restrictions). Google Maps uses raster tiles and works on every iOS Safari + WebGL-disabled browser.
+
+Classifier also updated: `"Mapbox GL unsupported"` in the error message is now recognised as fatal alongside `WebGL is not supported`.
+
+### Files changed
+- `frontend/src/components/ui-portal/MapboxMap.jsx` — capability probe (~15 lines) + one regex clause in classifier.
+- `backend/tests/test_mapbox_error_classifier_r27_1.py` — 2 new regression tests (12 total).
+
+### Files NOT changed
+- RouteMap.jsx, DriverLiveMap.jsx dispatchers.
+- Google fallback bodies (RouteMapGoogle.jsx, DriverLiveMapGoogle.jsx).
+- Any backend file, any pricing / service file, any Google Distance Matrix code, any `/api/geo/*`, any booking-fee bands.
+- `.env` files, token URL restrictions.
+
+### Testing
+- **12 / 12** classifier regression tests pass (was 10; +2 for the capability probe).
+- **186 / 186** full pricing + classifier suite passes · 11 skipped · 0 failed.
+- Direct classifier node probe: `Mapbox GL unsupported on this browser (WebGL unavailable)` → `"fatal"` (as required).
+- Frontend compile: clean (webpack compiled successfully).
+
+### Behaviour matrix after R27.2
+| Scenario | Behaviour |
+|---|---|
+| Desktop Chrome / Firefox (WebGL OK) | Renders Mapbox (unchanged) |
+| iOS Safari with WebGL working | Renders Mapbox (unchanged) |
+| iOS Safari Low Power Mode / WebGL disabled | **NEW:** Immediate switch to Google raster fallback (was: blank map) |
+| Android Chrome + GPU blocklist | **NEW:** Immediate switch to Google raster fallback |
+| Any browser + non-fatal tile 404 post-load | Silently ignored (R27.1 unchanged) |
+| Any browser + 401/403 token restriction | Fallback to Google (R27.1 unchanged) |
+| Any browser + genuine style-load failure | Fallback to Google (R27.1 unchanged) |
+
+### Production status
+NOT DEPLOYED YET. Owner explicit approval required. Owner will separately verify on their iPhone after deploy.
+
