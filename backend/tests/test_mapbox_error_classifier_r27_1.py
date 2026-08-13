@@ -90,6 +90,17 @@ def test_fatal_before_load_missing_token():
     assert r == ["fatal", "fatal", "fatal"]
 
 
+def test_fatal_before_load_load_timeout():
+    """R27.3 — When the load-timeout failsafe fires (iOS Safari silent
+    hang), the classifier must return fatal so the dispatcher falls
+    back to Google."""
+    r = _run_node([
+        {"err": {"message": "Mapbox failed to load within 8s — likely iOS Safari WebGL init hang"}, "opts": {"hasLoaded": False}},
+        {"err": {"message": "Mapbox failed to load"}, "opts": {"hasLoaded": False}},
+    ])
+    assert r == ["fatal", "fatal"]
+
+
 def test_fatal_before_load_mapbox_gl_unsupported_capability_probe():
     """R27.2 — mapboxgl.supported() returning false must route to Google.
     The exact message emitted by our capability probe is 'Mapbox GL

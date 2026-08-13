@@ -23,7 +23,7 @@ export function classifyMapboxError(err, { hasLoaded = false } = {}) {
   const message = String(err?.message || err?.error?.message || err || "");
   if (status === 401 || status === 403) return "fatal";
   // Genuine fatal signals from mapbox-gl during initial load
-  if (/^(?:No Token|Not Authorized|A valid Mapbox access token|access token is required|WebGL is not supported|WebGL is required|Mapbox GL unsupported|Style is not done loading|Failed to load style|CSP|Content Security Policy)/i.test(message))
+  if (/^(?:No Token|Not Authorized|A valid Mapbox access token|access token is required|WebGL is not supported|WebGL is required|Mapbox GL unsupported|Mapbox failed to load|Style is not done loading|Failed to load style|CSP|Content Security Policy)/i.test(message))
     return "fatal";
   // Anything else pre-load is treated as transient/non-fatal — the map
   // might still recover on the next tick. If Mapbox never fires `load`,
@@ -127,7 +127,23 @@ export function MapboxMap({
     }
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
+    // R27.3 — Load-timeout failsafe: iOS Safari can occasionally accept the
+    // constructor (mapboxgl.supported returned true) but then silently hang
+    // without firing `load` OR `error` (background restore, WebGL context
+    // creation ok'd but paint never happens, or GPU stall). If `load` hasn't
+    // fired within 8 seconds, we treat it as a fatal init failure and let
+    // the dispatcher fall back to Google raster tiles.
+    const loadTimeout = setTimeout(() => {
+      if (!hasLoaded.current) {
+        const err = new Error("Mapbox failed to load within 8s — likely iOS Safari WebGL init hang");
+        // eslint-disable-next-line no-console
+        console.warn("[MapboxMap] load timeout, bubbling to dispatcher:", err.message);
+        setInitError(err);
+        onError && onError(err);
+      }
+    }, 8000);
     map.on("load", () => {
+      clearTimeout(loadTimeout);
       hasLoaded.current = true;
       setReady(true);
       onLoad && onLoad();
@@ -147,6 +163,7 @@ export function MapboxMap({
     });
     mapRef.current = map;
     return () => {
+      clearTimeout(loadTimeout);
       if (sweepAnimRef.current) {
         cancelAnimationFrame(sweepAnimRef.current);
         sweepAnimRef.current = null;

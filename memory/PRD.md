@@ -1658,3 +1658,36 @@ Classifier also updated: `"Mapbox GL unsupported"` in the error message is now r
 ### Production status
 NOT DEPLOYED YET. Owner explicit approval required. Owner will separately verify on their iPhone after deploy.
 
+
+
+## R27.3 — Load-timeout failsafe for silent iOS Safari hangs (Feb 2026)
+
+### Trigger
+Even after R27.2 shipped (`mapboxgl.supported()` capability probe), the iPhone map still rendered as a blank rectangle on `cargoone.co.uk`. Bundle verification confirmed R27.2 fingerprints were live (`main.4a23996a.js` — probe + hasLoaded + telemetry-disable all present). Ergo: iOS Safari is passing the `supported()` probe (WebGL IS available) BUT then `new mapboxgl.Map()` silently hangs — no `load` event, no `error` event, just a dead canvas. Neither R27.1 classifier nor R27.2 probe can rescue this because there's no error to classify and WebGL reports as supported.
+
+### Fix (frontend/src/components/ui-portal/MapboxMap.jsx only, ~20 lines)
+Added a **load-timeout failsafe**: an 8-second `setTimeout` set immediately after `new mapboxgl.Map(...)`. If `map.on("load")` hasn't fired within 8s, `hasLoaded.current` is still false → we bubble a fatal error via `onError` → dispatcher falls back to Google raster tiles. Successful mounts `clearTimeout` in the load handler (zero overhead in the happy path). Cleanup effect also clears the timeout on unmount. Classifier regex updated to route "Mapbox failed to load…" messages as fatal.
+
+### Files changed
+- `frontend/src/components/ui-portal/MapboxMap.jsx` — timeout + cleanup + classifier regex
+- `backend/tests/test_mapbox_error_classifier_r27_1.py` — +1 regression test (13 classifier tests total)
+
+### Files NOT changed
+Dispatchers, Google fallback bodies, backend code, pricing, .env, token restrictions.
+
+### Testing
+- **187 / 187** full suite passes · 11 skipped · 0 failed
+- Frontend webpack compile: clean
+
+### Behaviour matrix after R27.3
+
+| Condition | R27.1 | R27.2 | R27.3 (now) |
+|---|---|---|---|
+| Mapbox happy path | Mapbox | Mapbox | Mapbox |
+| Single tile 404 post-load | Ignored | Ignored | Ignored |
+| Fatal 401/403 URL restriction | Google | Google | Google |
+| iOS Safari WebGL disabled | Blank | Google | Google |
+| **iOS Safari silent WebGL hang** (this bug) | Blank | Blank | **Google after 8s** |
+
+### Deployment status
+NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone verification.
