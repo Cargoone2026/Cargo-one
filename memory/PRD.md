@@ -1735,3 +1735,90 @@ NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone verification w
 ### Acceptance criterion (unchanged from user brief)
 Mapbox either renders successfully on the production iPhone, or we have a concrete, evidenced technical reason for the failure. R27.5 provides the evidence-gathering harness; no speculative workaround added.
 
+
+---
+
+## R27.6 — Safari-safe diagnostic harness rebuild (Feb 2026)
+
+### Motivation
+R27.5 iPhone screenshot revealed a concrete new clue:
+```
+MB v3.28.1 · dpr 3
+stage: layout.t3000 · size: 356×218
+req: s2 t4 g0 sp0 o0
+err×4: Can't find variable: o
+```
+`Can't find variable: o` is Safari's shape for `ReferenceError`. Simultaneously, screenshot #3 confirmed Mapbox renders correctly on OTHER routes (Smethwick → Leeds, real vector tiles + P/D markers), so the token, style, and general iOS WebGL path all work. Something in the failing "Current location → London" flow triggers 4 iOS `ReferenceError`s that Mapbox surfaces via its `error` event.
+
+### Root-cause hypothesis
+Ruled out: token/account (Mapbox Console shows normal traffic); style URL (2 style requests fired); tile network (4 tile requests fired); container size (356×218 non-zero); WebGL support (`mapboxgl.supported()` returns true).
+
+The R27.5 diagnostic code contained two Safari-brittle patterns that could produce the `Can't find variable: o` shape after Terser minification on iOS Safari's JIT:
+1. **Object-literal getters** — `get errs() { return errCount; }` / `get lastErr() { return lastErrMsg; }` on `window.__mapboxDiag__.current`.
+2. **Spread over unknown values** — `{ ...(extra || {}) }` inside `emit()` where `extra` was dynamically typed.
+
+Neither pattern is provably the cause (the errors come through Mapbox's error stream, not React's), but both are brittle enough to be worth eliminating before spending more time speculating. R27.6 rebuilds the harness with:
+- Plain object refs (no getters)
+- Manual `Object.keys` copy (no spread over `extra`)
+- Every diagnostic call wrapped in `safe(label, fn)` — exceptions swallowed and logged to `jsErrors`, never rethrown to Mapbox / React
+- Global `window.error` + `unhandledrejection` listeners capturing ALL page-level errors independently
+- Rich per-error record: `message`, `nestedMessage` (from `err.error?.message`), `status`, `source`, `sourceId`, `tile`, `url` (stripped), `errType`, `errKind`
+- 1-second heartbeat interval so timeline is dense even when no Mapbox events fire
+- Explicit lifecycle booleans on overlay: `styleLoaded`, `mapLoaded`, `firstRender`, `idle`, `webglReady`
+- Split error counters: `styleErrors`, `tileErrors`, `otherErrors`, `jsErrors`
+
+### Files touched
+- `/app/frontend/src/components/ui-portal/MapboxMap.jsx` — rebuilt diagnostic block.
+- `/app/backend/tests/test_mapbox_diagnostic_r27_6.py` — 9 new regression tests (see below).
+
+### Overlay after R27.6
+```
+MB v3.28.1 · dpr 3
+stage: <name> · <ms>ms · ev <n>
+size: 356×218
+gl✓·style✓·load✗·R✗·idle✗       ← explicit lifecycle booleans
+req: s2 t4 g0 sp0 o0
+errs: st0 ti0 ot4 js0            ← split error categories
+last: <last error message>
+```
+The `js` counter is exclusively fed by `window.onerror` + `unhandledrejection`. If the next iPhone screenshot shows `js0` but `ot>0`, the errors come from Mapbox itself (v3.28.1 internal). If `js>0`, the errors are from ANY page JS (including anything our React app throws) — either way we now have hard evidence.
+
+### Test coverage
+`test_mapbox_diagnostic_r27_6.py` — 9 tests, all pass in 1.4s:
+1. No bare undeclared `o` identifier in the diagnostic init effect scope (string-strip + regex check on the actual source).
+2. `safe()` wrapper declared and used ≥12 times.
+3. No object-literal getters (`get x()`) anywhere in the harness.
+4. `window.error` + `unhandledrejection` listeners registered AND torn down on unmount.
+5. `access_token` always stripped, never printed to console.
+6. All required status fields present: `styleLoaded`, `mapLoaded`, `firstRender`, `idle`, `webglReady`, `styleErrors`, `tileErrors`, `jsErrors`.
+7. Rich error record fields captured inside `map.on('error')`: `message`, `nestedMessage`, `status`, `source`, `sourceId`, `tile`, `url`, `errType`.
+8. 1-second heartbeat interval registered AND cleared.
+9. No spread-over-`extra` in `emit()`.
+
+Plus existing 13 R27.1 classifier tests pass unchanged. 22/22 Mapbox tests green.
+
+### Deployment status
+NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone verification.
+
+### Next iPhone screenshot interpretation guide
+When the user reopens the same booking on iPhone Safari and screenshots the black overlay when Google fallback kicks in (~8s):
+
+| Overlay reads | Diagnosis |
+|---|---|
+| `gl✓ style✓ load✗ R✗` + `errs: st0 ti0 ot0 js0` | Style loaded, no errors, but `map.load` never fired → **WebGL renderer stalled** (iOS GPU issue) |
+| `gl✓ style✓ load✗ R✗` + `errs: st>0` | **Style loaded partially, then failed** — network or style-content issue |
+| `gl✓ style✓ load✗ R✓` | Rendered at least once but load event blocked → likely a stuck source waiting on a tile |
+| `gl✓ style✗ load✗` + `req: s2` | Style requests fired but style.load never happened → **style JSON parse error or network hang** |
+| `js>0` counter has ANY value | Non-Mapbox JS error present — check console for stack |
+
+### Guardrails (all still intact)
+- Google 8-second fallback timeout unchanged
+- R26 pricing frozen — no Google Distance Matrix code touched
+- Mapbox token restrictions untouched
+- No new Mapbox token
+- No removal of Google fallback
+- No new speculative Mapbox rendering "fix" — only the diagnostic harness was rebuilt
+
+### Acceptance criterion (unchanged)
+Mapbox either renders on the production iPhone, or we have concrete evidenced technical reason for the failure. R27.6 provides the evidence-gathering harness AND rules out our own diagnostic code as a source of the "Can't find variable: o" leak.
+
