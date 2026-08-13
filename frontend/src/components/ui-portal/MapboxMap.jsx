@@ -371,6 +371,25 @@ export function MapboxMap({
         lastErrMsg = "JS:" + rec.message;
         try { console.warn("[MAPBOX-DIAG] window.onerror", rec); } catch (_) { /* noop */ }
         emit("js.error", { message: rec.message, source: rec.source, line: rec.line, column: rec.column });
+
+        // R27.12 — Mapbox Web Worker ReferenceError detection.
+        // Both mapbox-gl v3 (`Can't find variable: o`) AND v2 (`Can't find
+        // variable: r`) exhibit iOS Safari WebKit JIT ReferenceErrors in
+        // the minified tile-decoding worker. When we see this signature
+        // (blob: source URL + ReferenceError message pattern), Mapbox is
+        // fundamentally broken on this device and tiles will never render.
+        // Immediately bubble a fatal error so the RouteMap dispatcher
+        // falls back to Google (which works perfectly on iOS Safari).
+        const fromBlobWorker = typeof rec.source === "string" && rec.source.indexOf("blob:") === 0;
+        const isRefErrPattern = /Can't find variable:/i.test(rec.message)
+          || /is not defined/i.test(rec.message);
+        if (fromBlobWorker && isRefErrPattern && !hasLoaded.current) {
+          const err = new Error("Mapbox worker ReferenceError on iOS Safari — falling back to Google. Original: " + rec.message);
+          emit("map.worker.fatal", { message: rec.message, source: rec.source });
+          try { console.warn("[MAPBOX-DIAG] worker ReferenceError → Google fallback:", rec.message); } catch (_) { /* noop */ }
+          setInitError(err);
+          onError && onError(err);
+        }
       });
     };
     const onUnhandledRejection = function (ev) {

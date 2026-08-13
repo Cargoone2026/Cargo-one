@@ -2126,6 +2126,77 @@ Google fallback intact, 8s timeout intact (final safety net), pricing/backend/ro
 
 ---
 
+## R27.11 — Node engine build fix (Feb 2026)
+
+R27.10 deploy failed with `@mapbox/jsonlint-lines-primitives@2.0.3` requiring Node ≥22 (production has Node 20). Fix: yarn resolution pin in `frontend/package.json`:
+```json
+"resolutions": {
+  "@mapbox/jsonlint-lines-primitives": "2.0.2",
+  ...
+}
+```
+`2.0.2` has `engines: >= 0.6`. Local `yarn build` succeeds cleanly.
+
+---
+
+## R27.12 — Blob-worker ReferenceError → immediate Google fallback (Feb 2026)
+
+### Evidence from R27.10/R27.11 iPhone Safari deploy
+```
+MB v2.15.0 · dpr 3
+style✓ · load✗ · R✓ · idle✗
+errs: st0 ti0 ot0 js2 sw0
+mbErrorSigs: {}
+lastJSError:
+  message: "ReferenceError: Can't find variable: r"
+  source:  "blob:https://cargoone.co.uk/afb8537f-..."
+  precedingReqUrl: mapbox tile URL
+```
+
+Overlay counter shows Mapbox itself emits **zero** errors (huge win from R27.9's AbortError suppression + R27.10 v2 downgrade). But 2 window.error events captured from a `blob:` URL — which is Mapbox's Web Worker for tile decoding. Error: `ReferenceError: Can't find variable: r`.
+
+**Root cause: mapbox-gl v2.15.0's minified tile-decoding worker hits an iOS Safari WebKit JIT ReferenceError.** Different minified letter (`r` for v2, `o` for v3), same class of bug. Both major versions of mapbox-gl have this issue on iOS Safari — Mapbox itself has not fixed it in either.
+
+The markers render (DOM overlays) but tiles never decode → beige/blank basemap.
+
+### Fix
+Cannot fix Mapbox's internal worker. Best-available pragmatic fix: **immediately trigger the Google fallback on this signature**, since Google Maps works perfectly on iOS.
+
+Added detection in `onWindowError`:
+```js
+const fromBlobWorker = rec.source.indexOf("blob:") === 0;
+const isRefErrPattern = /Can't find variable:/i.test(rec.message)
+  || /is not defined/i.test(rec.message);
+if (fromBlobWorker && isRefErrPattern && !hasLoaded.current) {
+  const err = new Error("Mapbox worker ReferenceError on iOS Safari — falling back to Google.");
+  emit("map.worker.fatal", { ... });
+  setInitError(err);
+  onError && onError(err);
+}
+```
+
+This calls the dispatcher's `onFatalError` prop, which unmounts `MapboxMap` and mounts `RouteMapGoogle` — the exact same fallback path used when `mapboxgl.supported()` returns false. iOS users get Google Maps within ~180ms of the first worker error (vs 8s of blank map + timeout previously).
+
+### Guardrails
+- Gate on `!hasLoaded.current` — post-load worker errors are ignored (map already usable)
+- Regular `jsErrCount` still increments (visibility unchanged)
+- All R27.6–R27.11 defensive code kept as insurance
+- Google fallback still works exactly as before — this just triggers it sooner on iOS
+
+### Tests
+- **5/5** new R27.12 tests pass (`test_mapbox_r27_12_worker_fatal.py`): worker detection, gate on `!hasLoaded`, dual-shape ReferenceError pattern, dispatcher swap via setInitError + onError, all prior invariants
+- **123/123** total tests pass (48 Mapbox + 70 R26 pricing + 5 R27.12)
+- Frontend production build (`yarn build`) succeeds locally (504 kB main bundle)
+
+### Deployment
+Ready. Save-to-GitHub → Deploy. Expected iPhone result on the same failing bookings: Mapbox tries briefly (~180ms), worker throws, dispatcher swaps to Google Maps → streets + P/D markers + route polyline visible, no blank map, no 8s wait.
+
+### Longer-term note
+For Android / desktop Safari macOS / Chrome / Firefox where the worker doesn't throw, Mapbox continues to render normally. Only iOS Safari triggers this fast-fallback path. If Mapbox eventually fixes their worker bundle for iOS Safari (or we can afford to pin to an older/newer version that doesn't exhibit it), this fast-fallback becomes a no-op and iOS gets Mapbox too.
+
+
+---
+
 ## R27.10 — mapbox-gl v3 → v2 downgrade (Feb 2026) ✅ ROOT CAUSE FIXED
 
 ### The evidence that solved it
