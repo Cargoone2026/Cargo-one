@@ -100,6 +100,21 @@ export function MapboxMap({
     otherErrors: 0,
     jsErrors: 0,
     lastErr: null,
+    // R27.7 — actual error text + signature-count for overlay display.
+    // mbErrText: latest Mapbox error message (truncated). mbErrSame: true
+    // when all Mapbox errors so far share the same signature; false when
+    // there are multiple distinct signatures. jsErrText / jsErrSame:
+    // same, but for window.onerror + unhandledrejection.
+    mbErrText: null,
+    mbErrSame: true,
+    mbErrDistinct: 0,
+    jsErrText: null,
+    jsErrSame: true,
+    jsErrDistinct: 0,
+    // R27.7 — per-event counts (styledata / sourcedata / data / render
+    // / idle) so we can tell whether render ticks after the first paint
+    // or halts.
+    eventCounts: { styledata: 0, sourcedata: 0, data: 0, render: 0, idle: 0 },
     w: 0, h: 0,
   });
 
@@ -135,6 +150,18 @@ export function MapboxMap({
     const errorLog = [];       // rich Mapbox error records
     const jsErrorLog = [];     // window.onerror + unhandledrejection records
     const reqCounts = { style: 0, tile: 0, glyph: 0, sprite: 0, other: 0 };
+    // R27.7 — per-lifecycle-event counts + last URL requested (for
+    // error correlation). Answers: does render tick after the first
+    // render? does styledata keep firing? What was requested right
+    // before the error?
+    const eventCounts = { styledata: 0, sourcedata: 0, data: 0, dataloading: 0, render: 0, idle: 0 };
+    let lastReqUrl = null;
+    // R27.7 — signature buckets so we can report "same error ×N" vs
+    // "N distinct errors". Kept small; each entry stores { count, first, last }.
+    const mbErrorSigs = Object.create(null);
+    const jsErrorSigs = Object.create(null);
+    let lastMapboxError = null;   // rich record, exposed via window.__mapboxDiag__.current
+    let lastJSError = null;
     let styleErrCount = 0;
     let tileErrCount = 0;
     let otherErrCount = 0;
@@ -189,6 +216,10 @@ export function MapboxMap({
       timeline.push(entry);
       try { console.info("[MAPBOX-DIAG] +" + elapsed + "ms " + stage, extra || ""); } catch (_) { /* noop */ }
       setDiag(function (d) {
+        // R27.7 — compute signature-same booleans on each emit so the
+        // overlay reflects the live picture, not a stale first-error snapshot.
+        const mbSigKeys = Object.keys(mbErrorSigs);
+        const jsSigKeys = Object.keys(jsErrorSigs);
         return {
           stage: stage,
           elapsed: elapsed,
@@ -207,6 +238,19 @@ export function MapboxMap({
           otherErrors: otherErrCount,
           jsErrors: jsErrCount,
           lastErr: lastErrMsg,
+          mbErrText: lastMapboxError ? String(lastMapboxError.message || "").slice(0, 140) : null,
+          mbErrSame: mbSigKeys.length <= 1,
+          mbErrDistinct: mbSigKeys.length,
+          jsErrText: lastJSError ? String(lastJSError.message || "").slice(0, 140) : null,
+          jsErrSame: jsSigKeys.length <= 1,
+          jsErrDistinct: jsSigKeys.length,
+          eventCounts: {
+            styledata: eventCounts.styledata,
+            sourcedata: eventCounts.sourcedata,
+            data: eventCounts.data,
+            render: eventCounts.render,
+            idle: eventCounts.idle,
+          },
           w: containerRef.current ? containerRef.current.clientWidth  : d.w,
           h: containerRef.current ? containerRef.current.clientHeight : d.h,
         };
@@ -223,6 +267,14 @@ export function MapboxMap({
         reqCounts: reqCounts,    // shared object reference
         errorLog: errorLog,
         jsErrorLog: jsErrorLog,
+        eventCounts: eventCounts,     // R27.7 — per-lifecycle-event counts
+        mbErrorSigs: mbErrorSigs,     // R27.7 — signature → { count, first, last }
+        jsErrorSigs: jsErrorSigs,
+        // R27.7 — plain accessor functions (no object-literal getters).
+        // From Safari Web Inspector: `window.__mapboxDiag__.current.getLastMapboxError()`
+        // returns the rich last error record with all fields.
+        getLastMapboxError: function () { return lastMapboxError; },
+        getLastJSError:     function () { return lastJSError; },
         snapshot: function () {
           return {
             stage: lastStage, elapsed: Date.now() - t0, events: timeline.length,
@@ -230,11 +282,19 @@ export function MapboxMap({
               style: reqCounts.style, tile: reqCounts.tile, glyph: reqCounts.glyph,
               sprite: reqCounts.sprite, other: reqCounts.other,
             },
+            eventCounts: {
+              styledata: eventCounts.styledata, sourcedata: eventCounts.sourcedata,
+              data: eventCounts.data, render: eventCounts.render, idle: eventCounts.idle,
+            },
             styleLoaded: styleLoadedFlag, mapLoaded: mapLoadedFlag,
             firstRender: firstRenderFlag, idle: idleFlag, webglReady: webglReadyFlag,
             styleErrors: styleErrCount, tileErrors: tileErrCount,
             otherErrors: otherErrCount, jsErrors: jsErrCount,
             lastErr: lastErrMsg,
+            lastMapboxError: lastMapboxError,
+            lastJSError: lastJSError,
+            mbErrorSigs: mbErrorSigs,
+            jsErrorSigs: jsErrorSigs,
           };
         },
       };
@@ -249,18 +309,27 @@ export function MapboxMap({
       safe("window.onerror", function () {
         jsErrCount += 1;
         const rec = {
-          t: Date.now() - t0,
+          timestamp: Date.now() - t0,
           origin: "window.error",
           message: String(ev && ev.message ? ev.message : ev).slice(0, 300),
-          filename: String(ev && ev.filename ? ev.filename : ""),
-          lineno: ev && typeof ev.lineno === "number" ? ev.lineno : null,
-          colno: ev && typeof ev.colno === "number" ? ev.colno : null,
+          source: String(ev && ev.filename ? ev.filename : ""),
+          line: ev && typeof ev.lineno === "number" ? ev.lineno : null,
+          column: ev && typeof ev.colno === "number" ? ev.colno : null,
+          stack: ev && ev.error && ev.error.stack ? String(ev.error.stack).slice(0, 600) : null,
           errType: ev && ev.error && ev.error.name ? ev.error.name : null,
+          precedingStage: lastStage,
+          precedingReqUrl: lastReqUrl,
         };
         jsErrorLog.push(rec);
+        lastJSError = rec;
+        // Signature bucket — treat identical `message` strings as same error.
+        const sigKey = rec.message || "(empty)";
+        if (!jsErrorSigs[sigKey]) jsErrorSigs[sigKey] = { count: 0, firstT: rec.timestamp, lastT: rec.timestamp };
+        jsErrorSigs[sigKey].count += 1;
+        jsErrorSigs[sigKey].lastT = rec.timestamp;
         lastErrMsg = "JS:" + rec.message;
         try { console.warn("[MAPBOX-DIAG] window.onerror", rec); } catch (_) { /* noop */ }
-        emit("js.error", rec);
+        emit("js.error", { message: rec.message, source: rec.source, line: rec.line, column: rec.column });
       });
     };
     const onUnhandledRejection = function (ev) {
@@ -268,15 +337,26 @@ export function MapboxMap({
         jsErrCount += 1;
         const reason = ev && ev.reason;
         const rec = {
-          t: Date.now() - t0,
+          timestamp: Date.now() - t0,
           origin: "unhandledrejection",
           message: String(reason && reason.message ? reason.message : reason).slice(0, 300),
+          source: null,
+          line: null,
+          column: null,
+          stack: reason && reason.stack ? String(reason.stack).slice(0, 600) : null,
           errType: reason && reason.name ? reason.name : null,
+          precedingStage: lastStage,
+          precedingReqUrl: lastReqUrl,
         };
         jsErrorLog.push(rec);
+        lastJSError = rec;
+        const sigKey = rec.message || "(empty)";
+        if (!jsErrorSigs[sigKey]) jsErrorSigs[sigKey] = { count: 0, firstT: rec.timestamp, lastT: rec.timestamp };
+        jsErrorSigs[sigKey].count += 1;
+        jsErrorSigs[sigKey].lastT = rec.timestamp;
         lastErrMsg = "REJ:" + rec.message;
         try { console.warn("[MAPBOX-DIAG] unhandledrejection", rec); } catch (_) { /* noop */ }
-        emit("js.rejection", rec);
+        emit("js.rejection", { message: rec.message });
       });
     };
     safe("register-globals", function () {
@@ -380,7 +460,8 @@ export function MapboxMap({
           safe("transformRequest", function () {
             const kind = classify(url);
             reqCounts[kind] = (reqCounts[kind] || 0) + 1;
-            emit("req." + kind, { resourceType: resourceType, url: stripToken(url) });
+            lastReqUrl = stripToken(url);   // R27.7 — correlated with next error
+            emit("req." + kind, { resourceType: resourceType, url: lastReqUrl });
           });
           return { url: url };
         },
@@ -464,42 +545,72 @@ export function MapboxMap({
       styleLoadedFlag = true;
       emit("map.style.load");
     });
-    map.on("styledata",   function (e) { emit("map.styledata",   { dataType: e && e.dataType }); });
-    map.on("sourcedata",  function (e) { emit("map.sourcedata",  {
-      sourceId: e && e.sourceId,
-      isSourceLoaded: !!(e && e.isSourceLoaded),
-      sourceDataType: e && e.sourceDataType,
-    }); });
+    map.on("styledata",   function (e) {
+      eventCounts.styledata += 1;
+      // Only emit the first N to avoid flooding; owner still sees the count.
+      if (eventCounts.styledata <= 5 || eventCounts.styledata % 20 === 0) {
+        emit("map.styledata", { n: eventCounts.styledata, dataType: e && e.dataType });
+      }
+    });
+    map.on("sourcedata",  function (e) {
+      eventCounts.sourcedata += 1;
+      if (eventCounts.sourcedata <= 5 || eventCounts.sourcedata % 20 === 0) {
+        emit("map.sourcedata", {
+          n: eventCounts.sourcedata,
+          sourceId: e && e.sourceId,
+          isSourceLoaded: !!(e && e.isSourceLoaded),
+          sourceDataType: e && e.sourceDataType,
+        });
+      }
+    });
     map.on("dataloading", function (e) { emit("map.dataloading", { dataType: e && e.dataType }); });
-    map.on("data",        function (e) { emit("map.data",        { dataType: e && e.dataType }); });
-    map.on("idle",        function () { idleFlag = true; emit("map.idle"); });
-    let renderCount = 0;
+    map.on("data",        function (e) {
+      eventCounts.data += 1;
+      if (eventCounts.data <= 5 || eventCounts.data % 20 === 0) {
+        emit("map.data", { n: eventCounts.data, dataType: e && e.dataType });
+      }
+    });
+    map.on("idle",        function () { idleFlag = true; eventCounts.idle += 1; emit("map.idle", { n: eventCounts.idle }); });
     map.on("render", function () {
-      renderCount += 1;
-      if (renderCount === 1)  { firstRenderFlag = true; emit("map.render.first"); }
-      if (renderCount === 10) { emit("map.render.10"); }
-      if (renderCount === 60) { emit("map.render.60"); }
+      eventCounts.render += 1;
+      if (eventCounts.render === 1)  { firstRenderFlag = true; emit("map.render.first"); }
+      if (eventCounts.render === 10) { emit("map.render.10"); }
+      if (eventCounts.render === 60) { emit("map.render.60"); }
+      if (eventCounts.render === 300) { emit("map.render.300"); }
     });
     map.on("webglcontextlost",     function () { emit("map.webglcontextlost"); });
     map.on("webglcontextrestored", function () { emit("map.webglcontextrestored"); });
 
-    // R27.6 — Rich per-error capture. User asked for message, error.error?.message,
-    // status, source, sourceId, tile, url, and safe stringified error.
+    // R27.6 → R27.7 — Rich per-error capture.
+    // Now records precedingStage + precedingReqUrl, and safely snapshots
+    // style.layers / style.sources counts on each error so we can tell
+    // whether the error correlates with a specific layer or source id.
     map.on("error", function (ev) {
       safe("map.on.error", function () {
         const evObj = ev || {};
         const err = evObj.error || evObj || new Error("mapbox error");
-        // Best-effort classification of the request kind that failed
-        // (helps distinguish styleErrors vs tileErrors vs otherErrors).
         const urlForClass = evObj.url || (err && err.url) || evObj.sourceId || "";
         const errKind = classify(urlForClass);
         if (errKind === "style") styleErrCount += 1;
         else if (errKind === "tile" || errKind === "glyph" || errKind === "sprite") tileErrCount += 1;
         else otherErrCount += 1;
 
+        // Safe snapshot of style state (Task 8) — counts only, no dump.
+        let styleState = null;
+        try {
+          const s = map.getStyle && map.getStyle();
+          if (s) {
+            styleState = {
+              layers: s.layers ? s.layers.length : 0,
+              sources: s.sources ? Object.keys(s.sources).length : 0,
+            };
+          }
+        } catch (_) { styleState = { error: "getStyle-threw" }; }
+
+        const message = String(err && err.message ? err.message : err).slice(0, 300);
         const record = {
-          t: Date.now() - t0,
-          message: String(err && err.message ? err.message : err).slice(0, 300),
+          timestamp: Date.now() - t0,
+          message: message,
           nestedMessage: err && err.error && err.error.message
             ? String(err.error.message).slice(0, 300) : null,
           status: err && (err.status || err.statusCode)
@@ -510,9 +621,19 @@ export function MapboxMap({
           url: stripToken(evObj.url || (err && err.url) || ""),
           errType: err && err.name ? err.name : null,
           errKind: errKind,
+          precedingStage: lastStage,          // R27.7 — timeline correlation
+          precedingReqUrl: lastReqUrl,         // R27.7 — last URL requested
+          styleState: styleState,             // R27.7 — layer / source counts
+          stack: err && err.stack ? String(err.stack).slice(0, 600) : null,
         };
         errorLog.push(record);
-        lastErrMsg = record.message;
+        lastMapboxError = record;
+        // Signature bucket — identical `message` → same-error.
+        const sigKey = message || "(empty)";
+        if (!mbErrorSigs[sigKey]) mbErrorSigs[sigKey] = { count: 0, firstT: record.timestamp, lastT: record.timestamp };
+        mbErrorSigs[sigKey].count += 1;
+        mbErrorSigs[sigKey].lastT = record.timestamp;
+        lastErrMsg = message;
 
         const kind = classifyMapboxError(err, { hasLoaded: hasLoaded.current });
         emit("map.error." + kind, record);
@@ -789,17 +910,14 @@ export function MapboxMap({
         </button>
       )}
 
-      {/* R27.6 — Diagnostic overlay. Renders a compact status badge in the
-          top-left showing what stage Mapbox reached, request counts, and
-          explicit lifecycle-state booleans (styleLoaded / mapLoaded /
-          firstRender / idle / webglReady). Removed once `map.load`
-          succeeds so production users who see Mapbox never see it. When
-          the iPhone hangs, the user can screenshot the badge and we know
-          exactly which lifecycle stages progressed. */}
+      {/* R27.7 — Diagnostic overlay with actual error text + event counts.
+          When production iPhone hangs, screenshot shows exactly what
+          error(s) occurred, whether they're the same or distinct, and
+          which lifecycle events kept firing after first render. */}
       {!ready && (
         <div
           data-testid={`${testId}-diag`}
-          className="pointer-events-none absolute top-2 left-2 z-20 max-w-[92%] rounded-md bg-black/80 px-2 py-1 font-mono text-[10px] leading-tight text-white shadow"
+          className="pointer-events-none absolute top-2 left-2 z-20 max-w-[92%] rounded-md bg-black/85 px-2 py-1 font-mono text-[10px] leading-tight text-white shadow"
         >
           <div><b>MB</b> v{mapboxgl.version || "?"} · dpr {typeof window !== "undefined" ? window.devicePixelRatio : "?"}</div>
           <div>stage: <b>{diag.stage}</b> · {diag.elapsed}ms · ev {diag.events}</div>
@@ -811,12 +929,23 @@ export function MapboxMap({
             R{diag.firstRender ? "✓" : "✗"}·
             idle{diag.idle ? "✓" : "✗"}
           </div>
+          <div>
+            ec: sd{diag.eventCounts.styledata} src{diag.eventCounts.sourcedata}
+            {" "}d{diag.eventCounts.data} r{diag.eventCounts.render} i{diag.eventCounts.idle}
+          </div>
           <div>req: s{diag.reqs.style} t{diag.reqs.tile} g{diag.reqs.glyph} sp{diag.reqs.sprite} o{diag.reqs.other}</div>
           <div>
             errs: st{diag.styleErrors} ti{diag.tileErrors} ot{diag.otherErrors} js{diag.jsErrors}
           </div>
-          {diag.lastErr ? (
-            <div className="text-amber-300">last: {String(diag.lastErr).slice(0, 70)}</div>
+          {diag.mbErrText ? (
+            <div className="text-amber-300">
+              MBERR{diag.mbErrDistinct > 1 ? ` (${diag.mbErrDistinct} distinct)` : (diag.otherErrors > 1 ? ` (same×${diag.otherErrors + diag.styleErrors + diag.tileErrors})` : "")}: {diag.mbErrText}
+            </div>
+          ) : null}
+          {diag.jsErrText ? (
+            <div className="text-red-300">
+              JSERR{diag.jsErrDistinct > 1 ? ` (${diag.jsErrDistinct} distinct)` : (diag.jsErrors > 1 ? ` (same×${diag.jsErrors})` : "")}: {diag.jsErrText}
+            </div>
           ) : null}
         </div>
       )}

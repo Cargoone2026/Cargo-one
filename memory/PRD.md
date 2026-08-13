@@ -1822,3 +1822,106 @@ When the user reopens the same booking on iPhone Safari and screenshots the blac
 ### Acceptance criterion (unchanged)
 Mapbox either renders on the production iPhone, or we have concrete evidenced technical reason for the failure. R27.6 provides the evidence-gathering harness AND rules out our own diagnostic code as a source of the "Can't find variable: o" leak.
 
+
+---
+
+## R27.7 — Actual error text surfacing (Feb 2026)
+
+### Motivation
+R27.6 iPhone screenshot returned a very specific state on production
+(Halifax → London route):
+```
+MB v3.28.1 · dpr 3
+stage: heartbeat · ~7.1s · ev 48
+size: 356×198
+gl✓ · style✓ · load✗ · R✓ · idle✗
+req: s2 t4 g0 sp0 o0
+errs: st0 ti0 ot4 js4
+```
+So: WebGL works, style loaded, at least one render happened, no style/tile
+network errors, BUT `map.load` never fires and 4 Mapbox "other" + 4 JS
+errors are counted with no text visible.
+
+R27.7 exposes the **actual error content**. No fix attempted yet.
+
+### Changes (`MapboxMap.jsx`)
+1. **Overlay adds `MBERR:` and `JSERR:` lines** — shows the first 140 chars
+   of the latest Mapbox / JS error message. Also shows `(same×N)` if all
+   errors share the same signature, or `(N distinct)` if not.
+2. **Signature buckets** — `mbErrorSigs` / `jsErrorSigs` maps
+   `message → { count, firstT, lastT }`. Answers the user's Task 3 & 4:
+   are the 4 errors identical or distinct?
+3. **`window.__mapboxDiag__.current.getLastMapboxError()`** — plain
+   accessor (not object-literal getter, to keep R27.6 Safari-safety
+   invariant) returning the rich record:
+   `{ timestamp, message, nestedMessage, status, source, sourceId, tile,
+      url, errType, errKind, precedingStage, precedingReqUrl, styleState,
+      stack }`.
+4. **`window.__mapboxDiag__.current.getLastJSError()`** — same for the
+   window-level error/rejection stream: `{ timestamp, message, source,
+   line, column, stack, errType, precedingStage, precedingReqUrl }`.
+5. **Preceding-stage & preceding-URL correlation** — every error captures
+   `lastStage` and `lastReqUrl` at moment of firing (Task 5).
+6. **Safe style-state snapshot on each Mapbox error** — captures
+   `layers.length` and `sources` count via `map.getStyle()` (Task 8).
+   Wrapped in try/catch. No full-dump.
+7. **Per-lifecycle-event counters** — `eventCounts.styledata /
+   sourcedata / data / render / idle` exposed on overlay as
+   `ec: sd# src# d# r# i#`. Answers Task 7: does rendering continue
+   after first paint, or halt?
+8. **Deep event sampling** — first 5 emits per event kind then every
+   20th (avoid flooding but keep first-few + rate). Full counts still
+   visible via `eventCounts`.
+
+### Overlay after R27.7 (expected next iPhone screenshot)
+```
+MB v3.28.1 · dpr 3
+stage: heartbeat · 7115ms · ev 48
+size: 356×198
+gl✓ · style✓ · load✗ · R✓ · idle✗
+ec: sd# src# d# r# i#
+req: s2 t4 g0 sp0 o0
+errs: st0 ti0 ot4 js4
+MBERR (same×4): <actual first 140 chars of Mapbox error>
+JSERR (same×4): <actual first 140 chars of window error/rejection>
+```
+
+### Files touched
+- `/app/frontend/src/components/ui-portal/MapboxMap.jsx`
+- `/app/backend/tests/test_mapbox_diagnostic_r27_7.py` (new — 9 tests, all pass)
+
+### Test results (all deterministic filesystem-based)
+- **9/9** R27.7 tests pass (error record fields, signature buckets,
+  accessors, event counters, overlay text, preceding-stage correlation,
+  safe style-state snapshot, rich JS records, R27.6 invariants still hold).
+- **9/9** R27.6 harness safety tests still pass.
+- **13/13** R27.1 classifier tests still pass.
+- **70/70** R26 pricing tests unchanged.
+- Frontend compiles clean (webpack green).
+
+### No fix implemented — this is evidence-only
+Per user directive, R27.7 is diagnostic-only:
+- Mapbox version NOT changed (still 3.28.1)
+- Style URL NOT changed
+- Token NOT changed
+- Google fallback intact
+- 8s timeout intact
+- Pricing/backend untouched
+
+### Interpretation guide (once user posts next iPhone screenshot)
+- **Same message ×4 on both counters** → single JS ReferenceError bubbling
+  through Mapbox's error stream, fired 4 times during style eval / worker
+  message. Fix target = whichever code emitted the ReferenceError.
+- **Distinct messages** → 4 unrelated failure points; each becomes its
+  own investigation.
+- **`MBERR` mentions "layer" / "expression" / "filter"** → style
+  expression evaluation issue → potentially a mapbox-gl v3.28.1 bug on
+  iOS Safari, may need targeted style-fix or version pin.
+- **`JSERR` shows a stack pointing to `main.<hash>.js`** → our own React
+  code emits it, indirectly captured by Mapbox because of a mapbox-gl
+  internal `window.error` capture. Fix target = our stack frame.
+
+### Deployment status
+NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone screenshot
+showing the actual `MBERR:` and `JSERR:` text.
+
