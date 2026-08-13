@@ -99,6 +99,11 @@ export function MapboxMap({
     tileErrors: 0,
     otherErrors: 0,
     jsErrors: 0,
+    // R27.8 — diagnostic-internal swallow counter. When >0, our own
+    // harness threw an exception during error processing. Distinct
+    // from `jsErrors` (which is now ONLY window.onerror/rejection).
+    safeSwallows: 0,
+    lastSwallow: null,
     lastErr: null,
     // R27.7 — actual error text + signature-count for overlay display.
     // mbErrText: latest Mapbox error message (truncated). mbErrSame: true
@@ -166,6 +171,12 @@ export function MapboxMap({
     let tileErrCount = 0;
     let otherErrCount = 0;
     let jsErrCount = 0;
+    // R27.8 — separate counter for exceptions swallowed BY the diagnostic
+    // harness itself. In R27.6/R27.7 these were being conflated with
+    // window.onerror and inflating js4 to match ot4 identically. Split
+    // so we can see if the diagnostic itself is throwing.
+    let safeSwallowCount = 0;
+    let lastSwallowMsg = null;
     let lastErrMsg = null;
     let lastStage = "boot";
     let styleLoadedFlag = false;
@@ -175,19 +186,47 @@ export function MapboxMap({
     let webglReadyFlag = false;
 
     // ── Defensive wrapper: any diagnostic exception is swallowed and
-    //    logged as a jsError, but never rethrown to Mapbox / React.
+    //    logged as a diagnostic-internal error, but never rethrown to
+    //    Mapbox / React. R27.8 — increments its OWN counter so it can
+    //    no longer masquerade as a genuine window.onerror event.
     const safe = (label, fn) => {
       try { return fn(); } catch (e) {
-        jsErrCount += 1;
+        safeSwallowCount += 1;
+        lastSwallowMsg = String(e && e.message ? e.message : e).slice(0, 300);
         const rec = {
           t: Date.now() - t0,
           origin: "safe:" + label,
-          message: String(e && e.message ? e.message : e).slice(0, 300),
+          message: lastSwallowMsg,
           stack: String(e && e.stack ? e.stack : "").slice(0, 500),
         };
-        jsErrorLog.push(rec);
+        jsErrorLog.push(rec);   // Kept in log for post-mortem, tagged origin=safe:*
         try { console.warn("[MAPBOX-DIAG] safe() swallowed:", label, rec.message); } catch (_) { /* noop */ }
         return undefined;
+      }
+    };
+
+    // R27.8 — safe stringifier for Mapbox event fields (tile, source,
+    // etc.). JSON.stringify throws on circular refs (Mapbox tiles have
+    // back-refs to their source), which was the R27.7 blocker — the
+    // throw happened BEFORE lastMapboxError was assigned, so the overlay
+    // saw a null message and hid the MBERR line.
+    const safeStr = (v, maxLen) => {
+      const cap = typeof maxLen === "number" ? maxLen : 200;
+      if (v == null) return null;
+      if (typeof v === "string") return v.slice(0, cap);
+      if (typeof v === "number" || typeof v === "boolean") return String(v);
+      try {
+        const seen = [];
+        const s = JSON.stringify(v, function (k, val) {
+          if (typeof val === "object" && val !== null) {
+            if (seen.indexOf(val) !== -1) return "[Circular]";
+            seen.push(val);
+          }
+          return val;
+        });
+        return s ? s.slice(0, cap) : null;
+      } catch (_) {
+        try { return String(v).slice(0, cap); } catch (__) { return "[unstringifiable]"; }
       }
     };
 
@@ -237,6 +276,8 @@ export function MapboxMap({
           tileErrors: tileErrCount,
           otherErrors: otherErrCount,
           jsErrors: jsErrCount,
+          safeSwallows: safeSwallowCount,
+          lastSwallow: lastSwallowMsg ? String(lastSwallowMsg).slice(0, 140) : null,
           lastErr: lastErrMsg,
           mbErrText: lastMapboxError ? String(lastMapboxError.message || "").slice(0, 140) : null,
           mbErrSame: mbSigKeys.length <= 1,
@@ -581,21 +622,54 @@ export function MapboxMap({
     map.on("webglcontextlost",     function () { emit("map.webglcontextlost"); });
     map.on("webglcontextrestored", function () { emit("map.webglcontextrestored"); });
 
-    // R27.6 → R27.7 — Rich per-error capture.
-    // Now records precedingStage + precedingReqUrl, and safely snapshots
-    // style.layers / style.sources counts on each error so we can tell
-    // whether the error correlates with a specific layer or source id.
+    // R27.8 — Rich per-error capture with FAST-PATH message capture.
+    // The R27.7 build hid MBERR in the overlay because JSON.stringify
+    // on Mapbox's circular `tile` object threw inside safe(), and the
+    // throw happened BEFORE `lastMapboxError = record`. Now we assign
+    // the minimal record FIRST-THING, then enrich; even if enrichment
+    // throws, the overlay still shows the actual error text.
     map.on("error", function (ev) {
-      safe("map.on.error", function () {
+      // ── Fast-path (must not throw). Runs OUTSIDE safe() so React
+      //    always sees the state update.
+      let fastMsg = "(no message)";
+      let fastErrKind = "other";
+      try {
+        const evObj0 = ev || {};
+        const err0 = evObj0.error || evObj0;
+        if (err0 && typeof err0.message === "string" && err0.message) fastMsg = err0.message.slice(0, 300);
+        else if (typeof err0 === "string") fastMsg = err0.slice(0, 300);
+        else fastMsg = safeStr(err0, 300) || "(no message)";
+        const urlForClass0 = evObj0.url || (err0 && err0.url) || evObj0.sourceId || "";
+        fastErrKind = classify(urlForClass0);
+      } catch (_) { /* absolute worst case still keeps fastMsg */ }
+
+      // Bump the appropriate bucket counter and save early record.
+      if (fastErrKind === "style") styleErrCount += 1;
+      else if (fastErrKind === "tile" || fastErrKind === "glyph" || fastErrKind === "sprite") tileErrCount += 1;
+      else otherErrCount += 1;
+
+      const earlyRecord = {
+        timestamp: Date.now() - t0,
+        message: fastMsg,
+        errKind: fastErrKind,
+        precedingStage: lastStage,
+        precedingReqUrl: lastReqUrl,
+        phase: "early",
+      };
+      lastMapboxError = earlyRecord;      // <-- guaranteed set before ANY risky op
+      lastErrMsg = fastMsg;
+      const sigKey = fastMsg || "(empty)";
+      if (!mbErrorSigs[sigKey]) mbErrorSigs[sigKey] = { count: 0, firstT: earlyRecord.timestamp, lastT: earlyRecord.timestamp };
+      mbErrorSigs[sigKey].count += 1;
+      mbErrorSigs[sigKey].lastT = earlyRecord.timestamp;
+
+      // ── Enrichment path (wrapped in safe — any throw here is
+      //    swallowed but the early record already has the message).
+      safe("map.on.error.enrich", function () {
         const evObj = ev || {};
         const err = evObj.error || evObj || new Error("mapbox error");
-        const urlForClass = evObj.url || (err && err.url) || evObj.sourceId || "";
-        const errKind = classify(urlForClass);
-        if (errKind === "style") styleErrCount += 1;
-        else if (errKind === "tile" || errKind === "glyph" || errKind === "sprite") tileErrCount += 1;
-        else otherErrCount += 1;
 
-        // Safe snapshot of style state (Task 8) — counts only, no dump.
+        // Style state snapshot (Task 8) — layer / source counts only.
         let styleState = null;
         try {
           const s = map.getStyle && map.getStyle();
@@ -607,43 +681,40 @@ export function MapboxMap({
           }
         } catch (_) { styleState = { error: "getStyle-threw" }; }
 
-        const message = String(err && err.message ? err.message : err).slice(0, 300);
-        const record = {
-          timestamp: Date.now() - t0,
-          message: message,
-          nestedMessage: err && err.error && err.error.message
-            ? String(err.error.message).slice(0, 300) : null,
-          status: err && (err.status || err.statusCode)
-            ? (err.status || err.statusCode) : null,
-          source: evObj.source ? String(evObj.source).slice(0, 100) : null,
-          sourceId: evObj.sourceId ? String(evObj.sourceId).slice(0, 100) : null,
-          tile: evObj.tile ? JSON.stringify(evObj.tile).slice(0, 200) : null,
+        const enriched = {
+          timestamp: earlyRecord.timestamp,
+          message: fastMsg,
+          nestedMessage: err && err.error && typeof err.error.message === "string"
+            ? err.error.message.slice(0, 300) : null,
+          status: err && (err.status || err.statusCode) ? (err.status || err.statusCode) : null,
+          source: safeStr(evObj.source, 100),
+          sourceId: safeStr(evObj.sourceId, 100),
+          tile: safeStr(evObj.tile, 300),      // R27.8 — safe stringifier (handles circular refs)
           url: stripToken(evObj.url || (err && err.url) || ""),
           errType: err && err.name ? err.name : null,
-          errKind: errKind,
-          precedingStage: lastStage,          // R27.7 — timeline correlation
-          precedingReqUrl: lastReqUrl,         // R27.7 — last URL requested
-          styleState: styleState,             // R27.7 — layer / source counts
+          errKind: fastErrKind,
+          precedingStage: earlyRecord.precedingStage,
+          precedingReqUrl: earlyRecord.precedingReqUrl,
+          styleState: styleState,
           stack: err && err.stack ? String(err.stack).slice(0, 600) : null,
+          phase: "enriched",
         };
-        errorLog.push(record);
-        lastMapboxError = record;
-        // Signature bucket — identical `message` → same-error.
-        const sigKey = message || "(empty)";
-        if (!mbErrorSigs[sigKey]) mbErrorSigs[sigKey] = { count: 0, firstT: record.timestamp, lastT: record.timestamp };
-        mbErrorSigs[sigKey].count += 1;
-        mbErrorSigs[sigKey].lastT = record.timestamp;
-        lastErrMsg = message;
-
-        const kind = classifyMapboxError(err, { hasLoaded: hasLoaded.current });
-        emit("map.error." + kind, record);
-        try { console.warn("[MAPBOX-DIAG] map.error " + kind, record); } catch (_) { /* noop */ }
-
-        if (kind === "fatal") {
-          setInitError(err);
-          onError && onError(err);
-        }
+        errorLog.push(enriched);
+        lastMapboxError = enriched;      // replace early record with full one
+        try { console.warn("[MAPBOX-DIAG] map.error enriched", enriched); } catch (_) { /* noop */ }
       });
+
+      // Emit at the very end so state reflects the final record.
+      const finalRec = lastMapboxError || earlyRecord;
+      const kind = classifyMapboxError(
+        { message: finalRec.message, status: finalRec.status },
+        { hasLoaded: hasLoaded.current },
+      );
+      emit("map.error." + kind, { message: fastMsg, errKind: fastErrKind });
+      if (kind === "fatal") {
+        setInitError(new Error(fastMsg));
+        onError && onError(new Error(fastMsg));
+      }
     });
 
     mapRef.current = map;
@@ -910,14 +981,18 @@ export function MapboxMap({
         </button>
       )}
 
-      {/* R27.7 — Diagnostic overlay with actual error text + event counts.
-          When production iPhone hangs, screenshot shows exactly what
-          error(s) occurred, whether they're the same or distinct, and
-          which lifecycle events kept firing after first render. */}
+      {/* R27.8 — Diagnostic overlay with GUARANTEED error text visibility.
+          Error lines render whenever their respective counters > 0, even
+          if lastMapboxError is null (fallback: "(no message captured)").
+          A tap-to-alert button surfaces the full JSON when the overlay
+          text is truncated by iPhone Safari.
+
+          R27.6 harness safety + R27.7 field surfacing + R27.8 fast-path
+          + safeSwallow split so we know if diagnostic itself throws. */}
       {!ready && (
         <div
           data-testid={`${testId}-diag`}
-          className="pointer-events-none absolute top-2 left-2 z-20 max-w-[92%] rounded-md bg-black/85 px-2 py-1 font-mono text-[10px] leading-tight text-white shadow"
+          className="pointer-events-auto absolute top-2 left-2 right-2 z-20 rounded-md bg-black/85 px-2 py-1 font-mono text-[10px] leading-tight text-white shadow"
         >
           <div><b>MB</b> v{mapboxgl.version || "?"} · dpr {typeof window !== "undefined" ? window.devicePixelRatio : "?"}</div>
           <div>stage: <b>{diag.stage}</b> · {diag.elapsed}ms · ev {diag.events}</div>
@@ -935,18 +1010,63 @@ export function MapboxMap({
           </div>
           <div>req: s{diag.reqs.style} t{diag.reqs.tile} g{diag.reqs.glyph} sp{diag.reqs.sprite} o{diag.reqs.other}</div>
           <div>
-            errs: st{diag.styleErrors} ti{diag.tileErrors} ot{diag.otherErrors} js{diag.jsErrors}
+            errs: st{diag.styleErrors} ti{diag.tileErrors} ot{diag.otherErrors} js{diag.jsErrors} sw{diag.safeSwallows}
           </div>
-          {diag.mbErrText ? (
-            <div className="text-amber-300">
-              MBERR{diag.mbErrDistinct > 1 ? ` (${diag.mbErrDistinct} distinct)` : (diag.otherErrors > 1 ? ` (same×${diag.otherErrors + diag.styleErrors + diag.tileErrors})` : "")}: {diag.mbErrText}
+          {(diag.otherErrors + diag.styleErrors + diag.tileErrors) > 0 ? (
+            <div className="mt-0.5 break-words text-amber-300" style={{ whiteSpace: "normal" }}>
+              MBERR{diag.mbErrDistinct > 1 ? ` (${diag.mbErrDistinct} distinct)` : ""}:{" "}
+              {diag.mbErrText || "(no message captured — check window.__mapboxDiag__.current.getLastMapboxError())"}
             </div>
           ) : null}
-          {diag.jsErrText ? (
-            <div className="text-red-300">
-              JSERR{diag.jsErrDistinct > 1 ? ` (${diag.jsErrDistinct} distinct)` : (diag.jsErrors > 1 ? ` (same×${diag.jsErrors})` : "")}: {diag.jsErrText}
+          {diag.jsErrors > 0 ? (
+            <div className="mt-0.5 break-words text-red-300" style={{ whiteSpace: "normal" }}>
+              JSERR{diag.jsErrDistinct > 1 ? ` (${diag.jsErrDistinct} distinct)` : ""}:{" "}
+              {diag.jsErrText || "(no message captured — check window.__mapboxDiag__.current.getLastJSError())"}
             </div>
           ) : null}
+          {diag.safeSwallows > 0 ? (
+            <div className="mt-0.5 break-words text-orange-300" style={{ whiteSpace: "normal" }}>
+              SWALLOW: {diag.lastSwallow || "(unknown)"}
+            </div>
+          ) : null}
+          {/* R27.8 — Tap-to-alert full-JSON diagnostic. Truncation-safe,
+              works on any iOS Safari without Web Inspector. */}
+          <button
+            type="button"
+            data-testid={`${testId}-diag-show`}
+            onClick={function () {
+              try {
+                const cur = window.__mapboxDiag__ && window.__mapboxDiag__.current;
+                if (!cur) { window.alert("No diagnostic data available."); return; }
+                const snap = cur.snapshot ? cur.snapshot() : {};
+                const mb = cur.getLastMapboxError ? cur.getLastMapboxError() : null;
+                const js = cur.getLastJSError ? cur.getLastJSError() : null;
+                const out = {
+                  stage: snap.stage, elapsed: snap.elapsed, events: snap.events,
+                  status: {
+                    styleLoaded: snap.styleLoaded, mapLoaded: snap.mapLoaded,
+                    firstRender: snap.firstRender, idle: snap.idle, webglReady: snap.webglReady,
+                  },
+                  eventCounts: snap.eventCounts,
+                  reqCounts: snap.reqCounts,
+                  errCounts: {
+                    style: snap.styleErrors, tile: snap.tileErrors,
+                    other: snap.otherErrors, js: snap.jsErrors,
+                  },
+                  mbErrorSigs: snap.mbErrorSigs,
+                  jsErrorSigs: snap.jsErrorSigs,
+                  lastMapboxError: mb,
+                  lastJSError: js,
+                };
+                window.alert(JSON.stringify(out, null, 2));
+              } catch (e) {
+                try { window.alert("Diag show failed: " + String(e && e.message ? e.message : e)); } catch (_) { /* noop */ }
+              }
+            }}
+            className="mt-1 rounded bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white/25"
+          >
+            SHOW FULL DIAG
+          </button>
         </div>
       )}
     </div>

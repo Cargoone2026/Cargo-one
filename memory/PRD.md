@@ -1925,3 +1925,71 @@ Per user directive, R27.7 is diagnostic-only:
 NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone screenshot
 showing the actual `MBERR:` and `JSERR:` text.
 
+
+---
+
+## R27.8 — Fast-path capture + safeSwallow split (Feb 2026)
+
+### Root cause of R27.7 MBERR/JSERR invisibility
+The iPhone overlay from R27.7 showed `errs: st0 ti0 ot4 js4` but no MBERR/JSERR lines. Investigation of the source:
+
+The `map.on("error")` handler ran INSIDE `safe("map.on.error.enrich", …)`. Inside, before `lastMapboxError = record` was assigned, the handler executed:
+```js
+tile: evObj.tile ? JSON.stringify(evObj.tile).slice(0, 200) : null,
+```
+
+Mapbox tile objects contain **circular back-references** to their source. `JSON.stringify` throws `TypeError: Converting circular structure to JSON` on those. The throw:
+- Was caught by the outer `safe()` wrapper — which incremented `jsErrCount` (indistinguishable from a real `window.onerror` event)
+- Happened BEFORE `lastMapboxError = record`, so `lastMapboxError` remained `null`
+- Overlay conditional `{diag.mbErrText ? … : null}` therefore rendered nothing
+
+This is why the js counter EXACTLY equalled the ot counter (js4 = ot4): each Mapbox error triggered exactly one safe() swallow inside the handler. Same 4 events counted twice.
+
+### R27.8 fixes
+1. **Fast-path message capture** — `let fastMsg` and `lastMapboxError = earlyRecord` are now assigned FIRST-THING, OUTSIDE the `safe()` wrapper. Even if enrichment throws, the overlay sees the actual message text.
+2. **`safeStr()` helper** — safe stringifier for Mapbox event fields (`tile`, `source`, etc.). Uses a `seen` array + `JSON.stringify` replacer to substitute `"[Circular]"` for back-references. Never throws.
+3. **Split counter** — `safeSwallowCount` is a NEW variable distinct from `jsErrCount`. `safe()` increments only `safeSwallowCount`. `window.onerror` / `unhandledrejection` increment `jsErrCount`. Overlay shows `sw{N}` alongside `js{N}` so operators can distinguish diagnostic-internal errors from real page errors.
+4. **Overlay ALWAYS shows MBERR/JSERR when counters > 0** — even if the message is null (fallback text: `"(no message captured — check window.__mapboxDiag__.current.getLastMapboxError())"`).
+5. **Tap-to-alert SHOW FULL DIAG button** — renders below the counters. Tapping it calls `window.alert(JSON.stringify(snapshot(), null, 2))` with the full diagnostic snapshot. Truncation-safe on any iPhone Safari without Web Inspector.
+
+### Expected next iPhone screenshot
+The overlay will now be visibly wider (uses `right-2` to span the map area) and will show, on the same failing route, something like:
+```
+MB v3.28.1 · dpr 3
+stage: heartbeat · Nms · ev N
+size: 356×198
+gl✓ · style✓ · load✗ · R✓ · idle✗
+ec: sd5 src5 d10 r4 i0
+req: s2 t4 g0 sp0 o0
+errs: st0 ti0 ot4 js0 sw4       ← R27.8 shows the swallow was diagnostic-internal
+MBERR: <actual error text>
+SWALLOW: Converting circular structure to JSON   (or similar)
+[SHOW FULL DIAG]
+```
+
+The `sw4` counter alongside `js0` immediately tells us the R27.7 "4 JS errors" were entirely artefacts of our own diagnostic harness. Tapping SHOW FULL DIAG produces an iOS alert with the full snapshot JSON — copy-paste friendly.
+
+### Files touched
+- `/app/frontend/src/components/ui-portal/MapboxMap.jsx`
+- `/app/backend/tests/test_mapbox_diagnostic_r27_8.py` (new — 9 tests, all pass)
+
+### Tests
+- **9/9** R27.8 tests pass (fast-path ordering, safeSwallow split, safeStr presence, overlay-always-show, SHOW FULL DIAG button, R27.6+R27.7 invariants).
+- **9/9** R27.6 harness tests still pass.
+- **9/9** R27.7 error-surfacing tests still pass.
+- **13/13** R27.1 classifier tests still pass.
+- **70/70** R26 pricing tests unchanged.
+- Frontend compiles clean. Desktop dispatcher still falls back to Google correctly on non-whitelisted preview origin.
+
+### Guardrails (still intact)
+- Mapbox version 3.28.1 unchanged
+- Token unchanged, URL restrictions unchanged
+- No new token
+- Google fallback intact (8s timeout preserved)
+- R26 pricing frozen — no Google Distance Matrix touched
+- No booking/dispatch/routing logic touched
+- No speculative Mapbox rendering fix — still evidence-gathering only
+
+### Deployment status
+NOT DEPLOYED. Awaiting owner Save-to-GitHub → Deploy → iPhone screenshot of the R27.8 overlay showing the actual `MBERR:` text and `sw{N}` count. Then tap `SHOW FULL DIAG` to reveal the full snapshot JSON via `window.alert`.
+
