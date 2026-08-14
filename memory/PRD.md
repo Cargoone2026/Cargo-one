@@ -2317,3 +2317,71 @@ NOT DEPLOYED. Save-to-GitHub → Deploy → open the same failing bookings on iP
 
 **Not touched (deliberately)**: Mapbox iOS Safari fallback (unfixable
 WebKit bug — must stay), cancellation-fee formula (deposit-only, R35/R36).
+
+
+---
+
+### R40 — Stripe Refund End-to-End Smoke Test ✅ COMPLETE (Feb 2026)
+
+**Objective:** Prove the R35/R36 deposit-only cancellation policy with REAL Stripe test-mode transactions (not unit-test math). Every assertion below hit LIVE `stripe.PaymentIntent` + `stripe.Refund` objects on the Cargo One dedicated test account (`acct_1TyzKZGbGUS6nuaW`).
+
+**Primary acceptance scenario (verified) — 20% of £81 deposit:**
+
+| Field | Expected | Actual | ✓ |
+|---|---|---|---|
+| Booking total | £675.00 | £675.00 | ✓ |
+| Deposit paid | £81.00 | £81.00 (Stripe PI amount = 8100 pence) | ✓ |
+| Cancellation fee | £16.20 | £16.20 | ✓ |
+| Customer refund | £64.80 | £64.80 (Stripe Refund.amount = 6480 pence) | ✓ |
+| Balance £594 | never charged / never paid | PI amount stays £81, `driver_earnings` has 0 rows | ✓ |
+
+**Sample live Stripe IDs from a report run:**
+- BOOKING_ID: `r40-bkg-64c5418d6d`
+- STRIPE_PAYMENT_INTENT: `pi_3U4TLBGbGUS6nuaW0djNIWdU` (amount £81, status `succeeded`)
+- STRIPE_REFUND: `re_3U4TLBGbGUS6nuaW0uaTLwHH` (amount £64.80, status `succeeded`)
+- HTTP response: `200`, `refund_state="succeeded"`, `cancellation_breakdown.refund_amount=64.80`.
+
+**Edge cases covered (all 7 tests green):**
+1. Pre-accept cancel → 0% fee, £81 fully refunded (`re_…` proves it).
+2. Post-accept cancel → deposit-only fee applies.
+3. Same £81 deposit but £150 total → fee still £16.20 (proof: **fee is a % of deposit, NOT of full booking value**).
+4. Client-injected `{refund_amount: 999999, cancellation_fee: 0}` → server IGNORES, still £16.20/£64.80.
+5. Third-party customer trying to cancel someone else's booking → 403.
+6. Policy min_fee=£500 with £10 deposit → fee capped at £10, refund=£0.00, no negative refunds. Stripe **not** called when refund is £0.
+7. Double cancel attempt → second call returns 409 (atomic guard holds).
+
+**Security/integrity confirmations:**
+- Backend `_compute_cancellation_fee(deposit_paid, policy, driver_accepted)` is source-of-truth — client cannot influence fee/refund.
+- `stripe.Refund.create(payment_intent=…, amount=refund_amount * 100)` — never uses the booking's total_price, only the computed `breakdown.refund_amount`.
+- `post_accept_cancel_count` + `post_accept_cancel_history` correctly increment ONLY when `driver_accepted=True`.
+- No secondary `stripe.PaymentIntent.create` fires against the cancelled £594 balance.
+- No `driver_earnings` row is created for cancelled bookings.
+
+**Files added:**
+- `/app/backend/tests/test_stripe_refund_r40_smoke.py` — 7 tests, ~15s runtime, requires the real (non-`sk_test_emergent` placeholder) Stripe key in `/app/backend/.env`. Loads with `load_dotenv(..., override=True)` so container env vars don't shadow it. Auto-skips module if the key is unavailable.
+
+**Regression:**
+- 7/7 R40 Stripe tests pass.
+- 60/60 pre-existing tests still pass (cancellation R35/R36 + contact R37 + booking_fee_bands + password_reset + payment_and_csrf).
+- 3 flakes in `test_booking_fees.py` (fixed-price at £270 returning £113.85 from the accept path) are **pre-existing** — verified by `git stash` + rerun on the parent commit. NOT introduced by R40.
+
+---
+
+### R41 — Cancellation Insights on Admin Dashboard ✅ COMPLETE (Feb 2026)
+
+**Backend:** New `GET /api/admin/cancellations/weekly?weeks=N` (default 8, max 52). Aggregates `users.post_accept_cancel_history` array entries into ISO-week (Monday-anchored UTC) buckets. Never has holes — always returns exactly `weeks` buckets, oldest first. Each bucket: `{week_start, label, iso_year, iso_week, count, fees, refunds}`. Also returns `totals`. Admin-role gated.
+
+**Frontend:** New `components/ui-portal/CancellationInsightsCard.jsx` mounted on the Admin Dashboard between the metrics grid and the action rows. Pure SVG-like flex bar chart — no chart library added.
+- Current week highlighted in Cargo One red (`#D62828`), historical weeks in charcoal, empty weeks in grey.
+- Tooltip on hover shows `Wk 32 — 6 cancels, £91.00 fee, £324.00 refunded`.
+- Bottom summary cards: total cancels / total fees / total refunds for the window.
+- Whole card is a `<Link>` to `/admin/flagged-customers` for drill-down.
+- Data-testids: `admin-cancellation-insights`, `admin-cancellation-insights-chart`, `admin-cancellation-bar-<week_start>`, `insights-total-{count,fees,refunds}`.
+
+**Verified live:** Endpoint returns 8 buckets on the preview environment. R40 smoke-test cancellations appear in the current-week bar as expected.
+
+**Files added:**
+- `frontend/src/components/ui-portal/CancellationInsightsCard.jsx` (NEW).
+- `backend/server.py` `/admin/cancellations/weekly` endpoint.
+- `frontend/src/pages/portal/admin/Dashboard.jsx` (mounted the card).
+

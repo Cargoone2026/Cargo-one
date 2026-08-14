@@ -20,6 +20,7 @@ import {
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlobalSearchModal } from "@/components/ui-portal/GlobalSearchModal";
+import { CancellationInsightsCard } from "@/components/ui-portal/CancellationInsightsCard";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -86,6 +87,8 @@ export default function AdminDashboard() {
             color="#16A34A"
           />
         </div>
+
+        <CancellationInsightsCard weeks={8} />
 
         <section className="mt-3 space-y-2">
           <ActionRow

@@ -4918,6 +4918,100 @@ async def admin_flagged_customers(
     return {"threshold": int(threshold), "customers": cursor}
 
 
+# R41 — Weekly post-accept cancellation trend for the admin dashboard.
+@api.get("/admin/cancellations/weekly")
+async def admin_cancellations_weekly(
+    weeks: int = 8,
+    _: dict = Depends(require_role("admin")),
+):
+    """Aggregate post-driver-accept customer cancellations by ISO-week for a
+    small trend chart on the admin dashboard.
+
+    Reads from every customer's `post_accept_cancel_history` array (the
+    server appends to this in `customer_cancel_and_refund`). Returns
+    exactly `weeks` buckets, oldest first — never has holes, so the chart
+    always draws a full sparkline. Each bucket carries:
+      * label ("Wk 32", derived from ISO calendar)
+      * week_start (Monday YYYY-MM-DD, UTC)
+      * count (# post-accept cancellations that week)
+      * fees (£ of cancellation fees retained that week)
+      * refunds (£ refunded that week)
+    """
+    weeks = max(1, min(int(weeks or 8), 52))
+    docs = await db.users.find(
+        {"role": "customer", "post_accept_cancel_history.0": {"$exists": True}},
+        {"_id": 0, "post_accept_cancel_history": 1},
+    ).to_list(10000)
+
+    from collections import defaultdict
+    from datetime import datetime, timedelta, timezone as _tz
+
+    # Build the fixed window of the last N ISO weeks (Monday-anchored, UTC).
+    def _monday_of(dt: datetime) -> datetime:
+        d = dt.astimezone(_tz.utc)
+        return (d - timedelta(days=d.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+
+    now = datetime.now(_tz.utc)
+    current_mon = _monday_of(now)
+    buckets: list[dict] = []
+    for i in range(weeks - 1, -1, -1):
+        wk_start = current_mon - timedelta(weeks=i)
+        iso = wk_start.isocalendar()
+        buckets.append({
+            "week_start": wk_start.date().isoformat(),
+            "label": f"Wk {iso.week:02d}",
+            "iso_year": iso.year,
+            "iso_week": iso.week,
+            "count": 0,
+            "fees": 0.0,
+            "refunds": 0.0,
+        })
+    idx_by_start = {b["week_start"]: b for b in buckets}
+    oldest_start = buckets[0]["week_start"]
+
+    for u in docs:
+        for h in (u.get("post_accept_cancel_history") or []):
+            at = h.get("at")
+            if not at:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+            except Exception:
+                continue
+            wk_start = _monday_of(dt).date().isoformat()
+            if wk_start < oldest_start:
+                continue
+            bucket = idx_by_start.get(wk_start)
+            if not bucket:
+                continue
+            bucket["count"] += 1
+            bucket["fees"] += float(h.get("cancellation_fee") or 0.0)
+            bucket["refunds"] += float(h.get("refund_amount") or 0.0)
+
+    # Round for display and compute totals.
+    total_count = 0
+    total_fees = 0.0
+    total_refunds = 0.0
+    for b in buckets:
+        b["fees"] = round(b["fees"], 2)
+        b["refunds"] = round(b["refunds"], 2)
+        total_count += b["count"]
+        total_fees += b["fees"]
+        total_refunds += b["refunds"]
+
+    return {
+        "weeks": weeks,
+        "buckets": buckets,
+        "totals": {
+            "count": total_count,
+            "fees": round(total_fees, 2),
+            "refunds": round(total_refunds, 2),
+        },
+    }
+
+
 @api.post("/driver/bookings/{booking_id}/cancel")
 async def driver_cancel_booking(
     booking_id: str,
