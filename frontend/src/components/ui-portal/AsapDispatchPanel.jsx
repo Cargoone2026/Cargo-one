@@ -126,7 +126,7 @@ export function AsapDispatchPanel({
           {notReady && !cancelled && (
             <div className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-center" data-testid="dispatch-not-ready">
               <p className="text-[14px] text-amber-200">
-                Waiting for payment confirmation before we broadcast to drivers…
+                Finalising your booking — we'll start looking for a driver in a moment…
               </p>
             </div>
           )}

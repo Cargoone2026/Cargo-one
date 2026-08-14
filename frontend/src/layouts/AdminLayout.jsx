@@ -12,6 +12,7 @@ import {
   Inbox,
   User as UserIcon,
   Layers,
+  ShieldAlert,
   AlertTriangle,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ const ADMIN_NAV = [
   { label: "Fee Bands", href: "/admin/deposit-bands", icon: Wallet },
   { label: "Booking-Fee %", href: "/admin/booking-fee-bands", icon: Wallet },
   { label: "Cancellations", href: "/admin/driver-cancellations", icon: AlertTriangle },
+  { label: "Flagged Customers", href: "/admin/flagged-customers", icon: ShieldAlert },
   { label: "Queues", href: "/admin/queues", icon: Inbox },
   { label: "Profile", href: "/admin/profile", icon: UserIcon },
 ];

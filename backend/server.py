@@ -2960,6 +2960,7 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         "booking_fee_band_id": fee_detail["band_id"],
         "booking_fee_source": fee_detail["source"],
         "total_price": customer_total,          # what customer pays overall
+        "customer_total": customer_total,       # alias of total_price for admin/CSV/aggregation queries
         "deposit_amount": booking_fee,          # what customer pays now (Stripe)
         "balance_due": driver_charge,           # what customer pays driver on delivery
         "status": "accepted",  # pending deposit
@@ -3347,10 +3348,21 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
         b["assigned_driver_id"] = job.get("assigned_driver_id") or b.get("driver_id")
         b["assigned_driver_name"] = job.get("assigned_driver_name")
         b["assigned_driver_rating"] = job.get("assigned_driver_rating")
-    if include_private:
+    # R37 — Contact-details reveal gate.
+    # `other_party` (which includes email + phone via user_to_public) MUST
+    # only be returned once a driver has actually accepted the job. Prior
+    # to that, `b.driver_id` is None and the query below would silently
+    # return None, but making the guard explicit protects against future
+    # code paths that pre-populate `driver_id` before real acceptance.
+    driver_accepted = bool(b.get("driver_id")) or bool(job and job.get("assigned_driver_id"))
+    if include_private and driver_accepted:
         other_id = b.get("driver_id") if user["id"] == b.get("customer_id") else b.get("customer_id")
-        other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0})
+        other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0}) if other_id else None
         b["other_party"] = user_to_public(other) if other else None
+    else:
+        # Explicit null — the front-end knows to hide the "Contact driver" UI.
+        b["other_party"] = None
+    b["driver_accepted"] = driver_accepted    # convenience flag for the UI
     # Admin: surface Stripe reference IDs + refund history for the payment
     # tab. Non-admins never see raw Stripe IDs.
     if user["role"] == "admin":
@@ -4898,7 +4910,7 @@ async def admin_flagged_customers(
 
     Signal-only — no automated action. Admins decide what to do.
     """
-    cursor = db.users.find(
+    cursor = await db.users.find(
         {"role": "customer", "post_accept_cancel_count": {"$gte": int(threshold)}},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "post_accept_cancel_count": 1,
          "post_accept_cancel_history": 1, "created_at": 1},
@@ -6739,6 +6751,45 @@ async def seed_startup():
         await _ensure_booking_fee_bands_seeded()
     except Exception as e:  # noqa: BLE001
         logger.warning("booking_fee_bands seed skipped: %s", e)
+
+    # R38 — Back-fill `customer_total` on historical bookings that pre-date the
+    # explicit field. Idempotent — skips bookings that already have a value.
+    # Two-pass strategy:
+    #   1. If total_price is set, copy it (canonical path — covers 99% of rows).
+    #   2. Otherwise, derive from driver_charge + booking_fee where possible so
+    #      admin aggregation queries don't null-out ancient fixture rows.
+    # Powers /admin/analytics/* which sum `customer_total` directly.
+    try:
+        res_a = await db.bookings.update_many(
+            {"$or": [
+                {"customer_total": None},
+                {"customer_total": {"$exists": False}},
+            ], "total_price": {"$ne": None}},
+            [{"$set": {"customer_total": "$total_price"}}],
+        )
+        res_b = await db.bookings.update_many(
+            {"$or": [
+                {"customer_total": None},
+                {"customer_total": {"$exists": False}},
+            ], "total_price": None,
+             "driver_charge": {"$ne": None}},
+            [{"$set": {"customer_total": {
+                "$round": [
+                    {"$add": [
+                        {"$ifNull": ["$driver_charge", 0]},
+                        {"$ifNull": ["$booking_fee", 0]},
+                    ]}, 2,
+                ],
+            }}}],
+        )
+        total_bf = res_a.modified_count + res_b.modified_count
+        if total_bf:
+            logger.info(
+                "R38 back-fill: set customer_total on %d bookings (%d from total_price, %d derived)",
+                total_bf, res_a.modified_count, res_b.modified_count,
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("customer_total back-fill skipped: %s", e)
 
     # SEC-002 / SEC-003: In production the seed MUST be disabled (set
     # ALLOW_INITIAL_ADMIN_SEED="false" and PRODUCTION_MODE="true") — admins

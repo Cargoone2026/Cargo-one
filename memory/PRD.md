@@ -2255,3 +2255,65 @@ NOT DEPLOYED. Save-to-GitHub → Deploy → open the same failing bookings on iP
 - Mapbox token / scopes / URL restrictions unchanged
 - No new token
 
+
+
+---
+
+### R37 / R38 / R39 — Contact privacy + Admin cleanup ✅ COMPLETE (Feb 2026)
+
+**R37 Contact privacy — VERIFIED**
+- `testing_agent_v3_fork` produced `/app/test_reports/iteration_r37_contact_privacy.json` (verdict: PASS).
+- Added `/app/backend/tests/test_contact_privacy_r37.py` (7 tests, all green) covering:
+  * paid-pre-claim ASAP (`other_party=null`, `driver_accepted=false`);
+  * `/bookings/mine` never leaks contacts pre-claim;
+  * unassigned drivers get 403 on `/bookings/{id}`;
+  * post-claim reveal for BOTH customer & assigned driver;
+  * pre-payment regression (addresses + `other_party` hidden until deposit).
+- Frontend live-browser check: customer BookingDetail hides `party-phone`/`call-party-button` before claim, reveals with working `tel:` link after claim.
+- Copy polish: `AsapDispatchPanel` "notReady" banner reworded to
+  "Finalising your booking — we'll start looking for a driver in a moment…"
+  (previously said "Waiting for payment confirmation" while the pill already
+  read "Deposit Paid" — misleading UX).
+
+**R38 `customer_total` back-fill (P2)**
+- Added `customer_total` to the booking-creation write path in `server.py`
+  L2949 (alongside `total_price`), and a startup one-time back-fill:
+  * Pass A: 1007 legacy bookings copied `total_price` → `customer_total`.
+  * Pass B: 92 ancient rows with null `total_price` derived
+    `driver_charge + booking_fee`.
+  * 7 remaining nulls are un-priced legacy stubs (`payment_status=unpaid`,
+    `driver_charge=None`) — correctly left as null.
+- `GET /admin/bookings` verified: 493/500 rows now expose non-null
+  `customer_total`. Admin analytics aggregations at
+  `/admin/analytics/top-customers` and `/admin/analytics/top-drivers` now
+  sum the correct historical revenue instead of coalescing to 0.
+
+**R39 Flagged Customers dashboard (P1)**
+- New page `/app/frontend/src/pages/portal/admin/FlaggedCustomers.jsx`
+  wired at `/admin/flagged-customers` with sidebar entry "Flagged
+  Customers" (ShieldAlert icon).
+- Consumes existing `GET /api/admin/customers/flagged?threshold=N` (R35).
+- Fixed a latent server bug in that endpoint (missing `await` on the
+  Motor cursor — was raising 500 whenever the endpoint had any
+  matching document to serialise). Now returns `{threshold, customers}`
+  correctly.
+- UI: stat cards (customers / total events / fees retained), threshold
+  selector (1/2/3/5/10), search box (name/email/id), row → drawer with
+  per-booking cancellation fee + refund history. Read-only — signal only.
+
+**Regression**
+- 60/60 tests green (cancellation_policy_r35_r36 + contact_privacy_r37 +
+  booking_fee_bands + password_reset + payment_and_csrf_security).
+- Frontend `yarn build` clean (511.92 kB gzipped `main.b9caaa12.js`).
+
+**Files changed**
+- Backend: `server.py` (customer_total field + startup back-fill; awaited
+  Motor cursor in `/admin/customers/flagged`).
+- Frontend:
+  * `pages/portal/admin/FlaggedCustomers.jsx` (NEW).
+  * `App.js` (route + import).
+  * `layouts/AdminLayout.jsx` (sidebar entry).
+  * `components/ui-portal/AsapDispatchPanel.jsx` (copy polish).
+
+**Not touched (deliberately)**: Mapbox iOS Safari fallback (unfixable
+WebKit bug — must stay), cancellation-fee formula (deposit-only, R35/R36).

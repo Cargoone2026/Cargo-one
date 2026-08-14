@@ -67,6 +67,7 @@ import AdminBookingFeeBands from "@/pages/portal/admin/BookingFeeBands";
 import AdminDispatchMonitor from "@/pages/portal/admin/DispatchMonitor";
 import AdminQueues from "@/pages/portal/admin/Queues";
 import AdminDriverCancellations from "@/pages/portal/admin/DriverCancellations";
+import AdminFlaggedCustomers from "@/pages/portal/admin/FlaggedCustomers";
 import AdminProfile from "@/pages/portal/admin/Profile";
 import { AdminLayout } from "@/layouts/AdminLayout";
 
@@ -209,6 +210,7 @@ export default function App() {
             <Route path="/admin/dispatch" element={<Admin Page={AdminDispatchMonitor} />} />
             <Route path="/admin/queues" element={<Admin Page={AdminQueues} />} />
             <Route path="/admin/driver-cancellations" element={<Admin Page={AdminDriverCancellations} />} />
+            <Route path="/admin/flagged-customers" element={<Admin Page={AdminFlaggedCustomers} />} />
             <Route path="/admin/profile" element={<Admin Page={AdminProfile} />} />
             <Route path="/admin/*" element={<Admin Page={AdminDashboard} />} />
 
