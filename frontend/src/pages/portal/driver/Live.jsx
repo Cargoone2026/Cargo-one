@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Zap, MapPin, Truck, AlertTriangle, ShieldCheck, Loader2, PowerOff,
   Signal, Radio, Search, Clock, PoundSterling, Package,
@@ -62,6 +62,29 @@ export default function DriverLive() {
   const [todayStats, setTodayStats] = useState({ jobs: 0, earnings: 0 });
   const [sessionSecs, setSessionSecs] = useState(0);
   const positionRef = useRef(null);
+
+  // R34 — Live Mode ASAP offers ordering: newest first.
+  //
+  // The backend returns candidates sorted by `dispatch_ready_at ASC`
+  // (oldest first, for internal dispatch fairness). Drivers want the
+  // opposite in the UI: the freshest jobs at the top so they see the
+  // latest opportunities immediately.
+  //
+  // Primary sort: `dispatch_ready_at` DESC (newest first).
+  // Secondary tie-breaker: `job_id` DESC so identical timestamps stay
+  // stable across polls (no jumping order).
+  const sortedOffers = useMemo(() => {
+    const arr = [...offers];
+    arr.sort((a, b) => {
+      const ta = a && a.dispatch_ready_at ? String(a.dispatch_ready_at) : "";
+      const tb = b && b.dispatch_ready_at ? String(b.dispatch_ready_at) : "";
+      if (tb !== ta) return tb < ta ? -1 : 1;      // newest first (ISO strings sort lexicographically)
+      const ia = String(a?.job_id || "");
+      const ib = String(b?.job_id || "");
+      return ib < ia ? -1 : ib > ia ? 1 : 0;       // stable tie-break by job_id
+    });
+    return arr;
+  }, [offers]);
 
   const readOwnStatus = useCallback(async () => {
     try {
@@ -479,7 +502,7 @@ export default function DriverLive() {
         )}
 
         <ul className="space-y-3">
-          {offers.map((o) => (
+          {sortedOffers.map((o) => (
             <li
               key={o.job_id}
               className="animate-in fade-in slide-in-from-bottom-2 duration-300"
