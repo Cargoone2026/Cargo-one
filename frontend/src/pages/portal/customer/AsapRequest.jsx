@@ -849,16 +849,28 @@ export default function CustomerAsapRequest() {
                 value={`${vehicle.make} ${vehicle.model}${vehicle.registration ? " · " + vehicle.registration : ""}`}
               />
             )}
+            <div className="my-2 border-t border-neutral-200" />
+            {/* R28 — ASAP summary now matches the normal-job (PostJob) pricing
+               presentation. Show the total job price as the emphasised
+               headline, with the booking fee (paid-now portion) underneath.
+               Deliberately omit the standalone "Fare (driver charge)" line
+               — customers only care about the total price + the amount they
+               pay today. */}
             <SummaryRow
-              label="Fare (driver charge)"
-              value={estimatedTotal ? `£${estimatedTotal.toFixed(2)}` : "—"}
+              label="Total job price"
+              value={
+                estimatedTotal
+                  ? `£${(Number(quote?.customer_total ?? (estimatedTotal + estimatedDeposit))).toFixed(2)}`
+                  : "—"
+              }
+              strong
+              big
             />
             <SummaryRow
               label={feePercent != null
                 ? `Booking fee (${Number(feePercent).toFixed(0)}%, paid now)`
                 : "Booking fee (deposit, paid now)"}
               value={estimatedDeposit ? `£${estimatedDeposit.toFixed(2)}` : "—"}
-              strong
             />
           </div>
           <p className="text-[11px] text-neutral-500 mt-3">
@@ -913,11 +925,17 @@ function formatDuration(mins) {
   return r === 0 ? `${h} hr` : `${h} hr ${r} min`;
 }
 
-function SummaryRow({ label, value, strong = false }) {
+function SummaryRow({ label, value, strong = false, big = false }) {
   return (
-    <div className="flex items-baseline justify-between py-1 text-sm">
-      <span className="text-neutral-500">{label}</span>
-      <span className={strong ? "font-semibold text-neutral-900" : "text-neutral-800 text-right ml-2 max-w-[60%] truncate"}>
+    <div className={`flex items-baseline justify-between ${big ? "py-2" : "py-1"} ${big ? "text-base" : "text-sm"}`}>
+      <span className={big ? "font-semibold text-neutral-900" : "text-neutral-500"}>{label}</span>
+      <span className={
+        big
+          ? "font-bold text-neutral-900 text-xl"
+          : strong
+            ? "font-semibold text-neutral-900"
+            : "text-neutral-800 text-right ml-2 max-w-[60%] truncate"
+      }>
         {value}
       </span>
     </div>
