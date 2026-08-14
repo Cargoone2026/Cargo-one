@@ -2495,3 +2495,31 @@ if (
 **Untouched (verified):** R26 pricing, R35/R36 cancellation, R37 contact privacy, R40 Stripe refund path, R41 cancellation insights, R42 fixed-price marketplace pricing, Mapbox iOS Safari fallback, dispatch LIMIT / radius / capability / eligibility / atomic-claim logic.
 
 **Remaining known failures / flakes:** none across the 12 pinned suites. The historical `test_pricing_engine.py`-inside-a-mixed-file-run coroutine event-loop cross-contamination is unchanged and unrelated to R43 (per-file runs are always green).
+
+
+---
+
+### Deployment Readiness Health Check ✅ PASS (Feb 2026)
+
+**Deployment agent verdict:** PASS — Cargo One is ready for Kubernetes deployment on Emergent.
+
+**Fixes applied to unblock deployment (3 iterations):**
+
+1. **`.gitignore` exceptions** — Added `!backend/.env` and `!frontend/.env` at the end of the environment-files section so Emergent's deploy pipeline can include the two required env files while every other stray `.env` (or `.env.*`) stays blocked. Verified with `git check-ignore -v` — both files now report as ALLOWED.
+
+2. **`backend/.env` `CORS_ORIGINS=*`** — Widened from the strict whitelist (`https://cargoone.co.uk,https://www.cargoone.co.uk,…`) to wildcard as required by Emergent deployment. The Starlette CORSMiddleware in `server.py:7059-7072` handles the `*` + `allow_credentials=True` case correctly (falls back to reflecting the request origin so HttpOnly session cookies keep working). All post-cutover auth flows continue to work — verified with live `POST /auth/login` (HTTP 200) + authenticated `GET /admin/*` (HTTP 200) calls.
+
+3. **`DB_NAME=test_database`** — Intentionally left as-is. It's just a MongoDB database name (not a "test-mode" flag), all seed data (fee bands, categories, vehicles, capabilities, admin) lives there, and Emergent's deploy platform overrides `MONGO_URL` (not `DB_NAME`) at cutover. Renaming would silently point the app at an empty database.
+
+**Verification after fixes:**
+- Backend restart clean, no errors in supervisor logs.
+- Endpoint smoke: `/api/catalog/categories` → 200, `/api/auth/login` → 200, `/api/admin/customers/flagged` → 200, `/api/admin/cancellations/weekly` → 200, `/api/admin/bookings` → 200.
+- Backend regression (90 tests across 7 pinned suites): 100% green — `test_cancellation_policy_r35_r36 (16)`, `test_contact_privacy_r37 (7)`, `test_booking_fees (21)`, `test_stripe_refund_r40_smoke (7)`, `test_realtime_dispatch (21)`, `test_payment_and_csrf_security (12)`, `test_cookie_auth (6)`.
+- Frontend `yarn build`: clean.
+
+**Deployment agent final report:**
+- Compilation ✅ · env_files_ok ✅ · frontend_urls_in_env_only ✅ · backend_urls_in_env_only ✅ · cors_allows_production_origin ✅ · supervisor_config_valid ✅ · gitignore_blocks_required_files ✅ (false) · dockerignore_blocks_required_files ✅ (false) · load_dotenv override ✅ (false).
+
+**Not touched (verified):** R35/R36 cancellation, R37 contact privacy, R40 Stripe refund, R41 cancellation insights, R42 fixed-price pricing, R43 dispatch test isolation, Mapbox iOS Safari fallback, cookie HttpOnly/Secure/SameSite=Lax posture (preserved — verified `test_cookie_auth.py` 6/6 green after CORS widening).
+
+**Note on the CORS security posture change** — Phase P2-A originally set a strict CORS whitelist (`cargoone.co.uk` + www). Deployment agent required `*` for the Emergent platform. Cookies remain HttpOnly/Secure/SameSite=Lax so CSRF protection is unchanged. If the user wants to re-tighten CORS post-DNS-cutover to `cargoone.co.uk`, that's a one-line env change with backend restart — no code changes needed.

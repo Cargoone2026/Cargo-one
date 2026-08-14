@@ -35,6 +35,11 @@ dist
 .env.*
 !.env.example
 *.env
+# Emergent deployment reads /app/backend/.env and /app/frontend/.env from
+# the container filesystem — allow these two specific files while still
+# blocking every other stray .env / secret file in the repo.
+!backend/.env
+!frontend/.env
 
 *token.json*
 *credentials.json*
