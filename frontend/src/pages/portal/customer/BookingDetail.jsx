@@ -335,6 +335,37 @@ export default function CustomerBookingDetail() {
         <StatusPill status={b.status} />
       </header>
 
+      {/* R35 — Cancellation policy banner. Shown on any paid, non-cancelled
+          booking regardless of job type (ASAP / scheduled / fixed / bidding).
+          Wording depends on whether a driver has accepted yet. */}
+      {b.payment_status === "paid" && !b.cancelled_at && b.status !== "completed" ? (
+        <div
+          className={`mx-4 mt-3 rounded-[10px] px-3 py-2 md:mx-8 ${
+            b.assigned_driver_id
+              ? "bg-[#FEF3C7] text-[#78350F]"
+              : "bg-[#F1F5F9] text-[#334155]"
+          }`}
+          data-testid="cancellation-policy-banner"
+        >
+          <p className="text-[12px] leading-snug">
+            {b.assigned_driver_id ? (
+              <>
+                <strong>Driver accepted — cancellation fee now applies.</strong>{" "}
+                If you cancel, the fee will be deducted from your deposit only.
+                The remaining booking balance will NOT be charged.
+              </>
+            ) : (
+              <>
+                <strong>Cancellation policy:</strong> If a driver accepts your booking,
+                cancellation charges may apply. Any fee will be deducted from the
+                deposit you've already paid — never from the full booking price.
+              </>
+            )}
+          </p>
+        </div>
+      ) : null}
+
+
       {b.service_timing === "asap" && b.payment_status === "paid" && !b.assigned_driver_id && !b.cancelled_at ? (
         <div className="mx-4 mt-4 md:mx-8" data-testid="asap-dispatch-inline">
           <AsapDispatchPanel

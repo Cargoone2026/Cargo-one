@@ -31,6 +31,29 @@ export function AsapDispatchPanel({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelErr, setCancelErr] = useState(null);
+  // R35 — Live cancellation-preview breakdown (deposit / fee / refund).
+  // Backend is source-of-truth; the customer sees the exact numbers
+  // before they confirm.
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Fetch the preview whenever the confirm modal opens.
+  useEffect(() => {
+    if (!confirmOpen || !bookingId) { setPreview(null); return; }
+    let cancelled = false;
+    setPreviewLoading(true);
+    (async () => {
+      try {
+        const p = await api(`/customer/bookings/${bookingId}/cancel-preview`);
+        if (!cancelled) setPreview(p);
+      } catch (_e) {
+        if (!cancelled) setPreview(null);
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [confirmOpen, bookingId]);
 
   useEffect(() => {
     let alive = true;
@@ -201,11 +224,11 @@ export function AsapDispatchPanel({
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </span>
               <div className="min-w-0 flex-1">
-                <h3 className="text-[17px] font-bold">Cancel ASAP booking?</h3>
+                <h3 className="text-[17px] font-bold">Cancel this booking?</h3>
                 <p className="mt-1 text-[13px] leading-relaxed text-neutral-700">
-                  No driver has accepted this booking yet. You can keep waiting for a driver
-                  or cancel now and request a full refund of the amount you paid. Refund timing
-                  depends on your payment provider.
+                  {preview?.requires_fee
+                    ? "A driver has accepted your booking, so a cancellation fee applies. Your fee is calculated from the deposit you've already paid — you will NOT be charged the remaining booking balance."
+                    : "No driver has accepted this booking yet. You can keep waiting for a driver or cancel now and receive a full refund of the deposit you paid. Refund timing depends on your payment provider."}
                 </p>
               </div>
               <button
@@ -217,6 +240,47 @@ export function AsapDispatchPanel({
                 <XIcon className="h-4 w-4 text-neutral-500" />
               </button>
             </div>
+
+            {/* R35 — Deposit / Fee / Refund breakdown from backend preview */}
+            {previewLoading && (
+              <p className="mt-3 text-[12px] text-neutral-500" data-testid="cancel-preview-loading">
+                Calculating cancellation…
+              </p>
+            )}
+            {preview && (
+              <div
+                className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3"
+                data-testid="cancel-preview-breakdown"
+              >
+                <div className="flex justify-between py-1 text-[13px]">
+                  <span className="text-neutral-600">Deposit paid</span>
+                  <span className="font-semibold text-neutral-900" data-testid="cancel-preview-deposit">
+                    £{Number(preview.deposit_paid).toFixed(2)}
+                  </span>
+                </div>
+                {preview.requires_fee ? (
+                  <div className="flex justify-between py-1 text-[13px]">
+                    <span className="text-neutral-600">
+                      Cancellation fee ({Number(preview.cancellation_pct).toFixed(0)}%)
+                    </span>
+                    <span className="font-semibold text-red-700" data-testid="cancel-preview-fee">
+                      −£{Number(preview.cancellation_fee).toFixed(2)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="mt-1 flex justify-between border-t border-neutral-200 pt-2 text-[14px]">
+                  <span className="font-semibold text-neutral-900">Refund</span>
+                  <span className="font-bold text-neutral-900" data-testid="cancel-preview-refund">
+                    £{Number(preview.refund_amount).toFixed(2)}
+                  </span>
+                </div>
+                {preview.requires_fee ? (
+                  <p className="mt-2 text-[11px] leading-tight text-neutral-500">
+                    The remaining booking balance is <strong>not</strong> charged — it is cancelled with the job.
+                  </p>
+                ) : null}
+              </div>
+            )}
             {cancelErr && (
               <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-700" data-testid="dispatch-cancel-error">
                 {cancelErr}
@@ -235,11 +299,15 @@ export function AsapDispatchPanel({
               <button
                 type="button"
                 onClick={doCancel}
-                disabled={cancelling}
+                disabled={cancelling || previewLoading}
                 data-testid="dispatch-cancel-confirm-button"
                 className="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
-                {cancelling ? "Cancelling…" : "Cancel & request full refund"}
+                {cancelling
+                  ? "Cancelling…"
+                  : preview?.requires_fee
+                    ? `Confirm cancel · refund £${Number(preview.refund_amount).toFixed(2)}`
+                    : "Cancel & request full refund"}
               </button>
             </div>
           </div>

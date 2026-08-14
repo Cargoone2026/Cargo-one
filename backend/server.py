@@ -686,6 +686,92 @@ class BookingFeeBandIn(BaseModel):
     priority: Optional[int] = None
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# R35 — Customer cancellation policy (deposit-only fee model)
+#
+# Fee is computed from the DEPOSIT ALREADY PAID (never from the full
+# booking value). Configurable per-installation via a singleton document
+# in `platform_config` (id="cancellation"). Defaults: 20% of deposit,
+# applies only after driver acceptance.
+# ─────────────────────────────────────────────────────────────────────────
+DEFAULT_CANCELLATION_POLICY = {
+    "percentage": 20.0,                    # % of deposit paid
+    "applies_after_driver_accept": True,   # fee gate — pre-accept = free cancel
+    "min_fee": 0.0,                        # optional floor (£)
+    "max_fee": None,                       # optional ceiling (£, null = no cap)
+}
+
+
+async def _get_cancellation_policy() -> dict:
+    """Fetch the singleton cancellation policy doc, fallback to defaults."""
+    doc = await db.platform_config.find_one({"id": "cancellation"}, {"_id": 0})
+    if not doc:
+        return dict(DEFAULT_CANCELLATION_POLICY)
+    return {
+        "percentage": float(doc.get("percentage", DEFAULT_CANCELLATION_POLICY["percentage"])),
+        "applies_after_driver_accept": bool(doc.get("applies_after_driver_accept",
+                                                    DEFAULT_CANCELLATION_POLICY["applies_after_driver_accept"])),
+        "min_fee": float(doc.get("min_fee", DEFAULT_CANCELLATION_POLICY["min_fee"])),
+        "max_fee": (float(doc["max_fee"]) if doc.get("max_fee") not in (None, "") else None),
+    }
+
+
+def _compute_cancellation_fee(deposit_paid: float, policy: dict, driver_accepted: bool) -> dict:
+    """Pure calculator — backend source-of-truth.
+
+    Returns:
+        {
+          deposit_paid, cancellation_pct, cancellation_fee, refund_amount,
+          driver_accepted, requires_fee, policy_applied
+        }
+    All monetary values are ROUNDED to 2 dp (customer-facing).
+    """
+    dep = round(max(0.0, float(deposit_paid or 0.0)), 2)
+    pct = float(policy.get("percentage", 20.0))
+    applies_after_accept = bool(policy.get("applies_after_driver_accept", True))
+    # Fee only applies when either (a) policy says fee applies pre-accept too,
+    # or (b) the driver has already accepted the job.
+    requires_fee = (driver_accepted or not applies_after_accept)
+    if not requires_fee:
+        return {
+            "deposit_paid": dep,
+            "cancellation_pct": pct,
+            "cancellation_fee": 0.0,
+            "refund_amount": dep,
+            "driver_accepted": bool(driver_accepted),
+            "requires_fee": False,
+            "policy_applied": False,
+        }
+    raw_fee = dep * (pct / 100.0)
+    min_fee = float(policy.get("min_fee") or 0.0)
+    max_fee = policy.get("max_fee")
+    fee = max(raw_fee, min_fee)
+    if max_fee is not None:
+        fee = min(fee, float(max_fee))
+    # Fee cannot exceed the deposit itself.
+    fee = min(fee, dep)
+    fee = round(fee, 2)
+    refund = round(max(0.0, dep - fee), 2)
+    return {
+        "deposit_paid": dep,
+        "cancellation_pct": pct,
+        "cancellation_fee": fee,
+        "refund_amount": refund,
+        "driver_accepted": bool(driver_accepted),
+        "requires_fee": True,
+        "policy_applied": True,
+    }
+
+
+class CancellationPolicyIn(BaseModel):
+    percentage: float
+    applies_after_driver_accept: bool = True
+    min_fee: float = 0.0
+    max_fee: Optional[float] = None
+
+
+
+
 async def _lookup_booking_fee_band(driver_charge: float) -> Optional[dict]:
     """Find the first enabled percentage-band matching driver_charge.
     Returns the full band dict or None if no band matches."""
@@ -4582,11 +4668,9 @@ async def customer_cancel_and_refund(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if (job.get("service_timing") or "").lower() != "asap":
-        raise HTTPException(
-            status_code=400,
-            detail="This endpoint is only for ASAP bookings. Use the admin refund flow for other bookings.",
-        )
+    # R36 — Cancellation applies platform-wide (ASAP + scheduled + fixed + bidding).
+    # Same deposit-only fee formula regardless of job type. Admins can vary
+    # percentages / minimums per job type later via the policy config.
     if b.get("payment_status") != "paid":
         raise HTTPException(status_code=400, detail="Booking has not been paid")
     if b.get("refund_status") in ("refunded", "succeeded", "pending", "in_progress"):
@@ -4594,15 +4678,21 @@ async def customer_cancel_and_refund(
     if b.get("cancelled_at"):
         raise HTTPException(status_code=409, detail="Booking already cancelled")
     if job.get("assigned_driver_id"):
-        raise HTTPException(status_code=409,
-                            detail="A driver has just accepted this job — cancellation is no longer available.")
+        # R35 — Driver has accepted; a deposit-based cancellation fee may apply.
+        # We DO NOT block cancellation — we just apply the configured fee.
+        pass
+
+    # ---- R35: Compute cancellation fee (server-side source of truth) ------
+    deposit = float(b.get("deposit_amount") or 0.0)
+    driver_accepted = bool(job.get("assigned_driver_id"))
+    policy = await _get_cancellation_policy()
+    breakdown = _compute_cancellation_fee(deposit, policy, driver_accepted)
 
     # ---- ATOMIC CLAIM: only proceed if the job is still unclaimed ---------
     job_claim = await db.jobs.update_one(
         {
             "id": job["id"],
-            "assigned_driver_id": {"$in": [None, ""]},
-            "status": {"$nin": ["accepted", "in_progress", "completed", "cancelled"]},
+            "status": {"$nin": ["completed", "cancelled"]},
         },
         {"$set": {
             "status": "cancelled",
@@ -4612,10 +4702,9 @@ async def customer_cancel_and_refund(
         }},
     )
     if job_claim.modified_count == 0:
-        # A driver won the race
         raise HTTPException(
             status_code=409,
-            detail="A driver has just accepted this job — cancellation is no longer available.",
+            detail="Job already completed or cancelled — cancellation is no longer available.",
         )
 
     # ---- ATOMIC BOOKING CLAIM: guard the refund side of the transition ---
@@ -4666,16 +4755,30 @@ async def customer_cancel_and_refund(
 
         refund_obj = _stripe.Refund.create(
             payment_intent=pi_id,
+            # R35 — refund only the refund_amount portion of the deposit; the
+            # cancellation fee stays with the platform. If refund_amount is 0
+            # (100% fee case) we skip Stripe entirely.
+            amount=int(round(float(breakdown["refund_amount"]) * 100)),
             reason="requested_by_customer",
             metadata={
                 "booking_id": booking_id,
                 "customer_id": user["id"],
-                "cargoone_reason": "customer_asap_cancel_full_refund",
+                "cargoone_reason": (
+                    "customer_asap_cancel_partial_refund" if breakdown["requires_fee"]
+                    else "customer_asap_cancel_full_refund"
+                ),
+                "deposit_paid": str(breakdown["deposit_paid"]),
+                "cancellation_fee": str(breakdown["cancellation_fee"]),
+                "cancellation_pct": str(breakdown["cancellation_pct"]),
             },
-        )
-        refund_id = refund_obj.get("id") if isinstance(refund_obj, dict) else getattr(refund_obj, "id", None)
-        stripe_status = refund_obj.get("status") if isinstance(refund_obj, dict) else getattr(refund_obj, "status", None)
-        refund_state = "succeeded" if stripe_status == "succeeded" else (stripe_status or "pending")
+        ) if float(breakdown["refund_amount"]) > 0 else None
+        refund_id = refund_obj.get("id") if isinstance(refund_obj, dict) else getattr(refund_obj, "id", None) if refund_obj else None
+        stripe_status = refund_obj.get("status") if isinstance(refund_obj, dict) else getattr(refund_obj, "status", None) if refund_obj else None
+        # R35 — if refund_amount was 0 (100% fee) there is no Stripe call; treat as succeeded.
+        if refund_obj is None:
+            refund_state = "succeeded"
+        else:
+            refund_state = "succeeded" if stripe_status == "succeeded" else (stripe_status or "pending")
     except Exception as e:
         stripe_err = str(e)
         refund_state = "failed"
@@ -4692,8 +4795,16 @@ async def customer_cancel_and_refund(
         "at": now_iso(),
         "customer_id": user["id"],
         "customer_name": user.get("name"),
-        "amount": b.get("deposit_amount") or (txn or {}).get("amount"),
-        "reason": "customer_asap_cancel_full_refund",
+        # R35 — refund amount is the deposit MINUS the cancellation fee.
+        "amount": breakdown["refund_amount"],
+        "deposit_paid": breakdown["deposit_paid"],
+        "cancellation_pct": breakdown["cancellation_pct"],
+        "cancellation_fee": breakdown["cancellation_fee"],
+        "driver_accepted_before_cancel": breakdown["driver_accepted"],
+        "reason": (
+            "customer_asap_cancel_partial_refund" if breakdown["requires_fee"]
+            else "customer_asap_cancel_full_refund"
+        ),
         "state": refund_state,
         "stripe_refund_id": refund_id,
         "payment_intent_id": pi_id,
@@ -4709,9 +4820,37 @@ async def customer_cancel_and_refund(
         {"$set": {"refund_status": refund_state,
                   "refunded_at": now_iso() if refund_state == "succeeded" else None,
                   "stripe_refund_id": refund_id,
-                  "refund_amount": audit_entry["amount"] if refund_state == "succeeded" else None},
+                  "refund_amount": breakdown["refund_amount"] if refund_state == "succeeded" else None,
+                  # R35 — persist the breakdown on the booking for later display
+                  "cancellation_breakdown": {
+                      "deposit_paid": breakdown["deposit_paid"],
+                      "cancellation_pct": breakdown["cancellation_pct"],
+                      "cancellation_fee": breakdown["cancellation_fee"],
+                      "refund_amount": breakdown["refund_amount"],
+                      "driver_accepted_before_cancel": breakdown["driver_accepted"],
+                      "policy_applied": breakdown["policy_applied"],
+                  }},
          "$push": {"refunds": audit_entry}},
     )
+
+    # R35 — Anti-bypass tracking: increment the customer's suspicious-cancel
+    # counter whenever cancellation happens AFTER driver acceptance. This is a
+    # signal-only counter — no automated bans. Admins can review flagged
+    # customers via /admin/customers/flagged.
+    if breakdown["driver_accepted"]:
+        try:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$inc": {"post_accept_cancel_count": 1},
+                 "$push": {"post_accept_cancel_history": {
+                     "booking_id": booking_id,
+                     "at": now_iso(),
+                     "cancellation_fee": breakdown["cancellation_fee"],
+                     "refund_amount": breakdown["refund_amount"],
+                 }}},
+            )
+        except Exception as _e:
+            logger.warning("R35 anti-bypass counter update failed for %s: %s", user["id"], _e)
     if refund_state == "failed":
         # Booking is cancelled either way — but tell the customer refund failed
         raise HTTPException(status_code=502, detail=f"Booking cancelled but refund failed: {stripe_err}. Support has been notified.")
@@ -4737,7 +4876,34 @@ async def customer_cancel_and_refund(
         "refund_state": refund_state,
         "stripe_refund_id": refund_id,
         "cancelled_at": now_iso(),
+        # R35 — surface the exact breakdown to the client for the success UI
+        "cancellation_breakdown": {
+            "deposit_paid": breakdown["deposit_paid"],
+            "cancellation_pct": breakdown["cancellation_pct"],
+            "cancellation_fee": breakdown["cancellation_fee"],
+            "refund_amount": breakdown["refund_amount"],
+            "driver_accepted_before_cancel": breakdown["driver_accepted"],
+            "policy_applied": breakdown["policy_applied"],
+        },
     }
+
+
+# R35 — Admin visibility for repeated post-driver-accept cancellations.
+@api.get("/admin/customers/flagged")
+async def admin_flagged_customers(
+    threshold: int = 2,
+    user: dict = Depends(require_role("admin")),
+):
+    """List customers with `post_accept_cancel_count >= threshold`.
+
+    Signal-only — no automated action. Admins decide what to do.
+    """
+    cursor = db.users.find(
+        {"role": "customer", "post_accept_cancel_count": {"$gte": int(threshold)}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "post_accept_cancel_count": 1,
+         "post_accept_cancel_history": 1, "created_at": 1},
+    ).sort([("post_accept_cancel_count", -1)]).to_list(500)
+    return {"threshold": int(threshold), "customers": cursor}
 
 
 @api.post("/driver/bookings/{booking_id}/cancel")
@@ -5202,6 +5368,69 @@ async def admin_list_booking_fee_bands(user: dict = Depends(require_role("admin"
                                         .sort([("priority", 1), ("min_amount", 1)]) \
                                         .to_list(200)
     return docs
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# R35 — Cancellation policy config (admin)
+# ─────────────────────────────────────────────────────────────────────────
+@api.get("/admin/cancellation-policy")
+async def admin_get_cancellation_policy(user: dict = Depends(require_role("admin"))):
+    policy = await _get_cancellation_policy()
+    return {"policy": policy, "defaults": DEFAULT_CANCELLATION_POLICY}
+
+
+@api.put("/admin/cancellation-policy")
+async def admin_update_cancellation_policy(
+    payload: CancellationPolicyIn,
+    user: dict = Depends(require_role("admin")),
+):
+    if payload.percentage < 0 or payload.percentage > 100:
+        raise HTTPException(status_code=400, detail="percentage must be 0–100")
+    if payload.min_fee < 0:
+        raise HTTPException(status_code=400, detail="min_fee must be ≥ 0")
+    if payload.max_fee is not None and payload.max_fee < payload.min_fee:
+        raise HTTPException(status_code=400, detail="max_fee must be ≥ min_fee")
+    doc = {
+        "id": "cancellation",
+        "percentage": float(payload.percentage),
+        "applies_after_driver_accept": bool(payload.applies_after_driver_accept),
+        "min_fee": float(payload.min_fee),
+        "max_fee": (float(payload.max_fee) if payload.max_fee is not None else None),
+        "updated_at": now_iso(),
+        "updated_by": user["id"],
+    }
+    await db.platform_config.update_one({"id": "cancellation"}, {"$set": doc}, upsert=True)
+    return {"ok": True, "policy": await _get_cancellation_policy()}
+
+
+@api.get("/customer/bookings/{booking_id}/cancel-preview")
+async def customer_cancel_preview(
+    booking_id: str,
+    user: dict = Depends(require_role("customer")),
+):
+    """Preview cancellation breakdown — deposit / fee / refund.
+    The backend is the source of truth for these numbers.
+    """
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("customer_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not your booking")
+    job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
+    driver_accepted = bool(job and job.get("assigned_driver_id"))
+    # Deposit paid = booking.deposit_amount (immutable snapshot at checkout)
+    deposit = float(b.get("deposit_amount") or 0.0)
+    policy = await _get_cancellation_policy()
+    breakdown = _compute_cancellation_fee(deposit, policy, driver_accepted)
+    breakdown["booking_id"] = booking_id
+    breakdown["can_cancel"] = (
+        b.get("payment_status") == "paid"
+        and not b.get("cancelled_at")
+        and b.get("refund_status") not in ("refunded", "succeeded", "pending", "in_progress")
+    )
+    return breakdown
+
+
 
 
 @api.post("/admin/booking-fee-bands")
