@@ -11,6 +11,28 @@ import {
   PoundSterling,
   Plane,
   Truck,
+  Home,
+  Armchair,
+  FileText,
+  Layers,
+  Bike,
+  Car,
+  Cog,
+  Sprout,
+  Hammer,
+  Ship,
+  Container,
+  Caravan,
+  TreePine,
+  Building2,
+  ShoppingBag,
+  PartyPopper,
+  Gavel,
+  Zap,
+  MapPinned,
+  ShieldCheck,
+  HelpCircle,
+  Check,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCategories, useVehicles, requestRecommendation } from "@/hooks/useCatalog";
@@ -288,23 +310,50 @@ export default function CustomerPostJob() {
             {catLoading ? (
               <p className="mt-4 text-[13px] text-[#6B7280]">Loading categories…</p>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div
+                className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"
+                role="radiogroup"
+                aria-label="Service category"
+                data-testid="postjob-category-grid"
+              >
                 {categories.map((c) => {
                   const active = c.key === categoryKey;
+                  const meta = CATEGORY_META[c.key] || {};
+                  const Icon = meta.icon || Package;
                   return (
                     <button
                       key={c.key}
                       type="button"
+                      role="radio"
+                      aria-checked={active}
                       onClick={() => setCategoryKey(c.key)}
                       data-testid={`postjob-cat-${c.key}`}
-                      className={`flex flex-col items-start gap-2 rounded-[12px] border p-3 text-left transition-colors ${
+                      className={[
+                        "relative flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition",
                         active
-                          ? "border-[#111111] bg-[#111111] text-white"
-                          : "border-[#E5E7EB] bg-white hover:border-[#111111]"
-                      }`}
+                          ? "border-neutral-900 bg-neutral-50 ring-2 ring-neutral-900"
+                          : "border-[#E5E7EB] bg-white hover:border-neutral-300",
+                      ].join(" ")}
                     >
-                      <Package className="h-5 w-5" />
-                      <span className="text-[14px] font-semibold">{c.name}</span>
+                      {active ? (
+                        <span
+                          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-white"
+                          aria-hidden="true"
+                        >
+                          <Check className="h-3 w-3" />
+                        </span>
+                      ) : null}
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 text-neutral-700">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className="text-[13px] font-semibold leading-tight text-neutral-900">
+                        {c.name}
+                      </span>
+                      {meta.hint ? (
+                        <span className="text-[11px] leading-tight text-neutral-500">
+                          {meta.hint}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -834,3 +883,40 @@ function SummaryRow({ label, value, emphasise, big, testID }) {
     </div>
   );
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * R33 — PostJob category icon + hint metadata
+ *
+ * Mirrors the R32 ASAP CategoryChipGrid look for scheduled jobs. Each key
+ * matches a backend `service_categories.key`; unknown keys silently fall
+ * back to the Package icon + no hint (safe forward-compat).
+ * ──────────────────────────────────────────────────────────────────────── */
+const CATEGORY_META = {
+  house_removals:      { icon: Home,        hint: "Full house move" },
+  furniture_delivery:  { icon: Armchair,    hint: "Sofa / bed / etc." },
+  single_items:        { icon: Package,     hint: "One large item" },
+  parcels:             { icon: Package,     hint: "Small / single item" },
+  documents:           { icon: FileText,    hint: "Envelopes / paperwork" },
+  pallets:             { icon: Layers,      hint: "Palletised freight" },
+  freight:             { icon: Truck,       hint: "Bulk / commercial" },
+  motorcycles:         { icon: Bike,        hint: "Bikes / scooters" },
+  cars_vehicles:       { icon: Car,         hint: "Non-runners OK" },
+  vans:                { icon: Truck,       hint: "Van transport" },
+  machinery_plant:     { icon: Cog,         hint: "Plant / equipment" },
+  agricultural:        { icon: Sprout,      hint: "Farm machinery" },
+  building_materials:  { icon: Hammer,      hint: "Timber / bricks / etc." },
+  boats_marine:        { icon: Ship,        hint: "Boats / trailers" },
+  shipping_containers: { icon: Container,   hint: "20ft / 40ft containers" },
+  caravans:            { icon: Caravan,     hint: "Touring caravans" },
+  static_caravans:     { icon: Home,        hint: "Static / mobile homes" },
+  garden_outdoor:      { icon: TreePine,    hint: "Garden furniture / plants" },
+  office_commercial:   { icon: Building2,   hint: "Office moves" },
+  retail_business:     { icon: ShoppingBag, hint: "Stock / merchandise" },
+  event_equipment:     { icon: PartyPopper, hint: "Event / marquee kit" },
+  auction_marketplace: { icon: Gavel,       hint: "eBay / auction pickup" },
+  same_day_express:    { icon: Zap,         hint: "Urgent delivery" },
+  long_distance_uk:    { icon: MapPinned,   hint: "Nationwide moves" },
+  fragile_high_value:  { icon: ShieldCheck, hint: "Delicate / insured" },
+  other:               { icon: HelpCircle,  hint: "Describe below" },
+};
+
