@@ -50,6 +50,10 @@ export default function CustomerAsapRequest() {
   // and returns a `vehicle_too_small` error if unsuitable.
   const [transportVehicleKey, setTransportVehicleKey] = useState("");
   const [transportVehicles, setTransportVehicles] = useState([]);
+  // R30 — Recovery vehicle picker parallels the R29 transport card grid.
+  // Empty key = engine auto-picks from broken-vehicle info (make/model/weight).
+  const [recoveryVehicleKey, setRecoveryVehicleKey] = useState("");
+  const [recoveryVehicles, setRecoveryVehicles] = useState([]);
   const [vehicle, setVehicle] = useState({
     make: "", model: "", registration: "", condition: "will_not_start",
     rolls: "unknown", steers: "unknown", brakes: "unknown",
@@ -143,11 +147,11 @@ export default function CustomerAsapRequest() {
     (async () => {
       try {
         const cat = await api("/asap/vehicles");
-        if (!cancelled && Array.isArray(cat?.transport)) {
-          setTransportVehicles(cat.transport);
-        }
+        if (cancelled) return;
+        if (Array.isArray(cat?.transport)) setTransportVehicles(cat.transport);
+        if (Array.isArray(cat?.recovery)) setRecoveryVehicles(cat.recovery);
       } catch {
-        if (!cancelled) setTransportVehicles([]);
+        if (!cancelled) { setTransportVehicles([]); setRecoveryVehicles([]); }
       }
     })();
     return () => { cancelled = true; };
@@ -230,10 +234,12 @@ export default function CustomerAsapRequest() {
             dropoff_country_code: dropoff.country_code || null,
             service_type: mode,
             urgency: "asap",
-            // R26.2 — customer-picked transport class; empty = auto-recommend
+            // R26.2 / R30 — customer-picked vehicle class for both modes.
+            // Empty = engine auto-recommends based on load (transport)
+            // or broken-vehicle info (recovery).
             requested_vehicle_key: mode === "transport"
               ? (transportVehicleKey || null)
-              : null,
+              : (recoveryVehicleKey || null),
             vehicle_class: mode === "breakdown_recovery"
               ? (vehicle?.weight_class || vehicle?.type || null)
               : null,
@@ -297,7 +303,7 @@ export default function CustomerAsapRequest() {
       }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [pickup, dropoff, mode, transportCategory, transportVehicleKey, asapWeightKg,
+  }, [pickup, dropoff, mode, transportCategory, transportVehicleKey, recoveryVehicleKey, asapWeightKg,
       asapLengthM, asapWidthM, asapHeightM, asapItemCount,
       needsForklift, needsLoadingHelp, vehicle]);
 
@@ -582,6 +588,31 @@ export default function CustomerAsapRequest() {
               </label>
             ))}
           </div>
+        </section>
+      )}
+
+      {mode === "breakdown_recovery" && (
+        <section className="mb-6" data-testid="asap-recovery-vehicle-picker">
+          <label className="text-sm font-medium mb-2 block">
+            Which recovery vehicle do you need?
+          </label>
+          <VehicleCardGrid
+            selectedKey={recoveryVehicleKey}
+            onSelect={setRecoveryVehicleKey}
+            vehicles={recoveryVehicles}
+            fallback={RECOVERY_FALLBACK}
+          />
+          {recoveryVehicleKey && quote?.resolved_vehicle_key
+            && quote.resolved_vehicle_key !== recoveryVehicleKey && (
+              <p className="mt-2 text-[11px] text-amber-600" data-testid="asap-recovery-vehicle-note">
+                Priced as <b>{quote.resolved_vehicle_key.replace(/_/g, " ")}</b> — the engine may
+                have adjusted your choice.
+              </p>
+            )}
+          <p className="mt-2 text-[11px] text-neutral-500">
+            Leave on "Recommend for me" and we'll match your vehicle's weight and condition to the
+            right recovery class automatically.
+          </p>
         </section>
       )}
 
@@ -953,10 +984,24 @@ const VEHICLE_SPECS = {
   semi_trailer:           { icon: Truck,   payload: "≤ 26 t",    dims: "13.6 × 2.5 × 2.7 m" },
   articulated_hgv:        { icon: Truck,   payload: "≤ 26 t",    dims: "13.6 × 2.5 × 2.7 m (44 t GVW)" },
   heavy_haul_combo:       { icon: Truck,   payload: "abnormal",  dims: "STGO / escort · manual review" },
+  // ── Recovery vehicles (R30) — payload here = max recoverable vehicle
+  //    weight; dims = distinguishing recovery equipment.
+  light_recovery_van:          { icon: Truck, payload: "cars ≤ 1.5 t",        dims: "spec lift / dolly" },
+  pickup_recovery:             { icon: Truck, payload: "cars ≤ 1.5 t",        dims: "flat-bed pickup" },
+  "3_5t_recovery":             { icon: Truck, payload: "cars ≤ 3.5 t",        dims: "3.5T flat-bed / spec lift" },
+  "5_7_5t_recovery":           { icon: Truck, payload: "vans ≤ 5–7.5 t",      dims: "5–7.5T flat-bed" },
+  "10_18t_recovery":           { icon: Truck, payload: "vans / LGV ≤ 10–18 t", dims: "large flat-bed" },
+  "26t_recovery":              { icon: Truck, payload: "HGV ≤ 26 t",           dims: "heavy flat-bed" },
+  "32t_recovery":              { icon: Truck, payload: "HGV ≤ 32 t",           dims: "heavy underlift + jib" },
+  heavy_recovery:              { icon: Truck, payload: "HGV ≤ 40 t",           dims: "heavy underlift + jib" },
+  heavy_6x4_8x4_recovery:      { icon: Truck, payload: "HGV ≤ 44 t",           dims: "6×4 / 8×4 · winch capable" },
+  heavy_tractor_recovery:      { icon: Truck, payload: "artic tractor units",  dims: "5th-wheel underlift" },
+  heavy_articulated_recovery:  { icon: Truck, payload: "full artic ≤ 44 t",    dims: "artic + trailer combo" },
+  stgo_heavy_recovery:         { icon: Truck, payload: "abnormal / STGO",      dims: "escort · manual review" },
 };
 
-// Fallback list used only when /asap/vehicles hasn't responded yet.
-const VEHICLE_FALLBACK = [
+// Fallback lists used only when /asap/vehicles hasn't responded yet.
+const TRANSPORT_FALLBACK = [
   { key: "car",                    label: "Car" },
   { key: "small_van",              label: "Small Van" },
   { key: "lwb_van",                label: "LWB Van" },
@@ -978,9 +1023,23 @@ const VEHICLE_FALLBACK = [
   { key: "articulated_hgv",        label: "Articulated HGV" },
   { key: "heavy_haul_combo",       label: "Heavy-Haul Combination" },
 ];
+const RECOVERY_FALLBACK = [
+  { key: "light_recovery_van",         label: "Light Recovery Van" },
+  { key: "pickup_recovery",            label: "Pickup Recovery" },
+  { key: "3_5t_recovery",              label: "3.5T Recovery" },
+  { key: "5_7_5t_recovery",            label: "5–7.5T Recovery" },
+  { key: "10_18t_recovery",            label: "10–18T Recovery" },
+  { key: "26t_recovery",               label: "26T Recovery" },
+  { key: "32t_recovery",               label: "32T Recovery" },
+  { key: "heavy_recovery",             label: "Heavy Recovery" },
+  { key: "heavy_6x4_8x4_recovery",     label: "Heavy 6×4 / 8×4 Recovery" },
+  { key: "heavy_tractor_recovery",     label: "Heavy Tractor Recovery" },
+  { key: "heavy_articulated_recovery", label: "Heavy Articulated Recovery" },
+  { key: "stgo_heavy_recovery",        label: "STGO Heavy Recovery Combination" },
+];
 
-function VehicleCardGrid({ selectedKey, onSelect, vehicles }) {
-  const list = vehicles && vehicles.length ? vehicles : VEHICLE_FALLBACK;
+function VehicleCardGrid({ selectedKey, onSelect, vehicles, fallback = TRANSPORT_FALLBACK }) {
+  const list = vehicles && vehicles.length ? vehicles : fallback;
   return (
     <div
       className="grid grid-cols-2 gap-2"
