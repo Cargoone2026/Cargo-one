@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, MapPin, Truck, Zap, ShieldCheck, AlertTriangle,
-  Locate, Loader2,
+  Locate, Loader2, Check, Sparkles, Car, Package,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
@@ -625,43 +625,19 @@ export default function CustomerAsapRequest() {
           <label className="text-sm font-medium mb-2 block">
             Which vehicle do you need?
           </label>
-          <select
-            value={transportVehicleKey}
-            onChange={(e) => setTransportVehicleKey(e.target.value)}
-            data-testid="asap-vehicle-select"
-            className="block w-full rounded-lg border border-neutral-200 bg-white p-2 text-sm"
-          >
-            <option value="">Recommend a vehicle for me (based on load)</option>
-            {transportVehicles.length > 0
-              ? transportVehicles.map((v) => (
-                  <option key={v.key} value={v.key} data-testid={`asap-vehicle-option-${v.key}`}>
-                    {v.label} — min £{Number(v.minimum_charge).toFixed(0)} · £{Number(v.per_mile).toFixed(2)}/mi
-                  </option>
-                ))
-              : /* Fallback list keeps the picker usable when /asap/vehicles hasn't loaded yet */
-                [
-                  ["car", "Car"], ["small_van", "Small Van"], ["lwb_van", "LWB Van"],
-                  ["elwb_van", "ELWB Van"], ["pickup", "Pickup"],
-                  ["luton", "Luton"], ["luton_tail_lift", "Luton Tail Lift"],
-                  ["3_5t_rigid", "3.5T Rigid"], ["3_5t_rigid_tail_lift", "3.5T Rigid Tail Lift"],
-                  ["5t_rigid", "5T Rigid"], ["7_5t_rigid", "7.5T Rigid"],
-                  ["7_5t_rigid_tail_lift", "7.5T Rigid Tail Lift"],
-                  ["10_18t_rigid", "10–18T Rigid"], ["26t_rigid", "26T Rigid"],
-                  ["32t_rigid", "32T Rigid"], ["multi_axle_rigid", "Other Multi-Axle Rigid"],
-                  ["tractor_unit", "Tractor Unit"], ["semi_trailer", "Semi-Trailer"],
-                  ["articulated_hgv", "Articulated HGV"], ["heavy_haul_combo", "Heavy-Haul Combination"],
-                ].map(([k, l]) => (
-                  <option key={k} value={k} data-testid={`asap-vehicle-option-${k}`}>{l}</option>
-                ))}
-          </select>
+          <VehicleCardGrid
+            selectedKey={transportVehicleKey}
+            onSelect={setTransportVehicleKey}
+            vehicles={transportVehicles}
+          />
           {transportVehicleKey && quote?.resolved_vehicle_key
             && quote.resolved_vehicle_key !== transportVehicleKey && (
-              <p className="mt-1 text-[11px] text-amber-600" data-testid="asap-vehicle-note">
+              <p className="mt-2 text-[11px] text-amber-600" data-testid="asap-vehicle-note">
                 Priced as <b>{quote.resolved_vehicle_key.replace(/_/g, " ")}</b> — the engine may
                 have adjusted your choice.
               </p>
             )}
-          <p className="mt-1 text-[11px] text-neutral-500">
+          <p className="mt-2 text-[11px] text-neutral-500">
             Tail-lift vehicles are separate classes — pick a "Tail Lift" variant if you need one.
             Leave on "Recommend" and we'll size to your load below.
           </p>
@@ -939,5 +915,170 @@ function SummaryRow({ label, value, strong = false, big = false }) {
         {value}
       </span>
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * R29 — Vehicle Card Grid picker
+ *
+ * Replaces the plain `<select>` dropdown with a scannable 2-column card grid
+ * of transport vehicles. Each card shows an icon, label, indicative payload
+ * & internal dimensions, tail-lift badge, and price hint (min £ · £/mi).
+ *
+ * `VEHICLE_SPECS` is a client-side display-only metadata map — the backend
+ * pricing engine remains the single source of truth for actual charges.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+// Static per-vehicle display metadata. Payload / dims are indicative — the
+// dispatcher and driver confirm the actual load fits. Numbers align to
+// standard UK commercial vehicle specs; not to be interpreted as SLA.
+const VEHICLE_SPECS = {
+  car:                    { icon: Car,     payload: "≤ 150 kg",  dims: "boot space" },
+  small_van:              { icon: Package, payload: "≤ 500 kg",  dims: "1.8 × 1.2 × 1.1 m" },
+  lwb_van:                { icon: Truck,   payload: "≤ 1000 kg", dims: "3.2 × 1.8 × 1.9 m" },
+  elwb_van:               { icon: Truck,   payload: "≤ 1200 kg", dims: "4.0 × 1.8 × 2.1 m" },
+  pickup:                 { icon: Truck,   payload: "≤ 1000 kg", dims: "open bed" },
+  luton:                  { icon: Truck,   payload: "≤ 1000 kg", dims: "4.0 × 2.0 × 2.2 m" },
+  luton_tail_lift:        { icon: Truck,   payload: "≤ 1000 kg", dims: "4.0 × 2.0 × 2.2 m + tail lift" },
+  "3_5t_rigid":           { icon: Truck,   payload: "≤ 1200 kg", dims: "4.3 × 2.0 × 2.2 m" },
+  "3_5t_rigid_tail_lift": { icon: Truck,   payload: "≤ 1200 kg", dims: "4.3 × 2.0 × 2.2 m + tail lift" },
+  "5t_rigid":             { icon: Truck,   payload: "≤ 2500 kg", dims: "5.0 × 2.2 × 2.3 m" },
+  "7_5t_rigid":           { icon: Truck,   payload: "≤ 3500 kg", dims: "6.0 × 2.4 × 2.4 m" },
+  "7_5t_rigid_tail_lift": { icon: Truck,   payload: "≤ 3500 kg", dims: "6.0 × 2.4 × 2.4 m + tail lift" },
+  "10_18t_rigid":         { icon: Truck,   payload: "≤ 10 t",    dims: "7.5 × 2.4 × 2.6 m" },
+  "26t_rigid":            { icon: Truck,   payload: "≤ 16 t",    dims: "9.0 × 2.5 × 2.7 m" },
+  "32t_rigid":            { icon: Truck,   payload: "≤ 20 t",    dims: "9.0 × 2.5 × 2.7 m" },
+  multi_axle_rigid:       { icon: Truck,   payload: "≤ 26 t",    dims: "extra axle for weight/stability" },
+  tractor_unit:           { icon: Truck,   payload: "trailer-fed", dims: "hitch only — needs trailer" },
+  semi_trailer:           { icon: Truck,   payload: "≤ 26 t",    dims: "13.6 × 2.5 × 2.7 m" },
+  articulated_hgv:        { icon: Truck,   payload: "≤ 26 t",    dims: "13.6 × 2.5 × 2.7 m (44 t GVW)" },
+  heavy_haul_combo:       { icon: Truck,   payload: "abnormal",  dims: "STGO / escort · manual review" },
+};
+
+// Fallback list used only when /asap/vehicles hasn't responded yet.
+const VEHICLE_FALLBACK = [
+  { key: "car",                    label: "Car" },
+  { key: "small_van",              label: "Small Van" },
+  { key: "lwb_van",                label: "LWB Van" },
+  { key: "elwb_van",               label: "ELWB Van" },
+  { key: "pickup",                 label: "Pickup" },
+  { key: "luton",                  label: "Luton" },
+  { key: "luton_tail_lift",        label: "Luton Tail Lift" },
+  { key: "3_5t_rigid",             label: "3.5T Rigid" },
+  { key: "3_5t_rigid_tail_lift",   label: "3.5T Rigid Tail Lift" },
+  { key: "5t_rigid",               label: "5T Rigid" },
+  { key: "7_5t_rigid",             label: "7.5T Rigid" },
+  { key: "7_5t_rigid_tail_lift",   label: "7.5T Rigid Tail Lift" },
+  { key: "10_18t_rigid",           label: "10–18T Rigid" },
+  { key: "26t_rigid",              label: "26T Rigid" },
+  { key: "32t_rigid",              label: "32T Rigid" },
+  { key: "multi_axle_rigid",       label: "Other Multi-Axle Rigid" },
+  { key: "tractor_unit",           label: "Tractor Unit" },
+  { key: "semi_trailer",           label: "Semi-Trailer" },
+  { key: "articulated_hgv",        label: "Articulated HGV" },
+  { key: "heavy_haul_combo",       label: "Heavy-Haul Combination" },
+];
+
+function VehicleCardGrid({ selectedKey, onSelect, vehicles }) {
+  const list = vehicles && vehicles.length ? vehicles : VEHICLE_FALLBACK;
+  return (
+    <div
+      className="grid grid-cols-2 gap-2"
+      role="radiogroup"
+      aria-label="Vehicle class"
+      data-testid="asap-vehicle-grid"
+    >
+      {/* Recommend-for-me card — always first, always available. */}
+      <VehicleCard
+        selected={!selectedKey}
+        onClick={() => onSelect("")}
+        icon={Sparkles}
+        label="Recommend for me"
+        payload="Based on your load"
+        dims="We'll pick the smallest fit"
+        highlight
+        testKey="__recommend"
+      />
+      {list.map((v) => {
+        const spec = VEHICLE_SPECS[v.key] || {};
+        const Icon = spec.icon || Truck;
+        return (
+          <VehicleCard
+            key={v.key}
+            selected={selectedKey === v.key}
+            onClick={() => onSelect(v.key)}
+            icon={Icon}
+            label={v.label}
+            payload={spec.payload || ""}
+            dims={spec.dims || ""}
+            tailLift={v.tail_lift || (typeof v.key === "string" && v.key.endsWith("_tail_lift"))}
+            manualReview={v.requires_manual_review}
+            priceHint={
+              v.minimum_charge != null && v.per_mile != null
+                ? `from £${Number(v.minimum_charge).toFixed(0)} · £${Number(v.per_mile).toFixed(2)}/mi`
+                : null
+            }
+            testKey={v.key}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function VehicleCard({
+  selected, onClick, icon: Icon, label, payload, dims,
+  tailLift = false, manualReview = false, priceHint = null,
+  highlight = false, testKey,
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onClick}
+      data-testid={`asap-vehicle-card-${testKey}`}
+      className={[
+        "group relative flex flex-col items-start rounded-2xl border p-3 text-left transition",
+        selected
+          ? "border-neutral-900 bg-neutral-50 ring-2 ring-neutral-900"
+          : "border-neutral-200 bg-white hover:border-neutral-300",
+        highlight && !selected ? "bg-amber-50 border-amber-200" : "",
+      ].filter(Boolean).join(" ")}
+    >
+      {selected ? (
+        <span
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-white"
+          aria-hidden="true"
+        >
+          <Check className="h-3 w-3" />
+        </span>
+      ) : null}
+      <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 text-neutral-700 group-hover:bg-neutral-200">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="text-[13px] font-semibold leading-tight text-neutral-900">{label}</div>
+      {payload ? (
+        <div className="mt-0.5 text-[11px] font-medium text-neutral-700">{payload}</div>
+      ) : null}
+      {dims ? (
+        <div className="text-[11px] leading-tight text-neutral-500">{dims}</div>
+      ) : null}
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        {tailLift ? (
+          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+            Tail lift
+          </span>
+        ) : null}
+        {manualReview ? (
+          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+            Manual review
+          </span>
+        ) : null}
+      </div>
+      {priceHint ? (
+        <div className="mt-1 text-[10px] font-medium text-neutral-500">{priceHint}</div>
+      ) : null}
+    </button>
   );
 }
