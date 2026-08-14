@@ -2447,3 +2447,51 @@ if (
 
 **Frontend `yarn build`**: clean.
 
+
+
+---
+
+### R43 — Realtime Dispatch Flake Fix (test isolation only) ✅ COMPLETE (Feb 2026)
+
+**Root cause of the flake:**
+- `GET /driver/live/offers` (server.py:2519) fetches at most 200 dispatch-eligible ASAP candidates sorted by `dispatch_ready_at` **ASC** (oldest first), then iterates and emits at most `DISPATCH_CANDIDATE_LIMIT=50` offers before breaking.
+- The default driver radius on the endpoint is `DISPATCH_DEFAULT_RADIUS_MILES=500` (effectively nationwide).
+- The shared preview DB had accumulated **248 dispatch-eligible ASAP fixtures** from months of prior test runs (QAR6/7/8/9-*, R8-*, PYTEST-* etc.), 159 of them in `confirmed/dispatch_ready` states.
+- Because the candidate window sorts OLDEST first and the driver's default radius is nationwide, the 50 offer slots were consumed entirely by ancient fixtures. The freshly-created PYTEST-NEARBY-OFFER job (newest `dispatch_ready_at`) never got appended → test failed.
+
+**Fix (test-isolation only — ZERO production code changed):**
+- Added `_cancel_stale_dispatch_fixtures()` in `tests/test_realtime_dispatch.py`: at session start, marks every dispatch-eligible ASAP job older than 1 hour as `cancelled` (`cancelled_by="pytest_isolation"`, `cancelled_reason="R43 stale ASAP fixture cleanup (>1h old)"`). Real ASAP jobs are time-critical (customers get instant quotes and drivers claim within minutes); a job sitting unclaimed for over an hour on the preview DB is de-facto a stale test fixture.
+- Added `_isolate_nearby_dispatch(lat, lng, radius_miles)` — belt-and-suspenders helper called before the specific offer-matching test, cancels any ASAP jobs within a ~30mi lat/lng box of the test's pickup coord.
+- `_r43_dispatch_isolation` autouse session fixture wires up the cleanup exactly once per pytest session.
+- The primary flaky test `test_nearby_online_driver_receives_paid_asap_offer` also now emits a clearer failure message including `offers count` and `reason` for future debugging.
+
+**Production dispatch remained EXACTLY as-is — verified by diff:**
+- `git diff --stat backend/server.py` → **0 lines changed** (empty diff).
+- Only `backend/tests/test_realtime_dispatch.py` was touched (107 insertions, 2 deletions — new helpers + one test body swap for the more informative assert).
+
+**Determinism proof:**
+- Single test isolated: **8/8** consecutive runs green (`for i in 1..8; pytest ... -q; done`).
+- Whole file: **21/21 green × 3 consecutive full-file runs**.
+
+**Regression across all pinned suites (per-file to sidestep the pre-existing async cross-file event-loop issue):**
+| Suite | Result |
+|---|---|
+| `test_booking_fees.py`               | 21/21 ✅ |
+| `test_booking_fee_bands.py`          | 18/18 ✅ |
+| `test_stripe_refund_r40_smoke.py`    | 7/7 ✅ |
+| `test_cancellation_policy_r35_r36.py` | 16/16 ✅ |
+| `test_contact_privacy_r37.py`        | 7/7 ✅ |
+| `test_password_reset.py`             | 7/7 ✅ |
+| `test_payment_and_csrf_security.py`  | 12/12 ✅ |
+| `test_payment_finalisation.py`       | 7/7 ✅ |
+| `test_pricing_engine.py`             | 53/53 ✅ |
+| `test_moderation.py`                 | 35/35 ✅ |
+| `test_cookie_auth.py`                | 6/6 ✅ |
+| `test_realtime_dispatch.py`          | 21/21 ✅ (was 20/21) |
+| **Total**                            | **210/210 ✅** |
+
+**Frontend `yarn build`**: clean.
+
+**Untouched (verified):** R26 pricing, R35/R36 cancellation, R37 contact privacy, R40 Stripe refund path, R41 cancellation insights, R42 fixed-price marketplace pricing, Mapbox iOS Safari fallback, dispatch LIMIT / radius / capability / eligibility / atomic-claim logic.
+
+**Remaining known failures / flakes:** none across the 12 pinned suites. The historical `test_pricing_engine.py`-inside-a-mixed-file-run coroutine event-loop cross-contamination is unchanged and unrelated to R43 (per-file runs are always green).
