@@ -1442,11 +1442,19 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
     # the multi-round bidding lifecycle. Guard commercial rules explicitly.
     if service_timing == "asap" and job.get("pricing_type") != "fixed":
         raise HTTPException(status_code=400, detail="ASAP requests must be fixed-price")
-    # For ASAP + fixed-price scheduled jobs, ALWAYS overwrite any
-    # client-supplied fixed_price with the authoritative engine value —
-    # historic bug (R25 audit) allowed the client to submit its own
-    # haversine-only price. The server is the single source of truth.
-    if suggested_price is not None and job.get("pricing_type") == "fixed":
+    # R42 — ONLY ASAP jobs may have their client-supplied fixed_price replaced
+    # by the engine's `suggested_price`. For SCHEDULED marketplace fixed-price
+    # jobs the whole business model is "customer names the reward, drivers
+    # accept the deal" — the customer's offered price IS the source of truth.
+    # (The R25 pricing certification originally blanket-clobbered both, which
+    # broke test_booking_fees.py::TestFixedPriceBooking; £270 fixed jobs were
+    # being silently rewritten to whatever the engine quoted, e.g. £113.85 on
+    # the London→Brighton fixture.)
+    if (
+        suggested_price is not None
+        and job.get("pricing_type") == "fixed"
+        and service_timing == "asap"
+    ):
         job["fixed_price"] = suggested_price
     # Round 9 fix — always populate a Suitable Vehicle label. ASAP jobs
     # posted by customers rarely include one explicitly; without it the

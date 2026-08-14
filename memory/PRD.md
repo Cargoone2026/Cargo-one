@@ -2385,3 +2385,65 @@ WebKit bug — must stay), cancellation-fee formula (deposit-only, R35/R36).
 - `backend/server.py` `/admin/cancellations/weekly` endpoint.
 - `frontend/src/pages/portal/admin/Dashboard.jsx` (mounted the card).
 
+
+
+---
+
+### R42 — Fixed-Price Scheduled Booking Drift Fix ✅ COMPLETE (Feb 2026)
+
+**Root cause:** `POST /jobs` at `server.py` line 1449-1450 was **blanket-overwriting** the customer-supplied `fixed_price` with the engine's `suggested_price` for **every** fixed-price job — both ASAP AND scheduled marketplace. Introduced by the R25 pricing certification (commit `ababfba`, Aug 2026) under the (correct) intent of stopping ASAP clients from posting low prices, but the guard didn't distinguish ASAP from scheduled.
+
+**Business-model implication:** Scheduled marketplace fixed-price jobs are a "customer names the reward, drivers accept or decline" model — the customer's declared price IS the source of truth. The engine's suggestion is guidance shown in the UI, NOT an authoritative overwrite. R25's blanket clobber turned every scheduled £270 fixed-price job into whatever the engine quoted (£113.85 on the London→Brighton test fixture: ~47mi haversine × haversine rate + minimums).
+
+**Before → After:**
+
+| Case | pricing_type | service_timing | Client posts £270 | Server persists (before) | Server persists (after) |
+|---|---|---|---|---|---|
+| Scheduled marketplace fixed | `fixed` | `scheduled` | fixed_price=270 | 113.85 ❌ | **270** ✅ |
+| ASAP fixed insta-book       | `fixed` | `asap`      | fixed_price=270 | engine value ✅ | engine value ✅ (unchanged) |
+| Marketplace bidding         | `bidding` | `scheduled` | max_budget only | untouched | untouched |
+
+**Exact code change** (server.py L1445-1462, one function `create_job`):
+
+```python
+# BEFORE — overwrites ALL fixed-price jobs
+if suggested_price is not None and job.get("pricing_type") == "fixed":
+    job["fixed_price"] = suggested_price
+
+# AFTER — only overwrites ASAP fixed-price
+if (
+    suggested_price is not None
+    and job.get("pricing_type") == "fixed"
+    and service_timing == "asap"
+):
+    job["fixed_price"] = suggested_price
+```
+
+**What was intentionally NOT changed:**
+- ASAP fixed-price flow — engine value still overwrites (security intent preserved).
+- Bidding flow — untouched.
+- Booking-fee bands / `calculate_booking_fee_detail` — untouched.
+- `customer_total` write path (R38) — untouched.
+- R35/R36 deposit-only cancellation — untouched.
+- R37 contact privacy — untouched.
+- R40 Stripe refund path — untouched.
+- R41 cancellation insights — untouched.
+- Mapbox iOS Safari fallback — untouched.
+
+**Regression (per-file, sequential — cross-file async event-loop cross-contamination is a pre-existing pytest infra issue):**
+- `test_booking_fees.py`         21/21 ✅  (was 18 passing, **3 previously failing now green**)
+- `test_booking_fee_bands.py`    18/18 ✅
+- `test_stripe_refund_r40_smoke.py` 7/7 ✅
+- `test_cancellation_policy_r35_r36.py` 16/16 ✅
+- `test_contact_privacy_r37.py`   7/7 ✅
+- `test_password_reset.py`        7/7 ✅
+- `test_payment_and_csrf_security.py` 12/12 ✅
+- `test_payment_finalisation.py`  7/7 ✅
+- `test_pricing_engine.py`       53/53 ✅
+- `test_moderation.py`           35/35 ✅
+- `test_cookie_auth.py`           6/6 ✅
+
+**Total: 189/189 green.** The one lingering `test_realtime_dispatch.py::test_nearby_online_driver_receives_paid_asap_offer` failure is confirmed pre-existing (verified via `git stash` on the parent commit — identical failure) and documented in the PRD Manual-QA Sprint section as a known flake.
+
+**Frontend `yarn build`**: clean.
+
