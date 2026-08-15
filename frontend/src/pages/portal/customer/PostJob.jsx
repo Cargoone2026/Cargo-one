@@ -110,9 +110,21 @@ export default function CustomerPostJob() {
     if (!categoryKey && categories.length > 0) setCategoryKey(categories[0].key);
   }, [categories, categoryKey]);
 
-  // Live quote — matches the Expo dependency shape exactly
+  // Live quote — matches the Expo dependency shape exactly.
+  // R47 — Guard against unresolved addresses. If the user has typed an
+  // address string but the geocoder hasn't returned a lat/lng yet, DO NOT
+  // fire the request (the backend rejects `undefined` coord params and
+  // the entire Quote Summary silently blanks to `—`).
   useEffect(() => {
-    if (!pickup || !dropoff || !categoryKey) {
+    const pickupOk =
+      pickup &&
+      Number.isFinite(Number(pickup.lat)) &&
+      Number.isFinite(Number(pickup.lng));
+    const dropoffOk =
+      dropoff &&
+      Number.isFinite(Number(dropoff.lat)) &&
+      Number.isFinite(Number(dropoff.lng));
+    if (!pickupOk || !dropoffOk || !categoryKey) {
       setQuote(null);
       return;
     }
@@ -195,9 +207,19 @@ export default function CustomerPostJob() {
   }, [selectedCategory, weightKg, lengthM, widthM, heightM, itemCount, needsForklift, needsLoadingHelp]);
 
   useEffect(() => {
-    if (step === 4 && vehicleKey === NOT_SURE_KEY) requestRec();
+    // R47 — Refetch recommendations whenever the category (or its cargo
+    // fingerprint) changes. Previously this only fired on `step === 4`
+    // transitions, so a customer who went back from step 5 and switched
+    // category kept seeing recs cached from the FIRST category (e.g.
+    // "Recovery Truck (recommended)" for a Parcels job). Clearing recs on
+    // categoryKey change also prevents the summary from showing stale text.
+    setRecs(null);
+    if (vehicleKey === NOT_SURE_KEY && selectedCategory) {
+      requestRec();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, vehicleKey, needsForklift, needsLoadingHelp]);
+  }, [categoryKey, weightKg, lengthM, widthM, heightM, itemCount,
+       needsForklift, needsLoadingHelp, vehicleKey]);
 
   const canNext1 = !!categoryKey && title.trim().length > 0;
   const canNext2 = !!pickup && !!dropoff;

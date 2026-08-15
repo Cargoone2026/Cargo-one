@@ -2660,3 +2660,37 @@ Test coverage — `/app/backend/tests/test_sms_r46_unit.py` (14 parameterised E.
 
 **Production note:** R46 refactor and SMS code are live in preview. SMS won't actually send until `TWILIO_*` env vars are filled with the user's Twilio credentials — that's the next action.
 
+
+
+---
+
+### R47 — PostJob Quote Summary Missing Info + Wrong Vehicle Fix ✅ COMPLETE (Feb 2026)
+
+**Scope:** Scheduled marketplace bookings only — Open-to-Bids AND Fixed-Price. **ASAP flow untouched** per user instruction.
+
+**User-reported symptoms** (production, cargoone.co.uk):
+- "Vehicle: Recovery Truck (recommended)" surfacing on a Parcels marketplace job.
+- Distance, Journey time, Driver charge, Cargo One booking fee, Total booking price all rendering as "—" / "£—" on the step-5 Quote Summary.
+
+**Root causes:**
+
+1. **Stale vehicle recommendations** — the `useEffect` that calls `/catalog/recommend-vehicle` only fired when `step === 4` transitioned. If a customer navigated back from step 5 to step 1, changed category, and came back to step 5 without visiting step 4, `recs` stayed cached from the FIRST category (`recs[0].name` showed the old vehicle e.g. "Recovery Truck" for a Parcels job). The useEffect deps `[step, vehicleKey, needsForklift, needsLoadingHelp]` omitted `selectedCategory`, `weightKg`, `lengthM`, `widthM`, `heightM`, `itemCount`.
+
+2. **Quote fetch firing with unresolved addresses** — the guard `if (!pickup || !dropoff || !categoryKey)` was truthy as soon as an address STRING was typed, even before the geocoder resolved a lat/lng. The subsequent `pickup_lat=${pickup.lat}` interpolated `undefined`, backend returned 422, `catch` set `quote=null`, and every Distance/ETA/Driver-charge/Booking-fee/Total line rendered "—".
+
+**Fixes in `frontend/src/pages/portal/customer/PostJob.jsx`:**
+
+- **Vehicle recs refetch**: `useEffect` now runs on `[categoryKey, weightKg, lengthM, widthM, heightM, itemCount, needsForklift, needsLoadingHelp, vehicleKey]` and starts with `setRecs(null)` on every relevant change. Guaranteed: whenever the category (or its cargo fingerprint) changes, recs blank out immediately and refetch with the correct category. No more stale "Recovery Truck (recommended)" on a Parcels job.
+
+- **Quote fetch guard**: added a `pickupOk` / `dropoffOk` pair using `Number.isFinite(Number(pickup.lat))` etc. before firing the request. If any coord is not a valid number, `setQuote(null)` and skip. Once the geocoder resolves lat/lng, the useEffect re-runs and the summary populates correctly.
+
+**Live verification (backend confirmed working):**
+- `GET /api/quote/estimate?…&category=parcels` returns `distance_miles=103.57`, `duration_minutes=187.5`, `suggested_price=199.55`, `vehicle="Small Van (SWB)"`. So the endpoint was fine — the fix is purely frontend.
+- `POST /api/catalog/recommend-vehicle` for `category_key=parcels` returns `motorcycle_courier` → `small_van` → `swb_van` recommendations. Correct — the bug was ONLY the frontend not re-fetching.
+
+**Untouched:** ASAP flow (`AsapRequest.jsx` — user explicitly excluded), booking-detail highlights (R44), cancellation logic (R35/R36), Stripe refund (R40), pricing math, Mapbox iOS fallback.
+
+**Regression:** Frontend `yarn build` clean. Backend unchanged so no test rerun needed for the endpoints (already covered by `test_pricing_engine.py` and the earlier `/quote/estimate` smoke).
+
+**Production note:** R47 lives in preview; a redeploy will push it to cargoone.co.uk.
+
