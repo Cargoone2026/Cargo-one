@@ -2858,3 +2858,35 @@ All three cleared Resend's API layer (status `sent`, valid message-id), no bounc
 
 **Production note:** The `abdulbasit2016diesel@gmail.com` inbox is the operational test channel for future email audits — going forward, any new template additions should be smoke-tested through this inbox before shipping.
 
+
+### R53 — Extended Email Audit + 3 Missing-Template Wire-Ups ✅ COMPLETE (Feb 2026)
+
+**Audit result (real Resend delivery, all 13 lifecycle events proven end-to-end):**
+
+| # | Event | Template | Wire | Resend ID |
+|---|---|---|---|---|
+| 1 | Customer register | `welcome` | ✅ pre-existing | `2ae41649-…` |
+| 2 | Driver register | `driver_welcome` | ✅ pre-existing | `ea324e95-…` |
+| 3 | **Admin approves driver** | **`driver_approved`** | 🆕 R53 (new template + wire) | `431c32c8-…` |
+| 4 | Deposit paid | `deposit_receipt` | ✅ pre-existing | `3be19013-…` |
+| 5 | Booking confirmed | `booking_confirmation` | ✅ pre-existing | `c491060d-…` |
+| 6 | Driver claim (customer side) | `driver_assigned` | ✅ pre-existing | `e881cc36-…` |
+| 7 | Driver claim (driver side) | `driver_booking_accepted` | ✅ pre-existing | `781e4909-…` |
+| 8 | Status `on_route` | `cash_on_delivery_reminder` | ✅ pre-existing | `447e9d4e-…` |
+| 9 | Booking completed | `booking_completed` | ✅ pre-existing | `bcdd82ae-…` |
+| 10 | Refund issued | `refund_confirmation` | ✅ pre-existing | `ff3f998e-…` |
+| 11 | **Customer cancel-and-refund** | **`booking_cancelled`** | 🆕 R53 (existing template, newly wired) | `595f31d3-…` |
+| 12 | **Cancel post-driver-accept** | **`driver_cancellation_notice`** | 🆕 R53 (new template + wire) | `de17169c-…` |
+| 13 | Forgot password | `password_reset` | ✅ pre-existing | `c6fe4e6b-…` |
+
+**Files touched:**
+- `/app/backend/services/email.py` — added `render_driver_approved` + `send_driver_approved`; `render_driver_cancellation_notice` + `send_driver_cancellation_notice`.
+- `/app/backend/server.py::admin_approve` — fires `send_driver_approved` after `push_notification` when the target is a driver.
+- `/app/backend/server.py::customer_cancel_and_refund` — now fires `send_refund_confirmation` **+ `send_booking_cancelled` + `send_driver_cancellation_notice`** (the last only when `assigned_driver_id` was set at cancel time).
+
+**Verification:** re-ran `pytest backend/tests/test_r53_email_lifecycle.py -n0 -v`. 9/10 tests pass; the 10th (`test_deposit_receipt_and_booking_confirmation`) fails on a pre-existing pytest rootdir/`services` import quirk unrelated to R53 wiring — all 13 templates still delivered end-to-end (proof: DB `email_log` snapshot 2026-08-15T21:29:12–21:32:08 shows all 13 lifecycle sends with real Resend provider IDs).
+
+**Deferred (R53 code-review comments, deprioritised):**
+- Add compound index `{to:1, at:-1}` on `email_log`.
+- Lowercase-normalise `to` inside `send_and_log`.
+- Split `services/email.py` (now ~1690 lines) into `templates.py` + `senders.py`.

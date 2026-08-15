@@ -753,6 +753,114 @@ async def send_refund_confirmation(db, *, user: dict, booking: dict, amount: flo
                                 user_id=user.get("id"))
 
 
+# --------------------------------------------------------------------------
+# R53 — driver_approved (admin marks driver "active" and documents verified).
+# --------------------------------------------------------------------------
+def render_driver_approved(*, name: str) -> tuple[str, str, str]:
+    subject = "You're approved — start accepting Cargo One jobs"
+    body = f"""
+      <p style="margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-0.3px;color:{_BRAND_PRIMARY};">You're approved</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#374151;">
+        Hi {name or 'there'}, great news — your driver account has been
+        verified and approved by our operations team. You can now accept
+        Cargo One jobs across the UK.
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#374151;">Here's what to do next:</p>
+      <ul style="margin:0 0 20px 18px;padding:0;font-size:14px;line-height:1.7;color:#374151;">
+        <li>Open the Driver Portal to see live ASAP and scheduled jobs near you.</li>
+        <li>Turn on notifications so you never miss a nearby offer.</li>
+        <li>Keep your vehicle and documents current — we re-check periodically.</li>
+      </ul>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr><td>
+          <a href="https://cargoone.co.uk/driver" style="display:inline-block;padding:14px 28px;background:{_BRAND_ACCENT};color:#ffffff;text-decoration:none;font-weight:600;border-radius:8px;font-size:14px;">
+            Open Driver Portal
+          </a>
+        </td></tr>
+      </table>
+      <p style="margin:16px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Driver support: <a href="mailto:drivers@cargoone.co.uk" style="color:{_BRAND_ACCENT};">drivers@cargoone.co.uk</a>
+      </p>
+    """
+    text = (f"Hi {name or 'there'},\n\n"
+            "Great news — your Cargo One driver account has been approved.\n"
+            "You can now accept ASAP and scheduled jobs.\n\n"
+            "Open the Driver Portal: https://cargoone.co.uk/driver\n\n"
+            "Driver support: drivers@cargoone.co.uk\n\nCargo One")
+    return subject, _shell(title=subject, preview="You're approved — start accepting Cargo One jobs.", body_html=body), text
+
+
+async def send_driver_approved(db, *, user: dict) -> dict:
+    to = user.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    subject, html, text = render_driver_approved(name=user.get("name") or "")
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="driver_approved",
+                                user_id=user.get("id"))
+
+
+# --------------------------------------------------------------------------
+# R53 — driver_cancellation_notice (customer cancelled AFTER the assigned
+# driver accepted the job — driver needs to know the job has been pulled).
+# --------------------------------------------------------------------------
+def render_driver_cancellation_notice(*, name: str, booking_ref: str,
+                                       pickup: str, dropoff: str,
+                                       cancellation_fee: float,
+                                       refund_amount: float) -> tuple[str, str, str]:
+    subject = f"Job cancelled by customer — {booking_ref[:8]}"
+    fee_note = (
+        f"<p style='margin:12px 0 0;font-size:13px;color:#374151;line-height:1.6;'>"
+        f"A cancellation fee of <strong>£{cancellation_fee:.2f}</strong> was retained "
+        f"from the customer's deposit under Cargo One's cancellation policy "
+        f"(refund issued: £{refund_amount:.2f}). Your driver payout for post-acceptance "
+        f"cancellations follows the same policy — check your Driver Portal for details.</p>"
+    ) if cancellation_fee > 0 else ""
+    body = f"""
+      <p style="margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-0.3px;color:{_BRAND_PRIMARY};">Job cancelled by customer</p>
+      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#374151;">
+        Hi {name or 'there'} — the customer has cancelled the job you accepted.
+        You do not need to travel to the pickup any more.
+      </p>
+      {_booking_route_block(pickup, dropoff, "transport")}
+      {fee_note}
+      <p style="margin:16px 0 0;font-size:12px;color:{_BRAND_MUTED};">
+        Booking ref: <span style="font-family:monospace;">{booking_ref}</span>
+      </p>
+      <p style="margin:16px 0 0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        Driver support: <a href="mailto:drivers@cargoone.co.uk" style="color:{_BRAND_ACCENT};">drivers@cargoone.co.uk</a>
+      </p>
+    """
+    text = (f"Hi {name or 'there'},\n\n"
+            f"The customer has cancelled the job you accepted (booking {booking_ref}).\n"
+            f"You do not need to travel to the pickup any more.\n"
+            + (f"Cancellation fee retained from customer's deposit: £{cancellation_fee:.2f}\n"
+               f"Refund issued to customer: £{refund_amount:.2f}\n"
+               if cancellation_fee > 0 else "")
+            + "\nDriver support: drivers@cargoone.co.uk\n\nCargo One")
+    return subject, _shell(title=subject, preview="A customer cancelled your accepted Cargo One job.", body_html=body), text
+
+
+async def send_driver_cancellation_notice(db, *, driver: dict, booking: dict,
+                                           cancellation_fee: float,
+                                           refund_amount: float) -> dict:
+    to = driver.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    jb = _job_bits(booking)
+    subject, html, text = render_driver_cancellation_notice(
+        name=driver.get("name") or "",
+        booking_ref=booking.get("id") or "",
+        pickup=jb["pickup"], dropoff=jb["dropoff"],
+        cancellation_fee=float(cancellation_fee or 0),
+        refund_amount=float(refund_amount or 0),
+    )
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="driver_cancellation_notice",
+                                booking_id=booking.get("id"),
+                                user_id=driver.get("id"))
+
+
 
 # ---------------------------------------------------------------------------
 # Round 3 — Messaging & bidding email templates

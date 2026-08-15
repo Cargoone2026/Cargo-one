@@ -4377,6 +4377,15 @@ async def admin_approve(user_id: str, actor: dict = Depends(require_role("admin"
     )
     await push_notification(user_id, "You're approved!",
                              "Your driver account is approved. You can now accept jobs.")
+    # R53 — send the "you're approved" email (real Resend delivery).
+    if (target.get("role") or "").lower() == "driver":
+        try:
+            from services.email import send_driver_approved
+            fresh_driver = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if fresh_driver:
+                await send_driver_approved(db, user=fresh_driver)
+        except Exception:
+            logger.exception("driver_approved email failed; continuing")
     return {"ok": True}
 
 
@@ -4976,7 +4985,11 @@ async def customer_cancel_and_refund(
 
     # ---- CONFIRMATION EMAIL ---------------------------------------------
     try:
-        from services.email import send_refund_confirmation
+        from services.email import (
+            send_refund_confirmation,
+            send_booking_cancelled,
+            send_driver_cancellation_notice,
+        )
         fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0}) if b.get("job_id") else None
         if fresh_b:
@@ -4985,6 +4998,26 @@ async def customer_cancel_and_refund(
                 db, user=user, booking=fresh_b,
                 amount=float(audit_entry["amount"] or 0),
             )
+            # R53 — always tell the customer their booking was cancelled
+            # (separate email from the refund receipt).
+            await send_booking_cancelled(
+                db, user=user, booking=fresh_b,
+                reason="Customer cancelled",
+                refund_pending=(refund_state != "succeeded"),
+            )
+            # R53 — if a driver had already accepted the job, notify them
+            # that the customer pulled the booking so they don't drive out.
+            assigned_driver_id = job.get("assigned_driver_id")
+            if assigned_driver_id:
+                driver_doc = await db.users.find_one(
+                    {"id": assigned_driver_id}, {"_id": 0}
+                )
+                if driver_doc:
+                    await send_driver_cancellation_notice(
+                        db, driver=driver_doc, booking=fresh_b,
+                        cancellation_fee=float(breakdown["cancellation_fee"] or 0),
+                        refund_amount=float(breakdown["refund_amount"] or 0),
+                    )
     except Exception:
         logger.exception("customer refund-confirmation email failed; continuing")
 
