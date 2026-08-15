@@ -596,9 +596,19 @@ export default function CustomerBookingDetail() {
                 }
                 value={`£${bookingFee.toFixed(2)}`}
               />
-              <SumRow label="Total Booking Price" value={`£${total.toFixed(2)}`} highlight testID="booking-summary-total" />
+              <SumRow
+                label="Total Booking Price"
+                value={`£${total.toFixed(2)}`}
+                highlight={!b.assigned_driver_id}
+                testID="booking-summary-total"
+              />
               <div className="my-1 border-t border-[#F3F4F6]" />
-              <SumRow label="Pay Driver On Delivery" value={`£${driverCharge.toFixed(2)}`} testID="booking-summary-pay-driver" />
+              <SumRow
+                label="Pay Driver On Delivery"
+                value={`£${driverCharge.toFixed(2)}`}
+                highlight={Boolean(b.assigned_driver_id)}
+                testID="booking-summary-pay-driver"
+              />
               <div className="my-1 border-t border-[#F3F4F6]" />
               <SumRow label="Pay Now (Booking Fee)" value={`£${bookingFee.toFixed(2)}`} testID="booking-summary-pay-now" />
             </div>
