@@ -1475,3 +1475,86 @@ async def send_new_review(db, *, target_user: dict, from_user: dict,
                                 template="new_review",
                                 booking_id=booking.get("id"),
                                 user_id=target_user.get("id"))
+
+
+# ---------------------------------------------------------------------------
+# R45 — Delivery Cash Reminder
+#
+# Fired when the driver transitions the booking to `on_route` (i.e. cargo
+# has been picked up and they're now heading to the customer). This is the
+# moment the customer needs to know the EXACT cash figure to have ready.
+# Idempotent — guarded server-side by `cash_reminder_sent_at` on the booking.
+# ---------------------------------------------------------------------------
+
+def render_cash_on_delivery_reminder(
+    *, name: str, booking_ref: str, pickup: str, dropoff: str,
+    driver_name: str, driver_charge: float,
+    booking_url: str,
+) -> tuple[str, str, str]:
+    subject = f"Have £{driver_charge:.2f} ready — your driver is on the way"
+    body = f"""
+      <p style="margin:0 0 4px;font-size:22px;font-weight:700;letter-spacing:-0.3px;color:{_BRAND_PRIMARY};">Have your cash ready 💷</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#374151;">
+        Hi {name or 'there'} — {driver_name or 'your driver'} has picked up your cargo and is now heading to you.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:12px;">
+        <tr><td style="padding:22px 20px;text-align:center;">
+          <p style="margin:0 0 4px;font-size:11px;color:{_BRAND_ACCENT};letter-spacing:1.2px;text-transform:uppercase;font-weight:700;">Pay driver on delivery</p>
+          <p style="margin:0;font-size:34px;font-weight:800;color:{_BRAND_ACCENT};letter-spacing:-0.5px;">£{driver_charge:.2f}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:{_BRAND_MUTED};">Please pay the driver directly on delivery.</p>
+        </td></tr>
+      </table>
+      {_booking_route_block(pickup, dropoff, "transport")}
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+        <tr><td>
+          <a href="{booking_url}" style="display:inline-block;padding:12px 22px;background:{_BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-weight:600;border-radius:8px;font-size:13px;">
+            Track driver
+          </a>
+        </td></tr>
+      </table>
+      <p style="margin:16px 0 0;font-size:12px;color:{_BRAND_MUTED};">
+        Booking ref: <span style="font-family:monospace;">{booking_ref}</span>
+      </p>
+      {_support_line()}
+    """
+    text = (
+        f"Have your cash ready\n\n"
+        f"Hi {name or 'there'},\n"
+        f"{driver_name or 'Your driver'} has picked up your cargo and is heading to you.\n\n"
+        f"Please have £{driver_charge:.2f} ready to pay the driver on delivery.\n\n"
+        f"From: {pickup}\nTo: {dropoff}\nBooking: {booking_ref}\n\n"
+        f"Track driver: {booking_url}\n\nCargo One"
+    )
+    return subject, _shell(
+        title=subject,
+        preview=f"Have £{driver_charge:.2f} in cash ready for {driver_name or 'your driver'}.",
+        body_html=body,
+    ), text
+
+
+async def send_cash_on_delivery_reminder(
+    db, *, user: dict, booking: dict, driver: dict,
+) -> dict:
+    """Email the customer the exact cash figure once the driver is en route."""
+    to = user.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    driver_charge = float(booking.get("driver_charge") or booking.get("balance_due") or 0)
+    if driver_charge <= 0:
+        return {"status": "skipped", "reason": "no_driver_charge"}
+    jb = _job_bits(booking)
+    booking_url = f"{_APP_ORIGIN}/customer/booking/{booking.get('id') or ''}"
+    subject, html, text = render_cash_on_delivery_reminder(
+        name=user.get("name") or "",
+        booking_ref=booking.get("id") or "",
+        pickup=jb["pickup"], dropoff=jb["dropoff"],
+        driver_name=driver.get("name") or "",
+        driver_charge=driver_charge,
+        booking_url=booking_url,
+    )
+    return await _send_and_log(
+        db, to=to, subject=subject, html=html, text=text,
+        template="cash_on_delivery_reminder",
+        booking_id=booking.get("id"),
+        user_id=user.get("id"),
+    )

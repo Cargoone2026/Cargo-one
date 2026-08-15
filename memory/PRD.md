@@ -2568,3 +2568,45 @@ Fixes:
 
 **Note on the two catalogs still coexisting:** `service_catalog.py` (customer-facing picker) and `services/pricing.py` (server-side pricing vehicles) are still two disconnected vehicle taxonomies. A full unification would be a large refactor (mapping 20 catalog keys to 8 pricing keys with capacity-preserving translation). The R44 patch covers all currently-active category keys — if future categories are added, both maps need parallel updates. Adding a shared "vehicle_key_map" module is a good future refactor.
 
+
+
+---
+
+### R45 — Delivery Cash Reminder + Fixed-Price Guidance ✅ COMPLETE (Feb 2026)
+
+**Feature 1 — Delivery Cash Reminder (backend)**
+
+Hook: `POST /api/bookings/{id}/status` transition to `on_route` (driver just picked up cargo and is heading to the customer — natural moment to remind customer of exact cash to hand over on delivery).
+
+Wire-up in `server.py::update_booking_status`:
+- Push notification into the customer's existing bell tray: title `Have £{X} in cash ready`, body includes driver name and amount, `data = {kind: "cash_reminder", amount, booking_id}`.
+- Email via Resend: new template `cash_on_delivery_reminder` (subject `Have £X.XX ready — your driver is on the way`, big red `£X` cash figure on Cargo One brand card, route block, track-driver CTA linking to `/customer/booking/{id}`).
+- Idempotent — guarded by `cash_reminder_sent_at` field on the booking; driver toggling status back-and-forth (e.g. `on_route → collected → on_route`) does NOT re-fire.
+- Non-blocking — any Resend / DB failure is `logger.exception`ed and the underlying status update still succeeds.
+
+New helpers in `services/email.py`:
+- `render_cash_on_delivery_reminder(name, booking_ref, pickup, dropoff, driver_name, driver_charge, booking_url)` — returns `(subject, html, text)`. Reuses the existing `_shell`, `_booking_route_block`, and `_support_line` primitives so the email inherits the brand shell.
+- `send_cash_on_delivery_reminder(db, *, user, booking, driver)` — resolves driver_charge from `driver_charge` or `balance_due` (whichever is set), skips gracefully on missing email or £0 driver_charge, logs to `email_log` like every other template.
+
+Test coverage — `/app/backend/tests/test_cash_reminder_r45.py`:
+- `test_on_route_fires_reminder_once` — asserts `cash_reminder_sent_at` stamped, `email_log` has 1 row with subject containing the exact amount, `notifications` has 1 push with `kind=cash_reminder` and `amount=317.50`.
+- `test_replay_status_does_not_double_send` — `on_route → collected → on_route` triggers exactly 1 email.
+- `test_non_on_route_transitions_do_not_fire` — `arrived`, `collected`, `delivered` transitions never fire the reminder.
+
+**Feature 2 — Customer Fixed-Price Guidance (frontend)**
+
+New `<FixedPriceNudge>` component in `frontend/src/pages/portal/customer/PostJob.jsx`. Compares the customer's typed price against `quote.suggested_price` from `/quote/estimate` and renders inline feedback beneath the input:
+- **≥85% of suggestion** → silent (fair market spread).
+- **60–84%** → soft amber warning: "Below the typical UK market rate for this job (£X). Adding roughly £Y to your fixed price would put you in the sweet spot and typically halves the wait time."
+- **<60%** → strong red warning: "Well below the UK market rate for this job (£X). Most drivers filter out low-priced jobs. Consider raising your fixed price by about £Y to attract offers within the hour."
+- Applies to BOTH `Fixed Price` and `Open to Bids → Max budget` paths (the max budget copy is grammatically adapted).
+- Purely presentational — never blocks submission. Uses `data-testid="postjob-fixed-price-nudge"` for automated coverage.
+
+Test coverage — `test_cash_reminder_r45.py::TestFixedPriceNudgeSupport::test_quote_endpoint_still_returns_suggested_price` — locks in the contract that the frontend nudge depends on (`/quote/estimate` returns numeric `suggested_price` for a canonical UK route + `furniture_delivery` category).
+
+**Regression:** 165/165 tests green across `cash_reminder_r45`, `booking_fees` (21), `booking_fee_bands` (18), `pricing_engine` (53), `cancellation_policy_r35_r36` (16), `contact_privacy_r37` (7), `stripe_refund_r40_smoke` (7), `realtime_dispatch` (21), `payment_and_csrf_security` (12), `cookie_auth` (6). Frontend `yarn build` clean.
+
+**Untouched:** R35/R36 cancellation, R37 privacy, R40 Stripe refund path, R41 insights, R42 fixed-price pricing, R43 dispatch isolation, R44 booking-detail highlights + distance/ETA + vehicle recommendations, Mapbox iOS Safari fallback.
+
+**Production note:** R45 lives in preview. Both features need a redeploy to reach cargoone.co.uk.
+

@@ -3450,6 +3450,48 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
     await push_notification(other_id, f"Booking {payload.status}",
                              f"Booking status updated to {payload.status.replace('_', ' ')}.",
                              {"booking_id": booking_id})
+    # R45 — Cash-on-Delivery Reminder.
+    # When the driver flips the job to `on_route` (cargo picked up, now
+    # heading to the customer), send the customer a targeted push + email
+    # reminding them of the EXACT cash figure to have ready. Idempotent:
+    # a `cash_reminder_sent_at` field on the booking blocks duplicates if
+    # the driver toggles the status back and forth. Failures are swallowed
+    # so the status update itself is never blocked.
+    if payload.status == "on_route" and not b.get("cash_reminder_sent_at"):
+        try:
+            fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
+            cust = await db.users.find_one({"id": b.get("customer_id")},
+                                            {"_id": 0, "password_hash": 0})
+            drv = await db.users.find_one({"id": b.get("driver_id")},
+                                            {"_id": 0, "password_hash": 0}) or {}
+            if fresh_b and cust:
+                fresh_b["job"] = job_doc
+                driver_charge = float(
+                    fresh_b.get("driver_charge") or fresh_b.get("balance_due") or 0
+                )
+                # Targeted push — the notification lands in the customer's
+                # existing bell tray with the exact cash figure.
+                if driver_charge > 0:
+                    await push_notification(
+                        b.get("customer_id"),
+                        f"Have £{driver_charge:.2f} in cash ready",
+                        f"{drv.get('name') or 'Your driver'} has picked up your cargo "
+                        f"and is heading to you. Please have £{driver_charge:.2f} ready "
+                        f"to pay on delivery.",
+                        {"booking_id": booking_id, "kind": "cash_reminder",
+                         "amount": driver_charge},
+                    )
+                from services.email import send_cash_on_delivery_reminder
+                await send_cash_on_delivery_reminder(
+                    db, user=cust, booking=fresh_b, driver=drv,
+                )
+                await db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"cash_reminder_sent_at": now_iso()}},
+                )
+        except Exception:
+            logger.exception("cash-reminder dispatch failed; continuing")
     # Session E — email the customer if the booking was cancelled.
     if payload.status == "cancelled":
         try:
