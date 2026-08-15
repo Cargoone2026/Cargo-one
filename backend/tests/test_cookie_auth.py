@@ -20,7 +20,7 @@ BASE_URL = os.environ.get(
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cargoone.com")
-ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")
 
 
 def _cookie(session: requests.Session, name: str):

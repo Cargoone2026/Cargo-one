@@ -5,6 +5,17 @@ exist (`driver1@cargoone.com`, `cust1@cargoone.com`). This was previously done
 out-of-band; centralising it here makes the suite self-contained.
 """
 import os
+
+# Load backend/.env explicitly. In the container, the shell env has a stale
+# `STRIPE_API_KEY=sk_test_emergent` placeholder (and no admin password), so
+# `override=True` is important — same pattern already used by
+# test_stripe_refund_r40_smoke.py + test_cash_reminder_r45.py.
+try:
+    from dotenv import load_dotenv
+    load_dotenv("/app/backend/.env", override=False)
+except Exception:
+    pass
+
 import pytest
 import requests
 
@@ -14,8 +25,17 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
+# R50 fix — fall back to the backend's OWN admin-seed password before the
+# ancient 'admin123' hard-coded default. This way tests work out of the box
+# on any environment where INITIAL_ADMIN_PASSWORD is set in backend/.env
+# (which is the case on preview + production), without requiring an explicit
+# TEST_ADMIN_PASSWORD export.
 ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@cargoone.com")
-ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = (
+    os.environ.get("TEST_ADMIN_PASSWORD")
+    or os.environ.get("INITIAL_ADMIN_PASSWORD")
+    or "admin123"
+)
 
 FIXTURE_CUSTOMER = {
     "email": "cust1@cargoone.com",

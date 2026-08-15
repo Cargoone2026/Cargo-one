@@ -34,7 +34,7 @@ def test_section_b_auth():
         # Login
         login_resp = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")},
+            json={"email": "admin@cargoone.com", "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")},
             timeout=5
         )
         assert login_resp.status_code == 200, f"Login failed with {login_resp.status_code}"

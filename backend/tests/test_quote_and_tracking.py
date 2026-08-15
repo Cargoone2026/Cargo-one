@@ -19,7 +19,7 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 
 ADMIN_EMAIL = "admin@cargoone.com"
-ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")
 
 # London -> Manchester (per review request)
 PICKUP = (51.5074, -0.1278)

@@ -27,7 +27,7 @@ BASE_URL = (
     or "https://cargo-port.preview.emergentagent.com"
 ).rstrip("/")
 
-ADMIN = {"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")}
+ADMIN = {"email": "admin@cargoone.com", "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")}
 CUSTOMER = {"email": "cust1@cargoone.com", "password": "cust1234"}
 
 

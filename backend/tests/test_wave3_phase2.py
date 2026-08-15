@@ -14,7 +14,7 @@ import requests
 
 BASE_URL = os.environ.get("BACKEND_URL_OVERRIDE", "http://localhost:8001").rstrip("/")
 ADMIN_EMAIL = "admin@cargoone.com"
-ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")
 
 
 def _hdr(token):

@@ -62,7 +62,7 @@ class TestAuth:
 
     def test_login_admin_seeded(self, api, base_url):
         r = api.post(f"{base_url}/api/auth/login", json={
-            "email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123"),
+            "email": "admin@cargoone.com", "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123"),
         })
         assert r.status_code == 200, r.text
         d = r.json()

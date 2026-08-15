@@ -35,7 +35,7 @@ def _rand_email(prefix: str) -> str:
 def _admin_token() -> str:
     r = requests.post(
         f"{API}/auth/login",
-        json={"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")},
+        json={"email": "admin@cargoone.com", "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")},
         timeout=30,
     )
     assert r.status_code == 200, f"admin login failed: {r.text}"

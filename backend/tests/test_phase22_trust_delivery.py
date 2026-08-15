@@ -48,7 +48,7 @@ def admin_token():
     import requests
     s = requests.Session(); s.headers.update({"Content-Type": "application/json"})
     r = s.post(f"{BASE_URL}/api/auth/login",
-               json={"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")})
+               json={"email": "admin@cargoone.com", "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")})
     assert r.status_code == 200, r.text
     return r.json()["access_token"]
 
@@ -392,7 +392,7 @@ class TestNoRegression:
     def test_login(self, api_shared):
         r = api_shared.post(f"{BASE_URL}/api/auth/login",
                             json={"email": "admin@cargoone.com",
-                                  "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")})
+                                  "password": (os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123")})
         assert r.status_code == 200
 
     def test_booking_fees_preview(self, api_shared, admin_token):

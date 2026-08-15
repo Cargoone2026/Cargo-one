@@ -55,7 +55,7 @@ def mongo():
 @pytest.fixture(scope="module")
 def admin_token(base_url):
     r = requests.post(f"{base_url}/api/auth/login",
-                      json={"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")})
+                      json={"email": "admin@cargoone.com", "password": os.environ.get("TEST_ADMIN_PASSWORD") or os.environ.get("INITIAL_ADMIN_PASSWORD") or "admin123"})
     assert r.status_code == 200, f"admin login failed: {r.text}"
     return r.json()["access_token"]
 
