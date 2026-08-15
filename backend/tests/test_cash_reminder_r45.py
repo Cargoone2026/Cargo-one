@@ -127,6 +127,16 @@ class TestCashReminder:
         assert "£317.50" in notes[0]["title"]
         assert notes[0]["data"]["amount"] == 317.50
 
+        # R46 — SMS attempt is ALWAYS logged, even when Twilio env vars
+        # aren't configured (preview). Status = "skipped" in that case,
+        # or "sent"/"failed" when creds are live. Body preview must carry
+        # the exact amount so ops can audit what was queued.
+        sms_logs = list(db.sms_log.find({"booking_id": bkg_id,
+                                          "template": "cash_on_delivery_reminder"}))
+        assert len(sms_logs) == 1
+        assert "317.50" in sms_logs[0]["body_preview"]
+        assert sms_logs[0]["status"] in ("sent", "failed", "skipped")
+
     def test_replay_status_does_not_double_send(self):
         cust = _register("customer")
         drv = _register("driver")

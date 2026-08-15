@@ -3486,6 +3486,17 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
                 await send_cash_on_delivery_reminder(
                     db, user=cust, booking=fresh_b, driver=drv,
                 )
+                # R46 — also fire a Twilio SMS with the same cash figure.
+                # Non-blocking: helper skips gracefully if TWILIO_* env
+                # vars aren't configured. Some customers won't check email
+                # in the driveway — SMS lands on the lockscreen.
+                try:
+                    from services.sms import send_cash_on_delivery_sms
+                    await send_cash_on_delivery_sms(
+                        db, user=cust, booking=fresh_b, driver=drv,
+                    )
+                except Exception:
+                    logger.exception("cash-reminder SMS failed; continuing")
                 await db.bookings.update_one(
                     {"id": booking_id},
                     {"$set": {"cash_reminder_sent_at": now_iso()}},

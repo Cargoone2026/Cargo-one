@@ -2610,3 +2610,53 @@ Test coverage — `test_cash_reminder_r45.py::TestFixedPriceNudgeSupport::test_q
 
 **Production note:** R45 lives in preview. Both features need a redeploy to reach cargoone.co.uk.
 
+
+
+---
+
+### R46 — AsapRequest Slim + Cash Reminder SMS ✅ COMPLETE (Feb 2026)
+
+**Feature 1 — AsapRequest Slim**
+
+Reduced `frontend/src/pages/portal/customer/AsapRequest.jsx` from **1293 → 902 lines** (-30%) by extracting leaf presentational components into a new `asap/` sub-folder. Zero behaviour change — pure refactor.
+
+New files under `frontend/src/pages/portal/customer/asap/`:
+- `helpers.js` (25 lines) — `haversineMiles`, `formatDuration` (pure fns).
+- `SummaryRow.jsx` (32 lines) — Booking-Summary key/value row.
+- `VehicleGrid.jsx` (209 lines) — `VEHICLE_SPECS` map, `TRANSPORT_FALLBACK`, `RECOVERY_FALLBACK`, `VehicleCardGrid` + inner `VehicleCard`.
+- `RecoveryGrids.jsx` (120 lines) — `CONDITION_OPTIONS` + `ConditionCardGrid` + `YESNO_OPTIONS` + `YesNoChipRow`.
+- `CategoryGrid.jsx` (84 lines) — `CATEGORY_OPTIONS` + `CategoryChipGrid`.
+- `index.js` (19 lines) — barrel export so `AsapRequest.jsx` imports from `./asap` in one clean line.
+
+Preserved: every `data-testid`, every visual class, every option key. Frontend `yarn build` clean.
+
+**Feature 2 — Cash Reminder SMS**
+
+New service module `backend/services/sms.py` — mirror of `services/email.py` but for Twilio:
+- Graceful skip: if `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` are unset the send is logged to `sms_log` as `skipped` and returns cleanly (no crash). This is what preview will do today until creds are supplied.
+- `_to_e164` normaliser: accepts `07545…` (UK national) → `+447545…`, `00…` → `+…`, plain 11-digit → `+…`, rejects garbage.
+- `asyncio.to_thread(client.messages.create, ...)` so the caller's async loop is never blocked (mirrors the Resend pattern at services/email.py:100).
+- `send_cash_on_delivery_sms(db, user, booking, driver)` public helper.
+- Every send is logged to Mongo `sms_log` with status `sent`/`failed`/`skipped`, `provider_id` (Twilio SID), `body_preview`, `booking_id`, `user_id`.
+
+Wired into `server.py::update_booking_status` immediately after the R45 email send. Same idempotency guard (`cash_reminder_sent_at`) prevents double-sends. Failure is `logger.exception`ed and the booking status update itself is never blocked.
+
+New env vars added to `backend/.env` (empty by default — production must fill them):
+```
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+```
+
+SMS copy (161 chars): `Cargo One: have GBP {amount} cash ready — {driver_name} has picked up your cargo and is heading to you. Track: https://cargoone.co.uk/customer/booking/{id}`. Amount is front-loaded so mobile lockscreen previews always show it.
+
+**About the "10 min before delivery" spec:** The app doesn't have a precise delivery ETA scheduler (`collection_date` / `delivery_date` on the job are date-only). The chosen trigger — `status → on_route` (driver has just picked up the cargo and is heading to the customer) — is the closest event-driven proxy and typically fires ~15–40 min before delivery. Adding true "T-10 min" precision would require a background scheduler + rolling driver-GPS ETA computation — logged as a future enhancement.
+
+Test coverage — `/app/backend/tests/test_sms_r46_unit.py` (14 parameterised E.164 normaliser cases) + extended `test_cash_reminder_r45.py::test_on_route_fires_reminder_once` asserts an `sms_log` row is created with the correct amount in `body_preview` and status ∈ {sent, failed, skipped}.
+
+**Regression:** 122/122 tests green across the R45 + R46 core (sms_r46_unit, cash_reminder_r45, booking_fees, pricing_engine, cancellation_policy_r35_r36, contact_privacy_r37, stripe_refund_r40_smoke). Frontend `yarn build` clean.
+
+**Untouched:** R35/R36 cancellation formula, R37 privacy, R40 Stripe refund path, R41 insights, R42 fixed-price pricing, R43 dispatch isolation, R44 booking-detail highlights + distance/ETA + vehicle recommendations, R45 email + push, Mapbox iOS Safari fallback.
+
+**Production note:** R46 refactor and SMS code are live in preview. SMS won't actually send until `TWILIO_*` env vars are filled with the user's Twilio credentials — that's the next action.
+
