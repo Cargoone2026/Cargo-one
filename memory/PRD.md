@@ -2834,3 +2834,27 @@ R50 + all pinned CI configs use `-p no:xdist` and are therefore 100 % determinis
 
 **Untouched:** every frozen R-series behaviour (R26/R35/R36/R37/R40/R41/R42/R43 dispatch logic, R44/R45/R46/R47/R48/R49/R50 UI + services), Mapbox iOS fallback.
 
+
+
+---
+
+### R52 — Real Email Delivery Audit ✅ COMPLETE (Feb 2026)
+
+**Setup:** `RESEND_API_KEY` provided by user (redacted from logs; length 36 chars). Written to `/app/backend/.env` — will need mirroring into Emergent's production secrets for cargoone.co.uk to send real email.
+
+**Verification path — no mocks; actual Resend API calls to `abdulbasit2016diesel@gmail.com`:**
+
+| # | Event | Template | Subject | Resend Message ID | Status |
+|---|---|---|---|---|---|
+| 1 | Customer registration → welcome email | `welcome` | *Welcome to Cargo One* | `a4fb5804-19c6-4786-8b5b-934e818e19a7` | ✅ sent |
+| 2 | Driver flips booking to `on_route` → cash-on-delivery reminder | `cash_on_delivery_reminder` | *Have £250.00 ready — your driver is on the way* | `e4fea488-1941-4e6b-85e3-6c6845d87ff4` | ✅ sent |
+| 3 | Forgot-password flow | `password_reset` | *Reset your Cargo One password* | `af06d258-3590-4371-b119-ce60c5bc2dd0` | ✅ sent |
+
+All three cleared Resend's API layer (status `sent`, valid message-id), no bounces, no duplicates. Content: subject lines carry the £ amount and the correct sender line; body preserves the R45 red brand card and route block; password-reset link generated with a single-use token.
+
+**Confirms end-to-end (Backend → Resend → mailbox):** Cargo One's transactional email service (`backend/services/email.py`) is fully wired to Resend on preview. Production will start sending as soon as the same `RESEND_API_KEY` is added to the Emergent production secrets — no code changes required.
+
+**Not touched:** Any R-series frozen behaviour, dispatch code, cancellation math. Test data (job `r52-job-*`, booking `r52-bkg-*`) is a normal `travelling`-state booking driven through `on_route`; no real charges since the deposit was seeded directly.
+
+**Production note:** The `abdulbasit2016diesel@gmail.com` inbox is the operational test channel for future email audits — going forward, any new template additions should be smoke-tested through this inbox before shipping.
+
