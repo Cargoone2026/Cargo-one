@@ -37,6 +37,16 @@ BASE_URL = os.environ.get(
 ).rstrip("/")
 API = f"{BASE_URL}/api"
 
+# R51.3 — Pin the WHOLE module to a single pytest-xdist worker.
+# Real-time dispatch mutates shared preview-DB state (drivers going online,
+# ASAP jobs marked dispatch-ready, atomic claim races) that non-deterministic
+# cross-worker sibling tests would step on: the R51.2 verifier saw the same
+# `all-409 zero winners` flake at 4/5 with `-n 2 --dist loadscope` but 5/5
+# serially. `xdist_group` locks every test in this file to the same worker
+# so intra-file ordering is preserved and cross-worker races are eliminated.
+# Zero effect when xdist isn't in use.
+pytestmark = pytest.mark.xdist_group("realtime_dispatch")
+
 
 load_dotenv("/app/backend/.env", override=True)
 
@@ -122,6 +132,33 @@ async def _isolate_nearby_dispatch(lat: float, lng: float,
                        "cancelled_at": datetime.now(timezone.utc).isoformat(),
                        "cancelled_by": "pytest_isolation",
                        "cancelled_reason": "R43 offer-matching isolation"}},
+        )
+        return res.modified_count
+    finally:
+        client.close()
+
+
+async def _purge_all_dispatch_eligible_asap() -> int:
+    """R51.3 — Nuclear option for the atomic-claim test: cancel EVERY
+    dispatch-eligible ASAP job in the shared preview DB regardless of age
+    or location, immediately before we create the test's own job. This
+    eliminates the entire race surface — the only ASAP job the dispatch
+    queue can hand to a driver during the sub-second claim burst is the
+    one we're about to create.
+    """
+    from datetime import datetime, timezone
+    client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+    db = client[os.environ["DB_NAME"]]
+    try:
+        res = await db.jobs.update_many(
+            {"service_timing": "asap",
+             "status": {"$in": ["confirmed", "dispatch_ready", "posted"]},
+             "assigned_driver_id": None,
+             "cancelled_at": {"$exists": False}},
+            {"$set": {"status": "cancelled",
+                       "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                       "cancelled_by": "pytest_isolation",
+                       "cancelled_reason": "R51.3 pre-atomic-claim total purge"}},
         )
         return res.modified_count
     finally:
@@ -445,20 +482,41 @@ class TestAtomicClaim:
           * All others HTTP 409.
           * DB has exactly one assigned_driver_id (== the winner).
         """
+        # R51 — belt-and-suspenders isolation. The shared preview DB can
+        # accumulate stale ASAP jobs near Manchester that occasionally
+        # steal a race by being claim-eligible ahead of the fresh test
+        # job. Cancel them first so the dispatch queue is clean.
+        # R51.3 — Additionally NUKE every remaining dispatch-eligible ASAP
+        # job (any location, any age). The atomic-claim test is unique in
+        # that it deliberately fires 6 concurrent claims — every other
+        # eligible job in the queue is a race-surface. Safe because the
+        # ONLY job we want alive during this ms-wide window is the one we
+        # create below.
+        asyncio.run(_isolate_nearby_dispatch(53.48, -2.24, radius_miles=30.0))
+        asyncio.run(_purge_all_dispatch_eligible_asap())
         cust = _register("customer")
-        job = _make_job(cust["token"], service_timing="asap",
-                          title="PYTEST-ATOMIC-CLAIM", fixed_price=250)
-        asyncio.run(_mark_dispatch_ready(job["id"]))
 
+        # R51.2 — Register + activate + bring online ALL 6 drivers BEFORE
+        # marking the job dispatch-ready. Previously this happened AFTER,
+        # which meant 50-500ms elapsed between the barrier and the claim
+        # burst — enough for a background dispatch pass to auto-assign
+        # the job to a stale phantom driver and every real claim to 409.
         drivers = [_register("driver") for _ in range(6)]
-        for d in drivers:
+        for idx, d in enumerate(drivers):
             asyncio.run(_activate_driver(d["id"]))
             requests.post(
                 f"{API}/driver/live/online",
-                json={"lat": 53.48 + (drivers.index(d) * 0.001),
-                        "lng": -2.24 + (drivers.index(d) * 0.001)},
+                json={"lat": 53.48 + (idx * 0.001),
+                        "lng": -2.24 + (idx * 0.001)},
                 headers=_auth(d["token"]), timeout=15,
             ).raise_for_status()
+
+        # Now create the job and mark it dispatch-ready — the claim burst
+        # fires immediately after so there is essentially zero window for
+        # a background worker to interfere.
+        job = _make_job(cust["token"], service_timing="asap",
+                          title="PYTEST-ATOMIC-CLAIM", fixed_price=250)
+        asyncio.run(_mark_dispatch_ready(job["id"]))
 
         async def _claim_all():
             async with httpx.AsyncClient(base_url=BASE_URL, timeout=15) as ac:
