@@ -521,6 +521,32 @@ def public_job(job: dict, include_private: bool = False) -> dict:
     # scheduled, marketplace — displays a vehicle to the driver.
     if not out.get("recommended_vehicle"):
         out["recommended_vehicle"] = _derive_suitable_vehicle(job)
+    # R44 — Always surface distance_miles + duration_minutes on the customer
+    # + driver booking detail UIs. Historic jobs (pre-R25 pricing engine),
+    # non-domestic-UK routes (which skipped resolve_route), and jobs where
+    # the Google Distance Matrix call failed at create-time may have
+    # `distance_miles=0`, `duration_minutes=0`, or the fields missing
+    # entirely. Compute a Haversine + 35 mph fallback on read so the
+    # booking detail's "Distance / Journey time" row is never empty.
+    try:
+        need_dist = not out.get("distance_miles")
+        need_dur = not out.get("duration_minutes")
+        if (need_dist or need_dur) and all(
+            out.get(k) is not None
+            for k in ("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng")
+        ):
+            miles = haversine_miles(
+                float(out["pickup_lat"]), float(out["pickup_lng"]),
+                float(out["dropoff_lat"]), float(out["dropoff_lng"]),
+            )
+            if need_dist:
+                out["distance_miles"] = round(miles, 1)
+            if need_dur:
+                # 35 mph average + 10 min urban buffer — matches resolve_route.
+                out["duration_minutes"] = round((miles / 35.0) * 60 + 10, 1)
+    except Exception:
+        # Never let a bad coord kill the whole booking response.
+        pass
     return out
 
 
@@ -1412,10 +1438,14 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
             recommended_vehicle_key = breakdown.resolved_vehicle_key
     else:
         # Non-UK route — record haversine for admin sanity but never quote.
+        # R44 — also compute a conservative duration estimate so the booking
+        # detail UI never shows "Journey time —" for cross-border jobs
+        # awaiting manual quote.
         distance_miles = round(
             haversine_miles(data["pickup_lat"], data["pickup_lng"],
                             data["dropoff_lat"], data["dropoff_lng"]), 1,
         )
+        duration_minutes = round((distance_miles / 35.0) * 60 + 10, 1)
 
     job = {
         "id": new_id(),
@@ -2147,6 +2177,7 @@ DISPATCH_RADIUS_LADDER = [
 # UK-market focused. Updates should extend the table rather than adding
 # per-call branching to keep the deriver purely declarative.
 _SUITABLE_VEHICLE_BY_CATEGORY = {
+    # Legacy keys (kept for old jobs)
     "documents":              "Small Van",
     "parcels":                "Small Van",
     "parcel":                 "Small Van",
@@ -2169,6 +2200,21 @@ _SUITABLE_VEHICLE_BY_CATEGORY = {
     "freight":                "7.5T Box Truck",
     "cars":                   "Car Transporter",
     "boats":                  "Low Loader",
+    # R44 — Modern service_catalog.py category keys
+    "furniture_delivery":     "Luton Van",
+    "house_removals":         "Luton / 7.5T Truck",
+    "motorcycles":            "Enclosed Trailer Van",
+    "cars_vehicles":          "Car Transporter",
+    "caravans":               "3.5T Recovery Truck",
+    "static_caravans":        "18T HGV",
+    "shipping_containers":    "Hiab Crane Vehicle",
+    "boats_marine":           "Low Loader",
+    "machinery_plant":        "Hiab Crane / 7.5T Truck",
+    "office_commercial":      "Luton / 7.5T Truck",
+    "same_day_express":       "Small Van",
+    "long_distance_uk":       "Luton Van",
+    "fragile_high_value":     "Enclosed Small Van",
+    "freight_haulage":        "18T HGV",
 }
 
 

@@ -319,6 +319,42 @@ def _pick_transport_vehicle(cfg: dict, *, weight_kg: Optional[float],
             return "3_5t_truck"
         return "luton_van"
 
+    # R44 — Furniture delivery: typical 200 kg / 4 m³ per catalog. Small van
+    # underquotes. Prefer luton for bulky items unless the customer entered
+    # a very small load.
+    if transport_category in ("furniture", "furniture_delivery"):
+        if v > 15 or w > 800:
+            return "3_5t_truck"
+        if v > 3 or w > 150:
+            return "luton_van"
+        return "large_van"
+
+    # R44 — Office / commercial moves: typical 2500 kg / 35 m³.
+    if transport_category in ("office_commercial", "office_moves"):
+        if v > 25 or w > 2500:
+            return "7_5t_truck"
+        if v > 15 or w > 1000:
+            return "3_5t_truck"
+        return "luton_van"
+
+    # R44 — Building materials: typical 2000 kg / 12 m³.
+    if transport_category in ("building_materials",):
+        if w > 3500 or v > 25:
+            return "7_5t_truck"
+        return "3_5t_truck"
+
+    # R44 — Motorcycles as CARGO (not recovery): a covered van does the job.
+    if transport_category in ("motorcycles",):
+        if w > 400 or v > 4:
+            return "large_van"
+        return "medium_van"
+
+    # R44 — Same-day / parcels express — small load, speed matters.
+    if transport_category in ("same_day_express", "documents"):
+        if w > 150 or v > 2:
+            return "medium_van"
+        return "small_van"
+
     # Machinery / caravans / containers → truck
     if transport_category in ("machinery", "machinery_plant", "agricultural",
                                 "shipping_containers", "static_caravans"):

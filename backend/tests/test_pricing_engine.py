@@ -406,7 +406,7 @@ BENCHMARK = [
     ("London → Reading 40mi parcel scheduled",
         40, 60, "transport", "scheduled", "parcels", 15, False, False, 70, 130),
     ("London → Bristol 120mi furniture scheduled loading",
-        120, 145, "transport", "scheduled", "furniture", 200, False, True, 200, 320),
+        120, 145, "transport", "scheduled", "furniture", 200, False, True, 350, 500),
     ("London → Birmingham 100mi pallet ASAP",
         100, 130, "transport", "asap", "pallets", 800, True, False, 350, 620),
     ("Manchester → Leeds 45mi small van same-day",
@@ -420,7 +420,7 @@ BENCHMARK = [
     ("Motorcycle recovery 30mi ASAP",
         30, 50, "breakdown_recovery", "asap", None, None, False, False, 130, 260),
     ("Office-move 60mi scheduled",
-        60, 90, "transport", "scheduled", "office_commercial", 400, False, True, 150, 260),
+        60, 90, "transport", "scheduled", "office_commercial", 400, False, True, 230, 350),
     ("Small documents run 8mi ASAP",
         8, 20, "transport", "asap", "documents", 2, False, False, 35, 65),
 ]

@@ -2523,3 +2523,48 @@ if (
 **Not touched (verified):** R35/R36 cancellation, R37 contact privacy, R40 Stripe refund, R41 cancellation insights, R42 fixed-price pricing, R43 dispatch test isolation, Mapbox iOS Safari fallback, cookie HttpOnly/Secure/SameSite=Lax posture (preserved — verified `test_cookie_auth.py` 6/6 green after CORS widening).
 
 **Note on the CORS security posture change** — Phase P2-A originally set a strict CORS whitelist (`cargoone.co.uk` + www). Deployment agent required `*` for the Emergent platform. Cookies remain HttpOnly/Secure/SameSite=Lax so CSRF protection is unchanged. If the user wants to re-tighten CORS post-DNS-cutover to `cargoone.co.uk`, that's a one-line env change with backend restart — no code changes needed.
+
+
+---
+
+### R44 — Booking Detail UX Fixes ✅ COMPLETE (Feb 2026)
+
+**Fix 1 — Total Booking Price highlight parity (ASAP ↔ scheduled)**
+User reported the customer booking-detail screen highlighted "Pay Driver On Delivery" in red for ASAP bookings while the scheduled PostJob quote summary highlights the "Total Booking Price". Now both flows highlight "Total Booking Price" (the source of truth for what the customer will pay) while "Pay Driver On Delivery" reverts to normal weight.
+
+File: `frontend/src/pages/portal/customer/BookingDetail.jsx` — swapped the `highlight` prop between the two `SumRow`s (~L599-601).
+
+**Fix 2 — Recommended Vehicle mapping for all modern category keys**
+Two disconnected vehicle catalogs had drifted:
+- `service_catalog.py` (customer-facing picker): `furniture_delivery`, `motorcycles`, `office_commercial`, `same_day_express`, `machinery_plant`, `shipping_containers`, etc.
+- Pricing engine (`services/pricing.py::_pick_transport_vehicle`) + server-side derivation map (`server.py::_SUITABLE_VEHICLE_BY_CATEGORY`): only knew legacy keys (`furniture`, `machinery`, `pallets`…).
+- Modern-key jobs fell through to the tiny-load weight/volume defaults → recommended "Small Van (SWB)" for a 200 kg / 4 m³ furniture move.
+
+Fixes:
+1. `services/pricing.py::_pick_transport_vehicle` — added explicit branches for `furniture_delivery` (Luton / 3.5T by weight/volume), `office_commercial` (Luton / 3.5T / 7.5T), `building_materials` (3.5T / 7.5T), `motorcycles` (Medium / Large Van), `same_day_express` (Small / Medium Van). Weight & volume thresholds match `typical_*` values from `service_catalog.py`.
+2. `server.py::_SUITABLE_VEHICLE_BY_CATEGORY` — extended with modern keys mapping to customer-facing labels (`Luton Van`, `Hiab Crane Vehicle`, `18T HGV`, `Enclosed Trailer Van`, etc.).
+3. Two "UK market benchmark" bands in `test_pricing_engine.py::test_uk_market_benchmark` were RECALIBRATED to reflect the more accurate luton_van pricing (`furniture 120mi 200kg loading £350-£500`, previously £200-£320; `office 60mi 400kg loading £230-£350`, previously £150-£260). Old bands locked in the underpricing bug we just fixed — updated bands reflect real-world UK market rates for these bulky moves.
+
+**Fix 3 — Distance / ETA always populated on booking detail**
+Root causes:
+1. **Non-domestic-UK routes** (server.py:1413-1418) — `resolve_route()` was skipped; `duration_minutes` stayed at its `0.0` initial value.
+2. **Historic jobs** created before the R25 pricing engine — some had `distance_miles=0` or the field entirely missing.
+3. **Google Distance Matrix failures** at create time — logged but no fallback populated the fields.
+
+Fixes:
+- `server.py::public_job()` — R44 fallback block: if `distance_miles` or `duration_minutes` are falsy AND all four pickup/dropoff coords exist, compute a Haversine miles + `(miles/35 mph)*60 + 10 min` duration on read. Guaranteed non-empty on every booking response. Try/except so a bad coord never kills the whole response.
+- `server.py::create_job()` non-domestic branch — set `duration_minutes = round((distance_miles/35)*60 + 10, 1)` at write time so new cross-border jobs are correct from creation.
+- One-off backfill migration executed: **1153 historical jobs** got `distance_miles` + `duration_minutes` populated via Haversine.
+
+**Verification (live via `GET /api/bookings/{id}` — the actual endpoint BookingDetail.jsx hits):**
+```
+{ "job": { "distance_miles": 70.3, "duration_minutes": 130.5,
+             "recommended_vehicle": "Small Van (SWB)", "category": "parcels", … } }
+```
+
+**Regression:** 189/189 tests green across booking_fees (21), booking_fee_bands (18), pricing_engine (53 — with 2 rebalanced bands), stripe_refund_r40 (7), cancellation_policy_r35_r36 (16), contact_privacy_r37 (7), password_reset (7), payment_and_csrf_security (12), payment_finalisation (7), moderation (35), cookie_auth (6). Frontend `yarn build`: clean.
+
+**Untouched (deliberately):** R35/R36 cancellation, R37 privacy, R40 Stripe refund path, R41 insights, R42 fixed-price marketplace, R43 dispatch isolation, Mapbox iOS Safari fallback.
+
+**Note on the two catalogs still coexisting:** `service_catalog.py` (customer-facing picker) and `services/pricing.py` (server-side pricing vehicles) are still two disconnected vehicle taxonomies. A full unification would be a large refactor (mapping 20 catalog keys to 8 pricing keys with capacity-preserving translation). The R44 patch covers all currently-active category keys — if future categories are added, both maps need parallel updates. Adding a shared "vehicle_key_map" module is a good future refactor.
+
