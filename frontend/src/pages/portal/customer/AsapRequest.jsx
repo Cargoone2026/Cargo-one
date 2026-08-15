@@ -83,6 +83,73 @@ export default function CustomerAsapRequest() {
   const [feePreview, setFeePreview] = useState(null);
   const feeAbortRef = useRef(null);
 
+  // R49 — Rebook prefill. When the customer taps "Rebook this job" on a
+  // cancelled booking, the Bookings list / BookingDetail stash the cancelled
+  // job's parameters in sessionStorage and navigate here with `?rebook=1`.
+  // Hydrate the wizard state on mount, then clear the payload so a manual
+  // refresh doesn't re-apply it.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("rebook") !== "1") return;
+      const raw = sessionStorage.getItem("cargoone.rebook.payload");
+      if (!raw) return;
+      const payload = JSON.parse(raw);
+      const job = payload?.job || {};
+      // Mode
+      if (job.service_type === "breakdown_recovery") setMode("breakdown_recovery");
+      else setMode("transport");
+      // Route
+      if (job.pickup_lat != null && job.pickup_lng != null) {
+        setPickup({
+          lat: job.pickup_lat,
+          lng: job.pickup_lng,
+          address: job.pickup_address || job.pickup_town || "",
+          town: job.pickup_town || "",
+        });
+      }
+      if (job.dropoff_lat != null && job.dropoff_lng != null) {
+        setDropoff({
+          lat: job.dropoff_lat,
+          lng: job.dropoff_lng,
+          address: job.dropoff_address || job.dropoff_town || "",
+          town: job.dropoff_town || "",
+        });
+      }
+      // Transport cargo fields
+      if (job.category) setTransportCategory(job.category);
+      if (job.description || job.title) setTransportDescription(job.description || job.title || "");
+      if (job.weight_kg != null) setAsapWeightKg(String(job.weight_kg));
+      if (job.item_count != null) setAsapItemCount(String(job.item_count));
+      if (job.length_m != null) setAsapLengthM(String(job.length_m));
+      if (job.width_m != null) setAsapWidthM(String(job.width_m));
+      if (job.height_m != null) setAsapHeightM(String(job.height_m));
+      if (job.needs_forklift) setNeedsForklift(true);
+      if (job.needs_loading_help) setNeedsLoadingHelp(true);
+      // Recovery vehicle fields
+      if (job.vehicle) {
+        setVehicle((v) => ({ ...v, ...(job.vehicle || {}) }));
+      }
+      if (job.recommended_vehicle_key) {
+        if (job.service_type === "breakdown_recovery") {
+          setRecoveryVehicleKey(job.recommended_vehicle_key);
+        } else {
+          setTransportVehicleKey(job.recommended_vehicle_key);
+        }
+      }
+      if (job.note) setNote(job.note);
+      // Photos are private URLs on the cancelled job — we won't rehydrate
+      // them; the customer can add fresh photos if they still want.
+    } catch (_e) {
+      // ignore — a bad payload should not block the wizard from loading
+    } finally {
+      try {
+        sessionStorage.removeItem("cargoone.rebook.payload");
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const useCurrentLocation = useCallback(async () => {
     setLocError(null);
     if (typeof navigator === "undefined" || !navigator.geolocation) {

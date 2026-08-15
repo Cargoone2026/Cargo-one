@@ -33,7 +33,7 @@ export const STATUS_COLOR = {
   delivered: { bg: "#DCFCE7", fg: "#166534" },
   pod_uploaded: { bg: "#DCFCE7", fg: "#166534" },
   completed: { bg: "#E5E7EB", fg: "#111111" },
-  cancelled: { bg: "#F3F4F6", fg: "#6B7280" },
+  cancelled: { bg: "#FEE2E2", fg: "#B91C1C" },
 };
 
 // Supported markets — mirrors backend/markets.py for AddressAutocomplete web fallback

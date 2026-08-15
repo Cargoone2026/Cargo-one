@@ -88,6 +88,60 @@ export default function CustomerPostJob() {
     if (!categoryKey && categories.length > 0) setCategoryKey(categories[0].key);
   }, [categories, categoryKey]);
 
+  // R49 — Rebook prefill. When the customer taps "Rebook this job" on a
+  // cancelled scheduled booking, the referrer stashed the cancelled job's
+  // parameters in sessionStorage and navigated here with `?rebook=1`.
+  // Hydrate the wizard state once, then clear the payload so a manual
+  // refresh doesn't re-apply it.
+  useEffect(() => {
+    try {
+      if (params.get("rebook") !== "1") return;
+      const raw = sessionStorage.getItem("cargoone.rebook.payload");
+      if (!raw) return;
+      const payload = JSON.parse(raw);
+      const job = payload?.job || {};
+      if (job.title) setTitle(job.title);
+      if (job.description) setDescription(job.description);
+      if (job.category) setCategoryKey(job.category);
+      if (job.pickup_lat != null && job.pickup_lng != null) {
+        setPickup({
+          lat: job.pickup_lat,
+          lng: job.pickup_lng,
+          address: job.pickup_address || job.pickup_town || "",
+          town: job.pickup_town || "",
+        });
+      }
+      if (job.dropoff_lat != null && job.dropoff_lng != null) {
+        setDropoff({
+          lat: job.dropoff_lat,
+          lng: job.dropoff_lng,
+          address: job.dropoff_address || job.dropoff_town || "",
+          town: job.dropoff_town || "",
+        });
+      }
+      if (job.weight_kg != null) setWeightKg(String(job.weight_kg));
+      if (job.length_m != null) setLengthM(String(job.length_m));
+      if (job.width_m != null) setWidthM(String(job.width_m));
+      if (job.height_m != null) setHeightM(String(job.height_m));
+      if (job.item_count != null) setItemCount(String(job.item_count));
+      if (job.needs_forklift) setNeedsForklift(true);
+      if (job.needs_loading_help) setNeedsLoadingHelp(true);
+      if (job.collection_date) setCollectionDate(job.collection_date);
+      if (job.delivery_date) setDeliveryDate(job.delivery_date);
+      if (job.recommended_vehicle_key) setVehicleKey(job.recommended_vehicle_key);
+      if (job.pricing_type) setPricingType(job.pricing_type);
+      if (job.fixed_price != null) setFixedPrice(String(job.fixed_price));
+      if (job.max_budget != null) setMaxBudget(String(job.max_budget));
+    } catch (_e) {
+      // ignore malformed payloads
+    } finally {
+      try {
+        sessionStorage.removeItem("cargoone.rebook.payload");
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Live quote — matches the Expo dependency shape exactly.
   // R47 — Guard against unresolved addresses. If the user has typed an
   // address string but the geocoder hasn't returned a lat/lng yet, DO NOT

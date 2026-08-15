@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Search, X as XIcon, MapPin, ChevronRight, Package } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Search, X as XIcon, MapPin, ChevronRight, Package, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
 const PAST = new Set(["completed", "cancelled"]);
 
 export default function CustomerBookings() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("active");
   const [items, setItems] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -138,46 +139,103 @@ export default function CustomerBookings() {
           </div>
         ) : (
           <ul className="space-y-3">
-            {display.map((it) => (
-              <li key={it.id}>
-                <Link
-                  to={
-                    it._isJob
-                      ? `/customer/job/${it.id}`
-                      : `/customer/booking/${it.id}`
-                  }
-                  data-testid={`booking-row-${it.id}`}
-                  className="block rounded-[12px] border border-[#E5E7EB] bg-white p-4 hover:border-[#111111]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="min-w-0 flex-1 truncate text-[16px] font-semibold text-[#111111]">
-                      {it._isJob ? it.title : it.job?.title}
-                    </h3>
-                    <StatusPill status={it.status} />
+            {display.map((it) => {
+              const cancelled = !it._isJob && it.status === "cancelled";
+              const service = it._isJob
+                ? it.service_timing
+                : it.service_timing || it.job?.service_timing;
+              const rebookHref =
+                service === "asap"
+                  ? "/customer/asap?rebook=1"
+                  : "/customer/post-job?rebook=1";
+              return (
+                <li key={it.id}>
+                  <div
+                    className={`block rounded-[12px] border p-4 transition-colors ${
+                      cancelled
+                        ? "border-[#FCA5A5] bg-[#FEF2F2]"
+                        : "border-[#E5E7EB] bg-white hover:border-[#111111]"
+                    }`}
+                    data-testid={`booking-row-${it.id}`}
+                  >
+                    <Link
+                      to={
+                        it._isJob
+                          ? `/customer/job/${it.id}`
+                          : `/customer/booking/${it.id}`
+                      }
+                      className="block"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h3
+                          className={`min-w-0 flex-1 truncate text-[16px] font-semibold ${
+                            cancelled
+                              ? "text-[#991B1B] line-through decoration-[#DC2626]/60"
+                              : "text-[#111111]"
+                          }`}
+                        >
+                          {it._isJob ? it.title : it.job?.title}
+                        </h3>
+                        <StatusPill status={it.status} />
+                      </div>
+                      <div className="mt-2 flex items-center gap-1 text-[14px] text-[#6B7280]">
+                        <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
+                        <span className="truncate">
+                          {it._isJob
+                            ? `${it.pickup_town} → ${it.dropoff_town}`
+                            : `${it.job?.pickup_town} → ${it.job?.dropoff_town}`}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-end justify-between border-t border-[#F3F4F6] pt-3">
+                        <div>
+                          <p className="text-[12px] text-[#6B7280]">
+                            {cancelled ? "Refunded" : "Total"}
+                          </p>
+                          <p
+                            className={`text-[18px] font-bold ${
+                              cancelled ? "text-[#991B1B]" : "text-[#111111]"
+                            }`}
+                          >
+                            £
+                            {Number(
+                              it._isJob ? it.suggested_price : it.total_price,
+                            ).toFixed(0)}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-[#9CA3AF]" />
+                      </div>
+                    </Link>
+                    {cancelled ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            sessionStorage.setItem(
+                              "cargoone.rebook.payload",
+                              JSON.stringify({
+                                source_booking_id: it.id,
+                                job: it.job || {},
+                                service_type: it.service_type || it.job?.service_type,
+                                service_timing:
+                                  it.service_timing || it.job?.service_timing,
+                              }),
+                            );
+                          } catch {}
+                          navigate(rebookHref);
+                        }}
+                        data-testid={`booking-row-rebook-${it.id}`}
+                        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-[#111111] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#000000]"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Rebook this job
+                      </button>
+                    ) : null}
                   </div>
-                  <div className="mt-2 flex items-center gap-1 text-[14px] text-[#6B7280]">
-                    <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
-                    <span className="truncate">
-                      {it._isJob
-                        ? `${it.pickup_town} → ${it.dropoff_town}`
-                        : `${it.job?.pickup_town} → ${it.job?.dropoff_town}`}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-end justify-between border-t border-[#F3F4F6] pt-3">
-                    <div>
-                      <p className="text-[12px] text-[#6B7280]">Total</p>
-                      <p className="text-[18px] font-bold text-[#111111]">
-                        £
-                        {Number(
-                          it._isJob ? it.suggested_price : it.total_price,
-                        ).toFixed(0)}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-[#9CA3AF]" />
-                  </div>
-                </Link>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

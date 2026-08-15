@@ -13,6 +13,7 @@ import {
   FileText,
   Send,
   MapPin,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -319,6 +320,26 @@ export default function CustomerBookingDetail() {
   const driverCharge = Number(b.driver_charge ?? b.balance_due ?? 0);
   const total = Number(b.total_price ?? bookingFee + driverCharge);
 
+  // R49 — Rebook helper. Cancelled bookings surface a prominent CTA that
+  // stashes the essential job fields in sessionStorage and hops the
+  // customer straight into the ASAP / PostJob wizard with the form
+  // pre-filled. New deposit is paid as a fresh booking.
+  const goRebook = () => {
+    try {
+      sessionStorage.setItem(
+        "cargoone.rebook.payload",
+        JSON.stringify({
+          source_booking_id: b.id,
+          job,
+          service_type: b.service_type || job.service_type,
+          service_timing: b.service_timing || job.service_timing,
+        }),
+      );
+    } catch {}
+    const isAsap = (b.service_timing || job.service_timing) === "asap";
+    navigate(isAsap ? "/customer/asap?rebook=1" : "/customer/post-job?rebook=1");
+  };
+
   return (
     <div className="min-h-screen bg-white pb-32 lg:pb-6" data-testid="customer-booking-detail">
       <header className="flex items-center gap-3 px-4 pt-6 md:px-8">
@@ -334,6 +355,34 @@ export default function CustomerBookingDetail() {
         <h1 className="flex-1 text-[20px] font-bold text-[#111111]">Booking</h1>
         <StatusPill status={b.status} />
       </header>
+
+      {/* R49 — Rebook CTA on cancelled bookings. Full refund already
+          issued; this hop pre-fills the ASAP / PostJob wizard so the
+          customer can pay a fresh deposit and try again in one tap. */}
+      {b.cancelled_at ? (
+        <section
+          className="mx-4 mt-3 rounded-[12px] border border-[#FCA5A5] bg-[#FEF2F2] p-4 md:mx-8"
+          data-testid="rebook-banner"
+        >
+          <p className="text-[13px] font-semibold text-[#991B1B]">
+            This booking was cancelled and your deposit was refunded.
+          </p>
+          <p className="mt-1 text-[12px] leading-snug text-[#7F1D1D]">
+            Need this job done? Re-post it as a fresh booking and pay a new
+            deposit — we'll pre-fill everything from this booking so it takes
+            a few taps.
+          </p>
+          <button
+            type="button"
+            onClick={goRebook}
+            data-testid="rebook-cta"
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#111111] px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-[#000000]"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Rebook this job
+          </button>
+        </section>
+      ) : null}
 
       {/* R35 — Cancellation policy banner. Shown on any paid, non-cancelled
           booking regardless of job type (ASAP / scheduled / fixed / bidding).

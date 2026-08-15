@@ -2724,3 +2724,44 @@ Parent-file changes:
 
 **Production note:** R48 lives in preview only. A redeploy is needed to push it (along with R47) to cargoone.co.uk. Since R48 is pure code hygiene with no user-visible change, it's completely safe to ship alongside R47's bug fixes.
 
+
+
+---
+
+### R49 — Cancelled Booking Rebook flow + clearer cancelled marking ✅ COMPLETE (Feb 2026)
+
+**User-reported UX gap (production):** When a customer cancelled an ASAP job after paying the deposit but before a driver had accepted, they were bounced back to the bookings list with no clear signal the booking was cancelled and no easy way to re-post the same job. They effectively had to re-fill the whole ASAP wizard from scratch.
+
+**Three coordinated changes — pure frontend, zero backend surface:**
+
+**A) Bookings list — cancelled bookings now unmistakable**
+`frontend/src/pages/portal/customer/Bookings.jsx`:
+- Row background: red-tinted (`bg-[#FEF2F2]`, border `#FCA5A5`) — impossible to miss vs the plain-white active rows.
+- Title: struck-through in dark red (`text-[#991B1B] line-through`).
+- Total label swapped to "Refunded" with the amount in red.
+- Full-width **"Rebook this job"** black CTA appended to the row (data-testid `booking-row-rebook-<id>`). One tap stashes the job payload and hops the customer straight into the correct wizard.
+
+**B) BookingDetail — prominent Rebook banner**
+`frontend/src/pages/portal/customer/BookingDetail.jsx`:
+- New red banner injected right below the header on any booking with `cancelled_at` set: "This booking was cancelled and your deposit was refunded. Need this job done? Re-post it as a fresh booking…"
+- Big black `Rebook this job` button (data-testid `rebook-cta`) that:
+  1. Stashes `{source_booking_id, job, service_type, service_timing}` in `sessionStorage['cargoone.rebook.payload']`.
+  2. Navigates to `/customer/asap?rebook=1` for ASAP or `/customer/post-job?rebook=1` for scheduled.
+
+**C) Wizard rehydration**
+Both `AsapRequest.jsx` and `PostJob.jsx` gained a one-shot `useEffect` on mount that:
+- Reads `?rebook=1` from the query string.
+- Loads the payload from sessionStorage.
+- Rehydrates every relevant piece of state: mode (transport vs recovery), pickup/dropoff (`{lat, lng, address, town}`), category, description, weight/dims/item-count, forklift + loading-help toggles, collection/delivery dates (PostJob), pricing_type / fixed_price / max_budget (PostJob), recovery vehicle metadata (`vehicle.condition`, rolls/steers/brakes on AsapRequest), and preferred vehicle key.
+- Photos are NOT rehydrated (private URLs on the cancelled job — a fresh booking should attach fresh photos).
+- Clears the payload from sessionStorage after use so a manual refresh doesn't re-apply it.
+
+**D) StatusPill palette bump**
+`frontend/src/theme.js` — cancelled pill upgraded from muted grey (`bg #F3F4F6, fg #6B7280`) to red-tinted (`bg #FEE2E2, fg #B91C1C`) so it stands out at a glance wherever a StatusPill appears.
+
+**Verification:** Frontend `yarn build` clean. Zero backend changes so all 189+ tests remain green. R35/R36 deposit-only cancellation logic untouched — the actual refund still runs through the existing `cancel-and-refund` endpoint; R49 only affects what the customer SEES after that endpoint returns.
+
+**Untouched (deliberately):** cancellation fee formula (R35/R36), Stripe refund path (R40), contact privacy (R37), pricing (R42), realtime dispatch (R43), booking-detail highlights (R44), cash reminder (R45/R46), quote-fetch guards (R47), Slim wizards (R46/R48), Mapbox iOS fallback.
+
+**Production note:** R49 lives in preview only. A redeploy is needed to push it to cargoone.co.uk.
+
