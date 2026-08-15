@@ -11,30 +11,7 @@ import {
   PoundSterling,
   Plane,
   Truck,
-  Home,
-  Armchair,
-  FileText,
-  Layers,
-  Bike,
-  Car,
-  Cog,
-  Sprout,
-  Hammer,
-  Ship,
-  Container,
-  Caravan,
-  TreePine,
-  Building2,
-  ShoppingBag,
-  PartyPopper,
-  Gavel,
-  Zap,
-  MapPinned,
-  ShieldCheck,
-  HelpCircle,
   Check,
-  AlertTriangle,
-  Info,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCategories, useVehicles, requestRecommendation } from "@/hooks/useCatalog";
@@ -43,21 +20,22 @@ import { Input } from "@/components/ui-portal/Input";
 import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete";
 import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+// R48 — leaf components extracted out of this file. Behaviour unchanged;
+// see `./postjob/` for the widgets and metadata.
+import {
+  volumeFromDims,
+  fmtDur,
+  QuoteStat,
+  Toggle,
+  VehicleCard,
+  PriceTab,
+  SummaryRow,
+  FixedPriceNudge,
+  CATEGORY_META,
+} from "./postjob";
 
 const STEP_COUNT = 5;
 const NOT_SURE_KEY = "__not_sure__";
-
-function volumeFromDims(l, w, h) {
-  const ln = Number(l), wn = Number(w), hn = Number(h);
-  if (ln > 0 && wn > 0 && hn > 0) return Number((ln * wn * hn).toFixed(2));
-  return null;
-}
-function fmtDur(mins) {
-  if (mins == null) return "—";
-  if (mins < 60) return `${Math.round(mins)}m`;
-  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
 
 export default function CustomerPostJob() {
   const [params] = useSearchParams();
@@ -798,212 +776,4 @@ export default function CustomerPostJob() {
     </div>
   );
 }
-
-function QuoteStat({ Icon, label, value }) {
-  return (
-    <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-3 text-center">
-      <div className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#F4F4F4]">
-        <Icon className="h-4 w-4 text-[#111111]" />
-      </div>
-      <p className="text-[14px] font-bold text-[#111111]">{value}</p>
-      <p className="text-[11px] text-[#6B7280]">{label}</p>
-    </div>
-  );
-}
-
-function Toggle({ label, value, onChange, testID }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      data-testid={testID}
-      className={`flex w-full items-center justify-between gap-3 rounded-[12px] border px-3 py-3 text-left transition-colors ${
-        value ? "border-[#111111] bg-[#111111]" : "border-[#E5E7EB] bg-white"
-      }`}
-    >
-      <span
-        className={`text-[13px] font-medium ${value ? "text-white" : "text-[#111111]"}`}
-      >
-        {label}
-      </span>
-      <span
-        className={`inline-flex h-6 w-10 items-center rounded-full p-0.5 ${
-          value ? "bg-[#D62828]" : "bg-[#E5E7EB]"
-        }`}
-      >
-        <span
-          className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-            value ? "translate-x-4" : "translate-x-0"
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
-
-function VehicleCard({ active, onPress, name, description, Icon, highlight, testID }) {
-  return (
-    <button
-      type="button"
-      onClick={onPress}
-      data-testid={testID}
-      className={`flex w-full items-start gap-3 rounded-[12px] border p-3 text-left transition-colors ${
-        active
-          ? "border-[#D62828] bg-white shadow-sm"
-          : highlight
-          ? "border-dashed border-[#D62828] bg-[#FFF7ED] hover:bg-white"
-          : "border-[#E5E7EB] bg-white hover:border-[#111111]"
-      }`}
-    >
-      <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${
-          active ? "bg-[#D62828] text-white" : "bg-[#F4F4F4] text-[#D62828]"
-        }`}
-      >
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="flex-1 min-w-0">
-        <span
-          className={`block text-[14px] font-semibold ${
-            active ? "text-[#D62828]" : "text-[#111111]"
-          }`}
-        >
-          {name}
-        </span>
-        <span className="mt-0.5 line-clamp-2 text-[12px] text-[#6B7280]">
-          {description}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function PriceTab({ active, onClick, Icon, label, testID }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testID}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-[14px] font-semibold transition-colors ${
-        active ? "bg-[#111111] text-white" : "text-[#6B7280] hover:text-[#111111]"
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}
-
-function SummaryRow({ label, value, emphasise, big, testID }) {
-  return (
-    <div className="flex items-center justify-between py-1" data-testid={testID}>
-      <span className="text-[13px] text-[#6B7280]">{label}</span>
-      <span
-        className={`text-right ${
-          big
-            ? "text-[20px] font-bold text-[#D62828]"
-            : emphasise
-            ? "text-[15px] font-bold text-[#111111]"
-            : "text-[14px] text-[#111111]"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/**
- * R45 — Friendly inline nudge shown under the "Driver charge / Max budget"
- * field on the customer PostJob wizard. Compares the customer's typed
- * price against the engine's `suggested_price` and warns when it's far
- * below market — drivers filter out low-ball jobs, so the customer just
- * won't get accepted quickly. Silent when the price is fair (≥85% of the
- * suggestion) or when the suggestion / customer input is missing.
- *
- * Three tiers of feedback, in ascending severity:
- *   • ≥100% of suggestion  → nothing (fair or generous).
- *   • 85–99% of suggestion → nothing (within a normal market spread).
- *   • 60–84% of suggestion → soft warning ("this may take longer to fill").
- *   • <60% of suggestion   → strong warning ("this is well below UK market
- *                            rate — most drivers will skip it").
- */
-function FixedPriceNudge({ pricingType, value, suggested }) {
-  const numeric = Number(value);
-  if (!suggested || !Number.isFinite(numeric) || numeric <= 0) return null;
-  const ratio = numeric / Number(suggested);
-  if (ratio >= 0.85) return null;
-
-  const strong = ratio < 0.6;
-  const shortfall = Math.max(0, Number(suggested) - numeric);
-  const suggestedFmt = `£${Number(suggested).toFixed(0)}`;
-  const shortfallFmt = `£${shortfall.toFixed(0)}`;
-
-  const wrapperClass = strong
-    ? "border-[#FCA5A5] bg-[#FEF2F2] text-[#991B1B]"
-    : "border-[#FCD34D] bg-[#FFFBEB] text-[#92400E]";
-  const Icon = strong ? AlertTriangle : Info;
-
-  const priceWord = pricingType === "fixed" ? "fixed price" : "max budget";
-  const headline = strong
-    ? `Well below the UK market rate for this job (${suggestedFmt}).`
-    : `Below the typical UK market rate for this job (${suggestedFmt}).`;
-
-  const advice = strong
-    ? `Most drivers filter out low-priced jobs. Consider raising your ${priceWord} by about ${shortfallFmt} to attract offers within the hour.`
-    : `Adding roughly ${shortfallFmt} to your ${priceWord} would put you in the sweet spot and typically halves the wait time.`;
-
-  return (
-    <div
-      className={`mt-2 flex items-start gap-2 rounded-[10px] border p-3 ${wrapperClass}`}
-      role="status"
-      aria-live="polite"
-      data-testid="postjob-fixed-price-nudge"
-    >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="text-[12px] leading-[1.5]">
-        <p className="font-semibold" data-testid="postjob-fixed-price-nudge-headline">
-          {headline}
-        </p>
-        <p className="mt-0.5">{advice}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * R33 — PostJob category icon + hint metadata
- *
- * Mirrors the R32 ASAP CategoryChipGrid look for scheduled jobs. Each key
- * matches a backend `service_categories.key`; unknown keys silently fall
- * back to the Package icon + no hint (safe forward-compat).
- * ──────────────────────────────────────────────────────────────────────── */
-const CATEGORY_META = {
-  house_removals:      { icon: Home,        hint: "Full house move" },
-  furniture_delivery:  { icon: Armchair,    hint: "Sofa / bed / etc." },
-  single_items:        { icon: Package,     hint: "One large item" },
-  parcels:             { icon: Package,     hint: "Small / single item" },
-  documents:           { icon: FileText,    hint: "Envelopes / paperwork" },
-  pallets:             { icon: Layers,      hint: "Palletised freight" },
-  freight:             { icon: Truck,       hint: "Bulk / commercial" },
-  motorcycles:         { icon: Bike,        hint: "Bikes / scooters" },
-  cars_vehicles:       { icon: Car,         hint: "Non-runners OK" },
-  vans:                { icon: Truck,       hint: "Van transport" },
-  machinery_plant:     { icon: Cog,         hint: "Plant / equipment" },
-  agricultural:        { icon: Sprout,      hint: "Farm machinery" },
-  building_materials:  { icon: Hammer,      hint: "Timber / bricks / etc." },
-  boats_marine:        { icon: Ship,        hint: "Boats / trailers" },
-  shipping_containers: { icon: Container,   hint: "20ft / 40ft containers" },
-  caravans:            { icon: Caravan,     hint: "Touring caravans" },
-  static_caravans:     { icon: Home,        hint: "Static / mobile homes" },
-  garden_outdoor:      { icon: TreePine,    hint: "Garden furniture / plants" },
-  office_commercial:   { icon: Building2,   hint: "Office moves" },
-  retail_business:     { icon: ShoppingBag, hint: "Stock / merchandise" },
-  event_equipment:     { icon: PartyPopper, hint: "Event / marquee kit" },
-  auction_marketplace: { icon: Gavel,       hint: "eBay / auction pickup" },
-  same_day_express:    { icon: Zap,         hint: "Urgent delivery" },
-  long_distance_uk:    { icon: MapPinned,   hint: "Nationwide moves" },
-  fragile_high_value:  { icon: ShieldCheck, hint: "Delicate / insured" },
-  other:               { icon: HelpCircle,  hint: "Describe below" },
-};
 

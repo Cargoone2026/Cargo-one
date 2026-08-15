@@ -2694,3 +2694,33 @@ Test coverage — `/app/backend/tests/test_sms_r46_unit.py` (14 parameterised E.
 
 **Production note:** R47 lives in preview; a redeploy will push it to cargoone.co.uk.
 
+
+
+---
+
+### R48 — Slim PostJob refactor ✅ COMPLETE (Feb 2026)
+
+**Same R46 pattern applied to `frontend/src/pages/portal/customer/PostJob.jsx`.** Pure refactor — zero visual change, zero behaviour change, all `data-testid`s preserved.
+
+Reduced parent file from **1010 → 779 lines (-23%)** by extracting leaf presentational components into a new `postjob/` sub-folder.
+
+New files under `frontend/src/pages/portal/customer/postjob/`:
+- `helpers.js` (17 lines) — `volumeFromDims`, `fmtDur` (pure fns).
+- `Widgets.jsx` (120 lines) — `QuoteStat`, `Toggle`, `VehicleCard`, `PriceTab`, `SummaryRow` (5 small presentational primitives).
+- `FixedPriceNudge.jsx` (62 lines) — the R45 nudge component + its lucide icon imports.
+- `CategoryMeta.js` (63 lines) — the `CATEGORY_META` icon/hint map for all scheduled service categories + its lucide imports.
+- `index.js` (14 lines) — barrel export so `PostJob.jsx` imports from `./postjob` in one clean line.
+
+Parent-file changes:
+- Trimmed the top-of-file `lucide-react` import from **35 icons → 12** (only the ones the wizard body still uses directly; category icons now live inside `CategoryMeta.js`).
+- Removed 232 lines of leaf component definitions from the bottom.
+- Added a single `import { … } from "./postjob";` line — 32 identifier references correctly resolved via the barrel.
+
+**Verification:** `yarn build` clean (`Compiled successfully`). All existing R47 fixes (unresolved-address quote guard + vehicle-recs refetch on category change) preserved.
+
+**About the "before/after visual" the user asked for:** as expected for a pure refactor, the UI is identical to pre-R48. The value is entirely in code readability + future maintainability — the parent file now reads like a step-by-step wizard flow with the plumbing hidden inside `./postjob/`, and future postjob-specific enhancements have a clear home.
+
+**Untouched:** every behaviour in the wizard (state, quote fetching, category selection, vehicle recommendations, pricing tabs, submit flow), and every other page. R35/R36 cancellation, R37 privacy, R40 Stripe refund, R41 insights, R42 fixed-price pricing, R43 dispatch isolation, R44/R45/R46/R47 fixes, Mapbox iOS fallback all unchanged.
+
+**Production note:** R48 lives in preview only. A redeploy is needed to push it (along with R47) to cargoone.co.uk. Since R48 is pure code hygiene with no user-visible change, it's completely safe to ship alongside R47's bug fixes.
+
