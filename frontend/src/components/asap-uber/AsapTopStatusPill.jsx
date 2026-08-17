@@ -64,8 +64,14 @@ export function AsapTopStatusPill({
 
   const separated = parts.reduce((acc, node, i) => {
     if (i > 0) {
+      // Visible vertical bar for sighted users; a screen-reader-only
+      // bullet so assistive tech reads e.g. "Driver accepted · £141.50"
+      // instead of concatenating the text nodes.
       acc.push(
-        <span key={`sep-${i}`} className="mx-2 h-4 w-px bg-white/25" aria-hidden="true" />
+        <React.Fragment key={`sep-${i}`}>
+          <span className="sr-only"> · </span>
+          <span className="mx-2 h-4 w-px bg-white/25" aria-hidden="true" />
+        </React.Fragment>
       );
     }
     acc.push(node);

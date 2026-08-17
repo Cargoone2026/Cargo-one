@@ -2964,3 +2964,72 @@ Rewritten: `/app/frontend/src/pages/portal/driver/Live.jsx` (routed at `/driver/
 
 Phase 3 (Customer ASAP live tracking at `/customer/dispatch/:id`) is intentionally NOT started. Awaiting user sign-off on this checkpoint before proceeding.
 
+
+---
+
+## R55 — ASAP Uber-Style UX Transformation (Phase 3, Customer) ✅ CHECKPOINT (Feb 2026)
+
+**Scope this checkpoint:** the customer-side live tracking screen at `/customer/dispatch/:jobId`. Phase 4 (wire-up audit) and Phase 5 (full regression) are deferred until user sign-off.
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/portal/customer/Dispatch.jsx` | **rewrite** — map-first Uber-style live tracking screen (~780 lines). Handles every ASAP phase: loading → preparing → searching → accepted → en_route → arriving → collected → on_route → delivered → cancelled. |
+| `frontend/src/pages/portal/customer/DispatchClassic.jsx` | **new** — verbatim copy of the prior Dispatch.jsx for internal rollback (swap the import in `App.js` line ~34 to switch back). |
+| `frontend/src/components/asap-uber/AsapMapCanvas.jsx` | **extend** — added `mode="customer"` that draws pickup + dropoff markers, real-road Mapbox Directions polyline, an optional driver marker with heading, and a breadcrumb trail. Falls back to `RouteMapGoogle` on any Mapbox failure without disturbing the surrounding UI. |
+| `frontend/src/components/asap-uber/AsapTopStatusPill.jsx` | **a11y** — added an `sr-only` " · " between the pill slots so screen readers announce "Driver accepted · £141.50" instead of concatenating the text nodes. |
+| Backend | **untouched** — `git diff HEAD~1 -- backend/` empty as required. |
+
+### Customer ASAP live-tracking state machine
+
+Every visual phase is derived from `booking.status` / `dispatch.assigned_driver_id` / `dispatch.dispatch_eligible` / `dispatch.cancelled_at`. **No frontend-only state is invented.**
+
+```
+loading   → API call in flight
+preparing → dispatch record exists, not yet dispatch_eligible
+searching → dispatch_eligible=true, no assigned_driver_id
+accepted  → assigned_driver_id present, booking.status='confirmed'
+en_route  → booking.status='travelling'  ("Driver on the way")
+arriving  → booking.status='arrived'     ("Driver arriving")
+collected → booking.status='collected'   ("Cargo collected")
+on_route  → booking.status='on_route'    ("Job in progress")
+delivered → booking.status='delivered'|'completed'
+cancelled → booking.status='cancelled'   OR dispatch.cancelled_at
+```
+
+Polling cadence (visibility-aware — pauses when the tab is hidden):
+- `/customer/dispatch/{jobId}` — 4 s (radius + drivers-notified counter)
+- `/bookings/{bookingId}` — 5 s (status transitions + `other_party` release + coords)
+- `/tracking/{bookingId}` — 6 s (only during `en_route|arriving|collected|on_route|accepted`)
+
+### Preserved contracts (all revalidated in R55)
+
+- **R26 pricing** — pill and sheet render `customer_total` / `deposit_amount` / `driver_charge` verbatim from the booking record. No frontend arithmetic anywhere.
+- **R35/R36 cancellation** — `CancelPreviewModal` calls `GET /customer/bookings/{id}/cancel-preview` and renders the returned `deposit_paid`, `cancellation_fee` (% × deposit paid, never the full booking value), and `refund_amount`. Confirm button labels the exact refund amount. Confirm fires `POST /customer/bookings/{id}/cancel-and-refund` unchanged.
+- **R37 contact privacy** — `DriverCard` renders `dispatch-driver-call` and `Message` links **only when `booking.other_party` is truthy** (which the backend only returns after driver acceptance AND `payment_status === 'paid'`). Otherwise it shows `dispatch-contact-locked` with the padlock note.
+- **R42 fixed-price** — the `£141.50` displayed in the pill and sheet comes straight from the backend booking record.
+- **R43 dispatch** — same endpoint consumed for radius / drivers-notified counters; no dispatch changes.
+- **R27 Mapbox iOS Safari fallback** — `CustomerMap` inside `AsapMapCanvas` transparently switches to `RouteMapGoogle` on any Mapbox error (`data-testid="…-google-fallback"`).
+
+### R55 test report
+
+`/app/test_reports/iteration_r55_customer_uber_ux.json`
+
+- **Backend success: 100% (5/5)** — endpoint suite for the customer flow all green.
+- **Frontend success: 100%** — Playwright E2E on both desktop and mobile viewport (iOS-sized). Every `data-testid` in the spec confirmed. R37 contact-release diff explicitly verified (before-release: `dispatch-contact-locked` present; after-release: `dispatch-driver-call` renders `tel:+447700900500`).
+- **Regression:** R54 driver `/driver/live` still green (re-verified in R55 run).
+- **Issues:** **zero critical, zero minor.** Two optional notes only:
+  1. a11y: pill screen-reader concatenation → **fixed post-report** with an `sr-only` " · " separator.
+  2. Coverage: pre-claim "searching" body wasn't UI-tested via seed (the seed booking was already claimed). Backend R37 diff was still verified at API level and by inspecting `Dispatch.jsx` (only renders `dispatch-driver-call` when `other_party` truthy).
+
+### STOP POINT
+
+Phase 4 (functionality audit) and Phase 5 (full regression) are **not started**. Awaiting user sign-off on this Phase 3 checkpoint before proceeding.
+
+### Rollback plan
+
+1. **Customer Dispatch:** swap `import CustomerDispatch from "./portal/customer/Dispatch"` → `./portal/customer/DispatchClassic` in `App.js`.
+2. **Driver Live:** swap `import DriverLive from "./portal/driver/Live"` → `./portal/driver/LiveClassic` in `App.js`.
+Both are single-line changes; no data migrations, no backend changes required.
+
