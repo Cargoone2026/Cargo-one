@@ -6,6 +6,24 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 
 const PAST = new Set(["completed", "cancelled"]);
 
+// R59 — active ASAP bookings route to the new map-first Uber-style
+// dispatch screen (/customer/dispatch/:jobId) instead of the classic
+// booking detail. This mirrors the same logic used by the redirect in
+// BookingDetail.jsx so navigation, refresh, direct URL entry and
+// logout/login all resolve to the same canonical experience.
+function isActiveAsap(b) {
+  if (!b || b._isJob) return false;
+  const timing = b.service_timing || b.job?.service_timing;
+  if (timing !== "asap") return false;
+  const status = b.status;
+  return status !== "completed" && status !== "cancelled" && !b.cancelled_at;
+}
+function bookingHref(it) {
+  if (it._isJob) return `/customer/job/${it.id}`;
+  if (isActiveAsap(it) && it.job_id) return `/customer/dispatch/${it.job_id}`;
+  return `/customer/booking/${it.id}`;
+}
+
 export default function CustomerBookings() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("active");
@@ -159,11 +177,7 @@ export default function CustomerBookings() {
                     data-testid={`booking-row-${it.id}`}
                   >
                     <Link
-                      to={
-                        it._isJob
-                          ? `/customer/job/${it.id}`
-                          : `/customer/booking/${it.id}`
-                      }
+                      to={bookingHref(it)}
                       className="block"
                     >
                       <div className="flex items-center justify-between gap-2">

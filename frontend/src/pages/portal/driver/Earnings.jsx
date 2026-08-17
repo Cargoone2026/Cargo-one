@@ -2,15 +2,28 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Hourglass, CheckCircle2, Info } from "lucide-react";
 import { api } from "@/lib/api";
 
+// R59 — driver earnings status buckets.
+//
+// A booking is EARNED once the driver has finished the job (POD uploaded
+// or `delivered`) OR the customer has formally `completed` it. The prior
+// implementation only counted `completed`, which meant £0 earned + £5k
+// pending stuck for the driver until the customer clicked Complete —
+// misleading, since the driver had already done the work.
+//
+// IN_PROGRESS is everything after claim but before the driver has
+// delivered. `accepted` is added because /bookings/mine returns bookings
+// where the driver has claimed the job but no deposit has settled yet.
+// `cancelled` is deliberately in neither bucket (cancellation refund is
+// backend-managed via R35/R36 — never counted as driver earnings here).
+const EARNED = new Set(["delivered", "pod_uploaded", "completed"]);
 const IN_PROGRESS = new Set([
+  "accepted",
   "deposit_paid",
   "confirmed",
   "travelling",
   "arrived",
   "collected",
   "on_route",
-  "delivered",
-  "pod_uploaded",
 ]);
 
 export default function DriverEarnings() {
@@ -30,10 +43,24 @@ export default function DriverEarnings() {
     load();
   }, [load]);
 
+  // R59 — auto-refresh when the tab regains focus (e.g. driver returns
+  // from the booking-detail screen after completing a delivery). Prevents
+  // stale earnings figures without introducing a polling loop.
+  useEffect(() => {
+    const onFocus = () => { load(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) load();
+    });
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [load]);
+
   const stats = useMemo(() => {
-    const completed = bookings.filter((b) => b.status === "completed");
+    const earned = bookings.filter((b) => EARNED.has(b.status));
     const upcoming = bookings.filter((b) => IN_PROGRESS.has(b.status));
-    const total = completed.reduce(
+    const total = earned.reduce(
       (a, b) => a + Number(b.driver_charge ?? b.balance_due ?? 0),
       0,
     );
@@ -44,12 +71,16 @@ export default function DriverEarnings() {
     return {
       total,
       pending,
-      completed: completed.length,
+      completed: earned.length,
       upcoming: upcoming.length,
     };
   }, [bookings]);
 
-  const completed = bookings.filter((b) => b.status === "completed").slice(0, 10);
+  // Recent list is the earned bucket — anything the driver has delivered
+  // (delivered / pod_uploaded / completed), most recent first.
+  const completed = bookings
+    .filter((b) => EARNED.has(b.status))
+    .slice(0, 10);
 
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="driver-earnings">

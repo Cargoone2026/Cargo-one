@@ -3362,3 +3362,111 @@ Running `test_asap_pricing_r26.py` **combined with** `test_realtime_dispatch.py`
 
 Recenter FAB shipped. Classic rollback preserved. No other changes. No breadcrumb, no Twilio, no websocket, no server.py decomposition.
 
+
+---
+
+## R59 — Post-Deployment Fixes (Driver Earnings + Customer ASAP Routing) ✅ (Feb 2026)
+
+Two production-observation issues fixed. **Zero backend changes.**
+
+### Issue A — Driver Earnings incorrect
+
+**Production symptoms** (from user's screenshot):
+- Total earned: £0.00
+- Completed deliveries: 0
+- Pending balance: £5,531
+- In progress: 16
+
+**Root cause:** `Earnings.jsx` treated `delivered` and `pod_uploaded` as **in-progress**, and only counted `status === "completed"` as earned. But the CargoOne lifecycle is:
+
+```
+accepted → deposit_paid → confirmed → travelling → arrived
+       → collected → on_route → delivered → pod_uploaded → completed
+```
+
+The `completed` transition requires the customer to click "Complete" on their side. So drivers who had physically delivered their jobs (and uploaded POD) saw £0 earned indefinitely — the money sat in "Pending" until the customer confirmed, which many never did. The £5,531 pending balance was actually earned money from `pod_uploaded` / `delivered` bookings.
+
+**Fix:** widened the "earned" bucket to include all driver-terminal states.
+
+```js
+// R59 — Earnings.jsx
+const EARNED = new Set(["delivered", "pod_uploaded", "completed"]);
+const IN_PROGRESS = new Set([
+  "accepted", "deposit_paid", "confirmed",
+  "travelling", "arrived", "collected", "on_route",
+]);
+// cancelled deliberately in neither bucket
+```
+
+Also added a **focus/visibility auto-refetch** so the earnings page updates when the driver returns from a delivery flow without needing a manual refresh.
+
+**Expected values after fix** (based on production screenshot data with 16 bookings, mix of statuses averaging ~£345 each):
+- If ~6 of the 16 are `delivered`/`pod_uploaded`: Total Earned ≈ £2,070, Completed 6, Pending ≈ £3,450, In-progress 10.
+- Exact split visible on refresh — no more £0 earned when there are in fact terminal deliveries.
+
+### Issue B — Customer ASAP returns to old UI
+
+**Production symptoms:** After the Uber-style dispatch screen appeared post-payment, tapping the active booking from **Bookings** or refreshing/navigating opened the classic `BookingDetail.jsx`.
+
+**Root cause (2 places):**
+
+1. **`Bookings.jsx` line 161-167** — every booking row's `<Link>` unconditionally routed to `/customer/booking/{id}`. Active ASAP bookings weren't distinguished from scheduled/fixed-price/completed/cancelled.
+2. **`BookingDetail.jsx`** — a prior R19 fix explicitly removed the `sessionStorage`-gated bounce to `/customer/dispatch` because the URL was expected to be stable there. This left every direct-URL / refresh / logout-login entry on the classic screen for active ASAP.
+
+**Fix:** two layers so every entry path resolves to the new experience:
+
+1. **`Bookings.jsx`** — new `isActiveAsap(b)` + `bookingHref(it)` helpers. Active ASAP + valid `job_id` → `/customer/dispatch/{job_id}`. Everything else → existing route. Non-ASAP (scheduled / fixed-price / bidding) untouched. Completed / cancelled ASAP stays on `/customer/booking/{id}` (historical detail).
+2. **`BookingDetail.jsx`** — added a `useEffect` redirect: if the booking is active ASAP (`service_timing === "asap"` + status not in `[completed, cancelled]` + no `cancelled_at`), navigate to `/customer/dispatch/{job_id}` with `replace: true`. Catches direct URL, refresh, browser history, logout/login, deep links.
+3. **`Dispatch.jsx`** — `derivePhase` now maps `pod_uploaded` to the `"delivered"` phase (same UX as `delivered` / `completed` — DeliveredBody + Full-booking link).
+
+### Files touched (4, all frontend)
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/portal/driver/Earnings.jsx` | R59 — new EARNED set + focus/visibility refetch |
+| `frontend/src/pages/portal/customer/Bookings.jsx` | R59 — active ASAP → `/customer/dispatch/{jobId}` |
+| `frontend/src/pages/portal/customer/BookingDetail.jsx` | R59 — redirect active ASAP to dispatch |
+| `frontend/src/pages/portal/customer/Dispatch.jsx` | R59 — `pod_uploaded` maps to `delivered` phase |
+| Backend | **untouched** (`git diff --stat -- backend/` empty) |
+
+### R59 regression test — `test_r59_earnings_and_asap_routing.py`
+
+26 tests total, all pure-function assertions (no Playwright dependency).
+
+- 7 driver earnings tests: `delivered`, `pod_uploaded`, `completed` all land in EARNED; `accepted` in IN_PROGRESS; `cancelled` in neither; the production screenshot scenario is verified; cross-driver isolation preserved.
+- 19 customer routing tests: every active ASAP status → dispatch; completed / cancelled / `cancelled_at` → booking detail; every non-ASAP timing (scheduled / fixed-price / bidding / null) → booking detail; open jobs (`_isJob`) untouched; `service_timing` inside `job` object fallback; defensive fallback when `job_id` missing.
+
+**Result: 26/26 pass in 1.42s.**
+
+### Protected-suite regression (all 🟢 green)
+
+| Suite | Result |
+|---|---|
+| R26 pricing | 21/21 |
+| R34 offer ordering | 5/5 |
+| R35/R36 cancellation | 16/16 |
+| R37 contact privacy | 7/7 |
+| R40 Stripe refund | 7/7 |
+| R43 realtime dispatch | 21/21 |
+| R55 customer dispatch | 5/5 |
+| R56 phase 4 audit | 13/13 |
+| **R59 (new)** | **26/26** |
+| Frontend production build | PASS (30.6s) |
+
+### Manual verification
+
+- Loaded `/customer/booking/89e3a6f3-...` (active ASAP) → **redirected to `/customer/dispatch/a3d0f636-...`** ✅
+- Loaded `/customer/bookings` → tapped row → `href="/customer/dispatch/a3d0f636-..."` ✅ (no classic UI flash)
+
+### Classic rollback intact
+
+`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx` — all present, exports intact, NOT deleted.
+
+### STOP
+
+Both issues fixed. Nothing else changed. No breadcrumb, no Twilio, no websocket, no server.py decomposition, no classic UI deletion.
+
+### Observed but out of scope (backlog)
+
+- **Bookings list "£NaN" total** on the seed booking — the list uses `it.total_price` which some records don't have. Not in R59 brief; unrelated to the reported issues. Documented for future backlog.
+

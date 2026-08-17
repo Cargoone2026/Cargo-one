@@ -68,7 +68,15 @@ function useVisibleTab() {
 function derivePhase({ dispatch, booking }) {
   if (booking?.status === "cancelled" || dispatch?.cancelled_at) return "cancelled";
   const bookingStatus = booking?.status;
-  if (bookingStatus === "delivered" || bookingStatus === "completed") return "delivered";
+  // R59 — treat `pod_uploaded` as delivered from the customer's live-
+  // tracking POV. The formal `completed` transition happens when the
+  // customer confirms delivery; from the map-first UI's perspective both
+  // are terminal and should show the DeliveredBody + Full-booking link.
+  if (
+    bookingStatus === "delivered" ||
+    bookingStatus === "completed" ||
+    bookingStatus === "pod_uploaded"
+  ) return "delivered";
   if (bookingStatus === "on_route") return "on_route";        // cargo picked up, heading to dropoff
   if (bookingStatus === "collected") return "collected";      // cargo secured
   if (bookingStatus === "arrived") return "arriving";         // driver at pickup

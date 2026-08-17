@@ -121,6 +121,26 @@ export default function CustomerBookingDetail() {
     }
   }, []);
 
+  // R59 — active ASAP bookings live on the new map-first Uber-style
+  // dispatch screen (/customer/dispatch/:jobId), not this classic
+  // BookingDetail. When a customer lands here for an ACTIVE ASAP (from
+  // direct URL, refresh, logout/login, browser history, back-button,
+  // etc.) we redirect them to the canonical dispatch route so the
+  // experience is uniform across every entry point.
+  //
+  // We intentionally leave completed / cancelled ASAP bookings on this
+  // screen so historical detail (POD, rating, cancellation summary)
+  // remains accessible with its full information density.
+  useEffect(() => {
+    if (!b || !b.job_id) return;
+    if ((b.service_timing || b.job?.service_timing) !== "asap") return;
+    if (b.status === "completed" || b.status === "cancelled" || b.cancelled_at) return;
+    // Replace to keep the browser history clean — the Bookings list
+    // already links directly, so this handles the "landed here somehow"
+    // fallback rather than being the primary path.
+    navigate(`/customer/dispatch/${b.job_id}`, { replace: true });
+  }, [b, navigate]);
+
   // ASAP flow — after deposit is paid and no driver assigned yet, the
   // Finding-a-driver panel is embedded inline below (see JSX). No more
   // sessionStorage-gated bounce to /customer/dispatch — the URL must stay
