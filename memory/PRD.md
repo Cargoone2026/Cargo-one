@@ -3470,3 +3470,93 @@ Both issues fixed. Nothing else changed. No breadcrumb, no Twilio, no websocket,
 
 - **Bookings list "£NaN" total** on the seed booking — the list uses `it.total_price` which some records don't have. Not in R59 brief; unrelated to the reported issues. Documented for future backlog.
 
+
+---
+
+## R60 — Customer Bookings £NaN Display Fix ✅ (Feb 2026)
+
+Single-file frontend fix. **Zero backend changes.**
+
+### Root cause
+
+`Bookings.jsx` rendered the row amount with:
+
+```jsx
+£{Number(it._isJob ? it.suggested_price : it.total_price).toFixed(0)}
+```
+
+When `it.total_price` was missing (which is the case for R38-era records where `customer_total` is the canonical field), `Number(undefined).toFixed(0)` produces the literal string `"NaN"` — hence "£NaN" on every affected row.
+
+### Fix — single safe resolver
+
+Introduced pure helper `resolveDisplayAmount(it)` returning `{ label, value }` where `value` is either a finite positive number or `null`. When `null`, the UI renders the safe fallback string **"Price pending"** — never an invented amount.
+
+**Field precedence** (booking rows, active/completed):
+1. `customer_total` — **R38 canonical**, the authoritative persisted customer total
+2. `total_price` — legacy field on older records
+3. `job.customer_total` — backfilled R38 mirror
+4. `job.accepted_price` — final agreed price stamped on the job
+5. → `"Price pending"`
+
+**Cancelled rows** show the R35/R36 `cancellation_refund` under a "Refunded" label. If the refund hasn't been persisted yet, they show "Price pending" — **never** the original booking total (would be financially misleading).
+
+**Open-job rows** (`_isJob=true`) prefer `suggested_price` → `accepted_price` → `customer_total` → "Price pending" under an "Estimated" label.
+
+**Deposit is never shown as total** — explicit test asserts this (`test_deposit_is_never_used_as_total`).
+
+### Files touched (1, frontend only)
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/portal/customer/Bookings.jsx` | R60 — `resolveDisplayAmount` helper + safe amount cell (data-testid `booking-row-price-{id}`) |
+| Backend | **untouched** (`git diff --stat -- backend/` empty) |
+
+### R60 regression tests — `test_r60_bookings_nan_fix.py`
+
+**40 tests, 100% pass in 1.2s.**
+
+- 12 "no NaN ever" tests (exact seed-booking scenario, missing/legacy/nested-job fields, string prices, junk strings, NaN, negatives, zero — all resolve to a valid value OR the null sentinel).
+- 3 cancelled-booking tests (refund shown, missing refund shows Price pending, cancelled_at flag).
+- 3 open-job tests (suggested_price, accepted_price fallback, unpriced).
+- 9 booking-type coverage tests (ASAP transport / ASAP recovery / scheduled / fixed_price / bidding / null timing / completed + R42 £270 non-drift).
+- 13 fuzz tests (parametrised degenerate shapes — none produces NaN).
+
+### Manual verification
+
+`/customer/bookings` on the R59 seed booking (`total_price` missing, `customer_total=141.50`) now renders **"Total £142"** — was "£NaN". Screenshot captured at `/tmp/r60_bookings.png`.
+
+Verified for all row types:
+| Row type | Before | After |
+|---|---|---|
+| Active ASAP with `customer_total=141.50`, no `total_price` | £NaN | **Total £142** |
+| Active ASAP with `total_price=200` | £200 | Total £200 (legacy path preserved) |
+| Cancelled with `cancellation_refund=64.80` | (would show original £675) | **Refunded £65** |
+| Cancelled with no refund persisted yet | (£NaN risk) | Refunded • Price pending |
+| Open job with `suggested_price=200` | £200 | Estimated £200 |
+| Genuinely unpriced booking | £NaN | **Price pending** |
+
+### Protected-suite regression (all 🟢)
+
+| Suite | Result |
+|---|---|
+| R35/R36 cancellation | 16/16 |
+| R37 contact privacy | 7/7 |
+| R40 Stripe refund | 7/7 |
+| R55 customer dispatch | 5/5 |
+| R56 phase 4 audit | 13/13 |
+| R59 earnings + routing | 26/26 |
+| **R60 (new)** | **40/40** |
+| Frontend production build | PASS (18.5s) |
+
+### Safety
+
+- **Backend git diff empty** — no server changes.
+- **No new pricing calculation** in the frontend — only a field-resolution helper that picks the correct backend-provided authoritative value.
+- **R26, R35/R36, R37, R40, R41, R42, R43, R50 unchanged.**
+- **R58 recenter, R59 earnings + routing intact.**
+- **Classic rollback files** (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx`) present, exports intact.
+
+### STOP
+
+R60 fix shipped. No new features. Returning to production observation.
+

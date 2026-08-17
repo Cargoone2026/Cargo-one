@@ -6,6 +6,48 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 
 const PAST = new Set(["completed", "cancelled"]);
 
+// R60 — safe resolver for the amount displayed on a Bookings row.
+//
+// Returns { label, value } where value is a valid Number (> 0) or null.
+// Never displays deposit as booking total (financially misleading).
+// Never returns NaN — the label switches to a safe fallback when no
+// authoritative amount is available on the record.
+//
+// Field precedence (booking rows, active / completed):
+//   1. R38 canonical `customer_total` on the booking.
+//   2. Legacy `total_price` on the booking (older records).
+//   3. `job.customer_total` (backfilled R38 mirror).
+//   4. `job.accepted_price` (finalised agreed price from job).
+//   → otherwise "Price pending" — no invented number.
+//
+// Cancelled rows show the refund amount (`cancellation_refund` from
+// R35/R36) under a "Refunded" label. If missing, show "Price pending"
+// rather than the original booking total.
+//
+// Open-job rows (_isJob=true) use `suggested_price` with legacy
+// `accepted_price` / `customer_total` fallbacks under an "Estimated"
+// label.
+function resolveDisplayAmount(it) {
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  if (it?._isJob) {
+    const v = num(it.suggested_price) ?? num(it.accepted_price) ?? num(it.customer_total);
+    return { label: "Estimated", value: v };
+  }
+  if (it?.status === "cancelled" || it?.cancelled_at) {
+    const v = num(it.cancellation_refund) ?? num(it.refund_amount);
+    return { label: "Refunded", value: v };
+  }
+  const v =
+       num(it?.customer_total)
+    ?? num(it?.total_price)
+    ?? num(it?.job?.customer_total)
+    ?? num(it?.job?.accepted_price);
+  return { label: "Total", value: v };
+}
+
 // R59 — active ASAP bookings route to the new map-first Uber-style
 // dispatch screen (/customer/dispatch/:jobId) instead of the classic
 // booking detail. This mirrors the same logic used by the redirect in
@@ -201,21 +243,26 @@ export default function CustomerBookings() {
                         </span>
                       </div>
                       <div className="mt-3 flex items-end justify-between border-t border-[#F3F4F6] pt-3">
-                        <div>
-                          <p className="text-[12px] text-[#6B7280]">
-                            {cancelled ? "Refunded" : "Total"}
-                          </p>
-                          <p
-                            className={`text-[18px] font-bold ${
-                              cancelled ? "text-[#991B1B]" : "text-[#111111]"
-                            }`}
-                          >
-                            £
-                            {Number(
-                              it._isJob ? it.suggested_price : it.total_price,
-                            ).toFixed(0)}
-                          </p>
-                        </div>
+                        {(() => {
+                          const amt = resolveDisplayAmount(it);
+                          const hasValue = amt.value != null;
+                          return (
+                            <div data-testid={`booking-row-price-${it.id}`}>
+                              <p className="text-[12px] text-[#6B7280]">
+                                {hasValue ? amt.label : "\u00A0" /* preserve row height */}
+                              </p>
+                              <p
+                                className={`text-[18px] font-bold ${
+                                  cancelled ? "text-[#991B1B]" : "text-[#111111]"
+                                }`}
+                              >
+                                {hasValue
+                                  ? `£${amt.value.toFixed(0)}`
+                                  : "Price pending"}
+                              </p>
+                            </div>
+                          );
+                        })()}
                         <ChevronRight className="h-5 w-5 text-[#9CA3AF]" />
                       </div>
                     </Link>
