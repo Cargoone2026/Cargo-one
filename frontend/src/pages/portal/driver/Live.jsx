@@ -1,8 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Zap, MapPin, Truck, AlertTriangle, ShieldCheck, Loader2, PowerOff,
-  Signal, Radio, Search, Clock, PoundSterling, Package,
+  Clock, PoundSterling, Package, Bell, List, X, ChevronUp,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui-portal/Button";
+import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
+import {
+  AsapMapCanvas,
+  AsapTopStatusPill,
+  AsapFloatingControls,
+  AsapBottomSheet,
+} from "@/components/asap-uber";
+
+/**
+ * DriverLive — CargoOne ASAP Live Mode (Uber-style, map-first).
+ *
+ * The visual/interaction layer for the driver's ASAP experience:
+ *   • Full-screen live map
+ *   • Top pill: online state + today's earnings + jobs count
+ *   • Right-side floating controls (list / notifications)
+ *   • Bottom sheet: draggable — peek/half/full snap points
+ *   • Snap auto-expands to `half` when a new ASAP offer arrives
+ *
+ * All CargoOne business logic (heartbeat, offer polling, contact
+ * privacy, claim, dispatch fairness, cancellation, pricing) is
+ * unchanged — this file consumes the same endpoints the classic
+ * `LiveClassic.jsx` did. Rolling back is one import swap in `App.js`.
+ *
+ * Preserves (do NOT change):
+ *   • GET  /driver/live/status
+ *   • POST /driver/live/online   (returns missed_offers_count)
+ *   • POST /driver/live/offline
+ *   • POST /driver/live/heartbeat
+ *   • GET  /driver/live/offers   (5s poll)
+ *   • POST /jobs/{id}/claim
+ *   • R37 contact-privacy — driver only sees customer contact AFTER claim
+ *   • R34 offer ordering — newest first (dispatch_ready_at DESC)
+ */
+
+const HEARTBEAT_INTERVAL_MS = 30000;
+const OFFER_POLL_INTERVAL_MS = 5000;
+const OFFER_COUNTDOWN_SECONDS = 60;
 
 function formatDuration(secs) {
   const s = Math.max(0, Math.floor(secs || 0));
@@ -12,17 +51,9 @@ function formatDuration(secs) {
   const pad = (n) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${pad(m)}:${pad(r)}`;
 }
-import { api } from "@/lib/api";
-import { Button } from "@/components/ui-portal/Button";
-import { DriverLiveMap } from "@/components/ui-portal/DriverLiveMap";
-import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
-
-const HEARTBEAT_INTERVAL_MS = 30000;   // send position every 30s
-const OFFER_POLL_INTERVAL_MS = 5000;   // poll for offers every 5s
-const OFFER_COUNTDOWN_SECONDS = 60;    // visual auto-decline hint per offer
 
 function OfferCountdown({ readyAt }) {
-  const [left, setLeft] = React.useState(() => {
+  const [left, setLeft] = useState(() => {
     try {
       const t0 = readyAt ? new Date(readyAt).getTime() : Date.now();
       return Math.max(0, OFFER_COUNTDOWN_SECONDS - Math.floor((Date.now() - t0) / 1000));
@@ -34,21 +65,189 @@ function OfferCountdown({ readyAt }) {
     return () => clearInterval(t);
   }, [left]);
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
-      data-testid="driver-live-offer-countdown">
-      {left}s
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+      data-testid="driver-live-offer-countdown"
+    >
+      <Clock className="h-3 w-3" />{left}s
     </span>
   );
 }
 
-/**
- * CargoOne — Driver Live Mode.
- *
- * Map-first, honest privacy story. Location is only collected while the
- * driver is deliberately ONLINE. Going offline stops the heartbeat and
- * clears server-side location. Offers are polled every 5 s; a single tap
- * on the first offer atomically claims the job.
- */
+/** Compact card rendered inside the bottom sheet for each nearby ASAP offer. */
+function OfferCard({ offer, onAccept, onDecline, claiming }) {
+  const isRecovery = offer.service_type === "breakdown_recovery";
+  return (
+    <div
+      id={`driver-live-offer-card-${offer.job_id}`}
+      className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.06)] animate-in fade-in slide-in-from-bottom-2 duration-300"
+      data-testid={`driver-live-offer-${offer.job_id}`}
+    >
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="flex items-center gap-2 text-[13px] font-medium">
+          {isRecovery ? (
+            <><AlertTriangle className="h-4 w-4 text-amber-600" /> ASAP Vehicle Recovery</>
+          ) : (
+            <><Truck className="h-4 w-4 text-neutral-800" /> ASAP Transport</>
+          )}
+        </div>
+        <div className="flex items-baseline gap-2">
+          <OfferCountdown readyAt={offer.dispatch_ready_at} />
+          <div className="text-[22px] font-bold tracking-tight">£{offer.accepted_price}</div>
+        </div>
+      </div>
+      <p className="flex items-center gap-1 text-[13px] text-neutral-700">
+        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+        <span className="min-w-0 truncate">
+          {offer.pickup_address || offer.pickup_town}
+          <span className="ml-1 text-neutral-500">· {offer.distance_to_pickup_miles} mi away</span>
+        </span>
+      </p>
+      <p className="flex items-center gap-1 text-[13px] text-neutral-700">
+        <MapPin className="h-3.5 w-3.5 text-red-600" />
+        <span className="min-w-0 truncate">
+          {offer.dropoff_address || offer.dropoff_town}
+          <span className="ml-1 text-neutral-500">
+            · {offer.distance_miles} mi trip
+            {offer.duration_minutes ? ` · ~${Math.round(offer.duration_minutes)} min` : ""}
+          </span>
+        </span>
+      </p>
+      <div className="mt-3">
+        <AcceptanceInfo job={offer} dense testIdPrefix={`live-offer-accept-${offer.job_id}`} />
+      </div>
+      {Array.isArray(offer.photos) && offer.photos.length > 0 && (
+        <div
+          className="mt-2 flex items-center gap-2 overflow-x-auto pb-1"
+          data-testid={`live-offer-photos-${offer.job_id}`}
+        >
+          {offer.photos.slice(0, 4).map((p, i) => (
+            <img key={i} src={p} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-neutral-200 object-cover" />
+          ))}
+          {offer.photos.length > 4 && (
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 text-xs font-semibold text-neutral-600">
+              +{offer.photos.length - 4}
+            </span>
+          )}
+        </div>
+      )}
+      {offer.customer_note && (
+        <div className="mt-2 text-xs italic text-neutral-500">"{offer.customer_note}"</div>
+      )}
+      <div className="mt-3 flex gap-2">
+        <Button
+          variant="secondary"
+          onClick={() => onDecline(offer)}
+          disabled={claiming === offer.job_id}
+          className="flex-1"
+          data-testid={`driver-live-decline-${offer.job_id}`}
+        >
+          Decline
+        </Button>
+        <Button
+          onClick={() => onAccept(offer)}
+          disabled={claiming === offer.job_id}
+          className="flex-1"
+          data-testid={`driver-live-accept-${offer.job_id}`}
+        >
+          {claiming === offer.job_id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Accept · £{offer.accepted_price}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Idle-when-online body: today's stats + reassurance. */
+function OnlineIdleBody({ town, sessionSecs, todayStats, offersReason }) {
+  return (
+    <div className="space-y-4 pt-2" data-testid="driver-live-idle-dashboard">
+      <div className="flex items-center gap-2 text-[13px] text-neutral-700">
+        <MapPin className="h-4 w-4 text-neutral-500" />
+        <span className="truncate" data-testid="driver-live-town">
+          {town || "Locating you…"}
+        </span>
+      </div>
+
+      <div className="rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
+        <p className="text-[15px] font-semibold text-neutral-900">Looking for nearby ASAP jobs…</p>
+        <p className="mt-1 text-[13px] text-neutral-500">
+          We'll surface the freshest jobs in your area the instant they land.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-neutral-200 bg-white p-3" data-testid="driver-live-stat-time">
+          <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-neutral-500">
+            <Clock className="h-3 w-3" /> Online
+          </div>
+          <div className="text-[16px] font-semibold tabular-nums">{formatDuration(sessionSecs)}</div>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3" data-testid="driver-live-stat-jobs">
+          <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-neutral-500">
+            <Package className="h-3 w-3" /> Jobs
+          </div>
+          <div className="text-[16px] font-semibold tabular-nums">{todayStats.jobs}</div>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3" data-testid="driver-live-stat-earnings">
+          <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-neutral-500">
+            <PoundSterling className="h-3 w-3" /> Earnings
+          </div>
+          <div className="text-[16px] font-semibold tabular-nums">£{todayStats.earnings}</div>
+        </div>
+      </div>
+
+      {offersReason === "busy_on_asap" ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+          You're currently on an active ASAP job — new offers pause until it's completed.
+        </div>
+      ) : null}
+      {offersReason === "stale_location" ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+          Waiting for a fresh GPS fix — new offers will resume once we have it.
+        </div>
+      ) : null}
+
+      <p className="flex items-center gap-1 text-[11px] text-neutral-500">
+        <ShieldCheck className="h-3 w-3" />
+        Your live location is only used while you're online.
+      </p>
+    </div>
+  );
+}
+
+/** Offline body: Go online CTA + last known session/earnings summary. */
+function OfflineBody({ onGoOnline, busy, locError }) {
+  return (
+    <div className="space-y-4 pt-2" data-testid="driver-live-offline-body">
+      <div>
+        <p className="text-[16px] font-semibold text-neutral-900">You're offline</p>
+        <p className="mt-1 text-[13px] text-neutral-500">
+          Go online to receive nearby CargoOne ASAP jobs. Your location is only used while online.
+        </p>
+      </div>
+      {locError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[13px] text-red-800" data-testid="driver-live-loc-error">
+          {locError}
+        </div>
+      ) : null}
+      <Button
+        onClick={onGoOnline}
+        disabled={busy}
+        className="w-full h-12 text-[15px] font-semibold"
+        data-testid="driver-live-go-online"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+        Go online
+      </Button>
+      <p className="flex items-center gap-1 text-[11px] text-neutral-500">
+        <ShieldCheck className="h-3 w-3" />
+        Contact details of customers are only released after you accept a job.
+      </p>
+    </div>
+  );
+}
+
 export default function DriverLive() {
   const [online, setOnline] = useState(false);
   const [status, setStatus] = useState(null);
@@ -61,27 +260,21 @@ export default function DriverLive() {
   const [town, setTown] = useState(null);
   const [todayStats, setTodayStats] = useState({ jobs: 0, earnings: 0 });
   const [sessionSecs, setSessionSecs] = useState(0);
+  const [missedToast, setMissedToast] = useState(null);
+  const [sheetSnap, setSheetSnap] = useState("peek");
   const positionRef = useRef(null);
+  const priorOfferCountRef = useRef(0);
 
-  // R34 — Live Mode ASAP offers ordering: newest first.
-  //
-  // The backend returns candidates sorted by `dispatch_ready_at ASC`
-  // (oldest first, for internal dispatch fairness). Drivers want the
-  // opposite in the UI: the freshest jobs at the top so they see the
-  // latest opportunities immediately.
-  //
-  // Primary sort: `dispatch_ready_at` DESC (newest first).
-  // Secondary tie-breaker: `job_id` DESC so identical timestamps stay
-  // stable across polls (no jumping order).
+  // R34 — newest ASAP offers first (dispatch_ready_at DESC).
   const sortedOffers = useMemo(() => {
     const arr = [...offers];
     arr.sort((a, b) => {
-      const ta = a && a.dispatch_ready_at ? String(a.dispatch_ready_at) : "";
-      const tb = b && b.dispatch_ready_at ? String(b.dispatch_ready_at) : "";
-      if (tb !== ta) return tb < ta ? -1 : 1;      // newest first (ISO strings sort lexicographically)
+      const ta = a?.dispatch_ready_at ? String(a.dispatch_ready_at) : "";
+      const tb = b?.dispatch_ready_at ? String(b.dispatch_ready_at) : "";
+      if (tb !== ta) return tb < ta ? -1 : 1;
       const ia = String(a?.job_id || "");
       const ib = String(b?.job_id || "");
-      return ib < ia ? -1 : ib > ia ? 1 : 0;       // stable tie-break by job_id
+      return ib < ia ? -1 : ib > ia ? 1 : 0;
     });
     return arr;
   }, [offers]);
@@ -99,14 +292,11 @@ export default function DriverLive() {
   const getPosition = useCallback(() => new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("Geolocation unsupported"));
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude,
-                         accuracy_m: p.coords.accuracy }),
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }),
       (e) => reject(new Error(e.code === 1 ? "Location permission denied" : "GPS unavailable")),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
   }), []);
-
-  const [missedToast, setMissedToast] = useState(null);
 
   const goOnline = useCallback(async () => {
     setBusy(true);
@@ -117,22 +307,19 @@ export default function DriverLive() {
       positionRef.current = pos;
       const r = await api("/driver/live/online", { method: "POST", body: pos });
       setOnline(true);
-      setStatus({ ...status, live_online: true, live_lat: pos.lat, live_lng: pos.lng });
-      // Round 8 — Missed-Offer Toast. Surface the count returned by the
-      // /online endpoint so the driver knows what they might have missed
-      // while offline. Auto-dismiss after 8 s; a manual close is also
-      // available so the driver can dispatch it themselves.
+      setStatus((prev) => ({ ...(prev || {}), live_online: true, live_lat: pos.lat, live_lng: pos.lng }));
       const missed = Number(r?.missed_offers_count || 0);
       if (missed > 0) {
         setMissedToast(missed);
         setTimeout(() => setMissedToast((v) => (v === missed ? null : v)), 8000);
       }
+      setSheetSnap("peek");
     } catch (e) {
       setLocError(e.message || "Could not go online");
     } finally {
       setBusy(false);
     }
-  }, [getPosition, status]);
+  }, [getPosition]);
 
   const goOffline = useCallback(async () => {
     setBusy(true);
@@ -141,19 +328,19 @@ export default function DriverLive() {
       setOnline(false);
       setOffers([]);
       setOffersReason(null);
-      setStatus({ ...status, live_online: false });
+      setStatus((prev) => ({ ...(prev || {}), live_online: false }));
+      setSheetSnap("peek");
     } catch (e) {
       setErr(e?.message || "Could not go offline");
     } finally {
       setBusy(false);
     }
-  }, [status]);
+  }, []);
 
-  // Read initial status on mount.
+  // Initial status.
   useEffect(() => { readOwnStatus(); }, [readOwnStatus]);
 
-  // Live session-timer while online. Uses `live_online_since` from /status
-  // so it survives refresh/navigation without any additional API calls.
+  // Session timer.
   useEffect(() => {
     if (!online || !status?.live_online_since) { setSessionSecs(0); return () => {}; }
     let start = 0;
@@ -165,8 +352,7 @@ export default function DriverLive() {
     return () => clearInterval(t);
   }, [online, status?.live_online_since]);
 
-  // One-shot today's earnings/jobs when the driver goes online. No new
-  // polling loop — this fires once per online transition.
+  // Today's earnings/jobs (fires once per online transition).
   useEffect(() => {
     if (!online) return;
     let cancelled = false;
@@ -180,14 +366,12 @@ export default function DriverLive() {
           .filter((b) => b?.payment_status === "paid")
           .reduce((sum, b) => sum + Number(b?.driver_charge || 0), 0);
         setTodayStats({ jobs: todays.length, earnings: Math.round(earnings) });
-      } catch { /* silent — non-critical UI stat */ }
+      } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
   }, [online]);
 
-  // Reverse geocode the driver's current position → town name for the
-  // idle dashboard. Uses the browser Google Maps SDK already loaded by
-  // RouteMap. Zero backend calls.
+  // Reverse geocode town — best-effort.
   useEffect(() => {
     if (!online || !status?.live_lat || !status?.live_lng) return () => {};
     let alive = true;
@@ -205,7 +389,7 @@ export default function DriverLive() {
           if (comp) setTown(comp.long_name);
         },
       );
-    } catch { /* ignore — town display is best-effort */ }
+    } catch { /* ignore */ }
     return () => { alive = false; };
   }, [online, status?.live_lat, status?.live_lng]);
 
@@ -232,9 +416,8 @@ export default function DriverLive() {
         if (!alive) return;
         setOffers(r.offers || []);
         setOffersReason(r.reason || null);
-      } catch (e) {
-        // silent — polling errors shouldn't blast the UI
-      } finally {
+      } catch { /* silent */ }
+      finally {
         if (alive) offerTimer = setTimeout(offersOnce, OFFER_POLL_INTERVAL_MS);
       }
     }
@@ -247,13 +430,29 @@ export default function DriverLive() {
     };
   }, [online, getPosition]);
 
+  // Auto-expand the bottom sheet when a new offer arrives so the driver
+  // sees the accept CTA without an extra tap. Skips if the sheet is
+  // already at full (driver is actively browsing).
+  useEffect(() => {
+    const prev = priorOfferCountRef.current;
+    priorOfferCountRef.current = offers.length;
+    if (offers.length > prev && sheetSnap !== "full") {
+      setSheetSnap("half");
+    }
+    // Auto-shrink back to peek only when the LAST offer disappears
+    // (i.e. we previously had offers and now have none). We deliberately
+    // do NOT collapse when the driver has manually expanded the sheet
+    // with no offers on screen — that would fight their intent.
+    if (offers.length === 0 && prev > 0 && sheetSnap === "half") {
+      setSheetSnap("peek");
+    }
+  }, [offers.length, sheetSnap]);
+
   const claimOffer = useCallback(async (offer) => {
     setClaiming(offer.job_id);
     setErr(null);
     try {
       await api(`/jobs/${offer.job_id}/claim`, { method: "POST" });
-      // Redirect to the driver's existing job/booking detail page.
-      // BookingDetail is auto-discovered via bookings/mine.
       try {
         const mine = await api("/bookings/mine");
         const match = (mine || []).find((b) => b.job_id === offer.job_id);
@@ -267,7 +466,6 @@ export default function DriverLive() {
       const msg = e?.message || "Could not claim";
       if (/409/.test(msg) || /already claimed/i.test(msg)) {
         setErr("Another driver just took this job.");
-        // Refresh offers immediately.
         try {
           const r = await api("/driver/live/offers");
           setOffers(r.offers || []);
@@ -280,321 +478,198 @@ export default function DriverLive() {
     }
   }, []);
 
+  const declineOffer = useCallback((offer) => {
+    setOffers((prev) => prev.filter((x) => x.job_id !== offer.job_id));
+  }, []);
+
+  const focusOffer = useCallback((offer) => {
+    setSheetSnap("half");
+    setTimeout(() => {
+      const el = document.getElementById(`driver-live-offer-card-${offer.job_id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 220);
+  }, []);
+
+  // Viewer point for the map: driver's live position when online, else
+  // the last-known live_lat/live_lng from /status so the offline surface
+  // still shows something recognisable.
+  const viewer = useMemo(() => {
+    const lat = Number(status?.live_lat);
+    const lng = Number(status?.live_lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    return null;
+  }, [status?.live_lat, status?.live_lng]);
+
+  // Build the top-pill content based on state.
+  const topPill = useMemo(() => {
+    if (!online) {
+      return {
+        icon: PowerOff,
+        left: "Offline",
+        main: null,
+        right: null,
+        variant: "muted",
+        pulse: false,
+      };
+    }
+    const hasOffers = offers.length > 0;
+    return {
+      icon: Zap,
+      left: hasOffers ? `${offers.length} nearby` : "Online",
+      main: `£${todayStats.earnings}`,
+      right: `${todayStats.jobs} jobs`,
+      variant: "dark",
+      pulse: true,
+    };
+  }, [online, offers.length, todayStats]);
+
   return (
-    <div className="min-h-screen bg-neutral-50" data-testid="driver-live">
-      <div className="mx-auto max-w-2xl p-4">
-        {/* Round 8 — subtle "you missed N offers" banner surfaced by the
-           /driver/live/online response. Auto-dismisses after 8 s; the driver
-           can also close it themselves. */}
+    <div
+      className="relative w-full bg-neutral-900"
+      style={{ height: "calc(100dvh - 72px)", minHeight: 560 }}
+      data-testid="driver-live"
+    >
+      {/* Map layer (behind everything) */}
+      <AsapMapCanvas
+        viewer={online ? viewer : null}
+        offers={online ? sortedOffers : []}
+        onOfferClick={focusOffer}
+        showSweep={online}
+        data-testid="driver-live-map"
+      />
+
+      {/* Top pill row */}
+      <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex flex-col items-center gap-2 px-3">
+        <AsapTopStatusPill
+          icon={topPill.icon}
+          left={topPill.left}
+          main={topPill.main}
+          right={topPill.right}
+          variant={topPill.variant}
+          pulse={topPill.pulse}
+          data-testid="driver-live-status-pill"
+        />
         {missedToast ? (
           <div
             role="status"
             data-testid="missed-offers-toast"
-            className="mb-3 flex items-center gap-3 rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-900 shadow-sm"
+            className="pointer-events-auto flex max-w-md items-center gap-2 rounded-full border border-amber-200 bg-amber-50/95 px-3 py-1.5 text-[12px] text-amber-900 shadow-md backdrop-blur"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-              <Zap className="h-4 w-4 text-amber-600" />
-            </span>
+            <Zap className="h-3.5 w-3.5 text-amber-600" />
             <span className="min-w-0 flex-1">
-              <strong>You missed {missedToast} offer{missedToast === 1 ? "" : "s"} while offline.</strong>
-              {" "}
-              <span className="text-amber-800/80">Fresh offers will appear below.</span>
+              You missed <strong>{missedToast}</strong> offer{missedToast === 1 ? "" : "s"} while offline.
             </span>
             <button
               type="button"
               onClick={() => setMissedToast(null)}
               data-testid="missed-offers-toast-dismiss"
-              className="rounded-full px-2 py-1 text-[12px] font-semibold text-amber-900 hover:bg-amber-100"
               aria-label="Dismiss"
+              className="rounded-full p-0.5 hover:bg-amber-100"
             >
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : null}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-              <Zap className="h-5 w-5 text-amber-500" />
-              Live Mode
-            </h1>
-            <p className="text-sm text-neutral-500 mt-1">
-              {online ? "You're online — nearby jobs will appear below." : "Go online to receive nearby CargoOne jobs."}
-            </p>
-          </div>
-          {online ? (
-            <Button variant="secondary" onClick={goOffline} disabled={busy}
-              data-testid="driver-live-go-offline">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PowerOff className="h-4 w-4 mr-2" />}
-              Go offline
-            </Button>
-          ) : (
-            <Button onClick={goOnline} disabled={busy} data-testid="driver-live-go-online">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
-              Go online
-            </Button>
-          )}
-        </div>
-
-        <p className="text-xs text-neutral-500 mb-4 flex items-center gap-1">
-          <ShieldCheck className="h-3 w-3" />
-          Your live location is only used while you're online. Going offline clears it.
-        </p>
-
-        {locError && (
-          <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-3 text-sm text-red-800" data-testid="driver-live-loc-error">
-            {locError}
-          </div>
-        )}
-
-        {online && offers.length === 0 && (
-          <div
-            className="relative overflow-hidden rounded-2xl border border-neutral-800/70 bg-[#0A0A0A] p-6 text-white mb-4 shadow-[0_20px_60px_-30px_rgba(234,88,12,0.35)]"
-            data-testid="driver-live-idle-dashboard"
-          >
-            {/* Ambient glow — mirrors AsapDispatchPanel's premium feel */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full bg-[#EA580C]/10 blur-3xl"
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-[#EA580C]/5 blur-3xl"
-            />
-
-            {/* Header row — location + status pill */}
-            <div className="relative mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[13px] text-white/70">
-                <MapPin className="h-4 w-4 text-white/50" />
-                <span data-testid="driver-live-town" className="truncate">
-                  {town || "Locating you…"}
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.6px] text-emerald-300">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                </span>
-                Online
-              </span>
-            </div>
-
-            {/* Pulsing radar pin — visual only, mirrors the customer "Finding a driver" pin */}
-            <div className="relative flex flex-col items-center py-4">
-              <div className="relative flex items-center justify-center">
-                <span className="absolute h-40 w-40 animate-ping rounded-full bg-[#EA580C]/20 [animation-duration:2.6s]" />
-                <span className="absolute h-28 w-28 animate-ping rounded-full bg-[#EA580C]/30 [animation-duration:2s]" />
-                <span className="absolute h-32 w-32 rounded-full bg-[#EA580C]/15 blur-2xl" />
-                <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-[#EA580C] shadow-[0_10px_40px_-8px_rgba(234,88,12,0.7)]">
-                  <Zap className="h-10 w-10 text-black" strokeWidth={2.4} />
-                </span>
-              </div>
-              <p className="mt-8 text-center text-[22px] font-bold tracking-tight text-white sm:text-[26px]">
-                Searching for nearby jobs…
-              </p>
-              <p className="mt-2 text-center text-[13px] text-white/50">
-                We'll ping you the instant a matching ASAP job lands in your area.
-              </p>
-            </div>
-
-            {/* Stats — same three cards, restyled onto the dark hero */}
-            <div className="relative mt-6 grid grid-cols-3 gap-3">
-              <div
-                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
-                data-testid="driver-live-stat-time"
-              >
-                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
-                  <Clock className="h-3 w-3" /> Time online
-                </div>
-                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
-                  {formatDuration(sessionSecs)}
-                </div>
-              </div>
-              <div
-                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
-                data-testid="driver-live-stat-jobs"
-              >
-                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
-                  <Package className="h-3 w-3" /> Today's jobs
-                </div>
-                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
-                  {todayStats.jobs}
-                </div>
-              </div>
-              <div
-                className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur"
-                data-testid="driver-live-stat-earnings"
-              >
-                <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-[0.6px] text-white/50">
-                  <PoundSterling className="h-3 w-3" /> Today's earnings
-                </div>
-                <div className="text-[18px] font-semibold tabular-nums text-white sm:text-xl">
-                  £{todayStats.earnings}
-                </div>
-              </div>
-            </div>
-
-            {/* Signal + dispatch pills — same testID, restyled */}
-            <div
-              className="relative mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/60"
-              data-testid="driver-live-status-panel"
-            >
-              <span className="inline-flex items-center gap-1">
-                <Signal className="h-3 w-3 text-emerald-300" /> GPS connected
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Radio className="h-3 w-3 text-emerald-300" /> Dispatch ready
-              </span>
-              <span className="inline-flex items-center gap-1 text-white/40">
-                <ShieldCheck className="h-3 w-3" /> Your live location is only used while online
-              </span>
-            </div>
-          </div>
-        )}
-
-        {online && (
-          <div className="rounded-2xl bg-white border border-neutral-200 overflow-hidden mb-4" data-testid="driver-live-searching">
-            {/* Live map — always visible while online. Shows the driver's
-                own position with radar-pulses; when ASAP offers arrive it
-                plots each pickup as a labelled £-pin so the driver can
-                gauge distance/direction before tapping Accept below. */}
-            {status?.live_lat && status?.live_lng ? (
-              <DriverLiveMap
-                lat={status.live_lat}
-                lng={status.live_lng}
-                offers={offers}
-                onOfferClick={(o) => {
-                  const el = document.getElementById(`driver-live-offer-card-${o.job_id}`);
-                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
-                className="h-72 sm:h-96"
-                showSweep
-              />
-            ) : (
-              <div className="h-72 sm:h-96 relative bg-gradient-to-br from-emerald-50 via-white to-neutral-100">
-                <div className="absolute inset-0 driverlive-radar-grid" aria-hidden="true" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur-sm">
-                    Locating you…
-                  </p>
-                </div>
-              </div>
-            )}
-            <div className="border-t border-neutral-100 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                <span className="font-medium">
-                  {offers.length === 0
-                    ? "Looking for nearby jobs…"
-                    : `${offers.length} nearby ASAP offer${offers.length > 1 ? "s" : ""} — tap a pin to review`}
-                </span>
-              </div>
-              {offersReason === "stale_location" && (
-                <span className="text-xs text-amber-700">Waiting for GPS fix</span>
-              )}
-              {offersReason === "busy_on_asap" && offers.length === 0 && (
-                <span className="text-xs text-neutral-500">On an active ASAP job</span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <ul className="space-y-3">
-          {sortedOffers.map((o) => (
-            <li
-              key={o.job_id}
-              className="animate-in fade-in slide-in-from-bottom-2 duration-300"
-            >
-              <div id={`driver-live-offer-card-${o.job_id}`} className="rounded-2xl border border-neutral-200 bg-white p-4 scroll-mt-4" data-testid={`driver-live-offer-${o.job_id}`}>
-                <div className="flex items-baseline justify-between mb-1">
-                  <div className="text-xs uppercase tracking-wide text-neutral-500">Driver earnings</div>
-                  <div className="flex items-baseline gap-2">
-                    <OfferCountdown readyAt={o.dispatch_ready_at} />
-                    <div className="text-2xl font-semibold">£{o.accepted_price}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm font-medium mb-1">
-                  {o.service_type === "breakdown_recovery" ? (
-                    <><AlertTriangle className="h-4 w-4 text-amber-600" /> ASAP Vehicle Recovery</>
-                  ) : (
-                    <><Truck className="h-4 w-4 text-neutral-700" /> ASAP Transport</>
-                  )}
-                </div>
-                <p className="text-sm text-neutral-600 flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-emerald-600" />
-                  <span className="min-w-0 truncate">
-                    {o.pickup_address || o.pickup_town} · {o.distance_to_pickup_miles} mi away
-                  </span>
-                </p>
-                <p className="text-sm text-neutral-600 flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-red-600" />
-                  <span className="min-w-0 truncate">
-                    {o.dropoff_address || o.dropoff_town} · {o.distance_miles} mi trip
-                    {o.duration_minutes ? ` · ~${Math.round(o.duration_minutes)} min` : ""}
-                  </span>
-                </p>
-                {/* Round 7 — always show Suitable Vehicle + Transport Item
-                   / Recovery details before the driver taps Accept. */}
-                <div className="mt-3">
-                  <AcceptanceInfo
-                    job={o}
-                    dense
-                    testIdPrefix={`live-offer-accept-${o.job_id}`}
-                  />
-                </div>
-                {/* Customer photos strip — same info the offer card shows */}
-                {Array.isArray(o.photos) && o.photos.length > 0 && (
-                  <div
-                    className="mt-2 flex items-center gap-2 overflow-x-auto pb-1"
-                    data-testid={`live-offer-photos-${o.job_id}`}
-                  >
-                    {o.photos.slice(0, 4).map((p, i) => (
-                      <img
-                        key={i}
-                        src={p}
-                        alt=""
-                        className="h-14 w-14 shrink-0 rounded-lg object-cover border border-neutral-200"
-                      />
-                    ))}
-                    {o.photos.length > 4 && (
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 text-xs font-semibold text-neutral-600">
-                        +{o.photos.length - 4}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {o.customer_note && (
-                  <div className="mt-2 text-xs italic text-neutral-500">"{o.customer_note}"</div>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setOffers((prev) => prev.filter((x) => x.job_id !== o.job_id))}
-                    disabled={claiming === o.job_id}
-                    className="flex-1"
-                    data-testid={`driver-live-decline-${o.job_id}`}
-                  >
-                    Decline
-                  </Button>
-                  <Button onClick={() => claimOffer(o)}
-                    disabled={claiming === o.job_id}
-                    className="flex-1"
-                    data-testid={`driver-live-accept-${o.job_id}`}>
-                    {claiming === o.job_id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Accept · £{o.accepted_price}
-                  </Button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        {err && (
-          <p className="text-sm text-red-600 mt-4" data-testid="driver-live-error">{err}</p>
-        )}
       </div>
+
+      {/* Floating controls (right side) */}
+      <div className="absolute inset-y-0 right-0 z-20 flex flex-col justify-center">
+        <AsapFloatingControls
+          buttons={[
+            {
+              id: "list",
+              icon: sheetSnap === "full" ? ChevronUp : List,
+              label: sheetSnap === "full" ? "Collapse list" : "Expand list",
+              onClick: () => setSheetSnap(sheetSnap === "full" ? "peek" : "full"),
+              testId: "driver-live-fab-list",
+              active: sheetSnap === "full",
+            },
+            {
+              id: "notif",
+              icon: Bell,
+              label: "Notifications",
+              badge: offers.length || null,
+              onClick: () => setSheetSnap("half"),
+              testId: "driver-live-fab-notif",
+            },
+            online ? {
+              id: "offline",
+              icon: PowerOff,
+              label: "Go offline",
+              onClick: goOffline,
+              disabled: busy,
+              variant: "danger",
+              testId: "driver-live-fab-go-offline",
+            } : null,
+          ].filter(Boolean)}
+          data-testid="driver-live-floating-controls"
+        />
+      </div>
+
+      {/* Bottom sheet */}
+      <AsapBottomSheet
+        snap={sheetSnap}
+        onSnapChange={setSheetSnap}
+        sheetTestId="driver-live-sheet"
+        header={
+          <div className="flex items-center justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              {online ? (
+                <>
+                  <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  </span>
+                  <span className="min-w-0 truncate text-[14px] font-semibold text-neutral-900">
+                    {offers.length === 0
+                      ? "Looking for nearby jobs…"
+                      : `${offers.length} nearby ASAP offer${offers.length > 1 ? "s" : ""}`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex h-2.5 w-2.5 rounded-full bg-neutral-400" aria-hidden="true" />
+                  <span className="min-w-0 truncate text-[14px] font-semibold text-neutral-900">
+                    You're offline
+                  </span>
+                </>
+              )}
+            </div>
+            {online ? (
+              <span className="text-[11px] text-neutral-500 tabular-nums">
+                {formatDuration(sessionSecs)}
+              </span>
+            ) : null}
+          </div>
+        }
+      >
+        {!online ? (
+          <OfflineBody onGoOnline={goOnline} busy={busy} locError={locError} />
+        ) : offers.length === 0 ? (
+          <OnlineIdleBody
+            town={town}
+            sessionSecs={sessionSecs}
+            todayStats={todayStats}
+            offersReason={offersReason}
+          />
+        ) : (
+          <ul className="space-y-3 pt-2" data-testid="driver-live-offers-list">
+            {sortedOffers.map((o) => (
+              <li key={o.job_id}>
+                <OfferCard
+                  offer={o}
+                  onAccept={claimOffer}
+                  onDecline={declineOffer}
+                  claiming={claiming}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {err ? (
+          <p className="mt-3 text-sm text-red-600" data-testid="driver-live-error">{err}</p>
+        ) : null}
+      </AsapBottomSheet>
     </div>
   );
 }

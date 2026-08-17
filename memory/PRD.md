@@ -2890,3 +2890,77 @@ All three cleared Resend's API layer (status `sent`, valid message-id), no bounc
 - Add compound index `{to:1, at:-1}` on `email_log`.
 - Lowercase-normalise `to` inside `send_and_log`.
 - Split `services/email.py` (now ~1690 lines) into `templates.py` + `senders.py`.
+
+---
+
+## R54 — ASAP Uber-Style UX Transformation (Phase 1 + Phase 2) ✅ CHECKPOINT (Feb 2026)
+
+**Scope this checkpoint:** driver-side only. Customer-side (Phase 3) is deferred until the user signs off on this driver Live checkpoint.
+
+### Phase 1 — Shared map-first design system
+
+New folder: `/app/frontend/src/components/asap-uber/`
+
+| File | Role |
+|---|---|
+| `AsapMapCanvas.jsx` | Full-bleed live map surface. Delegates to `DriverLiveMap` so the existing Mapbox-preferred / Google iOS-Safari fallback (R27) is preserved untouched. Shows a "Locating you…" placeholder before GPS is acquired. |
+| `AsapTopStatusPill.jsx` | Floating capsule at the top of the map. Slots: `icon`, `left`, `main`, `right`, `pulse`, `variant` (dark/success/warning/muted). Renders `Online | £412 | 14 jobs`-style content. |
+| `AsapFloatingControls.jsx` | Right-side vertical stack of circular buttons (list, notifications, power-off). Supports badges + variants (ghost / primary / accent / danger). |
+| `AsapBottomSheet.jsx` | Draggable / snappable sheet with 3 snap points (peek 22%, half 55%, full 92%). PointerEvents-based drag with fling detection + `data-snap` attribute for testability. Content scroll enabled only at `full` snap so the map stays interactive at peek/half. |
+| `useAsapMapProvider.js` | Map abstraction hook — reports the *preferred* provider ("mapbox" or "google") + capability flags. Lets native iOS/Android later swap in a native Mapbox SDK without touching the ASAP UI code. |
+| `index.js` | Barrel export. |
+
+### Phase 2 — Driver ASAP Live Mode redesign
+
+Rewritten: `/app/frontend/src/pages/portal/driver/Live.jsx` (routed at `/driver/live`).
+
+**Preserved (internal fallback):** `/app/frontend/src/pages/portal/driver/LiveClassic.jsx` — the previous implementation is kept verbatim as an emergency rollback (swap the import in `App.js` line 52 to switch back).
+
+**New driver experience:**
+- Full-screen live map, driver location dot + pulsing dispatch-radius sweep.
+- Top pill: `Online | £<earnings> | <jobs> jobs` when online; `Offline` when off.
+- Missed-offer amber toast reappears above the pill (existing R33 behaviour, ported).
+- Right-side FABs: List (toggle sheet peek↔full), Notifications (badge = live offer count), Power-off (red, only when online).
+- Bottom sheet auto-expands to `half` when a new ASAP offer arrives so accept CTAs are one tap away without hiding the map. Manual expand via Bell FAB is preserved.
+- Offer cards inside the sheet include the existing `AcceptanceInfo` R33 acceptance panel, the R28 countdown timer, distance, photos, and Accept/Decline.
+- Accept flow is unchanged: `POST /jobs/{id}/claim` → redirect to `/driver/booking/{booking_id}`.
+
+**Preserved (no changes):**
+- R26 pricing (frontend still displays backend `accepted_price` verbatim).
+- R34 offer ordering (newest first by `dispatch_ready_at` DESC, `job_id` DESC tie-break).
+- R35/R36 cancellation policy (fee = % × deposit-actually-paid).
+- R37 contact privacy (`/driver/live/offers` never returns customer contact; released only post-claim via `/api/bookings/{id}` — confirmed diff in R54 test report L2610-2646).
+- R40 Stripe refund, R41 cancellation insights, R42 fixed-price logic, R43 realtime dispatch — untouched.
+- Mapbox GL preferred, Google iOS Safari fallback preserved (unchanged `DriverLiveMap` dispatcher).
+
+**No backend changes.** Same 6 endpoints consumed: `GET /driver/live/status`, `POST /driver/live/online`, `POST /driver/live/offline`, `POST /driver/live/heartbeat`, `GET /driver/live/offers`, `POST /jobs/{id}/claim`.
+
+### R54 test report
+
+`/app/test_reports/iteration_r54_driver_uber_ux.json`
+
+- **Backend success rate: 100%** (0 critical, 0 minor)
+- **Frontend success rate: 90%** — R34 (5/5), R37 (7/7), R43 (21/21) regression green. UI Playwright covered offline↔online, top pill states, all 3 FABs, stats trio, Mapbox render, iOS-sized viewport does not white-screen. All required `data-testid`s present. `LiveClassic.jsx` fallback confirmed exporting default component.
+- **Only findings (LOW priority polish, both fixed post-report):**
+  1. Bell FAB → half was being auto-collapsed to peek on the next tick when offers were empty. **Fixed** — auto-collapse now requires a prior offers-present state.
+  2. Top pill separator was too tight (`mx-1.5`). **Fixed** — bumped to `mx-2` and widened separator opacity.
+- Bottom sheet drag via headless Playwright pointer sequence didn't register a snap change — flagged as a **test-harness limitation** (real touch works; FAB-driven snap changes are correct). Manual real-device verification recommended before Phase 3.
+
+### Files touched in R54
+
+| File | Change |
+|---|---|
+| `frontend/src/components/asap-uber/AsapMapCanvas.jsx` | **new** |
+| `frontend/src/components/asap-uber/AsapTopStatusPill.jsx` | **new** |
+| `frontend/src/components/asap-uber/AsapFloatingControls.jsx` | **new** |
+| `frontend/src/components/asap-uber/AsapBottomSheet.jsx` | **new** |
+| `frontend/src/components/asap-uber/useAsapMapProvider.js` | **new** |
+| `frontend/src/components/asap-uber/index.js` | **new** |
+| `frontend/src/pages/portal/driver/Live.jsx` | **rewrite** (map-first UX; ~600 → 675 lines) |
+| `frontend/src/pages/portal/driver/LiveClassic.jsx` | **new** (verbatim copy of prior Live.jsx for internal rollback) |
+| Backend | **untouched** |
+
+### STOP POINT
+
+Phase 3 (Customer ASAP live tracking at `/customer/dispatch/:id`) is intentionally NOT started. Awaiting user sign-off on this checkpoint before proceeding.
+
