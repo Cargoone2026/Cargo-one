@@ -3560,3 +3560,109 @@ Verified for all row types:
 
 R60 fix shipped. No new features. Returning to production observation.
 
+
+---
+
+## R61 — Automatic Live Tracking for ASAP Only ✅ (Feb 2026)
+
+Single-file frontend change. **Zero backend changes.**
+
+### Root cause / current behaviour
+
+Prior to R61, every driver had to tap a **"Start"** button inside their booking detail (`driver/BookingDetail.jsx` line 570) to begin sharing their live location. This applied uniformly across all job types. For ASAP the manual step broke the ride-hailing feel — the customer's Uber-style dispatch screen was ready to receive live location, but drivers had to remember to press Start after accepting.
+
+### New behaviour
+
+For **ASAP only**, tracking auto-starts as soon as the driver views the accepted booking. All scheduled / fixed-price / bidding jobs keep the manual Start/Stop control exactly as before.
+
+**Auto-start guard** (inside `driver/BookingDetail.jsx`):
+
+```js
+const isAsap = (b.service_timing || b.job?.service_timing) === "asap";
+
+useEffect(() => {
+  if (!isAsap) return;                    // ← ASAP-only guard
+  if (trackingOn) return;                 // ← idempotent
+  const status = b.status;
+  const inActive = ACTIVE_STATUSES.has(status);      // travelling / arrived / collected / on_route
+  const inHandoff = status === "confirmed" || status === "deposit_paid";
+  if (!inActive && !inHandoff) return;    // e.g. pre-accept
+  if (["completed","cancelled"].includes(status) || b.cancelled_at) return;  // terminal
+  if (!user || b.driver_id !== user.id) return;      // R37: only the assigned driver
+  startTracking();
+}, [b?.id, b?.status, b?.driver_id, b?.cancelled_at, isAsap, trackingOn, user?.id]);
+```
+
+**Auto-stop** is already covered by the existing effects (unmount cleanup + `ACTIVE_STATUSES` guard that stops tracking when status leaves the active range — so `delivered`, `pod_uploaded`, `completed`, `cancelled` all correctly terminate the `watchPosition`).
+
+**Driver UI** — the `Foreground tracking` card:
+- **ASAP**: Manual Start/Stop **replaced** by a passive status pill (`data-testid=asap-auto-tracking-status`) showing "Live" (emerald pulse) or "Starting" (amber). Copy: "Automatic — the customer sees your live location."
+- **Non-ASAP**: existing Start/Stop button **unchanged**.
+
+**Customer side** — the R55 Uber-style `Dispatch.jsx` was already polling `/api/tracking/{booking_id}` every 6s once phase transitions into `accepted / en_route / arriving / collected / on_route`. No customer-side change was needed for R61 — the driver now begins pushing automatically and the customer's map picks it up on the next poll.
+
+### Backend contracts (unchanged)
+
+| Endpoint | Contract | Change |
+|---|---|---|
+| `POST /api/tracking/{booking_id}` | `require_role("driver")` + `driver_id` must match | **unchanged** |
+| `GET /api/tracking/{booking_id}` | customer OR driver of the booking OR admin | **unchanged** |
+| Location storage | `db.tracking` insert + `bookings.last_location` upsert with 30m / 45s throttle in the driver `watchPosition` handler | **unchanged** |
+
+### Privacy invariants (R37 intact)
+
+- Auto-tracking only fires when `b.driver_id === user.id` — cross-driver isolation.
+- Before driver acceptance, no `driver_id` is present on the booking, so the effect short-circuits.
+- `GET /tracking/{id}` still enforces `customer_id / driver_id / admin` auth (`test_r61_asap_auto_tracking.py::TestR37PrivacyIntact` asserts the guard line is present in `server.py`).
+
+### Files touched (1, frontend only)
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/portal/driver/BookingDetail.jsx` | R61 — `isAsap` derivation + auto-start `useEffect` + ASAP-conditional status pill replacing Start/Stop button |
+| Backend | **untouched** (`git diff --stat -- backend/` empty) |
+
+### R61 regression tests — `test_r61_asap_auto_tracking.py`
+
+**23/23 pass in 1.2s.**
+
+- 7 ASAP-auto-start tests (Transport + Recovery, all 4 active statuses, nested job.service_timing fallback)
+- 3 pre-accept tests (no driver, wrong driver, no user)
+- 5 non-ASAP tests (scheduled / fixed_price_scheduled / bidding / null / active status still manual)
+- 5 terminal-state tests (completed / delivered / pod_uploaded / cancelled / cancelled_at flag)
+- 3 backend contract tests (POST still driver-only, GET still auth-restricted, R37 guard line present)
+
+### Protected-suite regression (all 🟢)
+
+| Suite | Result |
+|---|---|
+| R26 pricing | 21/21 |
+| R34 offer ordering | 5/5 |
+| R35/R36 cancellation | 16/16 |
+| R37 contact privacy | 7/7 |
+| R40 Stripe refund | 7/7 |
+| R43 realtime dispatch | 21/21 |
+| R55 customer dispatch | 5/5 |
+| R56 phase 4 audit | 13/13 |
+| R59 earnings + routing | 26/26 |
+| R60 bookings NaN | 40/40 |
+| **R61 (new)** | **23/23** |
+| Frontend production build | PASS (18.7s) |
+
+### Manual verification
+
+Driver `livetest-7d06dc@…` logged in, `/driver/booking/89e3a6f3-…` (ASAP Transport, status=`confirmed`, assigned driver = this account):
+- Map shows pickup (green P, London), dropoff (red D, Reading), and **the driver's live blue marker on the M4 route** — confirming `POST /tracking/{id}` fired automatically without any Start tap.
+- Screenshot captured at `/tmp/r61_asap_driver.png`.
+
+### Safety
+
+- Backend git diff **empty**.
+- No pricing / cancellation / payment / refund / dispatch / privacy / booking-state changes.
+- R58 recenter, R59 earnings + routing, R60 NaN fallback — **all still intact**.
+- Classic rollback (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx`) — present, exports intact.
+
+### STOP
+
+R61 shipped. Returning to production observation.
+

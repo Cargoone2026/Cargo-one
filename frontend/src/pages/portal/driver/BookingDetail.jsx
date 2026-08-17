@@ -223,6 +223,47 @@ export default function DriverBookingDetail() {
     if (b && trackingOn && !ACTIVE_STATUSES.has(b.status)) stopTracking();
   }, [b, trackingOn, stopTracking]);
 
+  // R61 — automatic ASAP live tracking.
+  //
+  // For ASAP bookings only, tracking starts automatically as soon as the
+  // driver lands on the accepted booking — no manual "Start" tap required.
+  // This mirrors modern ride-hailing behaviour where the customer sees
+  // the driver moving in real time from the moment of acceptance.
+  //
+  // Scheduled / fixed-price / bidding jobs KEEP their existing manual
+  // Start/Stop control — R61 is strictly scoped to ASAP.
+  //
+  // Auto-stop is already covered by:
+  //   • the unmount effect above (leaving the page)
+  //   • the ACTIVE_STATUSES guard above (status leaving active range,
+  //     i.e. delivered / pod_uploaded / completed / cancelled)
+  //   • navigator.geolocation.watchPosition permission errors
+  //     (stopTracking is called inside the error handler)
+  const isAsap =
+    !!b &&
+    ((b.service_timing || b.job?.service_timing) === "asap");
+
+  useEffect(() => {
+    if (!b) return;
+    if (!isAsap) return;
+    if (trackingOn) return;
+    // Only auto-start while the trip is in an active (post-acceptance)
+    // status. Before travelling starts (e.g. `confirmed` immediately
+    // after claim) we still auto-start so the customer sees the driver
+    // heading toward pickup from the first moment.
+    const inActive = ACTIVE_STATUSES.has(b.status);
+    const inHandoff = b.status === "confirmed" || b.status === "deposit_paid";
+    if (!inActive && !inHandoff) return;
+    // Terminal states must never auto-start.
+    if (b.status === "completed" || b.status === "cancelled" || b.cancelled_at) return;
+    // Only the assigned driver can push tracking updates.
+    if (!user || b.driver_id !== user.id) return;
+    startTracking();
+    // startTracking is stable via useCallback; the effect only reruns
+    // when the booking state or auth changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [b?.id, b?.status, b?.driver_id, b?.cancelled_at, isAsap, trackingOn, user?.id]);
+
   async function updateStatus(status) {
     if (!id) return;
     setUpdating(true);
@@ -539,15 +580,42 @@ export default function DriverBookingDetail() {
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-[15px] font-bold text-[#111111]">
-                      Foreground tracking
+                      {isAsap ? "Live tracking" : "Foreground tracking"}
                     </p>
                     <p className="text-[12px] text-[#6B7280]">
-                      {trackingOn
-                        ? "Sharing your location with the customer."
-                        : "Turn on to share live position while en-route."}
+                      {isAsap
+                        ? (trackingOn
+                            ? "Automatic — the customer sees your live location."
+                            : locErr
+                              ? "Live location paused. See message below."
+                              : "Starting automatically…")
+                        : (trackingOn
+                            ? "Sharing your location with the customer."
+                            : "Turn on to share live position while en-route.")}
                     </p>
                   </div>
-                  {trackingOn ? (
+                  {/* R61 — ASAP hides the manual Start/Stop; the driver
+                      does not need to tap anything after accepting an
+                      ASAP job. Scheduled / fixed-price / bidding keep
+                      their existing manual control. */}
+                  {isAsap ? (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
+                        trackingOn
+                          ? "bg-[#F0FDF4] text-[#166534]"
+                          : "bg-[#FEF3C7] text-[#92400E]"
+                      }`}
+                      data-testid="asap-auto-tracking-status"
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          trackingOn ? "bg-[#16A34A]" : "bg-[#D97706]"
+                        } ${trackingOn ? "animate-pulse" : ""}`}
+                        aria-hidden="true"
+                      />
+                      {trackingOn ? "Live" : "Starting"}
+                    </span>
+                  ) : trackingOn ? (
                     <Button
                       title="Stop"
                       variant="outline"
