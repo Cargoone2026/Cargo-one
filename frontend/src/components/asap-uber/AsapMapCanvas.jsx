@@ -45,7 +45,7 @@ function validPt(p) {
     && !(p.lat === 0 && p.lng === 0);
 }
 
-function CustomerMap({ pickup, dropoff, driver, trail, showSweep, sweepColor, testId }) {
+function CustomerMap({ pickup, dropoff, driver, trail, showSweep, sweepColor, recenterSignal, testId }) {
   const [useGoogle, setUseGoogle] = useState(!process.env.REACT_APP_MAPBOX_TOKEN);
   const [routeCoords, setRouteCoords] = useState(null);
 
@@ -125,6 +125,7 @@ function CustomerMap({ pickup, dropoff, driver, trail, showSweep, sweepColor, te
       trailCoordinates={trailCoords}
       sweep={sweep}
       fitBounds
+      recenterSignal={recenterSignal}
       className="!h-full !w-full !rounded-none border-none"
       data-testid={testId}
       onError={handleFatal}
@@ -166,6 +167,7 @@ export function AsapMapCanvas({
   trail,
   showSweep = true,
   sweepColor,
+  recenterSignal = 0,
   className = "",
   "data-testid": testId = "asap-map-canvas",
 }) {
@@ -202,6 +204,7 @@ export function AsapMapCanvas({
           trail={trail}
           showSweep={showSweep}
           sweepColor={sweepColor}
+          recenterSignal={recenterSignal}
           testId={testId}
         />
       ) : (
@@ -211,6 +214,7 @@ export function AsapMapCanvas({
           offers={offers}
           onOfferClick={onOfferClick}
           showSweep={showSweep}
+          recenterSignal={recenterSignal}
           className="!h-full !w-full !rounded-none"
         />
       )}

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Zap, MapPin, Truck, AlertTriangle, ShieldCheck, Loader2, PowerOff,
-  Clock, PoundSterling, Package, Bell, List, X, ChevronUp,
+  Clock, PoundSterling, Package, Bell, List, X, ChevronUp, LocateFixed,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
@@ -262,6 +262,7 @@ export default function DriverLive() {
   const [sessionSecs, setSessionSecs] = useState(0);
   const [missedToast, setMissedToast] = useState(null);
   const [sheetSnap, setSheetSnap] = useState("peek");
+  const [recenterSignal, setRecenterSignal] = useState(0);
   const positionRef = useRef(null);
   const priorOfferCountRef = useRef(0);
 
@@ -490,6 +491,33 @@ export default function DriverLive() {
     }, 220);
   }, []);
 
+  // R58 — Recenter FAB. Prefer the cached position (positionRef → state
+  // lat/lng) so we don't trigger a fresh geolocation prompt on every tap.
+  // Only fall back to navigator.geolocation when we have nothing at all.
+  const recenter = useCallback(() => {
+    const cached = positionRef.current
+      || (Number.isFinite(status?.live_lat) && Number.isFinite(status?.live_lng)
+          ? { lat: status.live_lat, lng: status.live_lng }
+          : null);
+    if (cached) {
+      // Just bump the signal — the MapboxMap already knows the driver's
+      // sweep coordinates and will easeTo them.
+      setRecenterSignal((n) => n + 1);
+      return;
+    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+        positionRef.current = pos;
+        setStatus((prev) => ({ ...(prev || {}), live_lat: pos.lat, live_lng: pos.lng }));
+        setRecenterSignal((n) => n + 1);
+      },
+      () => { /* silent — user may have denied */ },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    );
+  }, [status?.live_lat, status?.live_lng]);
+
   // Viewer point for the map: driver's live position when online, else
   // the last-known live_lat/live_lng from /status so the offline surface
   // still shows something recognisable.
@@ -535,6 +563,7 @@ export default function DriverLive() {
         offers={online ? sortedOffers : []}
         onOfferClick={focusOffer}
         showSweep={online}
+        recenterSignal={recenterSignal}
         data-testid="driver-live-map"
       />
 
@@ -576,6 +605,13 @@ export default function DriverLive() {
       <div className="absolute inset-y-0 right-0 z-20 flex flex-col justify-center">
         <AsapFloatingControls
           buttons={[
+            online ? {
+              id: "recenter",
+              icon: LocateFixed,
+              label: "Recenter on me",
+              onClick: recenter,
+              testId: "driver-live-fab-recenter",
+            } : null,
             {
               id: "list",
               icon: sheetSnap === "full" ? ChevronUp : List,

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   MapPin, Navigation, ShieldCheck, User, Phone, MessageCircle,
   Package, X as XIcon, AlertTriangle, ChevronUp, List, PoundSterling,
-  CheckCircle2, Clock, Loader2, ExternalLink, Star,
+  CheckCircle2, Clock, Loader2, ExternalLink, Star, LocateFixed,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -552,6 +552,7 @@ export default function CustomerDispatch() {
   const [err, setErr] = useState(null);
   const [sheetSnap, setSheetSnap] = useState("half");
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [recenterSignal, setRecenterSignal] = useState(0);
   const priorPhaseRef = useRef(null);
 
   // Resolve bookingId once from /bookings/mine on mount.
@@ -686,6 +687,7 @@ export default function CustomerDispatch() {
         trail={tracking?.trail}
         showSweep={phase === "searching"}
         sweepColor="#EA580C"
+        recenterSignal={recenterSignal}
         data-testid="customer-dispatch-map"
       />
 
@@ -704,6 +706,13 @@ export default function CustomerDispatch() {
       <div className="absolute inset-y-0 right-0 z-20 flex flex-col justify-center">
         <AsapFloatingControls
           buttons={[
+            {
+              id: "recenter",
+              icon: LocateFixed,
+              label: "Recenter map",
+              onClick: () => setRecenterSignal((n) => n + 1),
+              testId: "customer-dispatch-fab-recenter",
+            },
             {
               id: "list",
               icon: sheetSnap === "full" ? ChevronUp : List,

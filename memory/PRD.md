@@ -3302,3 +3302,63 @@ The new ASAP Uber-style UX (`/driver/live` + `/customer/dispatch/:jobId`) is cer
 
 **Ready for production release. Awaiting user sign-off on Phase 5 before classic UI files are eligible for retirement.**
 
+
+---
+
+## R58 — Recenter FAB (post-Phase 5 hotfix) ✅ (Feb 2026)
+
+**Scope:** address the single 🟢 INFO item from R57 (missing recenter FAB). No other changes; no backend changes; classic rollback preserved.
+
+### Files touched (5, all frontend)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/ui-portal/MapboxMap.jsx` | **extend** — added `recenterSignal` prop (default `0`). When the counter changes and the map is ready, re-runs the fit-bounds logic on markers/route/trail/sweep. Single point → `easeTo(zoom 13)`. Multi-point → `fitBounds(padding 60, maxZoom 14)`. All best-effort inside try/catch. |
+| `frontend/src/components/ui-portal/DriverLiveMapMapbox.jsx` | **extend** — threaded `recenterSignal` prop through. Turned OFF the classic Mapbox built-in `showRecenter` bottom-left button since the ASAP FAB replaces it (no duplicate control). |
+| `frontend/src/components/asap-uber/AsapMapCanvas.jsx` | **extend** — accepts `recenterSignal` at the top-level API and forwards to both driver (via `DriverLiveMap`) and customer (via `MapboxMap`) modes. |
+| `frontend/src/pages/portal/driver/Live.jsx` | **extend** — new `recenter()` callback that prefers the cached position (`positionRef` → `status.live_lat/lng`) and only falls back to `navigator.geolocation` when nothing is cached (spec: "do not trigger a new location request unnecessarily"). New FAB `driver-live-fab-recenter` (LocateFixed icon) inserted at the top of the online-mode floating stack. |
+| `frontend/src/pages/portal/customer/Dispatch.jsx` | **extend** — new FAB `customer-dispatch-fab-recenter` at the top of the right stack. Increments `recenterSignal` so the map re-fits to pickup/dropoff/driver without a fresh geolocation request. |
+
+### Behaviour
+
+**Driver Live** — tapping the recenter FAB (visible only when online):
+1. Uses the cached driver position (already available since the heartbeat / online transition stored it) → NO new geolocation request under normal conditions.
+2. Bumps `recenterSignal` → `MapboxMap` easeTo(driver, zoom 13).
+3. If (rare) no cached position, falls back to a single `navigator.geolocation.getCurrentPosition` with `maximumAge: 60000` so cached OS-level positions are preferred.
+
+**Customer Dispatch** — tapping the recenter FAB:
+1. Bumps `recenterSignal` → `MapboxMap` fitBounds([pickup, dropoff, driver, trail, sweep]).
+2. NO geolocation request (customer map isn't following the customer's own device; it follows the booking).
+
+Bottom sheet is unaffected (FAB is above the sheet at inset-y-0 right-0). Dispatch behaviour untouched.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Frontend production build | 🟢 PASS (23.6s) |
+| Driver FABs rendered (recenter, list, notif, go-offline) | 🟢 PASS |
+| Customer FABs rendered (recenter, list, booking) | 🟢 PASS |
+| Recenter tap fires without permission prompt | 🟢 PASS |
+| Recenter tap easeTo behaviour | 🟢 PASS (visual verified) |
+| R26 pricing (`test_asap_pricing_r26.py` -n0) | 🟢 21/21 |
+| R34 offer ordering | 🟢 5/5 |
+| R35/R36 cancellation (`test_cancellation_policy_r35_r36.py`) | 🟢 16/16 |
+| R37 contact privacy (`test_contact_privacy_r37.py`) | 🟢 PASS (in R55/R56/R34 batch) |
+| R40 Stripe refund (`test_stripe_refund_r40_smoke.py`) | 🟢 7/7 |
+| R43 realtime dispatch (`test_realtime_dispatch.py` -n0) | 🟢 21/21 |
+| R55 customer dispatch (`test_r55_customer_dispatch.py`) | 🟢 PASS |
+| R56 phase 4 audit (`test_r56_phase4_audit.py`) | 🟢 PASS |
+| Mapbox desktop render | 🟢 PASS |
+| R27 iOS Safari fallback still wired | 🟢 PASS (unchanged, `DriverLiveMap` dispatcher still forwards) |
+| Backend git diff | 🟢 EMPTY (`git diff --stat -- backend/` returns nothing) |
+| Classic rollback files intact | 🟢 (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx` all present + exports intact) |
+
+### Pre-existing test-infra flake noted (not from this change)
+
+Running `test_asap_pricing_r26.py` **combined with** `test_realtime_dispatch.py` produced 11 async coroutine failures ("coroutine 'calculate_asap_quote' was never awaited"). Running each file **alone** with `-n0` passes 100% (21/21 and 21/21 respectively). This is a pre-existing shared-async-state flake between the two suites, unrelated to Phases 1-5 or R58, and documented for the ongoing test-infra backlog.
+
+### STOP
+
+Recenter FAB shipped. Classic rollback preserved. No other changes. No breadcrumb, no Twilio, no websocket, no server.py decomposition.
+

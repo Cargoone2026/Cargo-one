@@ -29,6 +29,7 @@ export function DriverLiveMapMapbox({
   onOfferClick,
   className = "",
   showSweep = true,
+  recenterSignal = 0,   // R58 — parent-driven recenter (0 = ignore)
   onFatalError = null,   // R27 — dispatcher hooks this for Google fallback
 }) {
   const [mapError, setMapError] = useState(null);
@@ -89,7 +90,8 @@ export function DriverLiveMapMapbox({
       markers={markers}
       sweep={sweep}
       fitBounds
-      showRecenter
+      showRecenter={false}
+      recenterSignal={recenterSignal}
       className={`w-full h-full overflow-hidden rounded-2xl ${className}`}
       data-testid="driver-live-map"
       onError={setMapError}

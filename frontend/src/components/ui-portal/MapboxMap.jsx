@@ -61,6 +61,11 @@ export function MapboxMap({
   sweep = null,              // R27 — {lng, lat, color?, radiusMeters?} pulsing dispatch circle
   fitBounds = true,
   showRecenter = false,
+  recenterSignal = 0,          // R58 — increment to re-fit / recenter the
+                               // map without re-mounting. Used by the ASAP
+                               // Uber-style FABs so the parent controls
+                               // when the map snaps back to the driver
+                               // / route without a fresh geolocation call.
   className = "h-80 w-full rounded-2xl overflow-hidden",
   onLoad = null,             // R27 — parent-side ready hook
   onError = null,            // R27 — parent-side failure hook (token restriction, etc.)
@@ -885,6 +890,35 @@ export function MapboxMap({
       } catch { /* ignore */ }
     }
   }, [markers, ready, fitBounds, routeCoordinates, trailCoordinates, sweep]);
+
+  // R58 — parent-driven recenter. When `recenterSignal` changes, run the
+  // same fit logic as the auto-fit above so the map snaps back to the
+  // driver / route / pickup + dropoff. If there's only a single point of
+  // interest (e.g. driver mode with just the sweep), easeTo it at zoom 13
+  // rather than fitBounds (which would keep the current zoom).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !recenterSignal) return;
+    try {
+      const pts = [];
+      (markers || []).forEach((m) => pts.push([m.lng, m.lat]));
+      (routeCoordinates || []).forEach((c) => pts.push(c));
+      (trailCoordinates || []).forEach((c) => pts.push(c));
+      if (sweep && Number.isFinite(sweep.lng) && Number.isFinite(sweep.lat)) {
+        pts.push([sweep.lng, sweep.lat]);
+      }
+      if (pts.length === 0) return;
+      if (pts.length === 1) {
+        map.easeTo({ center: pts[0], zoom: 13, duration: 600 });
+      } else {
+        const bounds = new mapboxgl.LngLatBounds();
+        pts.forEach((p) => bounds.extend(p));
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
+        }
+      }
+    } catch { /* silent — recenter is best-effort */ }
+  }, [recenterSignal, ready]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Draw route line (main road-polyline)
   useEffect(() => {
