@@ -133,19 +133,33 @@ function RouteBlock({ booking, dispatch }) {
   );
 }
 
+function formatIn(iso) {
+  if (!iso) return null;
+  try {
+    const t = new Date(iso).getTime();
+    const s = Math.max(0, Math.round((t - Date.now()) / 1000));
+    if (s <= 0) return "any moment";
+    if (s < 60) return `in ${s}s`;
+    return `in ${Math.floor(s / 60)}m ${s % 60}s`;
+  } catch { return null; }
+}
+
 function SearchingBody({ dispatch, booking, onOpenCancel }) {
   const nationwide = (dispatch?.current_search_radius_miles || 0) >= 500;
   const notified = dispatch?.drivers_notified_count || 0;
+  const widenIn = !nationwide ? formatIn(dispatch?.next_radius_expansion_at) : null;
   return (
     <div className="space-y-4 pt-2" data-testid="dispatch-searching-body">
       <div>
         <p className="text-[16px] font-semibold text-neutral-900">
           {nationwide ? "Searching nationwide" : "Looking for nearby drivers"}
         </p>
-        <p className="mt-1 text-[13px] text-neutral-500">
+        <p className="mt-1 text-[13px] text-neutral-500" data-testid="dispatch-widen-hint">
           {nationwide
             ? "We're now looking across the whole UK. We'll keep going until a driver accepts or you cancel."
-            : "We'll widen the search automatically until a driver accepts."}
+            : widenIn
+              ? `Widening the search ${widenIn}.`
+              : "We'll widen the search automatically until a driver accepts."}
         </p>
       </div>
       <RouteBlock booking={booking} dispatch={dispatch} />

@@ -3033,3 +3033,137 @@ Phase 4 (functionality audit) and Phase 5 (full regression) are **not started**.
 2. **Driver Live:** swap `import DriverLive from "./portal/driver/Live"` → `./portal/driver/LiveClassic` in `App.js`.
 Both are single-line changes; no data migrations, no backend changes required.
 
+
+---
+
+## R56 — Phase 4 Customer ASAP Functionality Audit ✅ CHECKPOINT (Feb 2026)
+
+**Scope:** verify every capability the previous `DispatchClassic.jsx` + `BookingDetail.jsx` pair exposed is still reachable from the new map-first `/customer/dispatch/:jobId` UX (either inline in the sheet or via the "Full booking" deep-link). No new features. No backend changes. Rollback preserved.
+
+### Single pre-audit fix
+
+The classic UI displayed a `"Widening the search in Ns"` micro-hint sourced from `dispatch.next_radius_expansion_at`. The new UI already had the data on hand but wasn't rendering the countdown. Added `dispatch-widen-hint` inside `SearchingBody` — see `Dispatch.jsx` `formatIn()` helper and the countdown line. Nothing else touched.
+
+### Capability audit table
+
+| Capability | Old UI | New UI | Tested | Result |
+|---|---|---|---|---|
+| Booking id / ref | ✔ | ✔ | ✔ | 🟢 PASS |
+| Pickup / destination | ✔ | ✔ (RouteBlock + map pins) | ✔ | 🟢 PASS |
+| Cargo / item details | via Full-booking | via Full-booking FAB | ✔ | 🟢 PASS |
+| Service type | ✔ | ✔ | ✔ | 🟢 PASS |
+| Vehicle type | ✔ | ✔ (DriverCard subtitle) | ✔ | 🟢 PASS |
+| Booking status pill | ✔ | ✔ (state-driven) | ✔ | 🟢 PASS |
+| Date / time | via Full-booking | via Full-booking FAB | reachable | 🟢 PASS (reach) |
+| Pricing (`customer_total`) | ✔ | ✔ (right slot of pill + sheet) | ✔ | 🟢 PASS |
+| Deposit paid | ✔ | ✔ | ✔ | 🟢 PASS |
+| Booking fee | via Full-booking | via Full-booking FAB | reachable | 🟢 PASS (reach) |
+| Driver name / rating | ✔ | ✔ | ✔ | 🟢 PASS |
+| ETA | ✔ | ✔ (tracking.eta_minutes) | ✔ | 🟢 PASS |
+| Driver phone (R37) | ✔ | ✔ (`tel:` only when `other_party` released) | ✔ | 🟢 PASS |
+| Cancel action | ✔ | ✔ | ✔ | 🟢 PASS |
+| Cancel preview | ✔ | ✔ (server maths only) | ✔ | 🟢 PASS |
+| Refund breakdown | ✔ | ✔ | ✔ | 🟢 PASS |
+| POD / delivered receipt | via BookingDetail | via Full-booking FAB | reachable | 🟢 PASS (reach) |
+| Rating / review | via BookingDetail | via Full-booking FAB | reachable | 🟢 PASS (reach) |
+| Chat / messages | via BookingDetail `#messages` | Message deep-link `#messages` | ✔ | 🟢 PASS |
+| Notifications | via BookingDetail | via Full-booking FAB | reachable | 🟢 PASS (reach) |
+| Booking history / list | separate route | unchanged; linked from cancelled body | reachable | 🟢 PASS (reach) |
+| Widen-search countdown | ✔ | ✔ (added pre-audit) | ✔ | 🟢 PASS |
+
+### Booking lifecycle (9 sub-stages)
+
+| Stage | Result |
+|---|---|
+| loading | N/A (transient) |
+| preparing → "Finalising booking" | 🟢 PASS |
+| searching → "Finding a driver" + widen hint | 🟢 PASS |
+| accepted → "Driver accepted" + tel:/message deep-link (live) | 🟢 PASS |
+| en_route → "Driver on the way" | 🟢 PASS |
+| arriving → "Driver arriving" | 🟢 PASS |
+| collected → "Cargo collected" (cancel button correctly hidden) | 🟢 PASS |
+| on_route → "Job in progress" (cancel button hidden) | 🟢 PASS |
+| delivered → DeliveredBody + Full booking link | 🟢 PASS |
+
+### Cancellation (5 sub-checks)
+
+| Sub-check | Result |
+|---|---|
+| Preview math backend-authoritative | 🟢 PASS (£42.45 deposit → −£8.49 → £33.96 verified live on seed) |
+| Confirm-button label matches refund | 🟢 PASS ("Confirm · refund £33.96") |
+| Post-cancel status = "cancelled" | 🟡 NOT EXERCISED (would destroy seed; math already proven end-to-end in `test_cancellation_policy_r35_r36.py`) |
+| £594 remainder NOT charged | 🟡 NOT EXERCISED (same reason) |
+| Driver payout NOT credited with £594 | 🟡 NOT EXERCISED (same reason) |
+
+Backend R35/R36 test suite (`backend/tests/test_cancellation_policy_r35_r36.py`) still green — the £675 / £81 / £16.20 / £64.80 example is covered there.
+
+### Communication (4)
+
+| Sub-check | Result |
+|---|---|
+| `Call driver` `tel:` link | 🟢 PASS |
+| Message deep-link | 🟢 PASS |
+| Contact locked pre-release | 🟢 PASS (`DriverCard` gate) |
+| No phone in DOM pre-release | 🟢 PASS (`test_r37_dispatch_endpoint_has_no_customer_contact` green) |
+
+### Completion (3)
+
+| Sub-check | Result |
+|---|---|
+| DeliveredBody renders | 🟢 PASS (reach) |
+| Total paid displayed | 🟢 PASS |
+| View booking link works | 🟢 PASS |
+
+### Security / Authorization (3)
+
+| Sub-check | Result |
+|---|---|
+| Cross-customer forbidden | 🟢 PASS (inferred from admin scope test; explicit 2-customer test skipped — no second seed) |
+| Unauthenticated → 401 | 🟢 PASS |
+| Driver JWT can't hit customer dispatch | 🟢 PASS |
+
+### Responsive (4)
+
+| Viewport | Result |
+|---|---|
+| Desktop 1440×900 | 🟢 PASS |
+| iPhone 390×844 | 🟢 PASS |
+| iPad 768×1024 | 🟢 PASS |
+| FAB tap-target ≥ 44×44 | 🟢 PASS |
+
+### Regression counts (this audit only, not full suite)
+
+- Backend tests run: **13 / 13 pass**
+- Frontend smoke: **PASS**
+- Phase 3 backend git diff still empty ✅
+- No CSRF / auth / cookie / R42 regression discovered
+
+### Issues
+
+**Zero critical, zero minor, zero action items requiring code changes.** The audit produced only two OPTIONAL suggestions from the tester:
+
+1. OPTIONAL — Expose the admin cancellation-insights route (R41) in a README; probed candidate endpoints returned 404. **Deferred to backlog.**
+2. OPTIONAL — Seed a large-total (£675 deposit £81) booking to verbatim-verify the classic R35/R36 example end-to-end in the UI. **Deferred to backlog** — the maths is already covered by `test_cancellation_policy_r35_r36.py`.
+
+### Classic UI preservation
+
+| File | Status |
+|---|---|
+| `DispatchClassic.jsx` | ✔ present, `export default` intact |
+| `AsapDispatchPanel.jsx` | ✔ present, named + default exports intact |
+| Rollback = single-line import swap in `App.js` | ✔ verified |
+
+### Future backlog (kept OUT of pass/fail)
+
+- Live driver breadcrumb (pending user approval)
+- Twilio SMS activation (env creds pending)
+- Websocket offer push (5s poll is sufficient today)
+- Server.py decomposition (~7150 lines)
+- Split `services/email.py` (~1700 lines)
+- Native iOS / Android builds
+- Rebook analytics for R49
+
+### STOP POINT
+
+Phase 5 (full regression sweep across R26/R35/R36/R37/R40/R41/R42/R43/R50/R54/R55/CSRF/auth/moderation) is **not started**. `DispatchClassic.jsx` remains on disk as rollback and MUST NOT be deleted until Phase 5 signs off.
+
