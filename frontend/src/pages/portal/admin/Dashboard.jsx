@@ -21,6 +21,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { GlobalSearchModal } from "@/components/ui-portal/GlobalSearchModal";
 import { CancellationInsightsCard } from "@/components/ui-portal/CancellationInsightsCard";
+import { RebookAnalyticsCard } from "@/components/ui-portal/RebookAnalyticsCard";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -88,7 +89,10 @@ export default function AdminDashboard() {
           />
         </div>
 
-        <CancellationInsightsCard weeks={8} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CancellationInsightsCard weeks={8} />
+          <RebookAnalyticsCard days={30} windowHours={24} />
+        </div>
 
         <section className="mt-3 space-y-2">
           <ActionRow

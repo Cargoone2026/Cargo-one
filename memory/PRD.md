@@ -3746,3 +3746,71 @@ The CargoOne booking operation is proven to work end-to-end across account creat
 
 Certification report delivered. No new features started. Classic rollback preserved. Backlog items (driver breadcrumb, Twilio SMS, rebook analytics, WebSocket migration, server.py decomposition) all still deferred per instruction.
 
+
+---
+
+## R63 — Rebook Analytics Chart ✅ (Feb 2026)
+
+Small admin dashboard tile that shows how many cancelled ASAP bookings turn into a fresh ASAP booking by the same customer inside a configurable window. Retro-computed — **zero schema migration**, **zero changes to any create flow**, additive-only backend endpoint.
+
+### Backend (additive)
+
+New endpoint `GET /api/admin/analytics/rebooks` in `server.py` (right after `admin_stats`).
+
+- Query params: `days` (1–365, default 30), `window_hours` (1–168, default 24). Values are clamped, never errored.
+- Auth: `require_role("admin")`.
+- Response:
+  ```json
+  {
+    "days": 30,
+    "window_hours": 24,
+    "cancelled_asap": 47,
+    "rebooked": 12,
+    "rebook_rate_pct": 25.5,
+    "daily": [{ "date": "2026-02-10", "cancelled": 3, "rebooked": 1 }, …]
+  }
+  ```
+- Retro-compute logic:
+  1. Fetch all `bookings` where `status='cancelled'` + `cancelled_at >= since` + `service_timing='asap'`.
+  2. For each, check whether the same `customer_id` has a fresh (`status != 'cancelled'`) `asap` booking with `created_at > cancelled_at AND created_at <= cancelled_at + window_hours`.
+  3. Aggregate into daily UTC buckets for the chart, ascending by date.
+
+### Frontend
+
+- **New:** `frontend/src/components/ui-portal/RebookAnalyticsCard.jsx` — a compact tile mirroring the visual language of `CancellationInsightsCard.jsx` (R41). Renders a 30-day bar chart: full bar height = cancelled count, emerald overlay = rebooked count. Below the chart: three stat pills (Cancelled / Rebooked / Rate %). Empty state: "No cancelled ASAP bookings in the last N days." All test-ids: `admin-rebook-analytics`, `-chart`, `-empty`, `rebook-total-cancelled`, `rebook-total-rebooked`, `rebook-rate`, `admin-rebook-bar-<date>`.
+- **Wired in:** `frontend/src/pages/portal/admin/Dashboard.jsx` — placed in a 2-column grid alongside `CancellationInsightsCard`. Verified live: card renders correctly on the admin dashboard next to Post-accept cancellations tile.
+
+### R63 test suite — `test_r63_rebook_analytics.py`
+
+**8/8 pass in 3.0s** — endpoint auth, empty-shape, rebook counted inside window, not counted outside window, non-ASAP service_timing ignored, cross-customer not counted, days/window bounds clamped (99999→365 / 99999→168), zero/negative defaults up, daily buckets ascending sorted.
+
+### Regression (all 🟢 protected)
+
+| Suite | Result |
+|---|---|
+| R35/R36 cancellation | 16/16 |
+| R37 contact privacy | 7/7 |
+| R40 Stripe refund | 7/7 |
+| R55 customer dispatch | 5/5 |
+| R56 phase 4 audit | 13/13 |
+| R59 earnings + routing | 26/26 |
+| R60 bookings NaN | 40/40 |
+| R61 ASAP auto-tracking | 23/23 |
+| **R63 (new)** | **8/8** |
+| Frontend production build | PASS (29s) |
+
+### Files touched (3, all additive)
+
+| File | Change |
+|---|---|
+| `backend/server.py` | **additive** — new `GET /admin/analytics/rebooks` endpoint (~85 lines). No changes to existing endpoints. |
+| `frontend/src/components/ui-portal/RebookAnalyticsCard.jsx` | **new** — the tile component |
+| `frontend/src/pages/portal/admin/Dashboard.jsx` | 2-line change: import + placement in grid |
+
+### Safety
+
+- **Zero** changes to `POST /jobs` / booking creation / pricing / cancellation / payment / refund / dispatch / contact privacy / booking state machine.
+- **R26/R35/R36/R37/R40/R41/R42/R43/R50/R58/R59/R60/R61** unchanged.
+- Classic rollback (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx`) — intact.
+- Endpoint is retro-compute only — reads existing booking records, no writes.
+

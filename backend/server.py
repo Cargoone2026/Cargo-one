@@ -4228,6 +4228,83 @@ async def admin_stats(user: dict = Depends(require_role("admin"))):
     }
 
 
+@api.get("/admin/analytics/rebooks")
+async def admin_analytics_rebooks(
+    days: int = 30,
+    window_hours: int = 24,
+    user: dict = Depends(require_role("admin")),
+):
+    """R63 — Rebook analytics.
+
+    Retro-computes how many cancelled ASAP bookings turned into a fresh
+    ASAP booking by the same customer within `window_hours` of the
+    cancellation. Zero schema migration required — reads existing
+    booking records. Only ASAP is counted (`service_timing == "asap"`).
+
+    Returns:
+      - `cancelled_asap`  count of ASAP bookings cancelled in the window
+      - `rebooked`        count of those where the customer created a new
+                          ASAP booking within `window_hours`
+      - `rebook_rate_pct` percentage rounded to 1dp
+      - `daily`           per-day breakdown for the small admin chart
+    """
+    from datetime import datetime, timedelta, timezone
+    days = max(1, min(365, int(days or 30)))
+    window_hours = max(1, min(168, int(window_hours or 24)))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since_iso = since.isoformat()
+
+    # 1) All cancelled ASAP bookings in the window, oldest first.
+    cancelled = await db.bookings.find(
+        {"status": "cancelled",
+         "cancelled_at": {"$gte": since_iso},
+         "service_timing": "asap"},
+        {"_id": 0, "id": 1, "customer_id": 1, "cancelled_at": 1},
+    ).sort("cancelled_at", 1).to_list(2000)
+
+    rebooked_ids = set()
+    for cb in cancelled:
+        try:
+            t0 = datetime.fromisoformat(cb["cancelled_at"].replace("Z", "+00:00"))
+        except Exception:
+            continue
+        t1 = t0 + timedelta(hours=window_hours)
+        # Any fresh ASAP booking by the same customer, created inside the
+        # (cancel, cancel+window) window.
+        match = await db.bookings.find_one({
+            "customer_id": cb["customer_id"],
+            "service_timing": "asap",
+            "status": {"$ne": "cancelled"},
+            "created_at": {"$gt": cb["cancelled_at"], "$lte": t1.isoformat()},
+        }, {"_id": 0, "id": 1})
+        if match:
+            rebooked_ids.add(cb["id"])
+
+    total = len(cancelled)
+    rebooked = len(rebooked_ids)
+    rate = round((rebooked * 100.0 / total), 1) if total else 0.0
+
+    # Daily buckets (UTC dates) — kept lean for the mini chart.
+    daily = {}
+    for cb in cancelled:
+        d = (cb.get("cancelled_at") or "")[:10]
+        if not d: continue
+        row = daily.setdefault(d, {"date": d, "cancelled": 0, "rebooked": 0})
+        row["cancelled"] += 1
+        if cb["id"] in rebooked_ids:
+            row["rebooked"] += 1
+    daily_list = sorted(daily.values(), key=lambda r: r["date"])
+
+    return {
+        "days": days,
+        "window_hours": window_hours,
+        "cancelled_asap": total,
+        "rebooked": rebooked,
+        "rebook_rate_pct": rate,
+        "daily": daily_list,
+    }
+
+
 @api.get("/admin/users")
 async def admin_list_users(role: Optional[str] = None,
                             user: dict = Depends(require_role("admin"))):
