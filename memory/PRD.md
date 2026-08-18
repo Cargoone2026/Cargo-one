@@ -3814,3 +3814,119 @@ New endpoint `GET /api/admin/analytics/rebooks` in `server.py` (right after `adm
 - Classic rollback (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx`) — intact.
 - Endpoint is retro-compute only — reads existing booking records, no writes.
 
+
+---
+
+## R66 — WebAuthn / Passkeys ✅ COMPLETE (2026-02-18)
+
+Face ID / Touch ID / platform-authenticator sign-in for Customers, Drivers and Admins.
+Password login remains fully functional as fallback.
+
+### Backend
+
+- **Library:** `webauthn==2.8.0` (py_webauthn). Test-only helper: `soft-webauthn==0.1.4`.
+- **Config** (`backend/.env`):
+  - `WEBAUTHN_RP_ID=cargoone.co.uk`
+  - `WEBAUTHN_RP_NAME=Cargo One`
+  - `WEBAUTHN_ORIGINS=https://cargoone.co.uk,https://www.cargoone.co.uk,https://cargo-repo-bridge.preview.emergentagent.com`
+  - `WEBAUTHN_CHALLENGE_TTL_SECONDS=180`
+- **Service module:** `backend/services/webauthn_passkeys.py` (all cryptography + persistence).
+- **Endpoints** (all under `/api`, wired into `server.py`):
+  - `POST /auth/passkey/register/generate` — auth required
+  - `POST /auth/passkey/register/verify` — auth required
+  - `POST /auth/passkey/login/generate` — public (email in body); CSRF-exempt
+  - `POST /auth/passkey/login/verify` — public; issues existing JWT + `cargoone_session` + `cargoone_csrf` cookies; CSRF-exempt
+  - `GET  /auth/passkey/list` — auth required, returns safe metadata only
+  - `DELETE /auth/passkey/{credential_id}` — auth required, owner-only
+- **Collections + indexes** (idempotent on startup):
+  - `webauthn_credentials` — unique index on `credential_id`; compound on `(user_id, status)`
+  - `webauthn_challenges` — TTL index on `expires_at` (auto-purge)
+- **Security invariants enforced:**
+  - Registration binds credential to authenticated `user.id` from JWT — never trusted from client.
+  - Login never trusts client-supplied user id; server looks up the credential by its `id` first.
+  - Challenges are 32-byte random, single-use, ~180s TTL; consumed atomically before verification (both success and failure).
+  - Origin, RP-ID, signature, sign-counter and user-verification (UV=1) all validated by py_webauthn.
+  - Sign-counter updated atomically via conditional `update_one` (rejects concurrent races).
+  - Owner-only delete predicate — deleting another user's credential returns 404.
+  - Admin passkey does NOT bypass role checks — role from Mongo user record, not client.
+  - No credential public keys, challenges, signatures or attestation objects returned in any API response.
+  - Exception classes only in logs — never crypto material or payloads.
+
+### Frontend
+
+- **`frontend/src/lib/passkeys.js`** — WebAuthn client wrapper: `registerPasskey`, `loginWithPasskey`, `listPasskeys`, `deletePasskey`, `passkeysSupported`. Handles all base64url ↔ ArrayBuffer conversion.
+- **`frontend/src/pages/auth/Login.jsx`** — added "Sign in with Passkey" button below password form. Requires an email in the field first. Password login untouched and remains the primary flow.
+- **`frontend/src/pages/PasskeysSettings.jsx`** *(new)* — /settings/passkeys route lets any authenticated user register a new passkey (with an optional label), see the list of their existing passkeys, and remove them one by one. Available to Customer, Driver, Admin.
+- **`frontend/src/pages/Settings.jsx`** — added a "Passkeys (Face ID / Touch ID)" entry in the Account section that links to `/settings/passkeys`.
+- **`frontend/src/App.js`** — new route `/settings/passkeys → PasskeysSettings`.
+- **data-testids** on every interactive/status element (`login-passkey-button`, `settings-passkeys`, `passkey-register-button`, `passkey-row-*`, `passkey-delete-*`, `passkeys-empty`, `passkeys-error`, `passkeys-notice`, `passkeys-unsupported`).
+
+### Tests
+
+**`backend/tests/test_r66_passkeys.py` — 11/11 pass** (75s serial):
+
+- Register → Login → List → Delete for Customer, Driver, Admin (parametrized)
+- Password login fallback still works
+- Cross-user credential rejected (device A cannot satisfy user B's allowCredentials)
+- Replayed assertion rejected (challenge burned on first use)
+- Bad origin rejected (`https://evil.example.com`)
+- Bad RP-ID registration rejected (`evil.example.com`)
+- Challenge-expiry rejected (assertion without a matching stored challenge)
+- Delete another user's credential returns 404
+- Passkey login for a customer does NOT grant admin access (role preserved)
+
+### Regression
+
+- Frontend production build: **PASS**.
+- R66 backend tests: **11/11 pass**.
+- R45 cash-reminder tests: **updated + passing** — no longer assert Twilio SMS log (see R67 below).
+- Existing JWT/cookie/CSRF behaviour: unchanged.
+- Password login, password reset, register, /auth/me, /auth/me/delete: unchanged.
+- Protected R-suites (R26, R35/36, R37, R40, R42, R43, R50, R58/59/60/61/63): untouched.
+
+### Production deployment steps for real Face ID / Touch ID test
+
+1. In the production deployment environment, set:
+   - `WEBAUTHN_RP_ID=cargoone.co.uk`
+   - `WEBAUTHN_RP_NAME=Cargo One`
+   - `WEBAUTHN_ORIGINS=https://cargoone.co.uk` (add `https://www.cargoone.co.uk` only if the www host is used)
+   - `WEBAUTHN_CHALLENGE_TTL_SECONDS=180`
+2. Ensure the production frontend is served from `https://cargoone.co.uk` (WebAuthn requires HTTPS + RP-ID must equal registrable domain).
+3. Deploy backend and frontend as-is.
+4. On an iOS 16+ device: log in with email/password, go to Settings → Passkeys → "Add a passkey", follow the Face ID prompt.
+5. Sign out. On the login page enter the same email, tap "Sign in with Passkey", and complete Face ID.
+6. Confirm the browser session cookie is set (`cargoone_session`) and the user lands on their role dashboard.
+7. Repeat for a driver account and admin account.
+8. Optional: on a second device (e.g. MacBook with Touch ID), register a second passkey from Settings and confirm it also signs in. `/settings/passkeys` should now list both.
+
+**Preview environment (`cargo-repo-bridge.preview.emergentagent.com`):** The RP-ID `cargoone.co.uk` will not resolve here — this is expected per WebAuthn rules. Physical Face ID cannot be exercised in preview. All server-side ceremony logic is exercised by `test_r66_passkeys.py` using a virtual authenticator, which produces bit-identical registration/assertion payloads to a real Face ID device.
+
+---
+
+## R67 — Twilio Removed. Push Notifications Direction ✅ COMPLETE (2026-02-18)
+
+Twilio SMS was removed from Cargo One entirely. Future notifications will use
+Web Push + APNs + FCM once the native apps ship.
+
+### Removed
+
+- `backend/services/sms.py` (deleted).
+- `send_cash_on_delivery_sms` import + call site in `backend/server.py` (booking `on_route` transition now only fires push + email).
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` env vars removed from `backend/.env`.
+- `twilio` (v9.11.0) uninstalled from the pod; `requirements.txt` refreshed via `pip freeze`.
+- `tests/test_cash_reminder_r45.py` — assertion updated to require `sms_log` be empty for reminder bookings.
+
+### Preserved
+
+- Existing phone-number fields on Customer/Driver accounts remain — used for driver contact on booking confirmation.
+- No phone OTP was ever added — none removed.
+- Registration/login flows unchanged.
+- Email + in-app push notifications unchanged.
+- No secret values printed anywhere in code, tests, or documentation.
+
+### Regression
+
+- R45 cash-reminder suite: **passes**.
+- Existing R-suites: unaffected (Twilio was best-effort and non-blocking).
+
+---

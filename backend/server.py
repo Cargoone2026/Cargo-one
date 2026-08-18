@@ -1069,6 +1069,102 @@ async def reset_password(payload: ResetPasswordRequest, response: Response):
     return TokenResponse(access_token=token, user=user_to_public(user))
 
 
+# ---------------------------------------------------------------------------
+# R66 — WebAuthn / Passkeys
+#
+# Endpoints (all under /api):
+#   POST /auth/passkey/register/generate  (auth required)
+#   POST /auth/passkey/register/verify    (auth required)
+#   POST /auth/passkey/login/generate     (public — email in body)
+#   POST /auth/passkey/login/verify       (public — issues JWT + cookie)
+#   GET  /auth/passkey/list               (auth required)
+#   DELETE /auth/passkey/{credential_id}  (auth required, owner only)
+#
+# Security invariants (see services/webauthn_passkeys.py for detail):
+#   - Registration is bound to the caller's authenticated user.id.
+#   - Login never trusts a client-supplied user id; the credential record
+#     alone determines which account receives a JWT.
+#   - Challenges are single-use with a short TTL; consumed on both success
+#     and failure.
+#   - Password login remains fully functional as fallback.
+# ---------------------------------------------------------------------------
+from services import webauthn_passkeys as _passkeys  # noqa: E402
+
+
+class _PasskeyRegisterVerifyBody(BaseModel):
+    credential: dict
+    label: Optional[str] = None
+
+
+class _PasskeyLoginStart(BaseModel):
+    email: EmailStr
+
+
+class _PasskeyLoginVerifyBody(BaseModel):
+    credential: dict
+
+
+@api.post("/auth/passkey/register/generate")
+async def passkey_register_generate(user: dict = Depends(get_current_user)):
+    return await _passkeys.build_registration_options(db, user)
+
+
+@api.post("/auth/passkey/register/verify")
+async def passkey_register_verify(
+    body: _PasskeyRegisterVerifyBody,
+    user: dict = Depends(get_current_user),
+):
+    return await _passkeys.verify_and_store_credential(
+        db, user, body.credential, label=body.label
+    )
+
+
+@api.post("/auth/passkey/login/generate")
+async def passkey_login_generate(body: _PasskeyLoginStart):
+    async def _find(email: str):
+        return await db.users.find_one({"email": email}, {"_id": 0, "password_hash": 0})
+
+    return await _passkeys.build_authentication_options(db, _find, body.email)
+
+
+@api.post("/auth/passkey/login/verify", response_model=TokenResponse)
+async def passkey_login_verify(
+    body: _PasskeyLoginVerifyBody, response: Response
+):
+    result = await _passkeys.verify_authentication(db, body.credential)
+    user = await db.users.find_one(
+        {"id": result["user_id"]}, {"_id": 0, "password_hash": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid passkey login")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="Account suspended")
+    token = create_token(user["id"], user["role"])
+    set_auth_cookie(response, token)
+    set_csrf_cookie(response, new_csrf_token())
+    return {"access_token": token, "token_type": "bearer", "user": user_to_public(user)}
+
+
+@api.get("/auth/passkey/list")
+async def passkey_list(user: dict = Depends(get_current_user)):
+    return await _passkeys.list_user_credentials(db, user["id"])
+
+
+@api.delete("/auth/passkey/{credential_id}")
+async def passkey_delete(
+    credential_id: str, user: dict = Depends(get_current_user)
+):
+    ok = await _passkeys.revoke_credential(db, user["id"], credential_id)
+    if not ok:
+        raise HTTPException(404, "Passkey not found")
+    return {"ok": True}
+
+
+# Passkey LOGIN endpoints are exempt from CSRF (user has no session yet).
+CSRF_EXEMPT_PATHS.add("/api/auth/passkey/login/generate")
+CSRF_EXEMPT_PATHS.add("/api/auth/passkey/login/verify")
+
+
 @api.get("/auth/me", response_model=UserPublic)
 async def me(request: Request, response: Response, user: dict = Depends(get_current_user)):
     # Opportunistic CSRF re-issue: any existing session that predates the SEC1
@@ -3486,17 +3582,9 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
                 await send_cash_on_delivery_reminder(
                     db, user=cust, booking=fresh_b, driver=drv,
                 )
-                # R46 — also fire a Twilio SMS with the same cash figure.
-                # Non-blocking: helper skips gracefully if TWILIO_* env
-                # vars aren't configured. Some customers won't check email
-                # in the driveway — SMS lands on the lockscreen.
-                try:
-                    from services.sms import send_cash_on_delivery_sms
-                    await send_cash_on_delivery_sms(
-                        db, user=cust, booking=fresh_b, driver=drv,
-                    )
-                except Exception:
-                    logger.exception("cash-reminder SMS failed; continuing")
+                # R67 — Twilio SMS was intentionally removed. The cash-reminder
+                # is delivered by push (above) + email (above) only. A future
+                # native push channel (APNs / FCM) can be added here.
                 await db.bookings.update_one(
                     {"id": booking_id},
                     {"$set": {"cash_reminder_sent_at": now_iso()}},
@@ -7053,6 +7141,8 @@ async def seed_startup():
         await db.reviews.create_index(
             [("booking_id", 1), ("from_id", 1)], unique=True
         )
+        # R66 — WebAuthn passkey indexes (idempotent).
+        await _passkeys.ensure_indexes(db)
     except Exception as e:  # noqa: BLE001
         logger.warning("Dispatch index creation skipped: %s", e)
 

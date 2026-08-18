@@ -18,6 +18,7 @@ import About from "@/pages/marketing/About";
 
 // Public app pages (no chrome)
 import Settings from "@/pages/Settings";
+import PasskeysSettings from "@/pages/PasskeysSettings";
 import DriverProfilePublic from "@/pages/DriverProfilePublic";
 
 // Auth (no marketing chrome)
@@ -134,6 +135,7 @@ export default function App() {
 
             {/* Settings hub + public driver profile (parity with Expo) */}
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/passkeys" element={<PasskeysSettings />} />
             <Route path="/settings/:slug" element={<Settings />} />
             <Route path="/driver-profile/:id" element={<DriverProfilePublic />} />
 

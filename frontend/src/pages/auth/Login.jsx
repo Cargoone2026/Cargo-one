@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, KeyRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { SEO } from "@/components/marketing/SEO";
+import { loginWithPasskey, passkeysSupported } from "@/lib/passkeys";
 
 function roleLanding(role) {
   if (role === "customer") return "/customer";
@@ -13,11 +14,13 @@ function roleLanding(role) {
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const passkeySupported = passkeysSupported();
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -30,6 +33,31 @@ export default function Login() {
       setError(err?.message || "Login failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onPasskeyLogin() {
+    setError(null);
+    const em = email.trim();
+    if (!em) {
+      setError("Enter your email to sign in with a passkey.");
+      return;
+    }
+    setPasskeyLoading(true);
+    try {
+      const res = await loginWithPasskey(em);
+      // Backend has set the session + CSRF cookies; hydrate user state.
+      const me = await refresh();
+      navigate(roleLanding(me?.role || res?.user?.role), { replace: true });
+    } catch (err) {
+      // NotAllowedError = user cancelled / no matching passkey — generic msg.
+      if (err?.name === "NotAllowedError") {
+        setError("Passkey sign-in was cancelled.");
+      } else {
+        setError(err?.message || "Passkey sign-in failed");
+      }
+    } finally {
+      setPasskeyLoading(false);
     }
   }
 
@@ -93,6 +121,28 @@ export default function Login() {
               {loading ? "Signing in…" : "Log in"}
             </button>
           </form>
+
+          {passkeySupported && (
+            <>
+              <div className="my-4 flex items-center gap-3" aria-hidden>
+                <div className="h-px flex-1 bg-[#E5E7EB]" />
+                <span className="text-[11px] font-semibold uppercase tracking-[1px] text-[#9CA3AF]">
+                  or
+                </span>
+                <div className="h-px flex-1 bg-[#E5E7EB]" />
+              </div>
+              <button
+                type="button"
+                onClick={onPasskeyLogin}
+                disabled={passkeyLoading || loading}
+                data-testid="login-passkey-button"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-full border-2 border-[#111111] bg-white text-[15px] font-bold text-[#111111] transition-colors hover:bg-[#F4F4F4] disabled:opacity-60"
+              >
+                <KeyRound className="h-5 w-5" />
+                {passkeyLoading ? "Waiting for passkey…" : "Sign in with Passkey"}
+              </button>
+            </>
+          )}
 
           <Link
             to="/auth/forgot-password"

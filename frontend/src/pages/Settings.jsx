@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ChevronRight,
   ExternalLink,
+  KeyRound,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -229,6 +230,14 @@ export default function Settings() {
       </Section>
       <Section title="Account">
         <InternalRow Icon={Info} label="About Cargo One" to="/settings/about" testID="settings-about" />
+        {user && (
+          <InternalRow
+            Icon={KeyRound}
+            label="Passkeys (Face ID / Touch ID)"
+            to="/settings/passkeys"
+            testID="settings-passkeys"
+          />
+        )}
         <div className="flex items-center gap-3 border-b border-[#F3F4F6] px-4 py-3 last:border-b-0">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F4F4F4]">
             <Code className="h-5 w-5 text-[#111111]" />
