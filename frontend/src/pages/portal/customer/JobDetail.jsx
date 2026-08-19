@@ -16,6 +16,7 @@ import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
+import { DriverReviewsSheet } from "@/components/customer/DriverReviewsSheet";
 
 export default function CustomerJobDetail() {
   const { id } = useParams();
@@ -24,6 +25,15 @@ export default function CustomerJobDetail() {
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(null);
+  // R69 — Reviews inspector state. `reviewsFor` holds the driver we are
+  // currently inspecting; the sheet renders when it is non-null. The
+  // customer can preview any bidder's OR the currently accepted driver's
+  // written reviews before committing money.
+  const [reviewsFor, setReviewsFor] = useState(null);
+  const openReviews = useCallback((driverId, driverName) => {
+    if (driverId) setReviewsFor({ id: driverId, name: driverName || null });
+  }, []);
+  const closeReviews = useCallback(() => setReviewsFor(null), []);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -242,6 +252,12 @@ export default function CustomerJobDetail() {
                         <div className="mt-0.5 flex items-center gap-1 text-[12px] text-[#6B7280]">
                           <Star className="h-3 w-3 fill-[#FF6A00] text-[#FF6A00]" />
                           <span>{Number(b.driver_rating || 0).toFixed(1)}</span>
+                          {typeof b.driver_review_count === "number" && (
+                            <span data-testid={`bid-review-count-${b.id}`}>
+                              · {b.driver_review_count} review
+                              {b.driver_review_count === 1 ? "" : "s"}
+                            </span>
+                          )}
                           {b.eta_hours ? (
                             <span>· ~{b.eta_hours}h ETA</span>
                           ) : null}
@@ -256,7 +272,7 @@ export default function CustomerJobDetail() {
                         {b.message}
                       </p>
                     ) : null}
-                    <div className="mt-3">
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
                       <Button
                         title="Accept Bid"
                         small
@@ -265,6 +281,14 @@ export default function CustomerJobDetail() {
                         onClick={() => acceptBid(b.id)}
                         testID={`accept-bid-${b.id}`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => openReviews(b.driver_id, b.driver_name)}
+                        data-testid={`bid-see-reviews-${b.id}`}
+                        className="text-[13px] font-semibold text-[#D62828] underline-offset-2 hover:underline"
+                      >
+                        See reviews
+                      </button>
                     </div>
                   </li>
                 ))}
@@ -294,9 +318,37 @@ export default function CustomerJobDetail() {
               data-testid="accepted-box"
             >
               <CheckCircle2 className="mt-0.5 h-5 w-5 text-[#16A34A]" />
-              <p className="flex-1 text-[14px] text-[#111111]">
-                Driver accepted! Pay deposit to unlock contact details and chat.
-              </p>
+              <div className="flex-1">
+                <p className="text-[14px] text-[#111111]">
+                  {job.assigned_driver_name
+                    ? `${job.assigned_driver_name} accepted your job!`
+                    : "Driver accepted your job!"}
+                  {" "}
+                  Pay deposit to unlock contact details and chat.
+                </p>
+                {job.assigned_driver_id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[12px] text-[#6B7280]">
+                    {typeof job.assigned_driver_rating === "number" && (
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-[#FF6A00] text-[#FF6A00]" />
+                        <b className="text-[#111111]">
+                          {Number(job.assigned_driver_rating).toFixed(1)}
+                        </b>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openReviews(job.assigned_driver_id, job.assigned_driver_name)
+                      }
+                      data-testid="accepted-see-reviews"
+                      className="text-[13px] font-semibold text-[#D62828] underline-offset-2 hover:underline"
+                    >
+                      See reviews before paying
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <Button
               title="Continue to Payment"
@@ -307,6 +359,14 @@ export default function CustomerJobDetail() {
           </div>
         )}
       </div>
+
+      {/* R69 — Driver reviews inspector (bidding + fixed-price accepted). */}
+      <DriverReviewsSheet
+        driverId={reviewsFor?.id}
+        driverName={reviewsFor?.name}
+        open={!!reviewsFor}
+        onClose={closeReviews}
+      />
     </div>
   );
 }

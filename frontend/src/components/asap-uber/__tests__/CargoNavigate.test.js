@@ -16,9 +16,10 @@ describe("buildNavigationUrl", () => {
     expect(buildNavigationUrl({ lat: NaN, lng: 0 }, "desktop")).toBeNull();
   });
 
-  test("ios → Apple Maps universal link with daddr", () => {
+  test("ios → Apple Maps universal link with daddr + dirflg=d", () => {
     const url = buildNavigationUrl(dest, "ios");
     expect(url).toMatch(/^https:\/\/maps\.apple\.com\/\?daddr=51\.5074,-0\.1278/);
+    expect(url).toContain("dirflg=d");
     expect(url).toContain("q=London%20Bridge");
   });
 

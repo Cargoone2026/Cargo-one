@@ -1289,6 +1289,29 @@ async def public_profile(user_id: str, requester: dict = Depends(get_current_use
     if not u:
         raise HTTPException(status_code=404, detail="Not found")
     pub = user_to_public(u)
+    # R37 / R69 — This endpoint is now called by customers pre-acceptance
+    # (DriverReviewsSheet). Redact private contact + home-address fields
+    # unless the caller is the profile owner or an admin. Rating,
+    # review_count, verified_driver, vehicle summary and photo remain
+    # visible because they are legitimately part of a public driver
+    # marketplace card.
+    is_self = requester.get("id") == user_id
+    is_admin = requester.get("role") == "admin"
+    if not is_self and not is_admin:
+        for k in (
+            "email",
+            "phone",
+            "address_line1",
+            "address_line2",
+            "town",
+            "county",
+            "postcode",
+            "country",
+            "changes_requested_reason",
+            "changes_requested_doc_types",
+            "suspension_reason",
+        ):
+            pub.pop(k, None)
     reviews = await db.reviews.find({"target_id": user_id}, {"_id": 0}) \
                                 .sort("created_at", -1).to_list(10)
     completed = await db.bookings.count_documents(
@@ -3022,6 +3045,10 @@ async def list_bids(job_id: str, user: dict = Depends(get_current_user)):
         d = dmap.get(b["driver_id"])
         b["verified_driver"] = bool(d and d.get("verified_driver"))
         b["total_jobs"] = d.get("total_jobs", 0) if d else 0
+        # R69 — expose the driver's aggregate review count so the customer
+        # can see it BEFORE accepting a bid. Individual review comments
+        # remain fetchable via GET /api/users/{driver_id}/profile.
+        b["driver_review_count"] = int(d.get("review_count", 0)) if d else 0
     return bids
 
 

@@ -4038,3 +4038,69 @@ Native replacement path is documented inline in `CargoNavigate.jsx` — the call
 ### R68 READY FOR PRODUCTION: ✅
 
 Awaiting explicit deploy instruction.
+
+---
+
+## R69 — Production Booking Certification ✅ COMPLETE (2026-02-19)
+
+Final web-production verification stage before native iOS build. Adds
+driver review visibility to customers **before** they commit money on
+Bidding + Fixed Price jobs, and hardens the R68 Navigate button to hand
+off natively to Apple Maps / Android maps on mobile.
+
+### Part 1 — Driver reviews visible before acceptance
+
+- Backend (additive): `list_bids` now enriches each bid with
+  `driver_review_count`. Existing `GET /api/users/{id}/profile` reused for
+  the full review list (rating + comment + author name + date).
+- Backend (security fix): `public_profile` now redacts `email`, `phone`,
+  address fields, `changes_requested_*`, `suspension_reason` for
+  non-owner + non-admin callers. R37 preserved.
+- Frontend (new): `frontend/src/components/customer/DriverReviewsSheet.jsx`
+  — modal shell listing rating, review count, verified badge, and the
+  last 10 individual reviews (star row + comment + reviewer name + date).
+- Frontend (wired): `frontend/src/pages/portal/customer/JobDetail.jsx`
+  — Bids list gains a visible "See reviews" button per bidder and shows
+  the review count inline. Fixed-Price accepted state shows the driver's
+  rating + "See reviews before paying" button that opens the same sheet.
+
+### Part 2 — Native Maps handoff
+
+- `frontend/src/components/asap-uber/CargoNavigate.jsx` — iOS/Android now
+  use `window.location.href = url` so the OS intercepts the universal
+  link / geo: intent and jumps straight into Apple Maps / the Android
+  maps chooser. iOS URL adds `dirflg=d` (driving directions) for higher
+  native-app reliability. Desktop still uses `window.open(_blank)` so the
+  CargoOne tab is preserved.
+- Unit tests updated: 6/6 pass.
+
+### Certification results (via testing agent, iteration_r69_certification.json + iteration_r69_reverify.json)
+
+| Item | Result |
+|---|---|
+| Fresh customer/driver registration + admin approval | ✅ |
+| Bidding end-to-end (bid → reviews visible → accept → deposit → live → complete) | ✅ |
+| Fixed Price end-to-end (R42 declared price preserved) | ✅ |
+| ASAP Transport end-to-end (R61 auto-tracking, R68 panel, native Navigate) | ✅ |
+| ASAP Recovery end-to-end | ✅ |
+| Security (unauth 401, cross-user 403/404) | ✅ |
+| **R37 privacy — customer views driver profile** | ✅ (email/phone/address redacted) |
+| Cancellation / refund (R35/R36 formula, Stripe test refund) | ✅ |
+| Emails (Resend send-log evidence) | ✅ |
+| Admin visibility | ✅ |
+| Backend regression (R26, R35/R36, R37, R45, R66) | 59 passed / 7 skipped |
+| Frontend production build | ✅ |
+| Frontend unit tests (CargoNavigate) | 6/6 ✅ |
+| Backend git diff | 2 hunks only: `driver_review_count` in `list_bids`, redaction block in `public_profile`. No business logic touched. |
+
+### Files this iteration
+
+- Added: `frontend/src/components/customer/DriverReviewsSheet.jsx`, `backend/tests/test_r69_reverify_profile_privacy.py` (7/7 pass).
+- Changed: `backend/server.py` (2 additive hunks), `frontend/src/pages/portal/customer/JobDetail.jsx`, `frontend/src/components/asap-uber/CargoNavigate.jsx`, `frontend/src/components/asap-uber/__tests__/CargoNavigate.test.js`.
+- Deleted: none. Rollback files intact.
+
+### R69 READY FOR PRODUCTION: 🟢 YES
+
+### Native iOS build
+
+Explicitly **not started** per stop condition. Awaiting user approval.

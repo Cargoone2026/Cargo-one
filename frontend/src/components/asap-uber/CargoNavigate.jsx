@@ -36,8 +36,10 @@ export function buildNavigationUrl({ lat, lng, label }, platform) {
   switch (platform) {
     case "ios":
       // Apple Maps universal link — iOS opens the native app when installed,
-      // otherwise the web preview.
-      return `https://maps.apple.com/?daddr=${lat},${lng}${label ? `&q=${q}` : ""}`;
+      // otherwise the web preview. `dirflg=d` requests driving directions
+      // explicitly which improves native-app auto-launch reliability on
+      // recent iOS builds.
+      return `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d${label ? `&q=${q}` : ""}`;
     case "android":
       // geo: scheme is honoured by every Android navigation app and prompts
       // the user to pick between installed providers.
@@ -57,9 +59,17 @@ export function useCargoNavigation() {
     const url = buildNavigationUrl(destination, platform);
     if (!url) return { ok: false, reason: "invalid-destination" };
     try {
-      // Open in a new tab; on iOS Safari this hands off to Apple Maps
-      // seamlessly. Preserves the CargoOne tab.
-      window.open(url, "_blank", "noopener,noreferrer");
+      // R69 — iOS + Android must hand off to the native mapping app rather
+      // than open another web tab. Using `window.location.href` on those
+      // platforms lets the OS intercept `https://maps.apple.com/…` /
+      // `geo:` URLs and jump straight into Apple Maps / the Android
+      // maps chooser — no interstitial Safari tab. Desktop keeps the
+      // "new tab" behaviour so the CargoOne page isn't unloaded.
+      if (platform === "ios" || platform === "android") {
+        window.location.href = url;
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
       return { ok: true, url, platform };
     } catch (e) {
       return { ok: false, reason: e?.message || "open-failed" };
