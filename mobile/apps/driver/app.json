@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "CargoOne Driver",
+    "slug": "cargoone-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "cargoonedriver",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "bundleIdentifier": "co.uk.cargoone.driver",
+      "supportsTablet": false,
+      "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Sign in to CargoOne Driver with Face ID.",
+        "NSLocationWhenInUseUsageDescription": "Show nearby jobs and share your live location with the customer during an active job.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "CargoOne needs background location to keep the customer's live map accurate during ASAP jobs.",
+        "UIBackgroundModes": ["location"],
+        "LSApplicationQueriesSchemes": ["maps", "http", "https"]
+      }
+    },
+    "android": {
+      "package": "co.uk.cargoone.driver",
+      "adaptiveIcon": { "backgroundColor": "#111111" },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "CargoOne shares your live location with the customer during an active ASAP job.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": { "projectId": "REPLACE_ME_ON_EAS_INIT" }
+    }
+  }
+}

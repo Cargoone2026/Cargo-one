@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "CargoOne Customer",
+    "slug": "cargoone-customer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "cargoonecustomer",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "bundleIdentifier": "co.uk.cargoone.customer",
+      "supportsTablet": false,
+      "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Sign in to CargoOne with Face ID.",
+        "NSLocationWhenInUseUsageDescription": "Show your pickup on the map and track your driver in real time.",
+        "LSApplicationQueriesSchemes": ["maps", "comgooglemaps", "http", "https"]
+      }
+    },
+    "android": {
+      "package": "co.uk.cargoone.customer",
+      "adaptiveIcon": { "backgroundColor": "#D62828" },
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "plugins": [
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show pickup and track your driver in real time."
+        }
+      ],
+      ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.co.uk.cargoone" }]
+    ],
+    "extra": {
+      "eas": { "projectId": "REPLACE_ME_ON_EAS_INIT" }
+    }
+  }
+}

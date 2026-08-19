@@ -1,0 +1,19 @@
+{
+  "name": "cargoone-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "customer": "yarn workspace @cargoone/customer start",
+    "driver": "yarn workspace @cargoone/driver start",
+    "test": "yarn workspace @cargoone/core test",
+    "typecheck": "yarn workspaces run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "5.3.3"
+  },
+  "packageManager": "yarn@1.22.22"
+}

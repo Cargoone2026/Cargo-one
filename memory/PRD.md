@@ -4149,3 +4149,48 @@ older items to find a newly created job / booking.
   block. No business logic touched.
 
 ### R70 READY: 🟢 YES
+
+---
+
+## R71 — Native iOS Foundation ✅ SCAFFOLD COMPLETE (2026-02-19)
+
+Two production-shape Expo/React Native monorepos live under `/app/mobile`,
+sharing a typed `@cargoone/core` package. **Zero backend changes.** Web
+regression still 61/7/0. Real-device certification is deferred to your
+local Xcode build (this container cannot compile an .ipa).
+
+### Layout
+```
+/app/mobile
+  package.json                     yarn workspaces root
+  README.md                        full setup, MAPBOX_DOWNLOADS_TOKEN steps
+  SECRETS.md                       secret-handling policy
+  .gitignore
+  /packages/core                   26/26 Jest tests pass, tsc clean
+     src/{api,auth,passkey,navigate,bookings,endpoints,types,index}.ts
+     __tests__/{api,bookings,navigate}.test.ts
+  /apps/customer                   @cargoone/customer  co.uk.cargoone.customer
+     app.json, package.json, tsconfig.json, index.ts
+     src/App.tsx, AuthContext.tsx, ActiveJobMap.tsx, ui.tsx
+     src/screens/{Login,Register,PasswordReset,Home,Bookings,BookingDetail,
+                    CreateJob,Bids,Payment,Review,Settings,Passkeys}.tsx
+  /apps/driver                     @cargoone/driver    co.uk.cargoone.driver
+     app.json, package.json, tsconfig.json, index.ts
+     src/App.tsx, AuthContext.tsx, ActiveJobMap.tsx, ui.tsx
+     src/screens/{Login,Register,PasswordReset,AwaitingApproval,
+                    AvailableJobs,JobDetail,LiveMode,ActiveBooking,
+                    Earnings,Settings,Passkeys}.tsx
+```
+
+### Locked policies
+- In-app map: **`@rnmapbox/maps` only.** No Google, no react-native-maps,
+  no WebView. If Mapbox can't render, show a clear error — never silent
+  fallback.
+- Navigate handoff: iOS `maps://?daddr=…&dirflg=d` (native Apple Maps),
+  Android `google.navigation:q=…` (falls back to `geo:` intent), desktop
+  Google Maps HTTPS (dev only). Google is never auto-opened on iPhone.
+- Passkey RP-ID: `cargoone.co.uk` (never overridden client-side).
+- Twilio: still permanently removed.
+
+### R71 READY: 🟢 (compilable source. Awaiting your Xcode build for
+   physical certification.)
