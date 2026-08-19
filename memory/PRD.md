@@ -3930,3 +3930,66 @@ Web Push + APNs + FCM once the native apps ship.
 - Existing R-suites: unaffected (Twilio was best-effort and non-blocking).
 
 ---
+
+---
+
+## R68 — Unified Map + Navigation UX ✅ COMPLETE (2026-02-19)
+
+Extended the certified R54/R55 Uber-style ASAP map architecture into
+a shared map-first + Navigate CTA experience across every active
+booking (Customer + Driver, all job types: ASAP Transport / Recovery,
+Big Jobs, Fixed Price, Scheduled, Fixed-Price Scheduled, Bidding).
+
+### Files added (4)
+
+- `frontend/src/components/asap-uber/ActiveJobMapPanel.jsx` — full composed map + destination-card panel; reuses `AsapMapCanvas` under the hood so R27 fallback (Mapbox → Google on iOS Safari) is preserved.
+- `frontend/src/components/asap-uber/DestinationCard.jsx` — pickup / destination / ETA / distance card with phased rendering (`to_pickup` / `arrived` / `to_dropoff` / `completed`).
+- `frontend/src/components/asap-uber/CargoNavigate.jsx` — navigation abstraction: `useCargoNavigation()`, `<CargoNavigateButton />`, `buildNavigationUrl()`. Web opens Apple Maps (iOS) / geo: intent (Android) / Google Maps directions (desktop). Native builds swap this file for Mapbox Navigation SDK without touching any calling screen.
+- `frontend/src/components/asap-uber/__tests__/CargoNavigate.test.js` — 6 unit tests for the navigation URL builder.
+
+### Files changed (3)
+
+- `frontend/src/components/asap-uber/index.js` — barrel exports for new components.
+- `frontend/src/pages/portal/driver/BookingDetail.jsx` — active bookings now render `ActiveJobMapPanel role="driver"` with Navigate CTA. Pre-payment / cancelled bookings keep the existing small `RouteMap` preview. All other detail actions (status progression, chat, POD, cancel, review, refund, etc.) unchanged.
+- `frontend/src/pages/portal/customer/BookingDetail.jsx` — active bookings now render `ActiveJobMapPanel role="customer"` (Navigate button suppressed). All other content untouched. R37 contact privacy unaffected.
+
+### Files deleted
+
+- None. Rollback files (`LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx`) intact.
+
+### Backend
+
+- **BACKEND GIT DIFF: EMPTY.** R68 is a frontend-only presentation upgrade — booking state machine, dispatch, pricing, refunds, cancellation, tracking authorisation, and R37 contact privacy all unchanged.
+
+### Navigation abstraction
+
+Web behaviour today (`buildNavigationUrl`):
+
+| Platform | URL scheme |
+|---|---|
+| iOS | `https://maps.apple.com/?daddr={lat},{lng}` (universal link → opens native Apple Maps when installed) |
+| Android | `geo:{lat},{lng}?q={lat},{lng}(Label)` (Android intent picker) |
+| Desktop / unknown | `https://www.google.com/maps/dir/?api=1&destination={lat},{lng}` |
+
+Native replacement path is documented inline in `CargoNavigate.jsx` — the calling screens do not need to change to move to Mapbox Navigation SDK on iOS/Android.
+
+### Regression
+
+| Suite | Result |
+|---|---|
+| R66 passkeys | 11/11 ✅ |
+| R45 cash-reminder (post-R67) | 7/7 ✅ |
+| R35/R36 cancellation | 16/16 ✅ |
+| R37 contact privacy | 7/7 ✅ |
+| Frontend production build | ✅ 29.8s |
+| Frontend unit tests (R68) | 6/6 ✅ |
+
+### Safety
+
+- R26/R34/R35/R36/R37/R40/R41/R42/R43/R50/R54/R55/R56/R58/R59/R60/R61/R62/R66 — untouched.
+- Password login untouched (R66 fallback intact).
+- Twilio remains permanently removed (R67).
+- R27 Mapbox → Google iOS fallback preserved (`ActiveJobMapPanel` delegates to `AsapMapCanvas` which delegates to `MapboxMap` with `onError` → `RouteMapGoogle`).
+- Customer maps do NOT expose driver-only navigation controls.
+- Existing manual tracking behaviour on normal (non-ASAP) jobs unchanged. R61 automatic ASAP tracking unchanged.
+- `LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx` — kept intact per rollback contract.

@@ -20,6 +20,7 @@ import { useAuth } from "@/context/AuthContext";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { Button } from "@/components/ui-portal/Button";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { ActiveJobMapPanel } from "@/components/asap-uber";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
@@ -517,37 +518,64 @@ export default function CustomerBookingDetail() {
               />
             ) : null}
 
-            <RouteMap
-              pickup={
-                job.pickup_lat != null
-                  ? { lat: job.pickup_lat, lng: job.pickup_lng, label: "Pickup" }
-                  : null
+            {(() => {
+              const status = b.status;
+              const phase = status === "travelling"
+                ? "to_pickup"
+                : status === "arrived"
+                  ? "arrived"
+                  : status === "collected" || status === "on_route"
+                    ? "to_dropoff"
+                    : status === "delivered" || status === "completed"
+                      ? "completed"
+                      : null;
+              const pickupPt = job.pickup_lat != null
+                ? { lat: job.pickup_lat, lng: job.pickup_lng, town: job.pickup_town, address: paid ? job.pickup_address : undefined }
+                : null;
+              const dropoffPt = job.dropoff_lat != null
+                ? { lat: job.dropoff_lat, lng: job.dropoff_lng, town: job.dropoff_town, address: paid ? job.dropoff_address : undefined }
+                : null;
+              const driverPt = tracking?.last_location
+                ? { lat: tracking.last_location.lat, lng: tracking.last_location.lng }
+                : null;
+
+              // R68 — active booking → premium panel with route + driver marker.
+              // Navigation controls are hidden on the customer side.
+              if (phase && paid) {
+                return (
+                  <ActiveJobMapPanel
+                    role="customer"
+                    phase={phase}
+                    pickup={pickupPt}
+                    dropoff={dropoffPt}
+                    driver={driverPt}
+                    trail={tracking?.trail}
+                    etaMinutes={tracking?.eta_minutes ?? job.duration_minutes ?? null}
+                    distanceMiles={tracking?.remaining_miles ?? job.distance_miles ?? null}
+                    data-testid="customer-active-map-panel"
+                  />
+                );
               }
-              dropoff={
-                job.dropoff_lat != null
-                  ? { lat: job.dropoff_lat, lng: job.dropoff_lng, label: "Dropoff" }
-                  : null
-              }
-              driver={
-                tracking?.last_location
-                  ? {
-                      lat: tracking.last_location.lat,
-                      lng: tracking.last_location.lng,
-                    }
-                  : null
-              }
-              trail={tracking?.trail}
-              height={220}
-              summary={{
-                pickupTown: job.pickup_town,
-                dropoffTown: job.dropoff_town,
-                distanceMiles: job.distance_miles,
-                durationMinutes:
-                  tracking?.eta_minutes != null
-                    ? tracking.eta_minutes
-                    : job.duration_minutes,
-              }}
-            />
+
+              return (
+                <RouteMap
+                  pickup={pickupPt}
+                  dropoff={dropoffPt}
+                  driver={driverPt}
+                  trail={tracking?.trail}
+                  height={220}
+                  summary={{
+                    pickupTown: job.pickup_town,
+                    dropoffTown: job.dropoff_town,
+                    distanceMiles: job.distance_miles,
+                    durationMinutes:
+                      tracking?.eta_minutes != null
+                        ? tracking.eta_minutes
+                        : job.duration_minutes,
+                  }}
+                />
+              );
+            })()}
 
             {tracking?.eta_minutes != null && (
               <div

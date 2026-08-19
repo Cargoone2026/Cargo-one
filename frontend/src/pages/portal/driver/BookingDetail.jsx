@@ -23,6 +23,7 @@ import { RecentActivity } from "@/components/ui-portal/RecentActivity";
 import { Button } from "@/components/ui-portal/Button";
 import { Input } from "@/components/ui-portal/Input";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { ActiveJobMapPanel } from "@/components/asap-uber";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
@@ -43,6 +44,19 @@ const ACTIVE_STATUSES = new Set([
   "collected",
   "on_route",
 ]);
+
+/**
+ * R68 — map booking status → active-job-map-panel phase.
+ * `null` means the booking is not yet in an active state for this driver,
+ * so the panel is not shown (we keep the small RouteMap preview instead).
+ */
+function bookingPhase(status) {
+  if (status === "travelling") return "to_pickup";
+  if (status === "arrived") return "arrived"; // arrived at pickup
+  if (status === "collected" || status === "on_route") return "to_dropoff";
+  if (status === "delivered" || status === "completed") return "completed";
+  return null;
+}
 
 function fmtDur(mins) {
   if (mins == null) return "—";
@@ -428,37 +442,55 @@ export default function DriverBookingDetail() {
               />
             ) : null}
 
-            <RouteMap
-              pickup={
-                job.pickup_lat != null
-                  ? { lat: job.pickup_lat, lng: job.pickup_lng, label: "Pickup" }
-                  : null
+            {(() => {
+              const phase = bookingPhase(b.status);
+              const pickupPt = job.pickup_lat != null
+                ? { lat: job.pickup_lat, lng: job.pickup_lng, town: job.pickup_town, address: paid ? job.pickup_address : undefined }
+                : null;
+              const dropoffPt = job.dropoff_lat != null
+                ? { lat: job.dropoff_lat, lng: job.dropoff_lng, town: job.dropoff_town, address: paid ? job.dropoff_address : undefined }
+                : null;
+              const driverPt = tracking?.last_location
+                ? { lat: tracking.last_location.lat, lng: tracking.last_location.lng }
+                : null;
+
+              // Active booking → premium ActiveJobMapPanel (R68).
+              if (phase && paid) {
+                return (
+                  <ActiveJobMapPanel
+                    role="driver"
+                    phase={phase}
+                    pickup={pickupPt}
+                    dropoff={dropoffPt}
+                    driver={driverPt}
+                    trail={tracking?.trail}
+                    etaMinutes={tracking?.eta_minutes ?? job.duration_minutes ?? null}
+                    distanceMiles={tracking?.remaining_miles ?? job.distance_miles ?? null}
+                    data-testid="driver-active-map-panel"
+                  />
+                );
               }
-              dropoff={
-                job.dropoff_lat != null
-                  ? { lat: job.dropoff_lat, lng: job.dropoff_lng, label: "Dropoff" }
-                  : null
-              }
-              driver={
-                tracking?.last_location
-                  ? {
-                      lat: tracking.last_location.lat,
-                      lng: tracking.last_location.lng,
-                    }
-                  : null
-              }
-              trail={tracking?.trail}
-              height={220}
-              summary={{
-                pickupTown: job.pickup_town,
-                dropoffTown: job.dropoff_town,
-                distanceMiles: job.distance_miles,
-                durationMinutes:
-                  tracking?.eta_minutes != null
-                    ? tracking.eta_minutes
-                    : job.duration_minutes,
-              }}
-            />
+
+              // Pre-payment / quote / cancelled → keep the small preview.
+              return (
+                <RouteMap
+                  pickup={pickupPt}
+                  dropoff={dropoffPt}
+                  driver={driverPt}
+                  trail={tracking?.trail}
+                  height={220}
+                  summary={{
+                    pickupTown: job.pickup_town,
+                    dropoffTown: job.dropoff_town,
+                    distanceMiles: job.distance_miles,
+                    durationMinutes:
+                      tracking?.eta_minutes != null
+                        ? tracking.eta_minutes
+                        : job.duration_minutes,
+                  }}
+                />
+              );
+            })()}
 
             <AcceptanceInfo job={job} testIdPrefix="driver-booking-accept" />
 
