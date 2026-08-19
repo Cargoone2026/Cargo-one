@@ -66,9 +66,14 @@ export function RouteMapMapbox({
 
   // Fetch a real road polyline (Mapbox Directions) whenever pickup/dropoff
   // change. Cached inside `mapboxDirections.js` so re-renders don't rehit.
+  // R68 — key on PRIMITIVES to eliminate any residual render-loop risk
+  // when a parent passes freshly-created point objects on every tracking
+  // poll.
+  const pickupKey = validPickup ? `${pickup.lat},${pickup.lng}` : null;
+  const dropoffKey = validDropoff ? `${dropoff.lat},${dropoff.lng}` : null;
   useEffect(() => {
     let cancelled = false;
-    if (!validPickup || !validDropoff) { setRouteCoords(null); return () => {}; }
+    if (!pickupKey || !dropoffKey) { setRouteCoords(null); return () => {}; }
     (async () => {
       const r = await fetchMapboxRoute(pickup, dropoff);
       if (cancelled) return;
@@ -76,9 +81,12 @@ export function RouteMapMapbox({
       else setRouteCoords(straightLine(pickup, dropoff));
     })();
     return () => { cancelled = true; };
-  }, [pickup, dropoff, validPickup, validDropoff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupKey, dropoffKey]);
 
-  // Markers list
+  const driverKey = validDriver ? `${driver.lat},${driver.lng}` : null;
+  // Markers list — keyed on primitive coordinates to prevent identity
+  // churn from parent tracking polls.
   const markers = useMemo(() => {
     const out = [];
     if (validPickup) {
@@ -97,7 +105,8 @@ export function RouteMapMapbox({
                     testId: `${testID}-marker-driver` });
     }
     return out;
-  }, [pickup, dropoff, driver, validPickup, validDropoff, validDriver, testID]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupKey, dropoffKey, driverKey, testID]);
 
   const trailCoords = useMemo(() => {
     if (!Array.isArray(trail) || trail.length < 2) return null;

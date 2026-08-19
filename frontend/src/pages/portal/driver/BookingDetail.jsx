@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -362,6 +362,46 @@ export default function DriverBookingDetail() {
     }
   }
 
+  // R68 — memoise map points keyed on PRIMITIVE lat/lng/address values so
+  // downstream useEffect hooks (RouteMapMapbox, AsapMapCanvas) don't refire
+  // on every parent re-render (tracking poll + Mapbox diag setState +
+  // R61 auto-tracking push). This was the root cause of the render-loop
+  // "Maximum update depth exceeded" caught by R68 live testing.
+  // Hooks must be called before the `if (!b)` early return, so we read the
+  // underlying primitives defensively.
+  const _job = b?.job || {};
+  const _paidForMap = b?.payment_status === "paid";
+  const mapPickup = useMemo(
+    () =>
+      _job.pickup_lat != null
+        ? {
+            lat: _job.pickup_lat,
+            lng: _job.pickup_lng,
+            town: _job.pickup_town,
+            address: _paidForMap ? _job.pickup_address : undefined,
+          }
+        : null,
+    [_job.pickup_lat, _job.pickup_lng, _job.pickup_town, _job.pickup_address, _paidForMap],
+  );
+  const mapDropoff = useMemo(
+    () =>
+      _job.dropoff_lat != null
+        ? {
+            lat: _job.dropoff_lat,
+            lng: _job.dropoff_lng,
+            town: _job.dropoff_town,
+            address: _paidForMap ? _job.dropoff_address : undefined,
+          }
+        : null,
+    [_job.dropoff_lat, _job.dropoff_lng, _job.dropoff_town, _job.dropoff_address, _paidForMap],
+  );
+  const _driverLat = tracking?.last_location?.lat;
+  const _driverLng = tracking?.last_location?.lng;
+  const mapDriver = useMemo(
+    () => (_driverLat != null && _driverLng != null ? { lat: _driverLat, lng: _driverLng } : null),
+    [_driverLat, _driverLng],
+  );
+
   if (!b) {
     return (
       <div className="min-h-screen bg-white px-4 pt-6 md:px-8" data-testid="driver-booking-detail">
@@ -390,6 +430,11 @@ export default function DriverBookingDetail() {
       : b.status === "deposit_paid" || b.status === "confirmed"
       ? STATUS_FLOW[0]
       : null;
+
+  const mapPhase = bookingPhase(b.status);
+  const mapTrail = tracking?.trail;
+  const mapEtaMinutes = tracking?.eta_minutes ?? job.duration_minutes ?? null;
+  const mapDistanceMiles = tracking?.remaining_miles ?? job.distance_miles ?? null;
 
   return (
     <div className="min-h-screen bg-white pb-24 lg:pb-6" data-testid="driver-booking-detail">
@@ -443,29 +488,18 @@ export default function DriverBookingDetail() {
             ) : null}
 
             {(() => {
-              const phase = bookingPhase(b.status);
-              const pickupPt = job.pickup_lat != null
-                ? { lat: job.pickup_lat, lng: job.pickup_lng, town: job.pickup_town, address: paid ? job.pickup_address : undefined }
-                : null;
-              const dropoffPt = job.dropoff_lat != null
-                ? { lat: job.dropoff_lat, lng: job.dropoff_lng, town: job.dropoff_town, address: paid ? job.dropoff_address : undefined }
-                : null;
-              const driverPt = tracking?.last_location
-                ? { lat: tracking.last_location.lat, lng: tracking.last_location.lng }
-                : null;
-
               // Active booking → premium ActiveJobMapPanel (R68).
-              if (phase && paid) {
+              if (mapPhase && paid) {
                 return (
                   <ActiveJobMapPanel
                     role="driver"
-                    phase={phase}
-                    pickup={pickupPt}
-                    dropoff={dropoffPt}
-                    driver={driverPt}
-                    trail={tracking?.trail}
-                    etaMinutes={tracking?.eta_minutes ?? job.duration_minutes ?? null}
-                    distanceMiles={tracking?.remaining_miles ?? job.distance_miles ?? null}
+                    phase={mapPhase}
+                    pickup={mapPickup}
+                    dropoff={mapDropoff}
+                    driver={mapDriver}
+                    trail={mapTrail}
+                    etaMinutes={mapEtaMinutes}
+                    distanceMiles={mapDistanceMiles}
                     data-testid="driver-active-map-panel"
                   />
                 );
@@ -474,10 +508,10 @@ export default function DriverBookingDetail() {
               // Pre-payment / quote / cancelled → keep the small preview.
               return (
                 <RouteMap
-                  pickup={pickupPt}
-                  dropoff={dropoffPt}
-                  driver={driverPt}
-                  trail={tracking?.trail}
+                  pickup={mapPickup}
+                  dropoff={mapDropoff}
+                  driver={mapDriver}
+                  trail={mapTrail}
                   height={220}
                   summary={{
                     pickupTown: job.pickup_town,

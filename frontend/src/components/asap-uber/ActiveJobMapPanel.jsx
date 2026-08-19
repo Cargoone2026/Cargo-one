@@ -72,13 +72,15 @@ export function ActiveJobMapPanel({
           data-testid={`${testId}-canvas`}
         />
 
-        {/* Floating recenter — R58 parity (single control, mobile-friendly 44px+) */}
+        {/* Floating recenter — R58 parity. Placed top-LEFT to avoid
+            overlapping Mapbox's default NavigationControl zoom buttons
+            in the top-right corner. 44px target for mobile. */}
         <button
           type="button"
           onClick={handleRecenter}
           aria-label="Recenter map on the route"
           data-testid={`${testId}-recenter`}
-          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[#111111] shadow-lg ring-1 ring-black/5 backdrop-blur hover:bg-white"
+          className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[#111111] shadow-lg ring-1 ring-black/5 backdrop-blur hover:bg-white"
         >
           <LocateFixed className="h-5 w-5" />
         </button>

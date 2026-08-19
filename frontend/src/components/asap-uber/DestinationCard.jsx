@@ -35,6 +35,8 @@ export function DestinationCard({
   const isCompleted = phase === "completed";
 
   const target = isDropoff ? dropoff : pickup;
+  const hasTarget =
+    !!target && Number.isFinite(target.lat) && Number.isFinite(target.lng);
   const primaryLabel = isDropoff ? "Destination" : "Pickup";
   const primaryIconColor = isDropoff ? "#D62828" : "#16A34A";
   const primaryIcon = isDropoff ? Flag : MapPin;
@@ -68,7 +70,9 @@ export function DestinationCard({
               ? "Job completed"
               : isArrived
                 ? `Arrived at ${isDropoff ? "dropoff" : "pickup"}`
-                : `Heading to ${primaryLabel.toLowerCase()}`}
+                : isDropoff
+                  ? "On route to dropoff"
+                  : "On route to pickup"}
           </p>
           <h2
             className="mt-0.5 truncate text-[20px] font-bold leading-tight tracking-[-0.25px] text-[#111111]"
@@ -89,8 +93,9 @@ export function DestinationCard({
         </div>
       </div>
 
-      {/* ETA + Distance pills */}
-      {!isCompleted && (etaMinutes != null || distanceMiles != null) && (
+      {/* ETA + Distance pills — suppressed when target coordinates are
+          missing (avoids showing stale numbers on edge-case bookings). */}
+      {!isCompleted && hasTarget && (etaMinutes != null || distanceMiles != null) && (
         <div
           className="mt-4 grid grid-cols-2 gap-3"
           data-testid={`${testId}-stats`}

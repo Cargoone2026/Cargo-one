@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -286,6 +286,42 @@ export default function CustomerBookingDetail() {
     }
   }
 
+  // R68 — memoise map points on PRIMITIVES so RouteMapMapbox /
+  // AsapMapCanvas effects don't refire on every parent re-render. Hooks
+  // must be called BEFORE the `if (!b)` early return.
+  const _job = b?.job || {};
+  const _paidForMap = b?.payment_status === "paid";
+  const mapPickup = useMemo(
+    () =>
+      _job.pickup_lat != null
+        ? {
+            lat: _job.pickup_lat,
+            lng: _job.pickup_lng,
+            town: _job.pickup_town,
+            address: _paidForMap ? _job.pickup_address : undefined,
+          }
+        : null,
+    [_job.pickup_lat, _job.pickup_lng, _job.pickup_town, _job.pickup_address, _paidForMap],
+  );
+  const mapDropoff = useMemo(
+    () =>
+      _job.dropoff_lat != null
+        ? {
+            lat: _job.dropoff_lat,
+            lng: _job.dropoff_lng,
+            town: _job.dropoff_town,
+            address: _paidForMap ? _job.dropoff_address : undefined,
+          }
+        : null,
+    [_job.dropoff_lat, _job.dropoff_lng, _job.dropoff_town, _job.dropoff_address, _paidForMap],
+  );
+  const _driverLat = tracking?.last_location?.lat;
+  const _driverLng = tracking?.last_location?.lng;
+  const mapDriver = useMemo(
+    () => (_driverLat != null && _driverLng != null ? { lat: _driverLat, lng: _driverLng } : null),
+    [_driverLat, _driverLng],
+  );
+
   if (!b) {
     const isReturningFromStripe = params.get("payment") === "success";
     return (
@@ -340,6 +376,21 @@ export default function CustomerBookingDetail() {
   const bookingFee = Number(b.booking_fee ?? b.deposit_amount ?? 0);
   const driverCharge = Number(b.driver_charge ?? b.balance_due ?? 0);
   const total = Number(b.total_price ?? bookingFee + driverCharge);
+
+  // R68 — non-hook derived values (safe to compute below the early return).
+  const mapPhase =
+    b.status === "travelling"
+      ? "to_pickup"
+      : b.status === "arrived"
+        ? "arrived"
+        : b.status === "collected" || b.status === "on_route"
+          ? "to_dropoff"
+          : b.status === "delivered" || b.status === "completed"
+            ? "completed"
+            : null;
+  const mapTrail = tracking?.trail;
+  const mapEtaMinutes = tracking?.eta_minutes ?? job.duration_minutes ?? null;
+  const mapDistanceMiles = tracking?.remaining_miles ?? job.distance_miles ?? null;
 
   // R49 — Rebook helper. Cancelled bookings surface a prominent CTA that
   // stashes the essential job fields in sessionStorage and hops the
@@ -519,39 +570,19 @@ export default function CustomerBookingDetail() {
             ) : null}
 
             {(() => {
-              const status = b.status;
-              const phase = status === "travelling"
-                ? "to_pickup"
-                : status === "arrived"
-                  ? "arrived"
-                  : status === "collected" || status === "on_route"
-                    ? "to_dropoff"
-                    : status === "delivered" || status === "completed"
-                      ? "completed"
-                      : null;
-              const pickupPt = job.pickup_lat != null
-                ? { lat: job.pickup_lat, lng: job.pickup_lng, town: job.pickup_town, address: paid ? job.pickup_address : undefined }
-                : null;
-              const dropoffPt = job.dropoff_lat != null
-                ? { lat: job.dropoff_lat, lng: job.dropoff_lng, town: job.dropoff_town, address: paid ? job.dropoff_address : undefined }
-                : null;
-              const driverPt = tracking?.last_location
-                ? { lat: tracking.last_location.lat, lng: tracking.last_location.lng }
-                : null;
-
-              // R68 — active booking → premium panel with route + driver marker.
-              // Navigation controls are hidden on the customer side.
-              if (phase && paid) {
+              // R68 — active booking → premium panel. Navigation is
+              // suppressed for customers. Uses memoised primitives above.
+              if (mapPhase && paid) {
                 return (
                   <ActiveJobMapPanel
                     role="customer"
-                    phase={phase}
-                    pickup={pickupPt}
-                    dropoff={dropoffPt}
-                    driver={driverPt}
-                    trail={tracking?.trail}
-                    etaMinutes={tracking?.eta_minutes ?? job.duration_minutes ?? null}
-                    distanceMiles={tracking?.remaining_miles ?? job.distance_miles ?? null}
+                    phase={mapPhase}
+                    pickup={mapPickup}
+                    dropoff={mapDropoff}
+                    driver={mapDriver}
+                    trail={mapTrail}
+                    etaMinutes={mapEtaMinutes}
+                    distanceMiles={mapDistanceMiles}
                     data-testid="customer-active-map-panel"
                   />
                 );
@@ -559,10 +590,10 @@ export default function CustomerBookingDetail() {
 
               return (
                 <RouteMap
-                  pickup={pickupPt}
-                  dropoff={dropoffPt}
-                  driver={driverPt}
-                  trail={tracking?.trail}
+                  pickup={mapPickup}
+                  dropoff={mapDropoff}
+                  driver={mapDriver}
+                  trail={mapTrail}
                   height={220}
                   summary={{
                     pickupTown: job.pickup_town,

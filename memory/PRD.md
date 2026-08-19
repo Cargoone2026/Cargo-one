@@ -3993,3 +3993,48 @@ Native replacement path is documented inline in `CargoNavigate.jsx` — the call
 - Customer maps do NOT expose driver-only navigation controls.
 - Existing manual tracking behaviour on normal (non-ASAP) jobs unchanged. R61 automatic ASAP tracking unchanged.
 - `LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx` — kept intact per rollback contract.
+
+---
+
+## R68 Live Certification (post-fix) — 2026-02-19
+
+### Live smoke test results (via testing agent)
+
+- ASAP Transport (customer create → deposit → driver accept → travelling → arrived → collected → on_route → delivered): all 13 R68 panel testids render; Navigate opens `https://www.google.com/maps/dir/?api=1&destination=...`; Recenter clickable; R61 auto-tracking active within 3s.
+- ASAP Recovery: same result — R68 panel + Navigate + auto-tracking all green.
+- Fixed Price paid+active: R68 panel renders; Navigate opens Google Maps; NO auto-tracking (manual controls preserved).
+- Big Job / Scheduled paid+active: R68 panel renders; Navigate works; existing scheduled-job workflow untouched.
+- Quote-stage / unpaid booking: compact `RouteMap` renders (no premium panel) — pre-payment guard confirmed.
+- Missing-coord edge case: ETA/distance pills correctly suppressed via `hasTarget` guard; Navigate button disabled.
+- Customer ASAP paid+active still redirects to `/customer/dispatch/{job_id}` (R55 preserved — do not regress).
+- Customer non-ASAP panel renders WITHOUT Navigate (customer role suppression working).
+- Regression backend suites: **59 passed / 7 skipped / 0 failed** (R26, R35/R36, R37, R45, R66, cookie auth, contact privacy, cash reminder).
+- Frontend production build: **PASS** (17.8s).
+- Frontend unit tests (`CargoNavigate.test.js`): **6/6 PASS**.
+
+### Fixes applied in this iteration
+
+1. **HIGH → RESOLVED**: `Maximum update depth exceeded` render loop.
+   - Memoised `mapPickup` / `mapDropoff` / `mapDriver` in both `driver/BookingDetail.jsx` and `customer/BookingDetail.jsx` above the early return, keyed on primitive lat/lng/town/address values.
+   - Hardened `RouteMapMapbox.jsx`: replaced object-identity useEffect + useMemo deps with primitive keys (`pickupKey`, `dropoffKey`, `driverKey`) so the compact fallback preview on `deposit_paid` bookings can no longer loop under R61 auto-tracking either.
+2. **MEDIUM → RESOLVED**: Recenter FAB overlapped Mapbox's default NavigationControl (both were top-right). Moved Recenter to top-LEFT with `z-10`.
+3. **DESIGN → RESOLVED**: `DestinationCard` dropoff phase label now reads "On route to dropoff" (matches top status pill).
+4. **DESIGN → RESOLVED**: `DestinationCard` ETA / distance pills are suppressed when the target coordinate is not finite (`hasTarget` guard).
+
+### Backend
+
+- **Git diff empty.** No `.py` files were modified during R68 or its two verification iterations.
+
+### Rollback files
+
+- `LiveClassic.jsx`, `DispatchClassic.jsx`, `AsapDispatchPanel.jsx` — untouched. Rollback path intact.
+
+### Known non-R68 items observed (out of scope, NOT modified)
+
+- The legacy `driver-tracking-eta` block in `driver/BookingDetail.jsx` duplicates ETA/distance with the panel card. Pre-R68 UI; deferred per R68 §14 ("Do not hide an existing capability").
+- The "Before you accept" (suitable-vehicle) box appears on already-accepted jobs. Pre-R68 UI; not caused by R68.
+- These are reported here for visibility, not touched by R68.
+
+### R68 READY FOR PRODUCTION: ✅
+
+Awaiting explicit deploy instruction.
