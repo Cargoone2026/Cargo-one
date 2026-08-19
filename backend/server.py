@@ -2082,9 +2082,15 @@ async def nearby_jobs(
         if d <= radius:
             j["distance_from_driver"] = round(d, 1)
             result.append(public_job(j, include_private=False))
-    # Sort: geolocated jobs nearest-first, then unresolved-coord / no-anchor
-    # jobs (Mongo already sorted newest-first).
-    result.sort(key=lambda x: (x.get("distance_from_driver") is None, x.get("distance_from_driver") or 0))
+    # R70 — preserve backend newest-first ordering. Mongo already returned
+    # jobs sorted by `created_at` desc (line 2066); the post-loop distance
+    # sort would demote a brand-new job that happens to be slightly further
+    # away, which is exactly the scroll-past-old-jobs issue R70 is closing.
+    # Drivers can still re-rank by proximity from the frontend's sort chip.
+    result.sort(
+        key=lambda x: (x.get("created_at") or "", x.get("id") or ""),
+        reverse=True,
+    )
     return result
 
 

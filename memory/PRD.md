@@ -4104,3 +4104,48 @@ off natively to Apple Maps / Android maps on mobile.
 ### Native iOS build
 
 Explicitly **not started** per stop condition. Awaiting user approval.
+
+---
+
+## R70 — Newest-first ordering ✅ COMPLETE (2026-02-19)
+
+Small display-ordering change. Drivers and customers never scroll past
+older items to find a newly created job / booking.
+
+### Changes
+
+- **Backend** — `/app/backend/server.py` `nearby_jobs` (~L2085-2093): the
+  post-loop distance sort was replaced with a `(created_at, id) desc`
+  sort so newest-first is preserved even when the driver supplies a
+  location. Radius filter, `(0,0)` safety net, ASAP exclusion and
+  `blocked_driver_ids` filter are unchanged. `distance_from_driver`
+  is still populated so the frontend "Nearest" chip can still re-rank
+  client-side.
+- **Frontend** — `/app/frontend/src/pages/portal/driver/Jobs.jsx`:
+  default `sort` state and `resetAll()` now use `'newest'`.
+- **Frontend** — `/app/frontend/src/pages/portal/customer/Bookings.jsx`:
+  the `display` useMemo sorts the merged raw list (bookings + unpaid
+  posted jobs) by `created_at` desc BEFORE search filtering, giving one
+  unified newest-first list.
+- **Backend tests** — `/app/backend/tests/test_r70_newest_first.py`:
+  2 tests, both real ordering assertions, both PASS.
+- **Untouched**: R43 dispatch (`asap-offers` still `distance_to_pickup_miles`
+  ascending), R61 tracking, R66 passkeys, R68 map/nav, R69 review sheet.
+  ASAP Live Mode is not in scope.
+
+### Verification
+
+- `test_r70_nearby_newest_first_regardless_of_distance` — posts 3 jobs
+  ~1.1s apart at London / Manchester / Edinburgh, anchors driver at
+  London, asserts newest (Edinburgh) is first even though it is the
+  furthest.
+- `test_r70_bookings_mine_newest_first` — inserts 3 bookings with
+  controlled `created_at`, asserts `/bookings/mine` returns strict
+  newest→oldest.
+- Full regression: **61 passed / 7 skipped / 0 failed** (R66, R37, R26,
+  R45, R35/R36, R70).
+- Frontend production build: **PASS** (18.8s).
+- Backend diff: **1 file, +9/-3 lines** — all in `nearby_jobs` sort
+  block. No business logic touched.
+
+### R70 READY: 🟢 YES

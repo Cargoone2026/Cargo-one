@@ -114,9 +114,16 @@ export default function CustomerBookings() {
 
   const display = useMemo(() => {
     const raw = tab === "active" ? [...active, ...openJobs] : past;
+    // R70 — newest-first regardless of whether the row is a booking or an
+    // unpaid job. The user should never scroll past older items to find a
+    // newly created one. `created_at` is the authoritative timestamp used
+    // by both `/bookings/mine` and `/jobs/mine` server-side.
+    const sorted = [...raw].sort((a, b) =>
+      (b.created_at || "").localeCompare(a.created_at || ""),
+    );
     const needle = q.trim().toLowerCase();
-    if (!needle) return raw;
-    return raw.filter((it) => {
+    if (!needle) return sorted;
+    return sorted.filter((it) => {
       const title = (it._isJob ? it.title : it.job?.title) || "";
       const pu = (it._isJob ? it.pickup_town : it.job?.pickup_town) || "";
       const drop = (it._isJob ? it.dropoff_town : it.job?.dropoff_town) || "";

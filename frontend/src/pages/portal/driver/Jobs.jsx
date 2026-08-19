@@ -39,7 +39,7 @@ export default function DriverJobs() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [selectedCaps, setSelectedCaps] = useState([]);
-  const [sort, setSort] = useState("nearest");
+  const [sort, setSort] = useState("newest");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [viewMode, setViewMode] = useState("list"); // list | map
   const [selectedJob, setSelectedJob] = useState(null); // map bottom-sheet
@@ -106,7 +106,7 @@ export default function DriverJobs() {
     setMinPrice("");
     setMaxPrice("");
     setSelectedCaps([]);
-    setSort("nearest");
+    setSort("newest");
     setVehicleSize("all");
     setTripBand("all");
     setServiceType("all");
