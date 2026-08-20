@@ -52,8 +52,7 @@ def line(a, b, stroke, sw):
     return f'<line x1="{a[0]}" y1="{a[1]}" x2="{b[0]}" y2="{b[1]}" stroke="{stroke}" stroke-width="{sw}" stroke-linecap="round"/>'
 
 def cube_svg(bg=RED, cube_top=WHITE, cube_left=CUBE_LEFT_SHADE, cube_right=CUBE_RIGHT_SHADE,
-             seam=SEAM, edge=EDGE, radius=228, transparent_bg=False,
-             monogram_color="#D62828"):
+             seam=SEAM, edge=EDGE, radius=228, transparent_bg=False):
     c = CUBE
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS} {CANVAS}" width="{CANVAS}" height="{CANVAS}">']
     if not transparent_bg:
@@ -69,20 +68,6 @@ def cube_svg(bg=RED, cube_top=WHITE, cube_left=CUBE_LEFT_SHADE, cube_right=CUBE_
     parts.append(line(c['N'], c['S'], seam, 10))
     # Front seam — subtle vertical from S down to BF (the front-center box seam)
     parts.append(line(c['S'], c['BF'], edge, 4))
-    # Cargo One monogram — printed as a shipping label on the front-left
-    # face. Anchored to the centroid of the (W, S, BF, BL) parallelogram
-    # and skewed so it lies in the plane of that face (isometric).
-    # Using a group transform: translate to face centre then skew.
-    face_cx = (c['W'][0] + c['S'][0] + c['BF'][0] + c['BL'][0]) / 4
-    face_cy = (c['W'][1] + c['S'][1] + c['BF'][1] + c['BL'][1]) / 4
-    # skew angles chosen to match the isometric 30° projection so the
-    # text sits flat on the front-left face
-    parts.append(
-        f'<g transform="translate({face_cx} {face_cy}) matrix(1 0.577 0 1 0 0)">'
-        f'<text x="0" y="20" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" '
-        f'font-weight="800" font-size="120" fill="{monogram_color}" letter-spacing="-4">C1</text>'
-        f'</g>'
-    )
     parts.append('</svg>')
     return "\n".join(parts)
 
@@ -108,7 +93,6 @@ splash_svg = cube_svg(
     cube_right="#9F1B1B",
     seam="#FFFFFF",
     edge="#B71E1E",
-    monogram_color="#FFFFFF",   # white C1 on the red parcel face
 )
 rasterize(splash_svg, os.path.join(OUT, "splash-icon.png"), 512)
 
@@ -122,7 +106,6 @@ loading_svg = cube_svg(
     cube_right="#9F1B1B",
     seam="#FFFFFF",
     edge="#B71E1E",
-    monogram_color="#FFFFFF",   # white C1 on the red parcel face
 )
 rasterize(loading_svg, os.path.join(OUT, "loading-mark.png"), 512)
 
