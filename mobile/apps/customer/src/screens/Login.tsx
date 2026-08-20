@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { isPasskeySupported, loginWithPasskey } from "@cargoone/core";
+import { isPasskeySupported, loginWithPasskey, NetworkError } from "@cargoone/core";
 import { useAuth } from "../AuthContext";
 import { Body, H1, Input, Label, PrimaryButton, Screen, Row } from "../ui";
 import type { RootStackParamList } from "../App";
@@ -9,11 +9,20 @@ import type { RootStackParamList } from "../App";
 type P = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export function LoginScreen({ navigation }: P) {
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<null | "password" | "passkey">(null);
   const [err, setErr] = useState<string | null>(null);
+
+  function friendlyError(e: any): string {
+    if (e instanceof NetworkError) return e.message;
+    if (typeof e?.status === "number") {
+      if (e.status === 401) return "Incorrect email or password.";
+      if (e.status === 429) return "Too many attempts. Please wait a moment and try again.";
+    }
+    return e?.message || "Login failed";
+  }
 
   async function onPasswordLogin() {
     setErr(null);
@@ -21,13 +30,14 @@ export function LoginScreen({ navigation }: P) {
     try {
       await login(email, password);
     } catch (e: any) {
-      setErr(e?.message || "Login failed");
+      setErr(friendlyError(e));
     } finally {
       setBusy(null);
     }
   }
 
   async function onPasskeyLogin() {
+    setErr(null);
     if (!email.trim()) {
       setErr("Enter your email first to sign in with a passkey.");
       return;
@@ -42,11 +52,12 @@ export function LoginScreen({ navigation }: P) {
       if (res.user.role !== "customer") {
         throw new Error("This app is for customers. Please use the driver app.");
       }
-      // Trigger auth refresh — bearer token already saved by core.
-      await login(email, password || "").catch(() => {}); // password may be empty; ignored
-      Alert.alert("Signed in", "Welcome back to CargoOne.");
+      // Passkey verify has already persisted the bearer token. Ask the
+      // auth context to re-fetch /auth/me so `user` becomes non-null and
+      // the root navigator swaps the Login stack for the Tabs stack.
+      await refresh();
     } catch (e: any) {
-      setErr(e?.message || "Passkey login failed");
+      setErr(friendlyError(e));
     } finally {
       setBusy(null);
     }

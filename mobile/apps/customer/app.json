@@ -7,6 +7,12 @@
     "scheme": "cargoonecustomer",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#FFFFFF",
+      "resizeMode": "contain"
+    },
     "ios": {
       "bundleIdentifier": "co.uk.cargoone.customer",
       "supportsTablet": false,
@@ -19,7 +25,10 @@
     },
     "android": {
       "package": "co.uk.cargoone.customer",
-      "adaptiveIcon": { "backgroundColor": "#D62828" },
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#D62828"
+      },
       "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "plugins": [
