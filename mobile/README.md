@@ -68,17 +68,36 @@ your public map access token.
 5. Click **Create** and copy the `sk.…` value **once** — it is only
    shown at creation time. Store it in your password manager.
 
-Then expose it to the native build. **Never commit it.** Two options:
+Then expose it to the native build. **Never commit it.** Three options:
 
-- **Local Xcode build** — export in your shell before `expo prebuild`:
+- **Local iOS build (recommended)** — export in your shell in the same
+  session you run `pod install` / `expo run:ios`:
   ```bash
   export MAPBOX_DOWNLOADS_TOKEN=sk.eyJ…
-  cd apps/customer && npx expo prebuild
-  cd ../driver     && npx expo prebuild
+  cd apps/customer
+  npx expo prebuild                # only needed on first setup / after config changes
+  cd ios && pod install
   ```
-  The `@rnmapbox/maps` config plugin (already wired in each `app.json`)
-  substitutes `$MAPBOX_DOWNLOADS_TOKEN` into `~/.netrc` on iOS and into
-  Gradle on Android at build time only.
+  How this works: the CargoOne local Expo plugin
+  `mobile/plugins/withCargoOneiOSFixes.js` (auto-wired in each `app.json`)
+  prepends a single line to the generated `ios/Podfile`:
+
+  ```ruby
+  ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'] ||= ENV['MAPBOX_DOWNLOADS_TOKEN']
+  ```
+
+  That lets the `@rnmapbox/maps` podspec (which reads
+  `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` and monkey-patches the CocoaPods `curl`
+  downloader to inject the token as `-u mapbox:sk.…` when fetching from
+  `api.mapbox.com`) pick up whichever env var name you set. No file
+  ever contains the token value. `~/.netrc` is not used.
+
+- **Local Android build** — put the token in `~/.gradle/gradle.properties`
+  (never in the repo):
+  ```
+  MAPBOX_DOWNLOADS_TOKEN=sk.eyJ…
+  ```
+  Gradle picks it up automatically at assemble time.
 
 - **EAS Build** — store as an EAS secret so it never touches source
   control:
@@ -99,12 +118,19 @@ logs or issue trackers.
 ```bash
 cd mobile
 yarn install                                # workspace-wide install
-export MAPBOX_DOWNLOADS_TOKEN=sk.eyJ…       # see section above
+export MAPBOX_DOWNLOADS_TOKEN=sk.eyJ…       # see section above (or use RNMAPBOX_MAPS_DOWNLOAD_TOKEN)
 cd apps/customer
-npx expo prebuild --clean                   # generates /ios and /android
+npx expo prebuild                           # generates /ios and /android on first setup
 cd ios && pod install && cd ..
 open ios/CargoOneCustomer.xcworkspace       # Xcode
 ```
+
+Notes:
+- Use `expo prebuild` (idempotent), NOT `expo prebuild --clean`, so the
+  iOS 15 deployment target and Mapbox env alias applied by
+  `withCargoOneiOSFixes` are preserved across runs.
+- On subsequent runs (no config changes) you can skip prebuild and just
+  do `cd ios && pod install` — the env alias line stays in the Podfile.
 
 In Xcode:
 1. Select **Signing & Capabilities** → your team + provisioning profile.
@@ -114,7 +140,8 @@ In Xcode:
 
 ```bash
 cd mobile/apps/driver
-npx expo prebuild --clean
+export MAPBOX_DOWNLOADS_TOKEN=sk.eyJ…
+npx expo prebuild
 cd ios && pod install && cd ..
 open ios/CargoOneDriver.xcworkspace
 ```

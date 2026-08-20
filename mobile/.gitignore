@@ -7,3 +7,12 @@ android/
 .expo/
 *.tsbuildinfo
 yarn-error.log
+
+# Secret token files — never commit
+.netrc
+.netrc.*
+*.token
+mapbox.token*
+*.p8
+GoogleService-Info.plist
+google-services.json

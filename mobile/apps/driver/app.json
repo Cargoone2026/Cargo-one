@@ -29,12 +29,8 @@
       ]
     },
     "plugins": [
-      [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
-        }
-      ],
+      "../../plugins/withCargoOneiOSFixes",
+      "@rnmapbox/maps",
       [
         "expo-location",
         {
