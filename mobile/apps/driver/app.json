@@ -7,6 +7,12 @@
     "scheme": "cargoonedriver",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#111111",
+      "resizeMode": "contain"
+    },
     "ios": {
       "bundleIdentifier": "co.uk.cargoone.driver",
       "supportsTablet": false,
@@ -21,7 +27,10 @@
     },
     "android": {
       "package": "co.uk.cargoone.driver",
-      "adaptiveIcon": { "backgroundColor": "#111111" },
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#111111"
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

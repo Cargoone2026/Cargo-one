@@ -1,9 +1,9 @@
 /**
  * LoadingScreen — CargoOne branded initial loader.
  *
- * Renders full-bleed CargoOne red with a white circular badge and the
- * red parcel mark inside, matching the reference for the customer app.
- * Respects safe-area insets on iPhone / iPad.
+ * Renders full-bleed CargoOne red with the customer app's own icon
+ * (the user-supplied red-rounded-square + white-cube artwork) centred
+ * inside a soft white circular badge. Respects safe-area insets.
  *
  * Kept purely presentational — the caller decides when to unmount it.
  * It never runs its own timer.
@@ -23,7 +23,7 @@ export function LoadingScreen({ label = "Loading" }: { label?: string }) {
           <Image
             source={require("../../assets/loading-mark.png")}
             style={styles.mark}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         </View>
       </View>
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    // subtle depth so the badge doesn't merge with the red bg on OLED
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -63,7 +63,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   mark: {
-    width: 60,
-    height: 60,
+    width: 96,
+    height: 96,
+    borderRadius: 20,
   },
 });
