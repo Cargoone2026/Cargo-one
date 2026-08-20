@@ -24,7 +24,7 @@
     },
     "plugins": [
       "../../plugins/withCargoOneiOSFixes",
-      "@rnmapbox/maps",
+      ["@rnmapbox/maps", {}],
       [
         "expo-location",
         {
