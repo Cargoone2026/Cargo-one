@@ -4261,7 +4261,7 @@ local Xcode build (this container cannot compile an .ipa).
 - ~~Pickup **photo upload** in PostJob (needs `expo-image-picker`).~~ ✅ **Landed in `c501fa4`** as `components/PhotoUpload.tsx` — up to 4 base64 data-URL photos in step 1, matching the backend `photos: list[str]` shape.
 
 ### Truly still open (next session)
-- iPad Pro visual certification vs the actual web portal (user must run `npx expo run:ios` on their Mac; container has no simulator).
+- ~~iPad Pro visual certification vs the actual web portal (user must run `npx expo run:ios` on their Mac; container has no simulator).~~ ⏳ **Awaiting user's re-test after `694be32`** — iPad splash-scaling bug (`supportsTablet: false` → iPhone-compat scaled window) and stuck-splash bug (fetch had no timeout → `setHydrated` never called) both fixed.
 - ~~Second-round driver polish for Fleet / My Jobs / Available hub (currently rendered by Stubs.tsx inside the shell). Data screens work via the existing detail flows.~~ ✅ **Landed in `64572b8`** — Stubs.tsx deleted; real web-parity MyJobs / Fleet / Profile shipped. Driver `AvailableJobs` route now points at the real reskinned list.
 - Full web-parity **background location** upgrade for App Store review (currently foreground-only via expo-location watchPositionAsync).
 - Push notifications (APNs / FCM).
