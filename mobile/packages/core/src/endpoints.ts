@@ -90,9 +90,70 @@ export const DriverAPI = {
 
 // ── Shared (both roles) ─────────────────────────────────────────────────
 
+export interface GeoSuggestion {
+  place_id?: string;
+  formatted_address: string;
+  town?: string;
+}
+export interface GeoAutocompleteResponse {
+  suggestions: GeoSuggestion[];
+  source: "google" | "manual";
+}
+export interface GeoDetails {
+  formatted_address?: string;
+  address_line?: string;
+  postcode?: string;
+  town?: string;
+  region?: string;
+  country?: string;
+  country_code?: string;
+  lat?: number;
+  lng?: number;
+  source: "google" | "manual";
+}
+export interface QuoteEstimate {
+  distance_miles: number;
+  duration_minutes: number;
+  suggested_price: number;
+  requires_manual_review?: boolean;
+  origin_country?: string;
+  destination_country?: string;
+  manual_review_message?: string;
+}
+export interface FeePreview {
+  driver_charge: number;
+  booking_fee: number;
+  booking_fee_percent?: number;
+  customer_total: number;
+}
+
 export const SharedAPI = {
   me: () => api<User>("/auth/me"),
   tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
   driverProfile: (driverId: string) => api<DriverProfile>(`/users/${driverId}/profile`),
   serviceCatalog: () => api<any>("/service-catalog"),
+  categories: () => api<any[]>("/service-categories").catch(() => [] as any[]),
+  vehicles: () => api<any[]>("/vehicles").catch(() => [] as any[]),
+  // Server-side geocoding proxy — Google key stays backend-only.
+  geoAutocomplete: (q: string) =>
+    api<GeoAutocompleteResponse>(`/geo/autocomplete?q=${encodeURIComponent(q)}`).catch(
+      () => ({ suggestions: [], source: "manual" as const }),
+    ),
+  geoDetails: (placeId: string) =>
+    api<GeoDetails>(`/geo/details?place_id=${encodeURIComponent(placeId)}`),
+  quoteEstimate: (params: Record<string, string | number | undefined | null>) => {
+    const parts = Object.entries(params)
+      .filter(([, v]) => v != null && v !== "")
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
+    return api<QuoteEstimate>(`/quote/estimate?${parts.join("&")}`);
+  },
+  feePreview: (driverCharge: number) =>
+    api<FeePreview>(`/booking-fees/preview?driver_charge=${driverCharge}`),
+  asapQuote: (body: Record<string, unknown>) =>
+    api<any>("/asap/quote", { method: "POST", body }),
+  asapVehicles: () =>
+    api<{ transport?: any[]; recovery?: any[] }>("/asap/vehicles").catch(() => ({
+      transport: [],
+      recovery: [],
+    })),
 };
