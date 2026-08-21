@@ -71,6 +71,51 @@ export function Row({ children, style }: { children: React.ReactNode; style?: Vi
   return <View style={[{ flexDirection: "row", alignItems: "center", gap: 8 }, style]}>{children}</View>;
 }
 
+/**
+ * MenuRow — a tappable settings/profile row with a label and optional
+ * right-chevron affordance. Used across Profile / Settings / Support
+ * screens. Not to be confused with the layout `Row` above.
+ */
+export function MenuRow({
+  label,
+  onPress,
+  testID,
+  danger,
+}: {
+  label: string;
+  onPress?: () => void;
+  testID?: string;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [
+        {
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: CARGO.hairline,
+          backgroundColor: pressed ? "#F3F4F6" : "#FFFFFF",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        },
+      ]}
+    >
+      <Text style={{ fontSize: 15, color: danger ? "#B91C1C" : CARGO.ink, fontWeight: "500" }}>{label}</Text>
+      <Text style={{ fontSize: 18, color: CARGO.muted }}>›</Text>
+    </Pressable>
+  );
+}
+
+/** SecondaryButton — outline variant of PrimaryButton for cancel /
+ * secondary navigation actions. */
+export function SecondaryButton(props: Omit<React.ComponentProps<typeof PrimaryButton>, "variant">) {
+  return <PrimaryButton {...props} variant="secondary" />;
+}
+
 const styles = StyleSheet.create({
   h1: { fontSize: 26, fontWeight: "700", color: CARGO.ink, letterSpacing: -0.3 },
   body: { fontSize: 14, color: CARGO.ink, lineHeight: 20 },

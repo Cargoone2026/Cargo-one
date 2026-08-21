@@ -19,6 +19,16 @@ import { PaymentScreen } from "./screens/Payment";
 import { ReviewScreen } from "./screens/Review";
 import { SettingsScreen } from "./screens/Settings";
 import { PasskeysScreen } from "./screens/Passkeys";
+import { MessagesScreen } from "./screens/Messages";
+import { ProfileScreen } from "./screens/Profile";
+import { LegalScreen } from "./screens/Legal";
+import { AboutScreen } from "./screens/About";
+import { SupportScreen } from "./screens/Support";
+import { DeleteAccountScreen } from "./screens/DeleteAccount";
+import { BookingConfirmedScreen } from "./screens/BookingConfirmed";
+import { JobDetailScreen } from "./screens/JobDetail";
+import { DispatchScreen } from "./screens/Dispatch";
+import { DriverProfileScreen } from "./screens/DriverProfile";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { LoadingScreen } from "./components/LoadingScreen";
 
@@ -38,6 +48,17 @@ export type RootStackParamList = {
   Payment: { bookingId: string };
   Review: { bookingId: string; driverId?: string };
   Passkeys: undefined;
+  Messages: undefined;
+  Profile: undefined;
+  Settings: undefined;
+  Legal: { slug: "terms" | "privacy" | "cookies" };
+  About: undefined;
+  Support: undefined;
+  DeleteAccount: undefined;
+  BookingConfirmed: { bookingId: string };
+  JobDetail: { jobId: string };
+  Dispatch: { bookingId: string };
+  DriverProfile: { driverId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -48,7 +69,8 @@ function TabsRoot() {
     <Tabs.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: "#D62828" }}>
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Bookings" component={BookingsScreen} />
-      <Tabs.Screen name="Settings" component={SettingsScreen} />
+      <Tabs.Screen name="Messages" component={MessagesScreen} />
+      <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>
   );
 }
@@ -97,6 +119,15 @@ export function App() {
                     <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: true, title: "Payment" }} />
                     <Stack.Screen name="Review" component={ReviewScreen} options={{ headerShown: true, title: "Leave a review" }} />
                     <Stack.Screen name="Passkeys" component={PasskeysScreen} options={{ headerShown: true, title: "Passkeys" }} />
+                    <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: "Settings" }} />
+                    <Stack.Screen name="Legal" component={LegalScreen} options={{ headerShown: true, title: "Legal" }} />
+                    <Stack.Screen name="About" component={AboutScreen} options={{ headerShown: true, title: "About" }} />
+                    <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: true, title: "Help & Support" }} />
+                    <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: true, title: "Delete account" }} />
+                    <Stack.Screen name="BookingConfirmed" component={BookingConfirmedScreen} options={{ headerShown: true, title: "Booked" }} />
+                    <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: true, title: "Job" }} />
+                    <Stack.Screen name="Dispatch" component={DispatchScreen} options={{ headerShown: true, title: "Live" }} />
+                    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} options={{ headerShown: true, title: "Driver" }} />
                   </>
                 )}
               </Stack.Navigator>

@@ -41,6 +41,20 @@ export const CustomerAPI = {
       method: "POST",
       body: { booking_id: bookingId, rating, comment },
     }),
+  // Messaging + notifications (mirrors web /customer/messages page).
+  listThreads: () => api<any[]>("/threads").catch(() => [] as any[]),
+  listMessages: (threadId: string) =>
+    api<any[]>(`/threads/${threadId}/messages`).catch(() => [] as any[]),
+  sendMessage: (threadId: string, body: string) =>
+    api<any>(`/threads/${threadId}/messages`, { method: "POST", body: { body } }),
+  listNotifications: () => api<any[]>("/notifications").catch(() => [] as any[]),
+  markNotificationRead: (id: string) =>
+    api<any>(`/notifications/${id}/read`, { method: "POST" }).catch(() => null),
+  // Profile + account.
+  updateProfile: (patch: Record<string, unknown>) =>
+    api<User>("/users/me", { method: "PATCH", body: patch }),
+  deleteAccount: () => api<any>("/users/me", { method: "DELETE" }),
+  tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
 };
 
 // ── Driver ──────────────────────────────────────────────────────────────
