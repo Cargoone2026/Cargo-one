@@ -1,7 +1,13 @@
+/**
+ * PasskeysScreen — driver passkey management.
+ * Same shared Cargo One design system as the customer app.
+ */
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { deletePasskey, listPasskeys, registerPasskey } from "@cargoone/core";
-import { Body, CARGO, Card, H1, PrimaryButton, Screen } from "../ui";
+import { Fingerprint } from "lucide-react-native";
+import { colors, radius, typography } from "../theme";
+import { EmptyState, Page, PageHeader, PrimaryButton } from "../ui";
 
 export function PasskeysScreen() {
   const [rows, setRows] = useState<any[]>([]);
@@ -42,33 +48,47 @@ export function PasskeysScreen() {
   }
 
   return (
-    <Screen>
-      <H1>Passkeys</H1>
-      <Body muted style={{ marginTop: 6, marginBottom: 12 }}>
-        Sign in without typing your password using Face ID.
-      </Body>
-      <PrimaryButton title="Add a passkey" onPress={add} loading={busy} testID="add-passkey" />
-      <View style={{ height: 12 }} />
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.id}
-        renderItem={({ item }) => (
-          <Card style={{ marginBottom: 10 }} testID={`passkey-row-${item.id.slice(0, 8)}`}>
-            <Text style={{ fontWeight: "700" }}>{item.label || "Passkey"}</Text>
-            <Text style={{ color: CARGO.muted, fontSize: 12, marginTop: 4 }}>
-              Added {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}
-            </Text>
-            <Text
-              onPress={() => remove(item.id)}
-              testID={`passkey-remove-${item.id.slice(0, 8)}`}
-              style={{ color: CARGO.red, fontWeight: "700", marginTop: 8 }}
-            >
-              Remove
-            </Text>
-          </Card>
-        )}
-        ListEmptyComponent={<Body muted style={{ marginTop: 40, textAlign: "center" }}>No passkeys yet.</Body>}
-      />
-    </Screen>
+    <Page testID="driver-passkeys">
+      <ScrollView>
+        <PageHeader title="Passkeys" subtitle="Sign in without typing your password using Face ID." />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
+          <PrimaryButton title="Add a passkey" onPress={add} loading={busy} testID="add-passkey" />
+          {rows.length === 0 ? (
+            <EmptyState Icon={Fingerprint} title="No passkeys yet" body="Add one to sign in with Face ID next time." />
+          ) : (
+            rows.map((item) => (
+              <View key={item.id} style={styles.row} testID={`passkey-row-${item.id.slice(0, 8)}`}>
+                <View style={{ flex: 1 }}>
+                  <Text style={typography.cardTitle}>{item.label || "Passkey"}</Text>
+                  <Text style={[typography.small, { marginTop: 2 }]}>
+                    Added {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}
+                  </Text>
+                </View>
+                <Text
+                  onPress={() => remove(item.id)}
+                  testID={`passkey-remove-${item.id.slice(0, 8)}`}
+                  style={{ color: colors.brand, fontWeight: "700", fontSize: 14 }}
+                >
+                  Remove
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </Page>
   );
 }
+
+const styles = {
+  row: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
+  },
+};

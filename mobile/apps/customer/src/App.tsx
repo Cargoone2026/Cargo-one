@@ -33,6 +33,7 @@ import { DriverProfileScreen } from "./screens/DriverProfile";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { AppShell } from "./components/AppShell";
+import { BiometricGate } from "./components/BiometricGate";
 
 // Hold the native splash until we've finished the auth-hydration pass.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -101,7 +102,8 @@ export function App() {
           {!hydrated ? (
             <LoadingScreen />
           ) : (
-            <NavigationContainer>
+            <BiometricGate>
+              <NavigationContainer>
               <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
                 {!user ? (
                   <>
@@ -139,6 +141,7 @@ export function App() {
                 )}
               </Stack.Navigator>
             </NavigationContainer>
+            </BiometricGate>
           )}
         </AuthContext.Provider>
       </StripeProvider>

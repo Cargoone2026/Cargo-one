@@ -55,6 +55,7 @@ import {
 import { useShellMenu } from "../components/AppShell";
 import { AddressAutocomplete, PlaceResult } from "../components/AddressAutocomplete";
 import { RouteMap } from "../components/RouteMap";
+import { PhotoUpload } from "../components/PhotoUpload";
 
 const STEP_COUNT = 5;
 const NOT_SURE_KEY = "__not_sure__";
@@ -95,6 +96,7 @@ export function PostJobScreen() {
   const [needsLoadingHelp, setNeedsLoadingHelp] = useState(false);
   const [collectionDate, setCollectionDate] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
 
   const [vehicleKey, setVehicleKey] = useState("");
   const [pricingType, setPricingType] = useState<"bidding" | "fixed">("bidding");
@@ -234,6 +236,7 @@ export function PostJobScreen() {
         fixed_price: pricingType === "fixed" ? Number(fixedPrice) : null,
         max_budget: maxBudget ? Number(maxBudget) : null,
         vehicle_required: effectiveVehicleKey || null,
+        photos: photos,
       };
       const job: any = await CustomerAPI.createJob(body);
       if (pricingType === "bidding") {
@@ -320,6 +323,9 @@ export function PostJobScreen() {
                 testID="postjob-desc-input"
                 style={styles.textarea}
               />
+              <View style={{ marginTop: 12 }}>
+                <PhotoUpload photos={photos} onChange={setPhotos} max={4} testID="postjob-photos" />
+              </View>
             </View>
           )}
 

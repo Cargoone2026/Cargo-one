@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Alert } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import { requestPasswordReset } from "@cargoone/core";
-import { Body, H1, Input, Label, PrimaryButton, Screen } from "../ui";
+import { colors } from "../theme";
+import { Input, Label, Page, PageHeader, PrimaryButton } from "../ui";
 
 export function PasswordResetScreen({ navigation }: any) {
   const [email, setEmail] = useState("");
@@ -21,14 +22,17 @@ export function PasswordResetScreen({ navigation }: any) {
   }
 
   return (
-    <Screen>
-      <H1>Reset password</H1>
-      <Body muted style={{ marginTop: 6, marginBottom: 24 }}>
-        Enter your email and we'll send a reset link.
-      </Body>
-      <Label>Email</Label>
-      <Input value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" testID="reset-email" />
-      <PrimaryButton title="Send reset link" onPress={onSubmit} loading={busy} testID="reset-submit" />
-    </Screen>
+    <Page testID="driver-password-reset">
+      <ScrollView>
+        <PageHeader title="Reset password" subtitle="Enter your email and we'll send a reset link." />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
+          <Label>Email</Label>
+          <Input value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" testID="reset-email" />
+          <View style={{ marginTop: 20 }}>
+            <PrimaryButton title="Send reset link" onPress={onSubmit} loading={busy} testID="reset-submit" />
+          </View>
+        </View>
+      </ScrollView>
+    </Page>
   );
 }
