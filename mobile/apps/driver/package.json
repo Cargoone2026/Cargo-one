@@ -15,7 +15,7 @@
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/native-stack": "^6.9.26",
     "@react-navigation/bottom-tabs": "^6.5.20",
-    "@rnmapbox/maps": "10.2.10",
+    "@rnmapbox/maps": "10.1.31",
     "expo": "~51.0.28",
     "expo-status-bar": "~1.12.1",
     "expo-linking": "~6.3.1",

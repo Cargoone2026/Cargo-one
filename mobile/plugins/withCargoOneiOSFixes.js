@@ -14,30 +14,45 @@
  *      Without this, `pod install` fails with:
  *        "react-native-passkey ... required a higher minimum deployment target"
  *
- *   2. Prepends a one-line env alias to ios/Podfile so developers can supply
- *      the Mapbox secret download token via EITHER of the two conventional
- *      environment variable names:
- *         - MAPBOX_DOWNLOADS_TOKEN         (the name in Mapbox's own docs
- *                                            and used by Android Gradle)
- *         - RNMAPBOX_MAPS_DOWNLOAD_TOKEN   (what the @rnmapbox/maps
- *                                            podspec's curl monkey-patch
- *                                            actually reads)
+ *   2. Prepends a single line to the generated ios/Podfile that
+ *      forwards the developer's shell env var to the rnmapbox Ruby
+ *      global that the podspec actually reads:
  *
- *      No token value is ever written to disk here. Only the env fallback
- *      line: `ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'] ||= ENV['MAPBOX_DOWNLOADS_TOKEN']`
+ *        $RNMapboxMapsDownloadToken ||= (
+ *          ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'] || ENV['MAPBOX_DOWNLOADS_TOKEN']
+ *        )
  *
- *      When neither env var is set, pod install fails with a 401 from
- *      api.mapbox.com — which is the intended failure mode (see mobile/SECRETS.md).
+ *      Why the Ruby global, not just ENV?
+ *      - @rnmapbox/maps@10.1.31's podspec ONLY reads the Ruby global
+ *        `$RNMapboxMapsDownloadToken`. It has no ENV fallback path,
+ *        so an ENV-only alias is a no-op there.
+ *      - @rnmapbox/maps@10.2.x's podspec DOES also read
+ *        ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'], but only when the Ruby
+ *        global is nil — so setting the global still works.
+ *      Setting the global covers both major-line branches.
+ *      Developers can supply the token via EITHER env var name:
+ *         - MAPBOX_DOWNLOADS_TOKEN         (Mapbox's canonical name;
+ *                                            also used by Android)
+ *         - RNMAPBOX_MAPS_DOWNLOAD_TOKEN   (rnmapbox-specific)
+ *
+ *      No token value is ever written to disk here. When neither env
+ *      var is set, pod install fails with a 401 from api.mapbox.com —
+ *      the intended failure mode (see mobile/SECRETS.md).
  *
  * Both operations are idempotent and marker-guarded — safe on repeated
- * `expo prebuild` runs.
+ * `expo prebuild` runs. Any previous version of the block is stripped
+ * before the current one is written so upgrades never leave stale
+ * comments behind.
  */
 const { withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
-const PODFILE_MARKER_BEGIN = '# BEGIN CargoOne Mapbox env alias';
-const PODFILE_MARKER_END = '# END CargoOne Mapbox env alias';
+const PODFILE_MARKER_BEGIN = '# BEGIN CargoOne Mapbox downloads token';
+const PODFILE_MARKER_END = '# END CargoOne Mapbox downloads token';
+// Any block whose BEGIN marker contains this substring is considered
+// ours and will be removed on the next prebuild.
+const LEGACY_BEGIN_PATTERN = /^# BEGIN CargoOne Mapbox[\s\S]*?^# END CargoOne Mapbox[^\n]*\n?/m;
 
 function ensureDeploymentTarget(iosDir) {
   const propsPath = path.join(iosDir, 'Podfile.properties.json');
@@ -50,18 +65,21 @@ function ensureDeploymentTarget(iosDir) {
   }
 }
 
-function ensurePodfileEnvAlias(iosDir) {
+function ensurePodfileTokenBridge(iosDir) {
   const podfilePath = path.join(iosDir, 'Podfile');
   if (!fs.existsSync(podfilePath)) return;
-  const contents = fs.readFileSync(podfilePath, 'utf8');
-  if (contents.includes(PODFILE_MARKER_BEGIN)) return;
+  let contents = fs.readFileSync(podfilePath, 'utf8');
+  // Remove ANY prior CargoOne Mapbox block (may loop if plugin was
+  // invoked multiple times before this cleanup was in place).
+  while (LEGACY_BEGIN_PATTERN.test(contents)) {
+    contents = contents.replace(LEGACY_BEGIN_PATTERN, '');
+  }
   const snippet =
     `${PODFILE_MARKER_BEGIN}\n` +
-    `# Let developers supply the Mapbox secret download token via either\n` +
-    `# MAPBOX_DOWNLOADS_TOKEN (Mapbox's canonical env var name, also used\n` +
-    `# by Android Gradle) or RNMAPBOX_MAPS_DOWNLOAD_TOKEN (what @rnmapbox/maps\n` +
-    `# actually reads at pod-install time). Never store the token here.\n` +
-    `ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'] ||= ENV['MAPBOX_DOWNLOADS_TOKEN']\n` +
+    `# Forward the developer's shell env var into the rnmapbox Ruby\n` +
+    `# global that the podspec's curl monkey-patch reads. Never stores\n` +
+    `# the token value on disk. Accepts either canonical env var name.\n` +
+    `$RNMapboxMapsDownloadToken ||= (ENV['RNMAPBOX_MAPS_DOWNLOAD_TOKEN'] || ENV['MAPBOX_DOWNLOADS_TOKEN'])\n` +
     `${PODFILE_MARKER_END}\n\n`;
   fs.writeFileSync(podfilePath, snippet + contents);
 }
@@ -72,7 +90,7 @@ module.exports = function withCargoOneiOSFixes(config) {
     async (cfg) => {
       const iosDir = cfg.modRequest.platformProjectRoot;
       ensureDeploymentTarget(iosDir);
-      ensurePodfileEnvAlias(iosDir);
+      ensurePodfileTokenBridge(iosDir);
       return cfg;
     },
   ]);
