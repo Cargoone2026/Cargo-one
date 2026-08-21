@@ -4243,19 +4243,20 @@ local Xcode build (this container cannot compile an .ipa).
   simulator).
 
 ### Deferred to next session
-1. **Full PostJob 5-step wizard** with native `AddressAutocomplete` +
-   `RouteMap` + `PhotoUpload` components (currently the screen is a
-   scheduled-service chooser that hands off to `CreateJob`).
-2. **Full ASAP wizard** with autocomplete + live map + quote card
-   (currently a Transport / Recovery chooser).
-3. **Driver native app parity** — replicate the same `AppShell` +
-   design system for the driver app, rebuild `Dashboard`, `Jobs`,
-   `MyJobs`, `Earnings`, `Live`, `Fleet`, `Documents`, `Profile`,
-   `Notifications`, `BookingDetail`, `JobDetail`.
-4. **Biometric / Passkey launch gate** (Task 2 from previous handoff).
-5. **Native `AddressAutocomplete`** module built against
-   `@cargoone/core` `pricing/asap/vehicles` endpoints for full ASAP +
-   PostJob wizards.
-6. **Native `RouteMap`** using `@rnmapbox/maps` matching the web
-   portal's `RouteMap.jsx` visual language.
+1. **Full PostJob 5-step wizard** — ✅ **Landed in `21612a9`**. Only remaining gap is pickup-photo upload (needs `expo-image-picker`; kept out of scope to keep iOS build config frozen per handoff rule).
+2. **Full ASAP wizard** — ✅ **Landed in `21612a9`**. Live `/api/asap/quote` + summary + deposit checkout hand-off complete.
+3. **Native `AddressAutocomplete`** — ✅ **Landed in `21612a9`** via the server-side `/api/geo/*` proxy so the Google Places key stays backend-only. Includes debounced search, manual-review fallback and market chip selector.
+4. **Native `RouteMap`** — ✅ **Landed in `21612a9`** using `@rnmapbox/maps` (existing pin `10.1.31`, no build changes).
+
+### Driver parity (Feb 2026 – commits `dc0bbc1`, `e1dd5f5`)
+- Shared `theme.ts` + `ui.tsx` copied verbatim to `mobile/apps/driver/src/` so both native apps share the same design tokens and primitives (Body primitive extended with `testID` prop in both).
+- **Driver AppShell** — 1:1 with the web `SideRail` + `DriverLayout`: seven-item nav (Home · Available · Live Mode · My Jobs · Earnings · Fleet · Profile), dark `#0B0B0F` sidebar, red brand badge, red-tinted active pill + red dot, Public site + Settings section, avatar footer. Same responsive presentation (docked ≥ 900 px with collapse-to-rail; off-canvas drawer < 900 px). **No bottom tab bar** — `@react-navigation/bottom-tabs` usage removed from `App.tsx`.
+- **Screens reskinned this session**: Home dashboard, AvailableJobs, Earnings, JobDetail, Login, Settings — all using shared primitives. Placeholder Stubs.tsx wired into MyJobs / Fleet / Profile / Available hub / Earnings hub so every primary nav entry lands inside the shell.
+
+### Still deferred (next driver commit)
+- Full **LiveMode** map reskin using the shared design tokens.
+- **ActiveBooking** POD / delivery flow reskin.
+- **AwaitingApproval**, **Register**, **PasswordReset**, **Passkeys** — currently render via the legacy `ui.tsx` Screen/Card/H1 primitives; functional but not yet using the new PageHeader/Cargo One card treatment.
+- **Biometric / Passkey launch gate** (Task 2 from previous handoff).
+- Pickup **photo upload** in PostJob (needs `expo-image-picker`).
 
