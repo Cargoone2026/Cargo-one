@@ -16,7 +16,9 @@ import { ActiveBookingScreen } from "./screens/ActiveBooking";
 import { EarningsScreen } from "./screens/Earnings";
 import { SettingsScreen } from "./screens/Settings";
 import { PasskeysScreen } from "./screens/Passkeys";
-import { AvailableJobsHubScreen, MyJobsScreen, EarningsHubScreen, FleetScreen, DriverProfileScreen } from "./screens/Stubs";
+import { MyJobsScreen } from "./screens/MyJobs";
+import { FleetScreen } from "./screens/Fleet";
+import { ProfileScreen } from "./screens/Profile";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
 
@@ -85,7 +87,7 @@ export function App() {
                 <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
                 <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
                 <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
-                <Stack.Screen name="Profile" component={withShell(DriverProfileScreen)} />
+                <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
                 <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
 
                 {/* Focused workflows */}

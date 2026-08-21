@@ -86,6 +86,17 @@ export const DriverAPI = {
   goOffline: () => api("/driver/offline", { method: "POST" }),
   pushLocation: (lat: number, lng: number) =>
     api("/driver/location", { method: "POST", body: { lat, lng } }),
+  // Fleet + additional lists used by native My Jobs / Fleet / Profile.
+  acceptedJobs: () => api<Job[]>("/driver/accepted-jobs").catch(() => [] as Job[]),
+  myBids: () => api<any[]>("/driver/my-bids").catch(() => [] as any[]),
+  listVehicles: () => api<any[]>("/driver/vehicles").catch(() => [] as any[]),
+  saveVehicle: (v: Record<string, unknown>) =>
+    api<any>(v.id ? `/driver/vehicles/${v.id}` : "/driver/vehicles", {
+      method: v.id ? "PUT" : "POST",
+      body: v,
+    }),
+  deleteVehicle: (id: string) => api<any>(`/driver/vehicles/${id}`, { method: "DELETE" }),
+  myReviews: (userId: string) => api<any[]>(`/users/${userId}/reviews`).catch(() => [] as any[]),
 };
 
 // ── Shared (both roles) ─────────────────────────────────────────────────
