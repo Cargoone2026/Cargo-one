@@ -1,20 +1,18 @@
+/**
+ * PaymentScreen — native Stripe Payment Sheet.
+ */
 import React, { useState } from "react";
-import { Alert } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useStripe } from "@stripe/stripe-react-native";
+import { ShieldCheck, CreditCard } from "lucide-react-native";
 import { CustomerAPI } from "@cargoone/core";
-import { Body, H1, PrimaryButton, Screen } from "../ui";
+import { colors, radius, typography } from "../theme";
+import { Page, PageHeader, PrimaryButton } from "../ui";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "Payment">;
 
-/**
- * Native Stripe Payment Sheet. The backend creates the PaymentIntent
- * (unchanged R26/R40/R42 pricing) and we simply present its
- * client_secret through Stripe's native UI. On success we return to the
- * bookings list so the customer sees the newly paid booking at the top
- * (R70 newest-first).
- */
 export function PaymentScreen({ route, navigation }: P) {
   const { bookingId } = route.params;
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -35,7 +33,7 @@ export function PaymentScreen({ route, navigation }: P) {
         return;
       }
       Alert.alert("Payment confirmed", "You'll get an email receipt shortly.");
-      navigation.navigate("Tabs");
+      navigation.replace("BookingConfirmed", { bookingId });
     } catch (e: any) {
       Alert.alert("Payment error", e?.message || "Could not complete payment");
     } finally {
@@ -44,12 +42,33 @@ export function PaymentScreen({ route, navigation }: P) {
   }
 
   return (
-    <Screen>
-      <H1>Confirm payment</H1>
-      <Body muted style={{ marginTop: 6, marginBottom: 20 }}>
-        Cargo One uses Stripe for secure card payments.
-      </Body>
-      <PrimaryButton title="Pay with card" onPress={pay} loading={busy} testID="pay-card" />
-    </Screen>
+    <Page testID="payment-screen">
+      <ScrollView>
+        <PageHeader title="Confirm payment" subtitle="Cargo One uses Stripe for secure card payments." />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
+          <View style={styles.card}>
+            <CreditCard size={24} color={colors.brand} />
+            <Text style={[typography.body, { marginTop: 8, lineHeight: 20 }]}>
+              Only the Cargo One booking fee is charged now via Stripe. The driver charge is paid on delivery.
+            </Text>
+          </View>
+          <PrimaryButton title="Pay with card" onPress={pay} loading={busy} testID="pay-card" />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
+            <ShieldCheck size={14} color={colors.inkMuted} />
+            <Text style={typography.small}>PCI-compliant Stripe Payment Sheet</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </Page>
   );
 }
+
+const styles = {
+  card: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+};

@@ -1,18 +1,15 @@
 /**
- * BookingConfirmedScreen — post-payment / post-booking success view.
- * Mirrors web /customer/booking-confirmed/:id. Shows a check icon,
- * the booking reference, and CTAs to view live tracking, view all
- * bookings, or go home.
+ * BookingConfirmedScreen — post-payment success. Mirrors web
+ * /customer/booking-confirmed/:id.
  */
 import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { CheckCircle2 } from "lucide-react-native";
 import type { RootStackParamList } from "../App";
 import { CustomerAPI, Booking } from "@cargoone/core";
-import { PrimaryButton, SecondaryButton } from "../ui";
-
-const GREEN = "#16A34A";
+import { colors, radius, typography } from "../theme";
+import { Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingConfirmed">;
 
@@ -25,31 +22,56 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
   }, [bookingId]);
 
   return (
-    <SafeAreaView style={styles.root} testID="booking-confirmed-screen">
-      <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.check}><Text style={styles.checkGlyph}>✓</Text></View>
-        <Text style={styles.title}>Booking confirmed</Text>
-        <Text style={styles.subtitle}>
-          Your booking is in and the driver has been notified. You'll
-          receive updates in Messages and can track the job live from
-          your Bookings.
-        </Text>
-        {booking?.id ? <Text style={styles.ref} testID="booking-confirmed-ref">Ref: {booking.id.slice(0, 8).toUpperCase()}</Text> : null}
-        <View style={{ height: 32 }} />
-        <PrimaryButton title="Track live" onPress={() => navigation.navigate("Dispatch", { bookingId })} testID="confirmed-track-btn" />
-        <View style={{ height: 12 }} />
-        <SecondaryButton title="View all bookings" onPress={() => navigation.navigate("Tabs")} testID="confirmed-bookings-btn" />
+    <Page testID="booking-confirmed-screen">
+      <ScrollView>
+        <PageHeader title="Booked" />
+        <View style={{ paddingHorizontal: 24, paddingVertical: 20, alignItems: "center", gap: 16 }}>
+          <View style={styles.check}>
+            <CheckCircle2 size={56} color="#FFFFFF" strokeWidth={2.2} />
+          </View>
+          <Text style={typography.h1Large}>Booking confirmed</Text>
+          <Text style={[typography.body, { textAlign: "center", color: colors.inkMuted, lineHeight: 22 }]}>
+            Your booking is in and the driver has been notified. You'll receive updates in Messages and can track the
+            job live from your Bookings.
+          </Text>
+          {booking?.id ? (
+            <Text style={styles.ref} testID="booking-confirmed-ref">
+              Ref: {booking.id.slice(0, 8).toUpperCase()}
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ paddingHorizontal: 16, gap: 8, paddingBottom: 32 }}>
+          <PrimaryButton
+            title="Track live"
+            onPress={() => navigation.navigate("Dispatch", { bookingId })}
+            testID="confirmed-track-btn"
+          />
+          <SecondaryButton
+            title="View all bookings"
+            onPress={() => navigation.navigate("Bookings")}
+            testID="confirmed-bookings-btn"
+          />
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#FFFFFF" },
-  body: { padding: 24, alignItems: "center" },
-  check: { width: 80, height: 80, borderRadius: 40, backgroundColor: GREEN, alignItems: "center", justifyContent: "center", marginTop: 32, marginBottom: 24 },
-  checkGlyph: { color: "#FFFFFF", fontSize: 44, fontWeight: "700", lineHeight: 48 },
-  title: { fontSize: 26, fontWeight: "700", color: "#111827", marginBottom: 8, textAlign: "center" },
-  subtitle: { fontSize: 15, lineHeight: 22, color: "#6B7280", textAlign: "center", paddingHorizontal: 12 },
-  ref: { fontSize: 13, color: "#6B7280", marginTop: 16, letterSpacing: 1.2, fontWeight: "600" },
-});
+const styles = {
+  check: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.success,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginTop: 16,
+  },
+  ref: {
+    fontSize: 13,
+    color: colors.inkMuted,
+    marginTop: 8,
+    letterSpacing: 1.4,
+    fontWeight: "600" as const,
+  },
+};

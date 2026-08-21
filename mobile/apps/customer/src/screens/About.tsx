@@ -1,40 +1,46 @@
 /**
- * AboutScreen — mirrors the web "About Cargo One" settings entry.
- * Shows a short marketing paragraph, app version, and a link to the
- * marketing site.
+ * AboutScreen — Cargo One about page.
  */
 import React from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Linking, ScrollView, Text, View } from "react-native";
 import Constants from "expo-constants";
-import { MenuRow } from "../ui";
+import { Globe, Briefcase } from "lucide-react-native";
+import { colors, radius, typography } from "../theme";
+import { MenuRow, Page, PageHeader } from "../ui";
 
 export function AboutScreen() {
-  const version = Constants.expoConfig?.version || "0.1.0";
+  const version = (Constants as any).expoConfig?.version || "0.1.0";
   return (
-    <SafeAreaView style={styles.root} testID="about-screen">
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>About Cargo One</Text>
-        <Text style={styles.text}>
-          Cargo One is the UK marketplace for on-demand transport, vehicle
-          recovery and large-freight jobs. We connect customers directly
-          with vetted independent drivers — instant quotes, live tracking,
-          photo proof of delivery and secure Stripe payments in one app.
-        </Text>
-        <View style={styles.card}>
-          <MenuRow label={`App version ${version}`} onPress={() => null} testID="about-version" />
-          <MenuRow label="Visit cargoone.co.uk" onPress={() => Linking.openURL("https://cargoone.co.uk")} testID="about-website" />
-          <MenuRow label="Business account enquiries" onPress={() => Linking.openURL("https://cargoone.co.uk/business")} testID="about-business" />
+    <Page testID="about-screen">
+      <ScrollView>
+        <PageHeader title="About Cargo One" />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
+          <Text style={[typography.body, { lineHeight: 22 }]}>
+            Cargo One is the UK marketplace for on-demand transport, vehicle recovery and large-freight jobs. We connect
+            customers directly with vetted independent drivers — instant quotes, live tracking, photo proof of delivery
+            and secure Stripe payments in one app.
+          </Text>
+          <View style={styles.card}>
+            <MenuRow label={`App version ${version}`} onPress={() => null} right={<Text style={typography.small}>{version}</Text>} testID="about-version" />
+            <MenuRow
+              label="Visit cargoone.co.uk"
+              leftIcon={Globe}
+              onPress={() => Linking.openURL("https://cargoone.co.uk")}
+              testID="about-website"
+            />
+            <MenuRow
+              label="Business enquiries"
+              leftIcon={Briefcase}
+              onPress={() => Linking.openURL("https://cargoone.co.uk/business")}
+              testID="about-business"
+            />
+          </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F9FAFB" },
-  body: { padding: 20 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827", marginBottom: 8 },
-  text: { fontSize: 15, lineHeight: 22, color: "#374151", marginBottom: 20 },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB" },
-});
+const styles = {
+  card: { backgroundColor: colors.bg, borderRadius: radius.base, borderWidth: 1, borderColor: colors.border, overflow: "hidden" as const },
+};

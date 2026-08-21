@@ -1,13 +1,13 @@
 /**
- * LegalScreen — renders Terms / Privacy / Cookies content matching the
- * web copy at pages/Settings.jsx's CONTENT dictionary. Slug picks the
- * document; heading + body render as ScrollView.
+ * LegalScreen — Terms / Privacy / Cookies content matching the web
+ * copy at pages/Settings.jsx's CONTENT dictionary.
  */
 import React from "react";
-import { ScrollView, StyleSheet, Text } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
+import { colors, typography } from "../theme";
+import { Page, PageHeader } from "../ui";
 
 type P = NativeStackScreenProps<RootStackParamList, "Legal">;
 
@@ -46,18 +46,13 @@ export function LegalScreen({ route }: P) {
   const slug = route?.params?.slug || "terms";
   const doc = DOCS[slug] || DOCS.terms;
   return (
-    <SafeAreaView style={styles.root} testID={`legal-${slug}-screen`}>
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>{doc.title}</Text>
-        <Text style={styles.text}>{doc.body}</Text>
+    <Page testID={`legal-${slug}-screen`}>
+      <ScrollView>
+        <PageHeader title={doc.title} />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+          <Text style={[typography.body, { lineHeight: 22, color: colors.ink }]}>{doc.body}</Text>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </Page>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#FFFFFF" },
-  body: { padding: 20 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827", marginBottom: 16 },
-  text: { fontSize: 15, lineHeight: 22, color: "#374151" },
-});

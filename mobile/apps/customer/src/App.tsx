@@ -22,8 +22,8 @@ import { MessagesScreen } from "./screens/Messages";
 import { ProfileScreen } from "./screens/Profile";
 import { PostJobScreen } from "./screens/PostJob";
 import { AsapScreen } from "./screens/Asap";
-import { MoreScreen } from "./screens/More";
-import { LegalScreen } from "./screens/Legal";import { AboutScreen } from "./screens/About";
+import { LegalScreen } from "./screens/Legal";
+import { AboutScreen } from "./screens/About";
 import { SupportScreen } from "./screens/Support";
 import { DeleteAccountScreen } from "./screens/DeleteAccount";
 import { BookingConfirmedScreen } from "./screens/BookingConfirmed";
@@ -35,8 +35,6 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { AppShell } from "./components/AppShell";
 
 // Hold the native splash until we've finished the auth-hydration pass.
-// Any failure here is non-fatal — the JS LoadingScreen will still show
-// once React mounts, so the user never sees a blank window.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export type RootStackParamList = {
@@ -69,12 +67,11 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
- * TabsRoot has been removed — the customer app no longer uses a
- * bottom tab bar. Every primary destination (Home / Post Job / ASAP
- * / Bookings / Messages / Profile) is now a plain Stack route
- * wrapped by <AppShell>, which mirrors the web SideRail as either a
- * docked sidebar (iPad width >= 900) or a slide-in drawer (iPhone /
- * smaller iPad orientations). See components/AppShell.tsx.
+ * withShell wraps a route inside <AppShell> so the Cargo One
+ * responsive sidebar is present on primary destinations. Detail
+ * screens (Booking / Job / Dispatch / Payment / etc.) render without
+ * the sidebar for a focused workflow, matching the pattern used on
+ * the web portal where those pages consume the full content width.
  */
 function withShell<C extends React.ComponentType<any>>(Component: C) {
   const Wrapped: React.FC<any> = (props) => (
@@ -90,9 +87,6 @@ export function App() {
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
 
-  // The moment the auth hydration finishes we dismiss the native splash.
-  // React then paints either the LoadingScreen (still fetching), the
-  // Login stack (no session), or the Tabs stack (session restored).
   useEffect(() => {
     if (hydrated) {
       SplashScreen.hideAsync().catch(() => {});
@@ -105,45 +99,42 @@ export function App() {
         <AuthContext.Provider value={authValue}>
           <StatusBar style={hydrated ? "dark" : "light"} />
           {!hydrated ? (
-            // Branded loading screen — remains visible only while we're
-            // restoring the session from AsyncStorage + /api/auth/me.
             <LoadingScreen />
           ) : (
             <NavigationContainer>
-              <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
                 {!user ? (
-                  // CASE C — no valid session, show Login.
                   <>
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
                     <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
                   </>
                 ) : (
-                  // CASE B — valid session restored, enter app directly.
-                  // (CASE A "biometric on launch" hooks in here later
-                  //  via a Settings toggle; the plumbing is ready.)
                   <>
+                    {/* Primary destinations — hosted inside the Cargo One sidebar shell. */}
                     <Stack.Screen name="Home" component={withShell(HomeScreen)} />
                     <Stack.Screen name="PostJob" component={withShell(PostJobScreen)} />
                     <Stack.Screen name="Asap" component={withShell(AsapScreen)} />
                     <Stack.Screen name="Bookings" component={withShell(BookingsScreen)} />
                     <Stack.Screen name="Messages" component={withShell(MessagesScreen)} />
                     <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
-                    <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: true, title: "Booking" }} />
-                    <Stack.Screen name="CreateJob" component={CreateJobScreen} options={{ headerShown: true, title: "New booking" }} />
-                    <Stack.Screen name="Bids" component={BidsScreen} options={{ headerShown: true, title: "Bids" }} />
-                    <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: true, title: "Payment" }} />
-                    <Stack.Screen name="Review" component={ReviewScreen} options={{ headerShown: true, title: "Leave a review" }} />
-                    <Stack.Screen name="Passkeys" component={PasskeysScreen} options={{ headerShown: true, title: "Passkeys" }} />
-                    <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: "Settings" }} />
-                    <Stack.Screen name="Legal" component={LegalScreen} options={{ headerShown: true, title: "Legal" }} />
-                    <Stack.Screen name="About" component={AboutScreen} options={{ headerShown: true, title: "About" }} />
-                    <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: true, title: "Help & Support" }} />
-                    <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: true, title: "Delete account" }} />
-                    <Stack.Screen name="BookingConfirmed" component={BookingConfirmedScreen} options={{ headerShown: true, title: "Booked" }} />
-                    <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: true, title: "Job" }} />
-                    <Stack.Screen name="Dispatch" component={DispatchScreen} options={{ headerShown: true, title: "Live" }} />
-                    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} options={{ headerShown: true, title: "Driver" }} />
+
+                    {/* Focused workflows — full-width without the sidebar. */}
+                    <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
+                    <Stack.Screen name="CreateJob" component={CreateJobScreen} />
+                    <Stack.Screen name="Bids" component={BidsScreen} />
+                    <Stack.Screen name="Payment" component={PaymentScreen} />
+                    <Stack.Screen name="Review" component={ReviewScreen} />
+                    <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                    <Stack.Screen name="Settings" component={SettingsScreen} />
+                    <Stack.Screen name="Legal" component={LegalScreen} />
+                    <Stack.Screen name="About" component={AboutScreen} />
+                    <Stack.Screen name="Support" component={SupportScreen} />
+                    <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+                    <Stack.Screen name="BookingConfirmed" component={BookingConfirmedScreen} />
+                    <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+                    <Stack.Screen name="Dispatch" component={DispatchScreen} />
+                    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
                   </>
                 )}
               </Stack.Navigator>

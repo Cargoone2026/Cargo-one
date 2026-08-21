@@ -1,100 +1,159 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
-import { CustomerAPI, mergeActive, Booking, Job, money } from "@cargoone/core";
-import { Body, CARGO, Card, H1, Screen } from "../ui";
-
-type Row = (Booking & { _isBooking: true }) | (Job & { _isJob: true });
-
 /**
- * Customer bookings list — newest-first (R70 parity). Merges paid
- * bookings with unpaid posted jobs so a brand-new posted job always
- * sits at the top instead of being buried behind old paid bookings.
+ * BookingsScreen — 1:1 port of frontend/src/pages/portal/customer/Bookings.jsx.
+ * Segmented tabs (Active / Past), search input, and BookingRow list.
  */
-export function BookingsScreen({ navigation }: any) {
-  const [rows, setRows] = useState<Row[]>([]);
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Package } from "lucide-react-native";
+import { CustomerAPI, Booking, Job } from "@cargoone/core";
+import type { RootStackParamList } from "../App";
+import { colors } from "../theme";
+import { BookingRow, EmptyState, Page, PageHeader, SearchInputRow, SegmentedTabs } from "../ui";
+import { useShellMenu } from "../components/AppShell";
+
+const PAST = new Set(["completed", "cancelled", "refunded"]);
+
+type Row =
+  | (Booking & { _isBooking: true; _isJob?: undefined })
+  | (Job & { _isJob: true; _isBooking?: undefined });
+
+export function BookingsScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { openDrawer, showMenu } = useShellMenu();
   const [tab, setTab] = useState<"active" | "past">("active");
+  const [items, setItems] = useState<Booking[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [bookings, jobs] = await Promise.all([CustomerAPI.myBookings(), CustomerAPI.myJobs().catch(() => [] as Job[])]);
-      const isActive = (b: Booking) => !["completed", "cancelled", "refunded"].includes(b.status);
-      const active = bookings.filter(isActive).map((b) => ({ ...b, _isBooking: true as const }));
-      const past = bookings.filter((b) => !isActive(b)).map((b) => ({ ...b, _isBooking: true as const }));
-      const posted = jobs.filter((j) => ["posted", "quote"].includes(j.status)).map((j) => ({ ...j, _isJob: true as const }));
-      setRows(tab === "active" ? (mergeActive(active as any, posted as any) as Row[]) : (past as Row[]));
+      const [b, j] = await Promise.all([
+        CustomerAPI.myBookings().catch(() => [] as Booking[]),
+        CustomerAPI.myJobs().catch(() => [] as Job[]),
+      ]);
+      setItems(Array.isArray(b) ? b : []);
+      setJobs(Array.isArray(j) ? j : []);
     } finally {
       setRefreshing(false);
     }
-  }, [tab]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  return (
-    <Screen>
-      <H1>Bookings</H1>
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 12, marginBottom: 12 }}>
-        {(["active", "past"] as const).map((t) => (
-          <Pressable
-            key={t}
-            onPress={() => setTab(t)}
-            testID={`bookings-tab-${t}`}
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: tab === t ? CARGO.ink : CARGO.offwhite,
-            }}
-          >
-            <Text style={{ color: tab === t ? "#fff" : CARGO.ink, fontWeight: "700", fontSize: 13 }}>
-              {t === "active" ? "Active" : "Past"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+  const active = useMemo(() => items.filter((b) => !PAST.has(b.status)), [items]);
+  const past = useMemo(() => items.filter((b) => PAST.has(b.status)), [items]);
+  const bookedJobIds = useMemo(() => new Set(items.map((b) => b.job_id).filter(Boolean)), [items]);
+  const openJobs = useMemo(
+    () =>
+      jobs
+        .filter((j) => ["posted", "accepted"].includes(j.status))
+        .filter((j) => !bookedJobIds.has(j.id))
+        .map((j) => ({ ...j, _isJob: true as const })),
+    [jobs, bookedJobIds],
+  );
 
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
-        renderItem={({ item }) => {
-          const isBooking = (item as any)._isBooking;
-          const job = isBooking ? (item as Booking).job : (item as Job);
-          const status = isBooking ? (item as Booking).status : (item as Job).status;
-          const total = isBooking ? (item as Booking).total_price : (item as Job).fixed_price;
-          return (
-            <Pressable
-              testID={`bookings-row-${item.id}`}
-              onPress={() =>
-                isBooking
-                  ? navigation.navigate("BookingDetail", { bookingId: item.id })
-                  : navigation.navigate("Bids", { jobId: item.id })
-              }
-            >
-              <Card style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase" }}>
-                  {status.replace("_", " ")}
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: CARGO.ink, marginTop: 4 }} numberOfLines={1}>
-                  {job?.title || (isBooking ? "Booking" : "Job")}
-                </Text>
-                <Text style={{ fontSize: 13, color: CARGO.muted, marginTop: 2 }} numberOfLines={1}>
-                  {job?.pickup_town || "—"} → {job?.dropoff_town || "—"}
-                </Text>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: CARGO.ink, marginTop: 6 }}>{money(total)}</Text>
-              </Card>
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <Body muted style={{ marginTop: 40, textAlign: "center" }}>
-            No {tab === "active" ? "active" : "past"} bookings yet.
-          </Body>
-        }
-      />
-    </Screen>
+  const display: Row[] = useMemo(() => {
+    const raw: Row[] =
+      tab === "active"
+        ? [...active.map((b) => ({ ...b, _isBooking: true as const })), ...openJobs]
+        : past.map((b) => ({ ...b, _isBooking: true as const }));
+    const sorted = [...raw].sort((a: any, b: any) =>
+      String(b.created_at || "").localeCompare(String(a.created_at || "")),
+    );
+    const needle = q.trim().toLowerCase();
+    if (!needle) return sorted;
+    return sorted.filter((it: any) => {
+      const title = (it._isJob ? it.title : it.job?.title) || "";
+      const pu = (it._isJob ? it.pickup_town : it.job?.pickup_town) || "";
+      const drop = (it._isJob ? it.dropoff_town : it.job?.dropoff_town) || "";
+      return (
+        title.toLowerCase().includes(needle) ||
+        pu.toLowerCase().includes(needle) ||
+        drop.toLowerCase().includes(needle)
+      );
+    });
+  }, [tab, active, past, openJobs, q]);
+
+  return (
+    <Page testID="customer-bookings">
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
+      >
+        <PageHeader
+          large
+          title="Bookings"
+          showMenu={showMenu}
+          onMenuPress={openDrawer}
+        />
+        <View style={{ paddingHorizontal: 16, gap: 12, paddingBottom: 32 }}>
+          <SegmentedTabs
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "active" as const, label: `Active (${active.length + openJobs.length})` },
+              { value: "past" as const, label: `Past (${past.length})` },
+            ]}
+            testIDPrefix="bookings-tab"
+          />
+          <SearchInputRow
+            value={q}
+            onChangeText={setQ}
+            onClear={() => setQ("")}
+            placeholder="Search bookings, pickup, delivery..."
+            testID="bookings-search"
+          />
+          {display.length === 0 ? (
+            <EmptyState
+              Icon={Package}
+              title={tab === "active" ? "No active bookings" : "No past bookings"}
+              body={tab === "active" ? "Post your first job to get started." : "Completed shipments will appear here."}
+              testID="bookings-empty"
+            />
+          ) : (
+            display.map((it: any) => {
+              const title = it._isJob ? it.title : it.job?.title || "Shipment";
+              const pickup = it._isJob ? it.pickup_town : it.job?.pickup_town;
+              const dropoff = it._isJob ? it.dropoff_town : it.job?.dropoff_town;
+              const status = it.status;
+              const cancelled = !it._isJob && (status === "cancelled" || !!it.cancelled_at);
+              const priceLabel = it._isJob
+                ? "Estimated"
+                : cancelled
+                ? "Refunded"
+                : "Total";
+              const price = it._isJob
+                ? it.suggested_price ?? it.accepted_price ?? it.customer_total
+                : cancelled
+                ? it.cancellation_refund ?? it.refund_amount
+                : it.customer_total ?? it.total_price ?? it.job?.customer_total ?? it.job?.accepted_price;
+              return (
+                <BookingRow
+                  key={it.id}
+                  title={title}
+                  status={status}
+                  pickup={pickup}
+                  dropoff={dropoff}
+                  price={price}
+                  priceLabel={priceLabel}
+                  cancelled={cancelled}
+                  onPress={() =>
+                    it._isJob
+                      ? nav.navigate("JobDetail", { jobId: it.id })
+                      : nav.navigate("BookingDetail", { bookingId: it.id })
+                  }
+                  testID={`booking-row-${it.id}`}
+                />
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+    </Page>
   );
 }

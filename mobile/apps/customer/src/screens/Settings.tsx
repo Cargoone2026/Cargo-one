@@ -1,41 +1,63 @@
+/**
+ * SettingsScreen — mirrors frontend/src/pages/Settings.jsx. Shows the
+ * signed-in identity, then a small set of MenuRow groups.
+ */
 import React from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Key, LogOut } from "lucide-react-native";
+import type { RootStackParamList } from "../App";
 import { useAuth } from "../AuthContext";
-import { Body, CARGO, Card, H1, PrimaryButton, Screen } from "../ui";
+import { colors, radius, typography } from "../theme";
+import { MenuRow, Page, PageHeader } from "../ui";
 
-export function SettingsScreen({ navigation }: any) {
+type P = NativeStackScreenProps<RootStackParamList, "Settings">;
+
+export function SettingsScreen({ navigation }: P) {
   const { user, logout } = useAuth();
   return (
-    <Screen>
+    <Page testID="settings-screen">
       <ScrollView>
-        <H1>Settings</H1>
-        <Card style={{ marginTop: 16 }}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase" }}>Signed in as</Text>
-          <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 4 }}>{user?.name}</Text>
-          <Text style={{ fontSize: 13, color: CARGO.muted, marginTop: 2 }}>{user?.email}</Text>
-        </Card>
-
-        <Pressable onPress={() => navigation.navigate("Passkeys")} testID="settings-passkeys" style={{ marginTop: 12 }}>
-          <Card>
-            <Text style={{ fontSize: 15, fontWeight: "700" }}>Passkeys (Face ID / Touch ID)</Text>
-            <Text style={{ fontSize: 13, color: CARGO.muted, marginTop: 4 }}>Manage your saved passkeys.</Text>
-          </Card>
-        </Pressable>
-
-        <View style={{ marginTop: 20 }}>
-          <PrimaryButton
-            title="Log out"
-            variant="secondary"
-            onPress={() =>
-              Alert.alert("Log out?", "You can sign in again anytime.", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Log out", style: "destructive", onPress: logout },
-              ])
-            }
-            testID="settings-logout"
-          />
+        <PageHeader title="Settings" />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
+          <View style={styles.identity}>
+            <Text style={typography.micro}>Signed in as</Text>
+            <Text style={[typography.strong, { marginTop: 4 }]}>{user?.name || "—"}</Text>
+            <Text style={[typography.caption, { marginTop: 2 }]}>{user?.email}</Text>
+          </View>
+          <View style={styles.card}>
+            <MenuRow
+              label="Passkeys (Face ID / Touch ID)"
+              subtitle="Sign in without your password"
+              leftIcon={Key}
+              onPress={() => navigation.navigate("Passkeys")}
+              testID="settings-passkeys"
+            />
+            <MenuRow
+              label="Log out"
+              leftIcon={LogOut}
+              onPress={() =>
+                Alert.alert("Log out?", "You can sign in again anytime.", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Log out", style: "destructive", onPress: () => logout() },
+                ])
+              }
+              testID="settings-logout"
+            />
+          </View>
         </View>
       </ScrollView>
-    </Screen>
+    </Page>
   );
 }
+
+const styles = {
+  identity: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  card: { backgroundColor: colors.bg, borderRadius: radius.base, borderWidth: 1, borderColor: colors.border, overflow: "hidden" as const },
+};

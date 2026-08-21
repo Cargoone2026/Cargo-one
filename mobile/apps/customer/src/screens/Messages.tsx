@@ -1,20 +1,20 @@
 /**
- * MessagesScreen — mirrors the web /customer/messages page.
- * Two segments: Conversations (message threads) and Notifications
- * (system inbox from /api/notifications). Both feeds tolerate absent
- * backend endpoints gracefully (CustomerAPI wrappers catch → []).
+ * MessagesScreen — 1:1 port of frontend/src/pages/portal/customer/Messages.jsx.
+ * Segmented Conversations / Notifications with Cargo One card treatment.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { CustomerAPI } from "@cargoone/core";
-
-const RED = "#D62828";
+import { colors, radius, typography } from "../theme";
+import { EmptyState, Page, PageHeader, SegmentedTabs } from "../ui";
+import { MessagesSquare, Bell } from "lucide-react-native";
+import { useShellMenu } from "../components/AppShell";
 
 type Tab = "conversations" | "notifications";
 
 export function MessagesScreen({ route }: any) {
   const initial: Tab = route?.params?.tab === "notifications" ? "notifications" : "conversations";
+  const { openDrawer, showMenu } = useShellMenu();
   const [tab, setTab] = useState<Tab>(initial);
   const [threads, setThreads] = useState<any[]>([]);
   const [notifs, setNotifs] = useState<any[]>([]);
@@ -22,7 +22,10 @@ export function MessagesScreen({ route }: any) {
 
   const load = useCallback(async () => {
     setRefreshing(true);
-    const [t, n] = await Promise.all([CustomerAPI.listThreads(), CustomerAPI.listNotifications()]);
+    const [t, n] = await Promise.all([
+      CustomerAPI.listThreads().catch(() => []),
+      CustomerAPI.listNotifications().catch(() => []),
+    ]);
     setThreads(Array.isArray(t) ? t : []);
     setNotifs(Array.isArray(n) ? n : []);
     setRefreshing(false);
@@ -33,75 +36,74 @@ export function MessagesScreen({ route }: any) {
   }, [load]);
 
   return (
-    <SafeAreaView style={styles.root} testID="messages-screen">
-      <View style={styles.tabs}>
-        <TabButton label="Conversations" active={tab === "conversations"} onPress={() => setTab("conversations")} />
-        <TabButton label="Notifications" active={tab === "notifications"} onPress={() => setTab("notifications")} />
-      </View>
-      {tab === "conversations" ? (
-        <FlatList
-          data={threads}
-          keyExtractor={(item, i) => item.id || String(i)}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={RED} />}
-          ListEmptyComponent={<Empty title="No conversations yet" body="Messages with drivers appear here when a booking is active." />}
-          renderItem={({ item }) => (
-            <View style={styles.row} testID={`thread-${item.id}`}>
-              <Text style={styles.rowTitle}>{item.title || item.driver_name || "Conversation"}</Text>
-              {item.preview ? <Text style={styles.rowBody} numberOfLines={2}>{item.preview}</Text> : null}
-            </View>
+    <Page testID="messages-screen">
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
+      >
+        <PageHeader large title="Messages" showMenu={showMenu} onMenuPress={openDrawer} />
+        <View style={{ paddingHorizontal: 16, gap: 12, paddingBottom: 32 }}>
+          <SegmentedTabs
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "conversations" as const, label: "Conversations" },
+              { value: "notifications" as const, label: "Notifications" },
+            ]}
+            testIDPrefix="messages-tab"
+          />
+
+          {tab === "conversations" ? (
+            threads.length === 0 ? (
+              <EmptyState
+                Icon={MessagesSquare}
+                title="No conversations yet"
+                body="Messages with drivers appear here when a booking is active."
+              />
+            ) : (
+              threads.map((it) => (
+                <View key={it.id} style={styles.row} testID={`thread-${it.id}`}>
+                  <Text style={typography.cardTitle}>{it.title || it.driver_name || "Conversation"}</Text>
+                  {it.preview ? (
+                    <Text style={typography.caption} numberOfLines={2}>
+                      {it.preview}
+                    </Text>
+                  ) : null}
+                </View>
+              ))
+            )
+          ) : notifs.length === 0 ? (
+            <EmptyState
+              Icon={Bell}
+              title="You're up to date"
+              body="System updates about your bookings and payments will show here."
+            />
+          ) : (
+            notifs.map((it) => (
+              <Pressable
+                key={it.id}
+                onPress={() => it.id && CustomerAPI.markNotificationRead(it.id).then(load)}
+                style={[styles.row, !it.read_at && styles.unread]}
+                testID={`notif-${it.id}`}
+              >
+                <Text style={typography.cardTitle}>{it.title || "Update"}</Text>
+                {it.body ? <Text style={typography.caption}>{it.body}</Text> : null}
+              </Pressable>
+            ))
           )}
-        />
-      ) : (
-        <FlatList
-          data={notifs}
-          keyExtractor={(item, i) => item.id || String(i)}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={RED} />}
-          ListEmptyComponent={<Empty title="You're up to date" body="System updates about your bookings and payments will show here." />}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => item.id && CustomerAPI.markNotificationRead(item.id).then(load)}
-              style={[styles.row, item.read_at ? null : styles.unread]}
-              testID={`notif-${item.id}`}
-            >
-              <Text style={styles.rowTitle}>{item.title || "Update"}</Text>
-              {item.body ? <Text style={styles.rowBody}>{item.body}</Text> : null}
-            </Pressable>
-          )}
-        />
-      )}
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </Page>
   );
 }
 
-function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.tab, active && styles.tabActive]} testID={`tab-${label.toLowerCase()}`}>
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Empty({ title, body }: { title: string; body: string }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F9FAFB" },
-  tabs: { flexDirection: "row", backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
-  tab: { flex: 1, paddingVertical: 14, alignItems: "center" },
-  tabActive: { borderBottomWidth: 3, borderBottomColor: RED },
-  tabLabel: { fontSize: 14, fontWeight: "600", color: "#6B7280" },
-  tabLabelActive: { color: RED },
-  row: { backgroundColor: "#FFFFFF", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  unread: { backgroundColor: "#FEF2F2" },
-  rowTitle: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  rowBody: { fontSize: 13, color: "#6B7280", marginTop: 4 },
-  empty: { padding: 40, alignItems: "center" },
-  emptyTitle: { fontSize: 16, fontWeight: "600", color: "#111827", marginBottom: 8 },
-  emptyBody: { fontSize: 13, color: "#6B7280", textAlign: "center" },
-});
+const styles = {
+  row: {
+    padding: 14,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    gap: 6,
+  },
+  unread: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
+} as const;

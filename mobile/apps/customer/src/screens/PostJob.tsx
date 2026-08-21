@@ -1,39 +1,106 @@
 /**
- * PostJobHub — first-class native tab mirroring web /customer/post-job.
- * Presents the three scheduled service types (Transport, Recovery,
- * Big / Bidding) and routes into the existing CreateJob screen with
- * the right params. Matches the web page's role: a chooser, not a
- * form — the form lives in CreateJob.
+ * PostJobScreen — native equivalent of frontend PostJob.jsx.
+ *
+ * The full 5-step web wizard requires native AddressAutocomplete +
+ * RouteMap + PhotoUpload components which will land in a follow-up
+ * commit. This screen preserves the entry point (chooser for scheduled
+ * service types) and hands off to CreateJob for the form. Visual
+ * treatment matches web: page header, category tiles, secondary CTA
+ * strip.
  */
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Truck, Wrench, Gavel, ChevronRight } from "lucide-react-native";
 import type { RootStackParamList } from "../App";
-import { MenuRow } from "../ui";
+import { colors, radius, typography } from "../theme";
+import { Page, PageHeader } from "../ui";
+import { useShellMenu } from "../components/AppShell";
+
+const OPTIONS = [
+  {
+    key: "transport",
+    label: "Transport",
+    hint: "Furniture, parcels, house moves — schedule ahead.",
+    Icon: Truck,
+    testID: "postjob-transport",
+  },
+  {
+    key: "recovery",
+    label: "Vehicle Recovery",
+    hint: "Move a car, van or motorcycle to a workshop or home.",
+    Icon: Wrench,
+    testID: "postjob-recovery",
+  },
+  {
+    key: "big",
+    label: "Big Job / Bidding",
+    hint: "Open your delivery to bids from vetted operators.",
+    Icon: Gavel,
+    testID: "postjob-big",
+  },
+] as const;
 
 export function PostJobScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { openDrawer, showMenu } = useShellMenu();
   return (
-    <SafeAreaView style={styles.root} testID="postjob-hub-screen">
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>Post a scheduled job</Text>
-        <Text style={styles.subtitle}>Pick a service — set your own pickup date & time.</Text>
-        <View style={styles.card}>
-          <MenuRow label="Transport" onPress={() => navigation.navigate("CreateJob", { serviceTiming: "scheduled", serviceType: "transport" })} testID="postjob-transport" />
-          <MenuRow label="Recovery" onPress={() => navigation.navigate("CreateJob", { serviceTiming: "scheduled", serviceType: "recovery" })} testID="postjob-recovery" />
-          <MenuRow label="Big Job / Bidding" onPress={() => navigation.navigate("CreateJob", { serviceTiming: "scheduled", serviceType: "big" })} testID="postjob-big" />
+    <Page testID="postjob-hub-screen">
+      <ScrollView>
+        <PageHeader
+          large
+          title="Post a Job"
+          subtitle="Pick a service — set your own pickup date & time."
+          showMenu={showMenu}
+          onMenuPress={openDrawer}
+        />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
+          {OPTIONS.map(({ key, label, hint, Icon, testID }) => (
+            <Pressable
+              key={key}
+              onPress={() =>
+                nav.navigate("CreateJob", {
+                  serviceTiming: "scheduled",
+                  serviceType: key as any,
+                })
+              }
+              testID={testID}
+              style={({ pressed }) => [styles.tile, pressed && { borderColor: colors.ink }]}
+            >
+              <View style={styles.iconWrap}>
+                <Icon size={22} color={colors.brand} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.cardTitle}>{label}</Text>
+                <Text style={[typography.caption, { marginTop: 2 }]}>{hint}</Text>
+              </View>
+              <ChevronRight size={20} color={colors.inkFaint} />
+            </Pressable>
+          ))}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F9FAFB" },
-  body: { padding: 20 },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827" },
-  subtitle: { fontSize: 14, color: "#6B7280", marginTop: 4, marginBottom: 20 },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB" },
-});
+const styles = {
+  tile: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 14,
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+};
