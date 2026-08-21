@@ -14,6 +14,7 @@ import { ImageBackground, Pressable, RefreshControl, ScrollView, StyleSheet, Tex
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Bell, Search, ArrowRight, Package as PackageIcon, MessagesSquare } from "lucide-react-native";
 import type { RootStackParamList } from "../App";
 import { CustomerAPI, Booking } from "@cargoone/core";
 import { useAuth } from "../AuthContext";
@@ -68,8 +69,12 @@ export function HomeScreen() {
             <Text style={[t.type.bodyMuted, { marginTop: 2 }]}>Ship Anything. Anywhere.</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <RoundBtn glyph="⌕" testID="customer-search-button" onPress={() => null} />
-            <RoundBtn glyph="🔔" testID="notifications-button" dot={notifUnread > 0} onPress={() => navigation.navigate("Messages")} />
+            <RoundBtn testID="customer-search-button" onPress={() => null}>
+              <Search size={20} color={t.color.ink} strokeWidth={2} />
+            </RoundBtn>
+            <RoundBtn testID="notifications-button" dot={notifUnread > 0} onPress={() => navigation.navigate("Messages")}>
+              <Bell size={20} color={t.color.ink} strokeWidth={2} />
+            </RoundBtn>
           </View>
         </View>
 
@@ -79,12 +84,13 @@ export function HomeScreen() {
             onPress={() => null}
             style={({ pressed }) => [styles.searchPill, pressed && { backgroundColor: "#E5E7EB" }]}
           >
-            <Text style={{ color: t.color.inkMuted, fontSize: 14 }}>⌕  Search categories, vehicles or jobs…</Text>
+            <Search size={16} color={t.color.inkMuted} />
+            <Text style={{ color: t.color.inkMuted, fontSize: 14, marginLeft: 8 }}>Search categories, vehicles or jobs…</Text>
           </Pressable>
 
           <Pressable
             testID="post-job-hero"
-            onPress={() => navigation.navigate("Tabs" as never)}
+            onPress={() => navigation.navigate("PostJob" as never)}
             style={styles.heroWrap}
           >
             <ImageBackground source={{ uri: HERO_IMG }} style={styles.hero} imageStyle={{ borderRadius: t.radius.lg }}>
@@ -92,7 +98,10 @@ export function HomeScreen() {
               <View style={styles.heroBody}>
                 <Text style={t.type.micro}>NEW SHIPMENT</Text>
                 <Text style={styles.heroTitle}>Post a job in{"\n"}under 60 seconds</Text>
-                <Text style={styles.heroCta}>Get instant quotes  →</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <Text style={styles.heroCta}>Get instant quotes</Text>
+                  <ArrowRight color="#FFFFFF" size={16} strokeWidth={2.4} />
+                </View>
               </View>
             </ImageBackground>
           </Pressable>
@@ -100,10 +109,10 @@ export function HomeScreen() {
           <View style={styles.quickGrid}>
             <QuickCard
               testID="quick-bookings"
-              onPress={() => navigation.navigate("Tabs" as never)}
+              onPress={() => navigation.navigate("Bookings" as never)}
               tint={t.color.tintRed}
-              glyph="📦"
-              glyphColor={t.color.brand}
+              Icon={PackageIcon}
+              iconColor={t.color.brand}
               title="Bookings"
               subtitle={`${bookings.length} total`}
             />
@@ -111,8 +120,8 @@ export function HomeScreen() {
               testID="quick-messages"
               onPress={() => navigation.navigate("Messages")}
               tint={t.color.tintOrange}
-              glyph="✉︎"
-              glyphColor={t.color.accentOrange}
+              Icon={MessagesSquare}
+              iconColor={t.color.accentOrange}
               title="Messages"
               subtitle={msgUnread > 0 ? `${msgUnread} unread` : "No new messages"}
               badge={msgUnread > 0 ? (msgUnread > 99 ? "99+" : String(msgUnread)) : undefined}
@@ -121,14 +130,14 @@ export function HomeScreen() {
 
           <View style={styles.sectionHead}>
             <Text style={t.type.h2}>Active shipments</Text>
-            <Pressable onPress={() => navigation.navigate("Tabs" as never)}>
+            <Pressable onPress={() => navigation.navigate("Bookings" as never)}>
               <Text style={{ color: t.color.brand, fontWeight: "600", fontSize: 14 }}>See all</Text>
             </Pressable>
           </View>
 
           {active.length === 0 ? (
             <View style={styles.empty} testID="empty-active-bookings">
-              <View style={styles.emptyCircle}><Text style={{ fontSize: 28 }}>📦</Text></View>
+              <View style={styles.emptyCircle}><PackageIcon size={32} color="#9CA3AF" strokeWidth={2} /></View>
               <Text style={t.type.h3}>No active shipments</Text>
               <Text style={[t.type.caption, { textAlign: "center", maxWidth: 320 }]}>Post a job to receive instant quotes from vetted drivers.</Text>
             </View>
@@ -164,19 +173,20 @@ export function HomeScreen() {
   );
 }
 
-function RoundBtn({ glyph, onPress, dot, testID }: { glyph: string; onPress: () => void; dot?: boolean; testID?: string }) {
+function RoundBtn({ children, onPress, dot, testID }: { children: React.ReactNode; onPress: () => void; dot?: boolean; testID?: string }) {
   return (
     <Pressable testID={testID} onPress={onPress} style={({ pressed }) => [styles.round, pressed && { backgroundColor: t.color.border }]}>
-      <Text style={{ fontSize: 18, color: t.color.ink }}>{glyph}</Text>
+      {children}
       {dot ? <View style={styles.dot} testID="notifications-unread-dot" /> : null}
     </Pressable>
   );
 }
 
-function QuickCard(props: { onPress: () => void; tint: string; glyph: string; glyphColor: string; title: string; subtitle: string; badge?: string; testID?: string }) {
+function QuickCard(props: { onPress: () => void; tint: string; Icon: any; iconColor: string; title: string; subtitle: string; badge?: string; testID?: string }) {
+  const { Icon } = props;
   return (
     <Pressable testID={props.testID} onPress={props.onPress} style={({ pressed }) => [styles.quickCard, pressed && { borderColor: t.color.ink }]}>
-      <View style={[styles.quickIcon, { backgroundColor: props.tint }]}><Text style={{ fontSize: 20, color: props.glyphColor }}>{props.glyph}</Text></View>
+      <View style={[styles.quickIcon, { backgroundColor: props.tint }]}><Icon size={20} color={props.iconColor} strokeWidth={2.2} /></View>
       {props.badge ? (
         <View style={styles.quickBadge} testID="customer-messages-unread-badge"><Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>{props.badge}</Text></View>
       ) : null}

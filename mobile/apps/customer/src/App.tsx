@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -24,8 +23,7 @@ import { ProfileScreen } from "./screens/Profile";
 import { PostJobScreen } from "./screens/PostJob";
 import { AsapScreen } from "./screens/Asap";
 import { MoreScreen } from "./screens/More";
-import { LegalScreen } from "./screens/Legal";
-import { AboutScreen } from "./screens/About";
+import { LegalScreen } from "./screens/Legal";import { AboutScreen } from "./screens/About";
 import { SupportScreen } from "./screens/Support";
 import { DeleteAccountScreen } from "./screens/DeleteAccount";
 import { BookingConfirmedScreen } from "./screens/BookingConfirmed";
@@ -34,6 +32,7 @@ import { DispatchScreen } from "./screens/Dispatch";
 import { DriverProfileScreen } from "./screens/DriverProfile";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { AppShell } from "./components/AppShell";
 
 // Hold the native splash until we've finished the auth-hydration pass.
 // Any failure here is non-fatal — the JS LoadingScreen will still show
@@ -44,15 +43,18 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   PasswordReset: undefined;
-  Tabs: undefined;
+  Home: undefined;
+  PostJob: undefined;
+  Asap: undefined;
+  Bookings: undefined;
+  Messages: undefined;
+  Profile: undefined;
   BookingDetail: { bookingId: string };
   CreateJob: { serviceTiming: "asap" | "scheduled"; serviceType: "transport" | "recovery" | "big" };
   Bids: { jobId: string };
   Payment: { bookingId: string };
   Review: { bookingId: string; driverId?: string };
   Passkeys: undefined;
-  Messages: undefined;
-  Profile: undefined;
   Settings: undefined;
   Legal: { slug: "terms" | "privacy" | "cookies" };
   About: undefined;
@@ -65,23 +67,23 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tabs = createBottomTabNavigator();
 
-function TabsRoot() {
-  return (
-    // Mirrors frontend/src/components/portal/BottomTabs.jsx overflow:
-    // web CustomerLayout has 6 items -> BottomTabs.MAX_PRIMARY=5 keeps
-    // the first 4 as primary and pushes {Messages, Profile} into
-    // "More". We reproduce that decision here so mobile web + mobile
-    // native show the same primary destinations.
-    <Tabs.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: "#D62828" }}>
-      <Tabs.Screen name="Home" component={HomeScreen} />
-      <Tabs.Screen name="Post Job" component={PostJobScreen} />
-      <Tabs.Screen name="ASAP" component={AsapScreen} />
-      <Tabs.Screen name="Bookings" component={BookingsScreen} />
-      <Tabs.Screen name="More" component={MoreScreen} />
-    </Tabs.Navigator>
+/**
+ * TabsRoot has been removed — the customer app no longer uses a
+ * bottom tab bar. Every primary destination (Home / Post Job / ASAP
+ * / Bookings / Messages / Profile) is now a plain Stack route
+ * wrapped by <AppShell>, which mirrors the web SideRail as either a
+ * docked sidebar (iPad width >= 900) or a slide-in drawer (iPhone /
+ * smaller iPad orientations). See components/AppShell.tsx.
+ */
+function withShell<C extends React.ComponentType<any>>(Component: C) {
+  const Wrapped: React.FC<any> = (props) => (
+    <AppShell>
+      <Component {...props} />
+    </AppShell>
   );
+  Wrapped.displayName = `WithShell(${(Component as any).displayName || (Component as any).name || "Screen"})`;
+  return Wrapped;
 }
 
 export function App() {
@@ -121,9 +123,12 @@ export function App() {
                   // (CASE A "biometric on launch" hooks in here later
                   //  via a Settings toggle; the plumbing is ready.)
                   <>
-                    <Stack.Screen name="Tabs" component={TabsRoot} />
-                    <Stack.Screen name="Messages" component={MessagesScreen} options={{ headerShown: true, title: "Messages" }} />
-                    <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: true, title: "Profile" }} />
+                    <Stack.Screen name="Home" component={withShell(HomeScreen)} />
+                    <Stack.Screen name="PostJob" component={withShell(PostJobScreen)} />
+                    <Stack.Screen name="Asap" component={withShell(AsapScreen)} />
+                    <Stack.Screen name="Bookings" component={withShell(BookingsScreen)} />
+                    <Stack.Screen name="Messages" component={withShell(MessagesScreen)} />
+                    <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
                     <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: true, title: "Booking" }} />
                     <Stack.Screen name="CreateJob" component={CreateJobScreen} options={{ headerShown: true, title: "New booking" }} />
                     <Stack.Screen name="Bids" component={BidsScreen} options={{ headerShown: true, title: "Bids" }} />
