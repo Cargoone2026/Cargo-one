@@ -4194,3 +4194,68 @@ local Xcode build (this container cannot compile an .ipa).
 
 ### R71 READY: 🟢 (compilable source. Awaiting your Xcode build for
    physical certification.)
+
+---
+
+## R71 Native parity — session update (Feb 2026)
+
+### Committed this session (`b7e1a82`)
+**Phase 2 — Shared foundation**
+- `theme.ts`: full Cargo One token library aligned 1:1 with
+  `frontend/src/theme.js` (colours, radii, typography scale,
+  `STATUS_LABELS`/`STATUS_COLOR` palette, sidebar dark shade, shadow
+  presets). Every value maps to a value in the web portal.
+- `ui.tsx`: full primitive library (`Page`, `PageHeader`, `IconButton`,
+  `SearchPill`, `SearchInputRow`, `StatusPill`, `SegmentedTabs`,
+  `ProgressBar`, `EmptyState`, `BookingRow`, `SummaryRow`, `MenuRow`,
+  `Section`, `H1/H2/Body/Caption/Micro/Label`). No screen writes raw
+  `StyleSheet` layouts.
+- `AppShell.tsx`: **web SideRail parity** — dark `#0B0B0F` sidebar with
+  the full six-item nav (Home / Post Job / ASAP / Bookings / Messages /
+  Profile), Public site + Settings section, account footer with avatar
+  initial + name + email + logout, exactly matching
+  `frontend/components/portal/SideRail.jsx`. **Responsive
+  presentation**:
+    - `width ≥ 900` → sidebar docked, animated collapse to a 72 px icon
+      rail via a Cargo One chevron toggle.
+    - `width < 900` → sidebar slides in from the left with a scrim
+      when the page-header menu button is tapped.
+  **No bottom tab bar anywhere.**
+- `LoadingScreen.tsx`: polished branded splash (Cargo One artwork
+  inside a white badge, animated ring, `CARGO ONE / Customer`
+  lockup, red brand surface).
+
+**Phase 3 — Customer screens (22 files) rebuilt against web**
+- `Home`, `Bookings`, `Messages`, `Profile`, `Settings`, `Passkeys`,
+  `Support`, `About`, `Legal`, `DeleteAccount`, `PostJob` hub,
+  `Asap` hub, `BookingDetail`, `Dispatch`, `JobDetail`, `Bids`,
+  `Payment`, `Review`, `BookingConfirmed`, `DriverProfile`,
+  `CreateJob`, `Login`, `Register`, `PasswordReset`.
+- `More.tsx` deleted (bottom-tab overflow no longer needed).
+- `App.tsx`: primary destinations wrapped by `withShell()`; every
+  route hides the built-in native-stack header (each screen renders
+  its own `<PageHeader>`).
+
+### Verification
+- `yarn typecheck` in `mobile/apps/customer` — **clean**.
+- `yarn test` in `mobile/` — **26/26 passed**.
+- Awaiting user's Xcode iOS-simulator run (Linux container has no
+  simulator).
+
+### Deferred to next session
+1. **Full PostJob 5-step wizard** with native `AddressAutocomplete` +
+   `RouteMap` + `PhotoUpload` components (currently the screen is a
+   scheduled-service chooser that hands off to `CreateJob`).
+2. **Full ASAP wizard** with autocomplete + live map + quote card
+   (currently a Transport / Recovery chooser).
+3. **Driver native app parity** — replicate the same `AppShell` +
+   design system for the driver app, rebuild `Dashboard`, `Jobs`,
+   `MyJobs`, `Earnings`, `Live`, `Fleet`, `Documents`, `Profile`,
+   `Notifications`, `BookingDetail`, `JobDetail`.
+4. **Biometric / Passkey launch gate** (Task 2 from previous handoff).
+5. **Native `AddressAutocomplete`** module built against
+   `@cargoone/core` `pricing/asap/vehicles` endpoints for full ASAP +
+   PostJob wizards.
+6. **Native `RouteMap`** using `@rnmapbox/maps` matching the web
+   portal's `RouteMap.jsx` visual language.
+
