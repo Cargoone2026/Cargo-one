@@ -1,12 +1,14 @@
 /**
- * LoadingScreen — CargoOne branded initial loader / splash treatment.
+ * LoadingScreen — CargoOne branded launch/splash treatment.
  *
- * Renders the CargoOne red brand surface with the customer app's
- * artwork centred inside a soft white circular badge. The typographic
- * lockup ("CARGO ONE" over "Customer") matches the web SideRail
- * lockup exactly (fontWeight 700, letterSpacing 1.4, small caps).
- * Respects safe-area insets. Fades to a subtle activity indicator
- * after 400 ms so the user always sees motion.
+ * The outer <View> is intentionally edge-to-edge with the Cargo One
+ * red brand fill, so on iPad / iPhone / notch / rounded-corner devices
+ * the surface bleeds to every physical edge. Content (badge + lockup
+ * + spinner) is inset by the safe-area via <SafeAreaView> so it never
+ * clips into the notch/home-indicator regions.
+ *
+ * The `StatusBar` sibling is set to translucent light content by the
+ * calling App component so the top edge stays clean.
  */
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
@@ -38,23 +40,26 @@ export function LoadingScreen() {
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   return (
-    <SafeAreaView style={styles.root} testID="customer-loading-screen">
-      <Animated.View style={[styles.center, { opacity: fade }]}>
-        <View style={styles.badge}>
-          <Image source={require("../../assets/loading-mark.png")} style={styles.mark} resizeMode="cover" />
-        </View>
-        <Text style={styles.brandTitle}>CARGO ONE</Text>
-        <Text style={styles.brandRole}>Customer</Text>
-        <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]}>
-          <View style={styles.spinnerDot} />
+    // Full-bleed red surface — reaches every physical edge on iPad,
+    // iPhone with a notch, and all Android form factors.
+    <View style={styles.root} testID="customer-loading-screen">
+      <SafeAreaView style={styles.safe} edges={["top", "bottom", "left", "right"]}>
+        <Animated.View style={[styles.center, { opacity: fade }]}>
+          <View style={styles.badge}>
+            <Image source={require("../../assets/loading-mark.png")} style={styles.mark} resizeMode="cover" />
+          </View>
+          <Text style={styles.brandTitle}>CARGO ONE</Text>
+          <Text style={styles.brandRole}>Customer</Text>
+          <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
         </Animated.View>
-      </Animated.View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: RED },
+  root: { ...StyleSheet.absoluteFillObject, backgroundColor: RED },
+  safe: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   badge: {
     width: 108,
@@ -81,8 +86,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.15)",
     borderTopColor: "#FFFFFF",
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
   },
-  spinnerDot: {},
 });

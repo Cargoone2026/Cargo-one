@@ -30,15 +30,26 @@ export function useAuthValue(): AuthState {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    const me = await SharedAPI.me().catch(() => null);
-    setUser(me && me.role === "driver" ? me : null);
+    // Guard against pathological network hangs during cold start —
+    // fetch has no default timeout on RN, so `SharedAPI.me()` could
+    // sit forever if DNS/TLS stalls. Race against a 6-second fuse.
+    const timed = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+    const me = await Promise.race([SharedAPI.me().catch(() => null), timed]);
+    setUser(me && (me as User).role === "driver" ? (me as User) : null);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      await refresh();
-      setHydrated(true);
+      try {
+        await refresh();
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {

@@ -52,26 +52,41 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
       setPhase("unlocked");
       return;
     }
+    let cancelled = false;
+    // Global 5-second fuse — if any of the async passkey/local-auth
+    // checks below hang (native module missing in the built binary,
+    // network stall on listPasskeys, biometric prompt frozen), we
+    // resolve as `unlocked` so the app is never permanently locked
+    // out of its own home screen.
+    const fuse = setTimeout(() => {
+      if (!cancelled) setPhase("unlocked");
+    }, 5000);
     (async () => {
       try {
         const passkeys = await listPasskeys().catch(() => [] as any[]);
+        if (cancelled) return;
         if (!Array.isArray(passkeys) || passkeys.length === 0) {
           setPhase("unlocked");
           return;
         }
         const [hasHardware, enrolled] = await Promise.all([
-          LocalAuth.hasHardwareAsync(),
-          LocalAuth.isEnrolledAsync(),
+          LocalAuth.hasHardwareAsync().catch(() => false),
+          LocalAuth.isEnrolledAsync().catch(() => false),
         ]);
+        if (cancelled) return;
         if (!hasHardware || !enrolled) {
           setPhase("unlocked");
           return;
         }
         await prompt();
       } catch {
-        setPhase("unlocked");
+        if (!cancelled) setPhase("unlocked");
       }
     })();
+    return () => {
+      cancelled = true;
+      clearTimeout(fuse);
+    };
   }, [hydrated, user, prompt]);
 
   if (phase === "unlocked") {

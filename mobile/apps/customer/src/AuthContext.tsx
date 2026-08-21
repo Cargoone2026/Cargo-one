@@ -30,15 +30,32 @@ export function useAuthValue(): AuthState {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    const me = await SharedAPI.me().catch(() => null);
-    setUser(me && me.role === "customer" ? me : null);
+    // Guard against pathological network hangs during cold start —
+    // fetch has no default timeout on RN, so `SharedAPI.me()` could
+    // sit forever if DNS/TLS stalls in the simulator. We race the
+    // real request against a 6-second fuse; on fuse we simply keep
+    // `user = null` (unauthenticated) and let the app render Login.
+    const timed = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+    const me = await Promise.race([SharedAPI.me().catch(() => null), timed]);
+    setUser(me && (me as User).role === "customer" ? (me as User) : null);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      await refresh();
-      setHydrated(true);
+      try {
+        await refresh();
+      } finally {
+        // ALWAYS resolve hydration — even if refresh throws before
+        // its own catch reaches. Without this, any unhandled error
+        // would leave `hydrated=false` forever and the LoadingScreen
+        // splash would never dismiss.
+        if (!cancelled) setHydrated(true);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {

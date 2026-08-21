@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
 
 import { LoginScreen } from "./screens/Login";
 import { RegisterScreen } from "./screens/Register";
@@ -58,10 +60,26 @@ function withShell<C extends React.ComponentType<any>>(Component: C) {
   return Wrapped;
 }
 
+// Hold the native launch splash until the React tree mounts, then
+// hide it immediately regardless of hydration. If hydration ever
+// hangs, the fallback loader below still renders — the native splash
+// never gets stranded on screen.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export function App() {
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
-  if (!hydrated) return null;
+
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  if (!hydrated) {
+    // Full-bleed dark surface while auth hydrates (matches native
+    // splash `backgroundColor: #111111` so the transition is
+    // invisible).
+    return <View style={{ flex: 1, backgroundColor: "#111111" }} testID="driver-loading-screen" />;
+  }
   const approved = (user as any)?.approval_state === "approved" || (user as any)?.verified_driver;
 
   return (

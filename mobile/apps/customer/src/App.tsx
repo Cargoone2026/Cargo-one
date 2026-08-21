@@ -89,10 +89,12 @@ export function App() {
   const { user, hydrated } = authValue;
 
   useEffect(() => {
-    if (hydrated) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [hydrated]);
+    // Dismiss the *native* Expo launch splash immediately after the
+    // React tree mounts. Our own <LoadingScreen> covers any remaining
+    // hydration wait, so keeping the native splash alive here would
+    // just risk it lingering forever if hydration ever hangs.
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   return (
     <SafeAreaProvider>

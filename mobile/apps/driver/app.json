@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "co.uk.cargoone.driver",
-      "supportsTablet": false,
+      "supportsTablet": true,
       "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
       "infoPlist": {
         "NSFaceIDUsageDescription": "Sign in to CargoOne Driver with Face ID.",

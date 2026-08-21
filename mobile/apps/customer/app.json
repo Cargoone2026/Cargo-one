@@ -10,12 +10,12 @@
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#D62828",
       "resizeMode": "contain"
     },
     "ios": {
       "bundleIdentifier": "co.uk.cargoone.customer",
-      "supportsTablet": false,
+      "supportsTablet": true,
       "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
       "infoPlist": {
         "NSFaceIDUsageDescription": "Sign in to CargoOne with Face ID.",
