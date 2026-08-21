@@ -21,6 +21,9 @@ import { SettingsScreen } from "./screens/Settings";
 import { PasskeysScreen } from "./screens/Passkeys";
 import { MessagesScreen } from "./screens/Messages";
 import { ProfileScreen } from "./screens/Profile";
+import { PostJobScreen } from "./screens/PostJob";
+import { AsapScreen } from "./screens/Asap";
+import { MoreScreen } from "./screens/More";
 import { LegalScreen } from "./screens/Legal";
 import { AboutScreen } from "./screens/About";
 import { SupportScreen } from "./screens/Support";
@@ -66,11 +69,17 @@ const Tabs = createBottomTabNavigator();
 
 function TabsRoot() {
   return (
+    // Mirrors frontend/src/components/portal/BottomTabs.jsx overflow:
+    // web CustomerLayout has 6 items -> BottomTabs.MAX_PRIMARY=5 keeps
+    // the first 4 as primary and pushes {Messages, Profile} into
+    // "More". We reproduce that decision here so mobile web + mobile
+    // native show the same primary destinations.
     <Tabs.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: "#D62828" }}>
       <Tabs.Screen name="Home" component={HomeScreen} />
+      <Tabs.Screen name="Post Job" component={PostJobScreen} />
+      <Tabs.Screen name="ASAP" component={AsapScreen} />
       <Tabs.Screen name="Bookings" component={BookingsScreen} />
-      <Tabs.Screen name="Messages" component={MessagesScreen} />
-      <Tabs.Screen name="Profile" component={ProfileScreen} />
+      <Tabs.Screen name="More" component={MoreScreen} />
     </Tabs.Navigator>
   );
 }
@@ -113,6 +122,8 @@ export function App() {
                   //  via a Settings toggle; the plumbing is ready.)
                   <>
                     <Stack.Screen name="Tabs" component={TabsRoot} />
+                    <Stack.Screen name="Messages" component={MessagesScreen} options={{ headerShown: true, title: "Messages" }} />
+                    <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: true, title: "Profile" }} />
                     <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: true, title: "Booking" }} />
                     <Stack.Screen name="CreateJob" component={CreateJobScreen} options={{ headerShown: true, title: "New booking" }} />
                     <Stack.Screen name="Bids" component={BidsScreen} options={{ headerShown: true, title: "Bids" }} />
