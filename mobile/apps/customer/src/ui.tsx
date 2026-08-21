@@ -221,9 +221,9 @@ export function SectionTitle({ children, style, right }: { children: React.React
     </View>
   );
 }
-export function Body({ children, muted, style, onPress }: { children: React.ReactNode; muted?: boolean; style?: StyleProp<TextStyle>; onPress?: () => void }) {
+export function Body({ children, muted, style, onPress, testID }: { children: React.ReactNode; muted?: boolean; style?: StyleProp<TextStyle>; onPress?: () => void; testID?: string }) {
   return (
-    <Text onPress={onPress} style={[muted ? typography.bodyMuted : typography.body, style]}>
+    <Text onPress={onPress} testID={testID} style={[muted ? typography.bodyMuted : typography.body, style]}>
       {children}
     </Text>
   );

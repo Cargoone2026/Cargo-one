@@ -29,13 +29,14 @@ export function JobDetailScreen({ route, navigation }: P) {
 
   if (!job) return <Screen><Body muted>Loading…</Body></Screen>;
 
+  const currentJob = job; // Non-null capture for closures below.
   const isFixed = job.pricing_type === "fixed" || job.fixed_price != null;
   const isBidding = job.pricing_type === "bidding";
 
   async function accept() {
     setBusy(true);
     try {
-      const res = await DriverAPI.acceptFixedPrice(job.id);
+      const res = await DriverAPI.acceptFixedPrice(currentJob.id);
       Alert.alert("Job accepted", "It's now in your bookings.");
       navigation.replace("ActiveBooking", { bookingId: res.booking_id });
     } catch (e: any) {
@@ -48,7 +49,7 @@ export function JobDetailScreen({ route, navigation }: P) {
   async function bid() {
     setBusy(true);
     try {
-      await DriverAPI.submitBid(job.id, Number(bidAmount) || 0, bidMessage);
+      await DriverAPI.submitBid(currentJob.id, Number(bidAmount) || 0, bidMessage);
       Alert.alert("Bid submitted", "You'll be notified if the customer accepts.");
       navigation.goBack();
     } catch (e: any) {
