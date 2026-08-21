@@ -1,9 +1,14 @@
+/**
+ * LoginScreen — Cargo One driver sign-in, matches customer Login
+ * branding exactly (dark lockup, brand mark, Face ID button).
+ */
 import React, { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { isPasskeySupported, loginWithPasskey } from "@cargoone/core";
 import { useAuth } from "../AuthContext";
-import { Body, H1, Input, Label, PrimaryButton, Screen, Row } from "../ui";
+import { Input, Label, Page, PrimaryButton, SecondaryButton } from "../ui";
+import { colors, radius, typography } from "../theme";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "Login">;
@@ -42,9 +47,6 @@ export function LoginScreen({ navigation }: P) {
       if (res.user.role !== "driver") {
         throw new Error("This app is for drivers. Please use the customer app.");
       }
-      // Trigger auth refresh — bearer token already saved by core.
-      await login(email, password || "").catch(() => {}); // password may be empty; ignored
-      Alert.alert("Signed in", "Welcome back to CargoOne.");
     } catch (e: any) {
       setErr(e?.message || "Passkey login failed");
     } finally {
@@ -53,56 +55,69 @@ export function LoginScreen({ navigation }: P) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <Screen>
-          <H1>Welcome back</H1>
-          <Body muted style={{ marginTop: 6, marginBottom: 24 }}>
-            Sign in to CargoOne.
-          </Body>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Page>
+        <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+          <View style={styles.brand}>
+            <View style={styles.mark}>
+              <Text style={styles.markText}>C1</Text>
+            </View>
+            <Text style={styles.brandTitle}>CARGO ONE</Text>
+            <Text style={styles.brandRole}>Driver</Text>
+          </View>
+
+          <Text style={[typography.h1Large, { marginTop: 32 }]}>Welcome back</Text>
+          <Text style={[typography.bodyMuted, { marginTop: 4, marginBottom: 8 }]}>Sign in to Cargo One.</Text>
 
           <Label>Email</Label>
-          <Input
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            testID="login-email"
-          />
-
+          <Input value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" testID="login-email" />
           <Label>Password</Label>
           <Input value={password} onChangeText={setPassword} secureTextEntry testID="login-password" />
 
           {err && (
-            <Body style={{ color: "#DC2626", marginTop: 8 }} testID="login-error">
-              {err}
-            </Body>
+            <View style={styles.error} testID="login-error">
+              <Text style={{ color: colors.errorInk, fontSize: 13 }}>{err}</Text>
+            </View>
           )}
 
-          <Row style={{ marginTop: 20, flexDirection: "column", gap: 12 }}>
+          <View style={{ marginTop: 24, gap: 12 }}>
             <PrimaryButton title="Log in" onPress={onPasswordLogin} loading={busy === "password"} testID="login-submit" />
-            <PrimaryButton
-              title="Sign in with Face ID / Passkey"
-              variant="secondary"
-              onPress={onPasskeyLogin}
-              loading={busy === "passkey"}
-              testID="login-passkey"
-            />
-          </Row>
+            <SecondaryButton title="Sign in with Face ID" onPress={onPasskeyLogin} loading={busy === "passkey"} testID="login-passkey" />
+          </View>
 
-          <Row style={{ marginTop: 24, justifyContent: "space-between" }}>
-            <Body onPress={() => navigation.navigate("Register")} style={{ color: "#D62828", fontWeight: "700" }}>
-              Create account
-            </Body>
-            <Body onPress={() => navigation.navigate("PasswordReset")} style={{ color: "#6B7280" }}>
-              Forgot password?
-            </Body>
-          </Row>
-        </Screen>
-      </ScrollView>
+          <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "space-between" }}>
+            <Pressable onPress={() => navigation.navigate("Register")}>
+              <Text style={{ color: colors.brand, fontWeight: "700", fontSize: 14 }}>Create account</Text>
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate("PasswordReset")}>
+              <Text style={{ color: colors.inkMuted, fontSize: 14 }}>Forgot password?</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </Page>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = {
+  brand: { alignItems: "center" as const, gap: 8, marginTop: 40 },
+  mark: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: colors.brand,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  markText: { color: "#FFFFFF", fontSize: 20, fontWeight: "700" as const, letterSpacing: 1 },
+  brandTitle: { color: colors.ink, fontSize: 16, fontWeight: "700" as const, letterSpacing: 1.6, marginTop: 6 },
+  brandRole: { color: colors.inkMuted, fontSize: 12, letterSpacing: 0.4 },
+  error: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.errorBg,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+};

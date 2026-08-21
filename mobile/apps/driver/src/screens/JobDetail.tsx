@@ -1,17 +1,17 @@
+/**
+ * JobDetailScreen — driver-side job accept / bid flow.
+ * Uses shared Cargo One primitives so styling matches the customer app.
+ */
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { DriverAPI, Job, money, miles } from "@cargoone/core";
-import { Body, CARGO, Card, H1, Input, Label, PrimaryButton, Screen } from "../ui";
+import { Input, Label, Page, PageHeader, PrimaryButton, StatusPill, SummaryRow } from "../ui";
+import { colors, radius, typography } from "../theme";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "JobDetail">;
 
-/**
- * Job detail — supports Fixed Price accept + Bidding submit-bid. ASAP
- * jobs use LiveMode instead so this screen intentionally doesn't need
- * an ASAP path.
- */
 export function JobDetailScreen({ route, navigation }: P) {
   const { jobId } = route.params;
   const [job, setJob] = useState<Job | null>(null);
@@ -27,9 +27,16 @@ export function JobDetailScreen({ route, navigation }: P) {
     load();
   }, [load]);
 
-  if (!job) return <Screen><Body muted>Loading…</Body></Screen>;
+  if (!job) {
+    return (
+      <Page>
+        <PageHeader title="Job" />
+        <Text style={{ padding: 16, color: colors.inkMuted }}>Loading job…</Text>
+      </Page>
+    );
+  }
 
-  const currentJob = job; // Non-null capture for closures below.
+  const currentJob = job;
   const isFixed = job.pricing_type === "fixed" || job.fixed_price != null;
   const isBidding = job.pricing_type === "bidding";
 
@@ -60,48 +67,58 @@ export function JobDetailScreen({ route, navigation }: P) {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#fff" }} contentContainerStyle={{ padding: 20 }}>
-      <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase", letterSpacing: 1 }}>
-        {isBidding ? "Bidding" : "Fixed price"} · {job.service_type}
-      </Text>
-      <H1>{job.title}</H1>
-      <Body muted style={{ marginTop: 6 }}>
-        {job.pickup_town || "—"} → {job.dropoff_town || "—"}
-      </Body>
+    <Page testID="job-detail-screen">
+      <ScrollView>
+        <PageHeader title={job.title} />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <StatusPill status={job.status || "posted"} />
+            <Text style={[typography.micro]}>{isBidding ? "BIDDING" : "FIXED PRICE"} · {job.service_type}</Text>
+          </View>
+          <Text style={[typography.bodyMuted]}>
+            {job.pickup_town || "—"} → {job.dropoff_town || "—"}
+          </Text>
 
-      <Card style={{ marginTop: 20 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <View>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase" }}>Price</Text>
-            <Text style={{ fontSize: 22, fontWeight: "800" }}>{isFixed ? money(job.fixed_price) : "Open bid"}</Text>
+          <View style={styles.card}>
+            <Text style={typography.micro}>Details</Text>
+            <View style={{ marginTop: 8 }}>
+              <SummaryRow label="Price" value={isFixed ? money(job.fixed_price ?? 0) : "Open bid"} big />
+              <SummaryRow label="Distance" value={miles(job.distance_miles ?? 0)} />
+              {job.description ? <SummaryRow label="Notes" value={job.description} /> : null}
+            </View>
           </View>
-          <View>
-            <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase" }}>Distance</Text>
-            <Text style={{ fontSize: 16, fontWeight: "700" }}>{miles(job.distance_miles)}</Text>
-          </View>
+
+          {isFixed && <PrimaryButton title="Accept this job" onPress={accept} loading={busy} testID="job-accept" />}
+
+          {isBidding && (
+            <View style={{ gap: 4 }}>
+              <Label>Your bid (£)</Label>
+              <Input value={bidAmount} onChangeText={setBidAmount} keyboardType="numeric" testID="bid-amount" />
+              <Label>Message to customer (optional)</Label>
+              <Input
+                value={bidMessage}
+                onChangeText={setBidMessage}
+                multiline
+                testID="bid-message"
+                style={{ height: 80, textAlignVertical: "top" }}
+              />
+              <View style={{ marginTop: 16 }}>
+                <PrimaryButton title="Submit bid" onPress={bid} loading={busy} testID="bid-submit" />
+              </View>
+            </View>
+          )}
         </View>
-      </Card>
-
-      {job.description ? (
-        <Card style={{ marginTop: 12 }}>
-          <Text style={{ fontSize: 13, color: CARGO.ink }}>{job.description}</Text>
-        </Card>
-      ) : null}
-
-      <View style={{ marginTop: 20 }}>
-        {isFixed && (
-          <PrimaryButton title="Accept this job" onPress={accept} loading={busy} testID="job-accept" />
-        )}
-        {isBidding && (
-          <>
-            <Label>Your bid (£)</Label>
-            <Input value={bidAmount} onChangeText={setBidAmount} keyboardType="numeric" testID="bid-amount" />
-            <Label>Message to customer (optional)</Label>
-            <Input value={bidMessage} onChangeText={setBidMessage} multiline testID="bid-message" style={{ height: 80 }} />
-            <PrimaryButton title="Submit bid" onPress={bid} loading={busy} testID="bid-submit" />
-          </>
-        )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </Page>
   );
 }
+
+const styles = {
+  card: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+};

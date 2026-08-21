@@ -1,23 +1,24 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
-import * as Location from "expo-location";
-import { DriverAPI, Job, money, miles, sortByCreatedAtDesc } from "@cargoone/core";
-import { Body, CARGO, Card, H1, Screen } from "../ui";
-
 /**
- * Driver's full marketplace list. R70 — newest-first by default, and
- * server-side ordering is already newest-first (see server.py L2085).
- * We defensively re-sort client-side as belt-and-braces.
+ * AvailableJobsScreen — driver marketplace. Uses the shared Cargo One
+ * primitives so this matches the customer app's design system exactly.
  */
+import React, { useCallback, useEffect, useState } from "react";
+import { RefreshControl, ScrollView, View } from "react-native";
+import * as Location from "expo-location";
+import { DriverAPI, Job, sortByCreatedAtDesc } from "@cargoone/core";
+import { Compass } from "lucide-react-native";
+import { BookingRow, EmptyState, Page, PageHeader } from "../ui";
+import { useShellMenu } from "../components/AppShell";
+import { colors } from "../theme";
+
 export function AvailableJobsScreen({ navigation }: any) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const { openDrawer, showMenu } = useShellMenu();
 
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Ask for the driver's location so distance is populated, but the
-      // server order remains newest-first regardless (R70).
       const perm = await Location.getForegroundPermissionsAsync();
       let lat: number | undefined, lng: number | undefined;
       if (perm.status === "granted") {
@@ -43,41 +44,37 @@ export function AvailableJobsScreen({ navigation }: any) {
   }, [load]);
 
   return (
-    <Screen>
-      <H1>Available jobs</H1>
-      <Body muted style={{ marginTop: 4, marginBottom: 12 }}>
-        Newest first. Pull to refresh.
-      </Body>
-      <FlatList
-        data={jobs}
-        keyExtractor={(j) => j.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
-        renderItem={({ item }) => (
-          <Pressable testID={`job-row-${item.id}`} onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}>
-            <Card style={{ marginBottom: 12 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: CARGO.muted, textTransform: "uppercase" }}>
-                  {item.pricing_type === "bidding" ? "Bidding" : "Fixed price"}
-                </Text>
-                <Text style={{ fontSize: 11, color: CARGO.muted }}>
-                  {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: CARGO.ink, marginTop: 6 }} numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text style={{ fontSize: 13, color: CARGO.muted, marginTop: 2 }} numberOfLines={1}>
-                {item.pickup_town || "—"} → {item.dropoff_town || "—"}
-              </Text>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-                <Text style={{ fontSize: 15, fontWeight: "700" }}>{item.fixed_price ? money(item.fixed_price) : "Open bid"}</Text>
-                <Text style={{ fontSize: 13, color: CARGO.muted }}>{miles(item.distance_miles)}</Text>
-              </View>
-            </Card>
-          </Pressable>
-        )}
-        ListEmptyComponent={<Body muted style={{ marginTop: 40, textAlign: "center" }}>No jobs available right now.</Body>}
-      />
-    </Screen>
+    <Page testID="driver-available-jobs">
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
+      >
+        <PageHeader
+          large
+          title="Available jobs"
+          subtitle="Newest first. Pull to refresh."
+          showMenu={showMenu}
+          onMenuPress={openDrawer}
+        />
+        <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
+          {jobs.length === 0 ? (
+            <EmptyState Icon={Compass} title="No jobs available right now" body="Pull down to check again." />
+          ) : (
+            jobs.map((item: any) => (
+              <BookingRow
+                key={item.id}
+                title={item.title}
+                status={item.status || "posted"}
+                pickup={item.pickup_town}
+                dropoff={item.dropoff_town}
+                price={item.fixed_price ?? item.suggested_price ?? null}
+                priceLabel={item.pricing_type === "bidding" ? "Open bid" : "Fixed"}
+                onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}
+                testID={`job-row-${item.id}`}
+              />
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </Page>
   );
 }
