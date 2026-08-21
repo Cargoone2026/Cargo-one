@@ -4254,9 +4254,14 @@ local Xcode build (this container cannot compile an .ipa).
 - **Screens reskinned this session**: Home dashboard, AvailableJobs, Earnings, JobDetail, Login, Settings — all using shared primitives. Placeholder Stubs.tsx wired into MyJobs / Fleet / Profile / Available hub / Earnings hub so every primary nav entry lands inside the shell.
 
 ### Still deferred (next driver commit)
-- Full **LiveMode** map reskin using the shared design tokens.
-- **ActiveBooking** POD / delivery flow reskin.
-- **AwaitingApproval**, **Register**, **PasswordReset**, **Passkeys** — currently render via the legacy `ui.tsx` Screen/Card/H1 primitives; functional but not yet using the new PageHeader/Cargo One card treatment.
-- **Biometric / Passkey launch gate** (Task 2 from previous handoff).
-- Pickup **photo upload** in PostJob (needs `expo-image-picker`).
+- ~~Full **LiveMode** map reskin using the shared design tokens.~~ ✅ **Landed in `c501fa4`**.
+- ~~**ActiveBooking** POD / delivery flow reskin.~~ ✅ **Landed in `c501fa4`**.
+- ~~**AwaitingApproval**, **Register**, **PasswordReset**, **Passkeys** — currently render via the legacy `ui.tsx` Screen/Card/H1 primitives; functional but not yet using the new PageHeader/Cargo One card treatment.~~ ✅ **Landed in `c501fa4`**.
+- ~~**Biometric / Passkey launch gate** (Task 2 from previous handoff).~~ ✅ **Landed in `c501fa4`** as `components/BiometricGate.tsx` — cold-start Face ID prompt when the signed-in user has at least one passkey.
+- ~~Pickup **photo upload** in PostJob (needs `expo-image-picker`).~~ ✅ **Landed in `c501fa4`** as `components/PhotoUpload.tsx` — up to 4 base64 data-URL photos in step 1, matching the backend `photos: list[str]` shape.
+
+### Truly still open (next session)
+- iPad Pro visual certification vs the actual web portal (user must run `npx expo run:ios` on their Mac; container has no simulator).
+- Second-round driver polish for Fleet / My Jobs / Available hub (currently rendered by Stubs.tsx inside the shell). Data screens work via the existing detail flows.
+- Full web-parity **background location** upgrade for App Store review (currently foreground-only via expo-location watchPositionAsync).
 
