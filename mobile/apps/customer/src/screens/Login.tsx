@@ -2,7 +2,7 @@
  * LoginScreen — Cargo One branded sign-in mirroring auth/Login web page.
  */
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Fingerprint } from "lucide-react-native";
 import { isPasskeySupported, loginWithPasskey, NetworkError } from "@cargoone/core";
@@ -71,9 +71,12 @@ export function LoginScreen({ navigation }: P) {
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24 }} keyboardShouldPersistTaps="handled">
           {/* Brand lockup */}
           <View style={styles.brand}>
-            <View style={styles.mark}>
-              <Text style={styles.markText}>C1</Text>
-            </View>
+            <Image
+              source={require("../../assets/loading-mark.png")}
+              style={styles.mark}
+              resizeMode="cover"
+              accessibilityLabel="Cargo One"
+            />
             <Text style={styles.brandTitle}>CARGO ONE</Text>
             <Text style={styles.brandRole}>Customer</Text>
           </View>
@@ -128,11 +131,8 @@ const styles = {
     width: 56,
     height: 56,
     borderRadius: 14,
-    backgroundColor: colors.brand,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    overflow: "hidden" as const,
   },
-  markText: { color: "#FFFFFF", fontSize: 20, fontWeight: "700" as const, letterSpacing: 1 },
   brandTitle: {
     color: colors.ink,
     fontSize: 16,
