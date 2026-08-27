@@ -102,6 +102,7 @@ export function PageHeader({
   right,
   onMenuPress,
   showMenu,
+  onBack,
   testID,
   large,
   style,
@@ -111,13 +112,19 @@ export function PageHeader({
   right?: React.ReactNode;
   onMenuPress?: () => void;
   showMenu?: boolean;
+  onBack?: () => void;
   testID?: string;
   large?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View style={[headerStyles.row, style]} testID={testID}>
-      {showMenu ? (
+      {onBack ? (
+        <Pressable onPress={onBack} testID="page-header-back" style={headerStyles.menuBtn} hitSlop={8}>
+          <BackGlyph />
+        </Pressable>
+      ) : null}
+      {showMenu && !onBack ? (
         <Pressable onPress={onMenuPress} testID="page-header-menu" style={headerStyles.menuBtn} hitSlop={8}>
           <MenuGlyph />
         </Pressable>
@@ -199,6 +206,25 @@ function MenuGlyph() {
         <View style={{ width: 18, height: 2, backgroundColor: colors.ink, borderRadius: 2 }} />
         <View style={{ width: 18, height: 2, backgroundColor: colors.ink, borderRadius: 2 }} />
       </View>
+    </View>
+  );
+}
+
+/** Back glyph — chevron pointing left for the back button. */
+function BackGlyph() {
+  return (
+    <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <View
+        style={{
+          width: 10,
+          height: 10,
+          borderLeftWidth: 2,
+          borderBottomWidth: 2,
+          borderColor: colors.ink,
+          transform: [{ rotate: "45deg" }],
+          marginLeft: 4,
+        }}
+      />
     </View>
   );
 }

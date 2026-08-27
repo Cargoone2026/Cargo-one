@@ -10,6 +10,46 @@ Expo/React Native app, the frontend has to be **ported to standard React web
 (CRA)** without altering the backend business logic, API contracts, catalog
 data, deposit math or visual language.
 
+## Update — Feb 2026 · Customer BookingDetail parity (P0 unblock)
+
+### What shipped
+- **Shared types aligned with real backend payload.** `/app/mobile/packages/core/src/types.ts`:
+  - `Job`: added `accepted_price`, `requested_vehicle_name`, `vehicle_required`, `recommended_vehicle`, `weight_kg`, `volume_m3`, `pallets`, `item_count`, `dimensions`, `dimensions_l_m`, `dimensions_w_m`, `dimensions_h_m`, `needs_forklift`, `needs_loading_help`, `loading_help`, `photos`, `cancelled_at`, `completed_at`. All optional — server may omit them for older records or private-until-paid jobs.
+  - `Booking`: added `customer_total`, `booking_fee_percent`, `service_timing`, `accepted_at`, `paid_at`, `cancelled_at`, `assigned_driver_id`, `assigned_driver_name`, `assigned_driver_rating`, `driver_accepted`, `other_party` (the released driver `User` post-paid), and `pod_uploaded`.
+  - `User`: added `total_jobs` (driver stats surfaced on the driver card).
+- **Customer BookingDetail wired to real fields.** `/app/mobile/apps/customer/src/screens/BookingDetail.tsx`:
+  - All `(x as any)` casts removed.
+  - Driver info now sourced from `b.other_party` (matches web `BookingDetail.jsx`) instead of non-existent `b.driver_phone` / `b.driver_rating` / `b.driver_jobs`.
+  - "Deposit received" activity row now reads `b.paid_at` (was `paid_at || deposit_paid_at`, neither existed on the payload; backend uses `paid_at` only).
+  - Suitable-vehicle chip + "Before you accept" card fall back through `requested_vehicle_name → vehicle_required → recommended_vehicle`, so historic jobs also render a vehicle.
+  - Booking-fee fallback now `b.booking_fee ?? b.deposit_amount ?? 0` to mirror web.
+  - Back button (`goBack`) routes to `Bookings` on deep-link/root entry.
+
+### Root cause of the missing booking info
+The native screen was already rendering the full web layout, but the shared `Job`/`Booking` interfaces in `@cargoone/core` were narrower than the real backend payload. TypeScript rejected access to real fields; the previous agent tried to paper over it with `(x as any)` casts, which then silently referenced properties that don't exist on the payload (`b.driver_phone`, `b.driver_rating`, `b.driver_jobs`, `b.deposit_paid_at`) — so at runtime the driver card + deposit-received row never rendered. Fixing the types + swapping to `b.other_party` restores parity.
+
+### Verification (this environment — Linux container, no Xcode)
+- `yarn tsc --noEmit` on all three workspaces (`packages/core`, `apps/customer`, `apps/driver`) → **clean, exit 0**.
+- `yarn test` (Jest in `@cargoone/core`) → **3 suites, 26 tests, all pass**.
+- iOS simulator build/launch → **cannot run here** (Linux ARM64 container has no macOS/Xcode). User must run `xcodebuild` + `xcrun simctl install` on their Mac using the existing working path (do NOT touch `plugins/withCargoOneiOSFixes.js`, the Mapbox Podfile, or the async-storage postinstall).
+
+### Files changed
+- `/app/mobile/packages/core/src/types.ts`
+- `/app/mobile/apps/customer/src/screens/BookingDetail.tsx`
+
+### Not touched (intentionally)
+- `/app/frontend/**` (web = source of truth)
+- `/app/mobile/plugins/withCargoOneiOSFixes.js`
+- Mapbox Podfile injection + async-storage postinstall
+- `ActiveJobMap` implementation (kept the currently-working map)
+
+### Next
+- **P1**: Push Notifications foundation (APNs + FCM).
+- **P1**: Background location tracking for the Driver app (`expo-location`, App Store compliance).
+- **P2**: Android production build prep (Play upload keys, Firebase config).
+
+
+
 ## Constraints (User-Set)
 - Pure React web app — **no Expo, Metro, or React Native** dependencies.
 - HttpOnly cookie-based JWT auth (`cargoone_session`, Secure, SameSite=Lax);
