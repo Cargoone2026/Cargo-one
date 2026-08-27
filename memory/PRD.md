@@ -10,7 +10,34 @@ Expo/React Native app, the frontend has to be **ported to standard React web
 (CRA)** without altering the backend business logic, API contracts, catalog
 data, deposit math or visual language.
 
-## Update — Feb 2026 · Customer BookingDetail parity (P0 unblock)
+## Update — Feb 2026 · BookingDetail runtime fix (nested-ScrollView bug)
+
+### Root cause (found via runtime trace after the previous type fix passed TS+Jest but rendered blank on the iPad)
+`apps/customer/src/ui.tsx` `Page` defaults to `scroll={true}` and internally renders a **`ScrollView`** around its children. `BookingDetail.tsx` was rendering **another vertical `ScrollView` inside** that one:
+
+```
+<Page>              // → ScrollView (implicit)
+  <ScrollView>      // → ScrollView (explicit)  ← nested vertical
+    <PageHeader/>
+    …cards…
+```
+
+React Native cannot measure a vertical `ScrollView` nested directly inside another vertical `ScrollView`; the inner one collapses (0-height content) on iOS. That is exactly why the iPad showed no Back button and no booking cards even though the code, types, and data were all correct.
+
+### Fix (smallest correct change)
+`/app/mobile/apps/customer/src/screens/BookingDetail.tsx`:
+- Pass `scroll={false}` to `Page` (both loading + main branches) so `Page` renders a plain `flex: 1` container.
+- Hoist `PageHeader` above the inner `ScrollView`, so the Back button is fixed at the top and never scrolls away.
+- Keep the single inner `ScrollView` for the body cards.
+
+No other files changed. `ActiveJobMap`, Mapbox Podfile, `withCargoOneiOSFixes.js`, async-storage postinstall, `/app/frontend/**` untouched. Types + `b.other_party` wiring from the previous fix retained (they were already correct at the API layer).
+
+### Verification (this Linux container — no Xcode)
+- `yarn tsc --noEmit` on `packages/core`, `apps/customer`, `apps/driver` → **exit 0, clean**.
+- `yarn test` → **3 suites, 26 tests, all pass**.
+- iOS simulator run → must be done by the user on the Mac (existing working `xcodebuild -destination` + `xcrun simctl install` flow).
+
+
 
 ### What shipped
 - **Shared types aligned with real backend payload.** `/app/mobile/packages/core/src/types.ts`:

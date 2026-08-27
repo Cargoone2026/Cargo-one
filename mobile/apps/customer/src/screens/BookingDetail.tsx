@@ -75,7 +75,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
 
   if (!b) {
     return (
-      <Page testID="booking-detail-loading">
+      <Page testID="booking-detail-loading" scroll={false}>
         <PageHeader title="Booking" onBack={goBack} />
         <Text style={{ padding: 16, color: colors.inkMuted }}>Loading booking…</Text>
       </Page>
@@ -117,13 +117,13 @@ export function BookingDetailScreen({ route, navigation }: P) {
   const driverPhone = driver?.phone;
 
   return (
-    <Page testID="booking-detail-screen">
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <PageHeader
-          title="Booking"
-          onBack={goBack}
-          right={<StatusPill status={b.status} />}
-        />
+    <Page testID="booking-detail-screen" scroll={false}>
+      <PageHeader
+        title="Booking"
+        onBack={goBack}
+        right={<StatusPill status={b.status} />}
+      />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <View style={{ paddingHorizontal: 16, gap: 16 }}>
           {/* Cancellation banner */}
           {cancellationApplies && (
