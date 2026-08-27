@@ -54,6 +54,13 @@ export function BookingDetailScreen({ route, navigation }: P) {
   const [tracking, setTracking] = useState<TrackingResponse | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
 
+  // Runtime bundle diagnostic — if you don't see this line in Metro logs
+  // after opening a booking, the simulator is running a stale JS bundle
+  // and none of the recent BookingDetail edits are being executed.
+  // Reload with `r` in Metro (or shake → Reload) after `expo start -c`.
+  // eslint-disable-next-line no-console
+  console.log("[BookingDetail R71.13] mounted", { bookingId });
+
   const load = useCallback(async () => {
     const bk = await CustomerAPI.bookingDetail(bookingId);
     setB(bk);
