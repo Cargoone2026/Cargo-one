@@ -3,9 +3,14 @@
  * components/ui-portal/RouteMap.jsx. Renders a Mapbox map with pickup +
  * dropoff markers and fits the camera so both are visible. Optional
  * summary strip below the map matches the web summary layout.
+ *
+ * Interaction parity with ActiveJobMap (confirmed-booking map):
+ *   • pinch-to-zoom + pan (Mapbox defaults, explicitly enabled)
+ *   • compass control while rotated
+ *   • recenter FAB to re-fit the pickup/dropoff bounds
  */
-import React, { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useMemo, useRef } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
 import { colors, radius, typography } from "../theme";
 
@@ -39,6 +44,16 @@ export function RouteMap({
     return { ne, sw };
   }, [pickup, dropoff]);
 
+  const cameraRef = useRef<Mapbox.Camera>(null);
+  const recenter = () => {
+    cameraRef.current?.fitBounds(
+      [bounds.ne.lng, bounds.ne.lat],
+      [bounds.sw.lng, bounds.sw.lat],
+      [40, 40, 40, 40],
+      400,
+    );
+  };
+
   const routeGeoJSON: any = useMemo(
     () => ({
       type: "FeatureCollection",
@@ -66,11 +81,16 @@ export function RouteMap({
           style={{ flex: 1 }}
           styleURL={Mapbox.StyleURL.Street}
           scaleBarEnabled={false}
-          compassEnabled={false}
+          compassEnabled={true}
           logoEnabled={false}
           attributionEnabled={false}
+          zoomEnabled={true}
+          scrollEnabled={true}
+          pitchEnabled={true}
+          rotateEnabled={true}
         >
           <Mapbox.Camera
+            ref={cameraRef}
             bounds={{
               ne: [bounds.ne.lng, bounds.ne.lat],
               sw: [bounds.sw.lng, bounds.sw.lat],
@@ -98,6 +118,15 @@ export function RouteMap({
             </View>
           </Mapbox.PointAnnotation>
         </Mapbox.MapView>
+        <Pressable
+          onPress={recenter}
+          style={styles.recenter}
+          accessibilityRole="button"
+          accessibilityLabel="Recenter map"
+          testID="route-map-recenter"
+        >
+          <Text style={styles.recenterGlyph}>◎</Text>
+        </Pressable>
       </View>
       {summary ? (
         <View style={styles.summary}>
@@ -139,6 +168,23 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   pinText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
+  recenter: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  recenterGlyph: { fontSize: 18, color: colors.ink, lineHeight: 20 },
   summary: {
     padding: 12,
     borderTopWidth: 1,

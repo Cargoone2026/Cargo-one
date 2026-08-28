@@ -33,7 +33,7 @@ export const CustomerAPI = {
       { method: "POST", body: { payment_method_type: paymentMethodType } },
     ),
   createAsapBooking: (jobId: string) =>
-    api<Booking>(`/jobs/${jobId}/booking`, { method: "POST" }),
+    api<Booking>(`/bookings`, { method: "POST", body: { job_id: jobId } }),
   cancelBooking: (bookingId: string) =>
     api<Booking>(`/bookings/${bookingId}/cancel`, { method: "POST" }),
   submitReview: (bookingId: string, rating: number, comment?: string) =>
@@ -143,8 +143,8 @@ export const SharedAPI = {
   tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
   driverProfile: (driverId: string) => api<DriverProfile>(`/users/${driverId}/profile`),
   serviceCatalog: () => api<any>("/service-catalog"),
-  categories: () => api<any[]>("/service-categories").catch(() => [] as any[]),
-  vehicles: () => api<any[]>("/vehicles").catch(() => [] as any[]),
+  categories: () => api<any[]>("/catalog/categories").catch(() => [] as any[]),
+  vehicles: () => api<any[]>("/catalog/vehicles").catch(() => [] as any[]),
   // Server-side geocoding proxy — Google key stays backend-only.
   geoAutocomplete: (q: string) =>
     api<GeoAutocompleteResponse>(`/geo/autocomplete?q=${encodeURIComponent(q)}`).catch(
