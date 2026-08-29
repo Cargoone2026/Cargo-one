@@ -27,10 +27,14 @@ export const CustomerAPI = {
   acceptBid: (jobId: string, bidId: string) =>
     api<{ booking_id: string }>(`/jobs/${jobId}/bids/${bidId}/accept`, { method: "POST" }),
   driverProfile: (driverId: string) => api<DriverProfile>(`/users/${driverId}/profile`),
-  createCheckout: (bookingId: string, paymentMethodType: "card" | "cash" = "card") =>
-    api<{ payment_intent_client_secret: string; publishable_key?: string }>(
-      `/bookings/${bookingId}/payment/intent`,
-      { method: "POST", body: { payment_method_type: paymentMethodType } },
+  createCheckout: (bookingId: string, originUrl: string) =>
+    api<{ session_id: string; url: string }>(
+      `/bookings/${bookingId}/deposit`,
+      { method: "POST", body: { origin_url: originUrl } },
+    ),
+  paymentStatus: (sessionId: string) =>
+    api<{ payment_status: "paid" | "initiated" | "expired" | "unpaid"; status?: string }>(
+      `/payments/status/${sessionId}`,
     ),
   createAsapBooking: (jobId: string) =>
     api<Booking>(`/bookings`, { method: "POST", body: { job_id: jobId } }),
@@ -50,9 +54,20 @@ export const CustomerAPI = {
   listNotifications: () => api<any[]>("/notifications").catch(() => [] as any[]),
   markNotificationRead: (id: string) =>
     api<any>(`/notifications/${id}/read`, { method: "POST" }).catch(() => null),
-  // Profile + account.
+  // Profile + account (aligned with web PUT /auth/me + change-password + document
+  // upload contract used by frontend/src/pages/portal/customer/Profile.jsx).
   updateProfile: (patch: Record<string, unknown>) =>
-    api<User>("/users/me", { method: "PATCH", body: patch }),
+    api<User>("/auth/me", { method: "PUT", body: patch }),
+  changePassword: (current_password: string, new_password: string) =>
+    api<{ ok: boolean; access_token?: string }>("/auth/me/change-password", {
+      method: "POST",
+      body: { current_password, new_password },
+    }),
+  uploadProfilePhoto: (base64: string) =>
+    api<any>("/users/me/documents", {
+      method: "POST",
+      body: { doc_type: "profile_photo", base64 },
+    }),
   deleteAccount: () => api<any>("/users/me", { method: "DELETE" }),
   tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
 };

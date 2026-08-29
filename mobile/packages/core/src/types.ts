@@ -21,6 +21,13 @@ export interface User {
   total_jobs?: number;
   profile_photo?: string | null;
   vehicle?: { key?: string; make?: string; reg?: string } | null;
+  // Address (customer settings; nullable across the payload).
+  address_line1?: string | null;
+  address_line2?: string | null;
+  town?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  country?: string | null;
   created_at?: string;
 }
 

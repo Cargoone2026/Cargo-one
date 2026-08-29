@@ -20,6 +20,8 @@ import { SettingsScreen } from "./screens/Settings";
 import { PasskeysScreen } from "./screens/Passkeys";
 import { MessagesScreen } from "./screens/Messages";
 import { ProfileScreen } from "./screens/Profile";
+import { EditProfileScreen } from "./screens/EditProfile";
+import { ChangePasswordScreen } from "./screens/ChangePassword";
 import { PostJobScreen } from "./screens/PostJob";
 import { AsapScreen } from "./screens/Asap";
 import { LegalScreen } from "./screens/Legal";
@@ -48,6 +50,8 @@ export type RootStackParamList = {
   Bookings: undefined;
   Messages: undefined;
   Profile: undefined;
+  EditProfile: undefined;
+  ChangePassword: undefined;
   BookingDetail: { bookingId: string };
   CreateJob: { serviceTiming: "asap" | "scheduled"; serviceType: "transport" | "recovery" | "big" };
   Bids: { jobId: string };
@@ -130,6 +134,8 @@ export function App() {
                     <Stack.Screen name="Payment" component={PaymentScreen} />
                     <Stack.Screen name="Review" component={ReviewScreen} />
                     <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                    <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+                    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
                     <Stack.Screen name="Settings" component={SettingsScreen} />
                     <Stack.Screen name="Legal" component={LegalScreen} />
                     <Stack.Screen name="About" component={AboutScreen} />

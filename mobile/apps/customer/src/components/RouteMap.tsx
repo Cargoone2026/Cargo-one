@@ -25,7 +25,7 @@ interface Point {
 export function RouteMap({
   pickup,
   dropoff,
-  height = 180,
+  height = 260,
   summary,
 }: {
   pickup: Point;
@@ -127,6 +127,11 @@ export function RouteMap({
         >
           <Text style={styles.recenterGlyph}>◎</Text>
         </Pressable>
+        <View style={styles.topPill} pointerEvents="none">
+          <Text style={styles.topPillText} testID="route-map-top-pill">
+            Route preview
+          </Text>
+        </View>
       </View>
       {summary ? (
         <View style={styles.summary}>
@@ -171,7 +176,7 @@ const styles = StyleSheet.create({
   recenter: {
     position: "absolute",
     top: 12,
-    right: 12,
+    left: 12,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -185,6 +190,17 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   recenterGlyph: { fontSize: 18, color: colors.ink, lineHeight: 20 },
+  topPill: { position: "absolute", top: 12, left: 0, right: 0, alignItems: "center" },
+  topPillText: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.ink,
+    overflow: "hidden",
+  },
   summary: {
     padding: 12,
     borderTopWidth: 1,
