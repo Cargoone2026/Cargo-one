@@ -42,6 +42,7 @@ import {
 } from "lucide-react-native";
 import { SharedAPI, CustomerAPI, QuoteEstimate, FeePreview } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
+import { DatePickerField } from "../components/DatePickerField";
 import { colors, radius, typography } from "../theme";
 import {
   IconButton,
@@ -427,20 +428,19 @@ export function PostJobScreen() {
               </View>
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                 <View style={{ flex: 1 }}>
-                  <Label>Collection date</Label>
-                  <Input
+                  <DatePickerField
+                    label="Collection date"
                     value={collectionDate}
-                    onChangeText={setCollectionDate}
-                    placeholder="YYYY-MM-DD"
+                    onChange={setCollectionDate}
                     testID="postjob-collection-date"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Label>Delivery date</Label>
-                  <Input
+                  <DatePickerField
+                    label="Delivery date"
                     value={deliveryDate}
-                    onChangeText={setDeliveryDate}
-                    placeholder="YYYY-MM-DD"
+                    onChange={setDeliveryDate}
+                    minDate={collectionDate || undefined}
                     testID="postjob-delivery-date"
                   />
                 </View>

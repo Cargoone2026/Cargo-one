@@ -22,9 +22,14 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
   }, [bookingId]);
 
   return (
-    <Page testID="booking-confirmed-screen">
-      <ScrollView>
-        <PageHeader title="Booked" />
+    <Page testID="booking-confirmed-screen" scroll={false}>
+      <PageHeader
+        title="Booked"
+        onBack={() =>
+          navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Bookings")
+        }
+      />
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={{ paddingHorizontal: 24, paddingVertical: 20, alignItems: "center", gap: 16 }}>
           <View style={styles.check}>
             <CheckCircle2 size={56} color="#FFFFFF" strokeWidth={2.2} />

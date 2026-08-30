@@ -127,11 +127,33 @@ export function RouteMap({
         >
           <Text style={styles.recenterGlyph}>◎</Text>
         </Pressable>
-        <View style={styles.topPill} pointerEvents="none">
-          <Text style={styles.topPillText} testID="route-map-top-pill">
-            Route preview
-          </Text>
-        </View>
+        {/* Full-width top strip showing pickup → dropoff — parity with
+            confirmed-booking map's phase banner. Falls back to the
+            centered "Route preview" pill when the caller doesn't pass
+            town names. */}
+        {summary?.pickupTown || summary?.dropoffTown ? (
+          <View style={styles.topStrip} pointerEvents="none" testID="route-map-top-strip">
+            <View style={styles.topStripCol}>
+              <Text style={styles.topStripLabel}>COLLECTION</Text>
+              <Text style={styles.topStripTown} numberOfLines={1}>
+                {summary?.pickupTown || "—"}
+              </Text>
+            </View>
+            <Text style={styles.topStripArrow}>→</Text>
+            <View style={[styles.topStripCol, { alignItems: "flex-end" }]}>
+              <Text style={styles.topStripLabel}>DELIVERY</Text>
+              <Text style={styles.topStripTown} numberOfLines={1}>
+                {summary?.dropoffTown || "—"}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.topPill} pointerEvents="none">
+            <Text style={styles.topPillText} testID="route-map-top-pill">
+              Route preview
+            </Text>
+          </View>
+        )}
       </View>
       {summary ? (
         <View style={styles.summary}>
@@ -201,6 +223,31 @@ const styles = StyleSheet.create({
     color: colors.ink,
     overflow: "hidden",
   },
+  topStrip: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
+  },
+  topStripCol: { flex: 1, minWidth: 0 },
+  topStripLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: colors.inkMuted,
+    marginBottom: 2,
+  },
+  topStripTown: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  topStripArrow: { fontSize: 20, color: colors.brand, fontWeight: "700" },
   summary: {
     padding: 12,
     borderTopWidth: 1,

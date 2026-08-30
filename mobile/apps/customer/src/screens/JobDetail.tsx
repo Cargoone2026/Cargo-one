@@ -35,13 +35,17 @@ export function JobDetailScreen({ route, navigation }: P) {
     load();
   }, [load]);
 
+  const goBack = () =>
+    navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Bookings");
+
   return (
-    <Page testID="job-detail-screen">
+    <Page testID="job-detail-screen" scroll={false}>
+      <PageHeader title={job?.title || "Job"} onBack={goBack} />
       <ScrollView
+        contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
       >
-        <PageHeader title={job?.title || "Job"} />
-        <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
+        <View style={{ paddingHorizontal: 16, gap: 16 }}>
           {job?.status ? <StatusPill status={job.status} /> : null}
           {job?.description ? (
             <Text style={[typography.body, { lineHeight: 20, color: colors.inkMuted }]}>{job.description}</Text>

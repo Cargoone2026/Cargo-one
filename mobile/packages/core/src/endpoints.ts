@@ -46,11 +46,16 @@ export const CustomerAPI = {
       body: { booking_id: bookingId, rating, comment },
     }),
   // Messaging + notifications (mirrors web /customer/messages page).
-  listThreads: () => api<any[]>("/threads").catch(() => [] as any[]),
-  listMessages: (threadId: string) =>
-    api<any[]>(`/threads/${threadId}/messages`).catch(() => [] as any[]),
-  sendMessage: (threadId: string, body: string) =>
-    api<any>(`/threads/${threadId}/messages`, { method: "POST", body: { body } }),
+  // Web uses /messages/summary for conversation previews — /threads doesn't
+  // exist on the backend. Return shape (per row):
+  //   { booking_id, job_title, pickup_town, dropoff_town, counterparty:{
+  //     name, profile_photo, rating }, last_message:{ created_at, text, mine,
+  //     read_at, delivered_at, has_photo, moderated }, unread_count }
+  listThreads: () => api<any[]>("/messages/summary").catch(() => [] as any[]),
+  listMessages: (bookingId: string) =>
+    api<any[]>(`/bookings/${bookingId}/messages`).catch(() => [] as any[]),
+  sendMessage: (bookingId: string, body: string) =>
+    api<any>(`/bookings/${bookingId}/messages`, { method: "POST", body: { body } }),
   listNotifications: () => api<any[]>("/notifications").catch(() => [] as any[]),
   markNotificationRead: (id: string) =>
     api<any>(`/notifications/${id}/read`, { method: "POST" }).catch(() => null),
