@@ -45,6 +45,7 @@ export function RouteMap({
   }, [pickup, dropoff]);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const mapRef = useRef<Mapbox.MapView>(null);
   const recenter = () => {
     cameraRef.current?.fitBounds(
       [bounds.ne.lng, bounds.ne.lat],
@@ -52,6 +53,16 @@ export function RouteMap({
       [40, 40, 40, 40],
       400,
     );
+  };
+  const zoomBy = async (delta: number) => {
+    const current = await mapRef.current?.getZoom();
+    const next = Math.max(0, Math.min(22, (current ?? 10) + delta));
+    cameraRef.current?.setCamera({ zoomLevel: next, animationDuration: 200 });
+  };
+  const zoomIn = () => zoomBy(1);
+  const zoomOut = () => zoomBy(-1);
+  const resetBearing = () => {
+    cameraRef.current?.setCamera({ heading: 0, pitch: 0, animationDuration: 250 });
   };
 
   const routeGeoJSON: any = useMemo(
@@ -78,6 +89,7 @@ export function RouteMap({
     <View style={{ borderRadius: radius.base, overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
       <View style={{ height, backgroundColor: colors.bgSecondary }}>
         <Mapbox.MapView
+          ref={mapRef}
           style={{ flex: 1 }}
           styleURL={Mapbox.StyleURL.Street}
           scaleBarEnabled={false}
@@ -118,15 +130,49 @@ export function RouteMap({
             </View>
           </Mapbox.PointAnnotation>
         </Mapbox.MapView>
-        <Pressable
-          onPress={recenter}
-          style={styles.recenter}
-          accessibilityRole="button"
-          accessibilityLabel="Recenter map"
-          testID="route-map-recenter"
-        >
-          <Text style={styles.recenterGlyph}>◎</Text>
-        </Pressable>
+        {/* Left-side control stack — visually consistent buttons.
+            Top arrow ▲ = zoom IN (preserves existing top-control style).
+            Bottom arrow ▼ = zoom OUT (new counterpart).
+            Compass  N = reset heading + pitch.
+            Recenter ◎ = existing fit-bounds behaviour, unchanged. */}
+        <View style={styles.ctrlStack} pointerEvents="box-none">
+          <Pressable
+            onPress={zoomIn}
+            style={styles.ctrlBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom in"
+            testID="route-map-zoom-in"
+          >
+            <Text style={styles.ctrlArrow}>▲</Text>
+          </Pressable>
+          <Pressable
+            onPress={zoomOut}
+            style={styles.ctrlBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom out"
+            testID="route-map-zoom-out"
+          >
+            <Text style={styles.ctrlArrow}>▼</Text>
+          </Pressable>
+          <Pressable
+            onPress={resetBearing}
+            style={styles.ctrlBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Reset compass"
+            testID="route-map-compass"
+          >
+            <Text style={styles.ctrlCompass}>N</Text>
+          </Pressable>
+          <Pressable
+            onPress={recenter}
+            style={styles.ctrlBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Recenter map"
+            testID="route-map-recenter"
+          >
+            <Text style={styles.recenterGlyph}>◎</Text>
+          </Pressable>
+        </View>
         {/* Full-width top strip showing pickup → dropoff — parity with
             confirmed-booking map's phase banner. Falls back to the
             centered "Route preview" pill when the caller doesn't pass
@@ -196,9 +242,21 @@ const styles = StyleSheet.create({
   },
   pinText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
   recenter: {
+    // Retained so any external caller referring to this style keeps compiling.
+    // The stack of controls uses ctrlBtn below.
     position: "absolute",
     top: 12,
     left: 12,
+  },
+  recenterGlyph: { fontSize: 18, color: colors.ink, lineHeight: 20 },
+  ctrlStack: {
+    position: "absolute",
+    // Sits BELOW the top strip so it never clips over the COLLECTION → DELIVERY banner.
+    top: 68,
+    left: 12,
+    gap: 8,
+  },
+  ctrlBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -211,7 +269,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  recenterGlyph: { fontSize: 18, color: colors.ink, lineHeight: 20 },
+  ctrlArrow: { fontSize: 14, color: colors.ink, lineHeight: 16, fontWeight: "700" },
+  ctrlCompass: { fontSize: 13, color: colors.brand, lineHeight: 15, fontWeight: "800" },
   topPill: { position: "absolute", top: 12, left: 0, right: 0, alignItems: "center" },
   topPillText: {
     backgroundColor: "rgba(255,255,255,0.95)",
