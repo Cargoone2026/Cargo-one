@@ -4,6 +4,7 @@ FastAPI + MongoDB + JWT + Stripe (via emergentintegrations).
 Roles: customer, driver, admin.
 """
 
+import asyncio
 import logging
 import math
 import os
@@ -566,7 +567,67 @@ async def push_notification(user_id: str, title: str, body: str, data: Optional[
         "created_at": now_iso(),
     }
     await db.notifications.insert_one(doc)
+    # Fan-out to Expo Push Service for any registered ExponentPushToken on
+    # this user. Best-effort, silent on failure — the notifications record
+    # above is the source of truth so the in-app inbox still works if push
+    # delivery fails.
+    try:
+        asyncio.create_task(_deliver_expo_push(user_id, title, body, doc["data"]))
+    except Exception:  # pragma: no cover - never break the notification write
+        logger.exception("expo push fan-out task creation failed")
     return doc
+
+
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "").strip()
+
+
+async def _deliver_expo_push(user_id: str, title: str, body: str, data: dict):
+    """Look up the user's registered ExponentPushTokens and POST to Expo
+    Push Service. Handles the recommended lifecycle: DeviceNotRegistered
+    invalidates the offending token, everything else is logged and moved on.
+    """
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "push_tokens": 1})
+    tokens = [t.get("token") for t in (u or {}).get("push_tokens", []) if t.get("token")]
+    tokens = [t for t in tokens if isinstance(t, str) and t.startswith("ExponentPushToken[")]
+    if not tokens:
+        return
+    payloads = [
+        {
+            "to": t,
+            "title": title,
+            "body": body,
+            "data": data,
+            "sound": "default",
+            "priority": "high",
+            # channelId only affects Android — safe to always include.
+            "channelId": "default",
+        }
+        for t in tokens
+    ]
+    import httpx  # local import — keeps startup lean
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if EXPO_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {EXPO_ACCESS_TOKEN}"
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.post(EXPO_PUSH_URL, json=payloads, headers=headers)
+            resp = r.json() if r.content else {}
+    except Exception:
+        logger.exception("expo push HTTP call failed")
+        return
+    # Expo returns {"data": [{"status": "ok"|"error", "message": "...",
+    #   "details": {"error": "DeviceNotRegistered"|"MessageTooBig"|...}}]}
+    results = resp.get("data") if isinstance(resp, dict) else None
+    if not isinstance(results, list):
+        return
+    for token, res in zip(tokens, results):
+        details = (res or {}).get("details") or {}
+        if (res or {}).get("status") == "error" and details.get("error") == "DeviceNotRegistered":
+            await db.users.update_one(
+                {"id": user_id},
+                {"$pull": {"push_tokens": {"token": token}}},
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1281,6 +1342,53 @@ async def change_password(
 # ---------------------------------------------------------------------------
 # Public profile (visible to other users pre-deposit for driver selection)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Push-token registration (Expo Push Service)
+# ---------------------------------------------------------------------------
+# Native customer + driver apps register an ExponentPushToken here when the
+# user grants notification permission. Tokens live on the user document as
+# `push_tokens: [{token, platform, updated_at}]`. A single account may have
+# many active devices; logout on device X only removes X's token.
+# `push_notification()` above fans out to every token on the recipient user
+# and self-heals `DeviceNotRegistered` responses.
+class PushTokenIn(BaseModel):
+    token: str
+    platform: Optional[str] = None  # "ios" | "android"
+
+
+@api.post("/users/me/push-tokens")
+async def register_push_token(payload: PushTokenIn, user: dict = Depends(get_current_user)):
+    tok = (payload.token or "").strip()
+    if not tok.startswith("ExponentPushToken[") or not tok.endswith("]"):
+        raise HTTPException(status_code=400, detail="Invalid Expo push token")
+    now = now_iso()
+    # Remove any prior copy of this token — could have been registered against
+    # a different user before an account switch — then attach it to caller.
+    await db.users.update_many(
+        {"push_tokens.token": tok},
+        {"$pull": {"push_tokens": {"token": tok}}},
+    )
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$push": {"push_tokens": {
+            "token": tok,
+            "platform": (payload.platform or "").lower() or None,
+            "updated_at": now,
+        }}},
+    )
+    return {"ok": True}
+
+
+@api.delete("/users/me/push-tokens/{token}")
+async def unregister_push_token(token: str, user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$pull": {"push_tokens": {"token": token}}},
+    )
+    return {"ok": True}
+
 
 
 @api.get("/users/{user_id}/profile")

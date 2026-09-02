@@ -74,6 +74,15 @@ export const CustomerAPI = {
       body: { doc_type: "profile_photo", base64 },
     }),
   deleteAccount: () => api<any>("/users/me", { method: "DELETE" }),
+  registerPushToken: (token: string, platform: "ios" | "android") =>
+    api<{ ok: boolean }>("/users/me/push-tokens", {
+      method: "POST",
+      body: { token, platform },
+    }),
+  unregisterPushToken: (token: string) =>
+    api<{ ok: boolean }>(`/users/me/push-tokens/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
   tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
 };
 
@@ -117,6 +126,17 @@ export const DriverAPI = {
     }),
   deleteVehicle: (id: string) => api<any>(`/driver/vehicles/${id}`, { method: "DELETE" }),
   myReviews: (userId: string) => api<any[]>(`/users/${userId}/reviews`).catch(() => [] as any[]),
+  // Push-token registration is identical for both roles — kept alongside
+  // driver-only routes for convenience so DriverAPI can call it directly.
+  registerPushToken: (token: string, platform: "ios" | "android") =>
+    api<{ ok: boolean }>("/users/me/push-tokens", {
+      method: "POST",
+      body: { token, platform },
+    }),
+  unregisterPushToken: (token: string) =>
+    api<{ ok: boolean }>(`/users/me/push-tokens/${encodeURIComponent(token)}`, {
+      method: "DELETE",
+    }),
 };
 
 // ── Shared (both roles) ─────────────────────────────────────────────────

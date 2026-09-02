@@ -1,10 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { View } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { DriverAPI } from "@cargoone/core";
 
 import { LoginScreen } from "./screens/Login";
 import { RegisterScreen } from "./screens/Register";
@@ -23,6 +24,15 @@ import { FleetScreen } from "./screens/Fleet";
 import { ProfileScreen } from "./screens/Profile";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
+import {
+  initPushForegroundHandler,
+  registerForPushNotifications,
+  unregisterCurrentToken,
+  usePushNavigation,
+  type PushDataPayload,
+} from "./pushNotifications";
+
+initPushForegroundHandler();
 
 export type RootStackParamList = {
   Login: undefined;
@@ -43,6 +53,40 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+/** PushBridge — same shape as customer app: register on login, unregister
+ *  on logout, route notification taps into the navigator. */
+function PushBridge() {
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    registerForPushNotifications(DriverAPI.registerPushToken).then((tok) => {
+      if (!cancelled) tokenRef.current = tok;
+    });
+    return () => {
+      cancelled = true;
+      unregisterCurrentToken(DriverAPI.unregisterPushToken, tokenRef.current);
+      tokenRef.current = null;
+    };
+  }, []);
+  const navigate = useCallback((data: PushDataPayload) => {
+    if (!navigationRef.isReady()) {
+      setTimeout(() => navigate(data), 300);
+      return;
+    }
+    const nav = navigationRef as unknown as { navigate: (name: string, params?: any) => void };
+    if (typeof data.booking_id === "string" && data.booking_id) {
+      nav.navigate("ActiveBooking", { bookingId: data.booking_id });
+    } else if (typeof data.job_id === "string" && data.job_id) {
+      nav.navigate("JobDetail", { jobId: data.job_id });
+    } else {
+      nav.navigate("Home");
+    }
+  }, []);
+  usePushNavigation(navigate);
+  return null;
+}
 
 /**
  * Wrap each primary destination inside <AppShell> so the Cargo One
@@ -85,7 +129,7 @@ export function App() {
   return (
     <SafeAreaProvider>
       <AuthContext.Provider value={authValue}>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <StatusBar style="dark" />
           <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
             {!user ? (
@@ -115,6 +159,7 @@ export function App() {
               </>
             )}
           </Stack.Navigator>
+          {user ? <PushBridge /> : null}
         </NavigationContainer>
       </AuthContext.Provider>
     </SafeAreaProvider>

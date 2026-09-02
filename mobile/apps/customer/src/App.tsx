@@ -1,10 +1,11 @@
-import React, { useEffect } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import React, { useCallback, useEffect, useRef } from "react";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { StripeProvider } from "@stripe/stripe-react-native";
+import { CustomerAPI } from "@cargoone/core";
 
 import { LoginScreen } from "./screens/Login";
 import { RegisterScreen } from "./screens/Register";
@@ -36,6 +37,18 @@ import { AuthContext, useAuthValue } from "./AuthContext";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { AppShell } from "./components/AppShell";
 import { BiometricGate } from "./components/BiometricGate";
+import {
+  initPushForegroundHandler,
+  registerForPushNotifications,
+  unregisterCurrentToken,
+  usePushNavigation,
+  type PushDataPayload,
+} from "./pushNotifications";
+
+// Configure the foreground notification handler once at module load — the
+// customer + driver apps both need this in place before the first
+// `Notifications.addNotificationReceivedListener` fires.
+initPushForegroundHandler();
 
 // Hold the native splash until we've finished the auth-hydration pass.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -70,6 +83,50 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+/**
+ * PushBridge — lives inside the authenticated tree and glues expo-notifications
+ * to the customer app. On mount (i.e. after login) it registers the current
+ * device's ExponentPushToken with the backend; on unmount / logout it removes
+ * that token from the account. Also routes notification taps into the
+ * navigation tree using the customer's payload contract:
+ *   { booking_id?: string, job_id?: string, ... }
+ */
+function PushBridge() {
+  const tokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    registerForPushNotifications(CustomerAPI.registerPushToken).then((tok) => {
+      if (!cancelled) tokenRef.current = tok;
+    });
+    return () => {
+      cancelled = true;
+      // Fire-and-forget — logout must never be blocked by a failing unregister.
+      unregisterCurrentToken(CustomerAPI.unregisterPushToken, tokenRef.current);
+      tokenRef.current = null;
+    };
+  }, []);
+
+  const navigate = useCallback((data: PushDataPayload) => {
+    if (!navigationRef.isReady()) {
+      // Cold-start race — retry once navigation has mounted.
+      setTimeout(() => navigate(data), 300);
+      return;
+    }
+    const nav = navigationRef as unknown as { navigate: (name: string, params?: any) => void };
+    if (typeof data.booking_id === "string" && data.booking_id) {
+      nav.navigate("BookingDetail", { bookingId: data.booking_id });
+    } else if (typeof data.job_id === "string" && data.job_id) {
+      nav.navigate("JobDetail", { jobId: data.job_id });
+    } else {
+      nav.navigate("Messages");
+    }
+  }, []);
+  usePushNavigation(navigate);
+  return null;
+}
 
 /**
  * withShell wraps a route inside <AppShell> so the Cargo One
@@ -109,7 +166,7 @@ export function App() {
             <LoadingScreen />
           ) : (
             <BiometricGate>
-              <NavigationContainer>
+              <NavigationContainer ref={navigationRef}>
               <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
                 {!user ? (
                   <>
@@ -148,6 +205,7 @@ export function App() {
                   </>
                 )}
               </Stack.Navigator>
+              {user ? <PushBridge /> : null}
             </NavigationContainer>
             </BiometricGate>
           )}
