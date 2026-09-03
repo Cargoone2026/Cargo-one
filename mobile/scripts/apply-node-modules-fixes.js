@@ -94,9 +94,49 @@ function stripAsyncStorageCodegen(nodeModulesDir) {
   fixed += 1;
 }
 
-for (const root of candidateRoots) stripAsyncStorageCodegen(root);
+// ---------------------------------------------------------------------------
+// expo-device@6.0.2 · UIDevice.swift · TARGET_OS_SIMULATOR
+// ---------------------------------------------------------------------------
+// UIDevice.swift line 188 reads `return TARGET_OS_SIMULATOR != 0`, which
+// dereferences the C preprocessor macro `TARGET_OS_SIMULATOR` inside Swift.
+// Xcode 16 / Swift 5.10 no longer imports that macro implicitly, so the
+// compile fails with:
+//   UIDevice.swift:188:12: error: cannot find 'TARGET_OS_SIMULATOR' in scope
+// The upstream fix landed in expo-device 7.x (Expo SDK 52). On SDK 51 the
+// recommended workaround is to swap the macro for Swift's native
+// `#if targetEnvironment(simulator)` compile-time check — equivalent
+// semantics, no behavioural change.
+function patchExpoDeviceSimulator(nodeModulesDir) {
+  const swiftPath = path.join(
+    nodeModulesDir,
+    'expo-device',
+    'ios',
+    'UIDevice.swift',
+  );
+  if (!fs.existsSync(swiftPath)) return;
+  const original = fs.readFileSync(swiftPath, 'utf8');
+  const marker = 'return TARGET_OS_SIMULATOR != 0';
+  if (!original.includes(marker)) return; // already patched or upstream fixed
+  const replacement = [
+    '#if targetEnvironment(simulator)',
+    '    return true',
+    '    #else',
+    '    return false',
+    '    #endif',
+  ].join('\n    ');
+  const patched = original.replace(marker, replacement);
+  fs.writeFileSync(swiftPath, patched);
+  const rel = path.relative(workspaceRoot, swiftPath);
+  console.log(`[cargoone-postinstall] patched TARGET_OS_SIMULATOR in ${rel}`);
+  fixed += 1;
+}
+
+for (const root of candidateRoots) {
+  stripAsyncStorageCodegen(root);
+  patchExpoDeviceSimulator(root);
+}
 if (fixed === 0) {
   console.log(
-    '[cargoone-postinstall] async-storage codegenConfig already absent — nothing to do',
+    '[cargoone-postinstall] all node_modules fixes already applied — nothing to do',
   );
 }
