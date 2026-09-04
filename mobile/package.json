@@ -16,5 +16,8 @@
   "devDependencies": {
     "typescript": "5.3.3"
   },
-  "packageManager": "yarn@1.22.22"
+  "packageManager": "yarn@1.22.22",
+  "resolutions": {
+    "react-native-passkey": "3.2.0"
+  }
 }
