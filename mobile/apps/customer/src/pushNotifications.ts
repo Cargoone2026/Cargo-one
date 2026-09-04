@@ -29,6 +29,7 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import Constants from "expo-constants";
 
 export type PushDataPayload = {
   booking_id?: string;
@@ -84,7 +85,16 @@ export async function registerForPushNotifications(
     // projectId is only strictly required when running via EAS Build — the
     // native runtime resolves it from `Expo.modules.ExponentConstants` on
     // classic builds. Wrapping in try/catch keeps development builds happy.
-    const tokenResp = await Notifications.getExpoPushTokenAsync();
+    // projectId is required by expo-notifications SDK 51+. Sourced from
+    // `app.json → expo.extra.eas.projectId` (set by `eas init`) so the
+    // real UUID never lives in source control. Falling back to
+    // `easConfig.projectId` covers app.config-based projects.
+    const projectId =
+      (Constants.expoConfig as any)?.extra?.eas?.projectId ??
+      (Constants as any).easConfig?.projectId;
+    const tokenResp = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
     const token = tokenResp?.data;
     if (!token || !token.startsWith("ExponentPushToken[")) return null;
     await register(token, Platform.OS === "ios" ? "ios" : "android").catch(() => null);
