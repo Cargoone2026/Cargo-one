@@ -1,6 +1,15 @@
 /**
  * BookingConfirmedScreen — post-payment success. Mirrors web
  * /customer/booking-confirmed/:id.
+ *
+ * R71 status-accuracy fix — ASAP jobs (service_timing === "asap") must
+ * NOT show the generic "the driver has been notified" copy immediately
+ * after payment, because for ASAP the driver-search only starts once
+ * the deposit lands. Instead we immediately replace into the Uber-like
+ * DispatchScreen which owns the true "Finding a driver → Driver
+ * accepted → …" state machine (mirrors web CustomerDispatch).
+ *
+ * Standard (scheduled) bookings retain the confirmation success card.
  */
 import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
@@ -18,8 +27,24 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
   const [booking, setBooking] = useState<Booking | null>(null);
 
   useEffect(() => {
-    CustomerAPI.bookingDetail(bookingId).then(setBooking).catch(() => null);
-  }, [bookingId]);
+    let cancelled = false;
+    CustomerAPI.bookingDetail(bookingId)
+      .then((b) => {
+        if (cancelled) return;
+        setBooking(b);
+        const isAsap = b?.service_timing === "asap" || b?.job?.service_timing === "asap";
+        const jobId = b?.job_id || b?.job?.id;
+        if (isAsap && jobId) {
+          // ASAP: skip the static success card — go straight to the
+          // Uber-like live driver-search experience.
+          navigation.replace("Dispatch", { jobId });
+        }
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId, navigation]);
 
   return (
     <Page testID="booking-confirmed-screen" scroll={false}>
@@ -36,8 +61,8 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
           </View>
           <Text style={typography.h1Large}>Booking confirmed</Text>
           <Text style={[typography.body, { textAlign: "center", color: colors.inkMuted, lineHeight: 22 }]}>
-            Your booking is in and the driver has been notified. You'll receive updates in Messages and can track the
-            job live from your Bookings.
+            Your booking is in. You'll receive updates in Messages and can
+            track the job live from your Bookings.
           </Text>
           {booking?.id ? (
             <Text style={styles.ref} testID="booking-confirmed-ref">
@@ -47,12 +72,12 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
         </View>
         <View style={{ paddingHorizontal: 16, gap: 8, paddingBottom: 32 }}>
           <PrimaryButton
-            title="Track live"
-            onPress={() => navigation.navigate("Dispatch", { bookingId })}
-            testID="confirmed-track-btn"
+            title="View booking"
+            onPress={() => navigation.replace("BookingDetail", { bookingId })}
+            testID="confirmed-view-btn"
           />
           <SecondaryButton
-            title="View all bookings"
+            title="All bookings"
             onPress={() => navigation.navigate("Bookings")}
             testID="confirmed-bookings-btn"
           />

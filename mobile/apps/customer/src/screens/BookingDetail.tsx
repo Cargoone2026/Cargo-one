@@ -40,6 +40,7 @@ import {
 import { Page, PageHeader, PrimaryButton, SecondaryButton, StatusPill, SegmentedTabs } from "../ui";
 import { colors, radius, typography } from "../theme";
 import { ActiveJobMap } from "../ActiveJobMap";
+import { RouteMap } from "../components/RouteMap";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
@@ -94,6 +95,18 @@ export function BookingDetailScreen({ route, navigation }: P) {
   const paid = b.payment_status === "paid";
   const cancellationApplies = CANCELLATION_STATUSES.has(b.status);
   const showActiveMap = !!phase && paid;
+  // R71 map-consistency fix — when the booking isn't in an active driving
+  // phase yet (e.g. posted / accepted / deposit_paid / confirmed) OR
+  // still awaiting payment, fall back to the standard RouteMap route
+  // preview so the screen never collapses to "just information". The
+  // active driver-tracking map (ActiveJobMap) only takes over once we
+  // have a driving phase + paid deposit.
+  const showRoutePreview =
+    !showActiveMap &&
+    job?.pickup_lat != null &&
+    job?.pickup_lng != null &&
+    job?.dropoff_lat != null &&
+    job?.dropoff_lng != null;
 
   const driverCharge = Number(b.driver_charge ?? job?.accepted_price ?? job?.fixed_price ?? 0);
   const bookingFee = Number(b.booking_fee ?? b.deposit_amount ?? 0);
@@ -204,6 +217,17 @@ export function BookingDetailScreen({ route, navigation }: P) {
                   etaMinutes={tracking?.eta_minutes ?? job?.duration_minutes ?? null}
                   distanceMiles={tracking?.remaining_miles ?? job?.distance_miles ?? null}
                   role="customer"
+                />
+              ) : showRoutePreview ? (
+                <RouteMap
+                  pickup={{ lat: job!.pickup_lat!, lng: job!.pickup_lng! }}
+                  dropoff={{ lat: job!.dropoff_lat!, lng: job!.dropoff_lng! }}
+                  summary={{
+                    pickupTown: job!.pickup_town,
+                    dropoffTown: job!.dropoff_town,
+                    distanceMiles: job!.distance_miles,
+                    durationMinutes: job!.duration_minutes,
+                  }}
                 />
               ) : null}
 

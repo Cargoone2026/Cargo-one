@@ -172,3 +172,31 @@ export interface TrackingResponse {
   trail?: { lat: number; lng: number }[];
   active: boolean;
 }
+
+/**
+ * DispatchState — snapshot returned by GET /api/customer/dispatch/{job_id}.
+ * Mirrors what the web CustomerDispatch page consumes to render the
+ * "Finding a driver / Driver accepted / Driver on the way" state.
+ * Fields marked optional are only populated once a driver is assigned.
+ */
+export interface DispatchState {
+  job_id: string;
+  service_timing?: ServiceTiming;
+  service_type?: "transport" | "recovery";
+  status: string;
+  dispatch_ready_at?: string | null;
+  cancelled_at?: string | null;
+  pickup_lat?: number;
+  pickup_lng?: number;
+  pickup_town?: string;
+  pickup_address?: string;
+  dropoff_lat?: number;
+  dropoff_lng?: number;
+  dropoff_town?: string;
+  dropoff_address?: string;
+  search_radius_miles?: number | null;
+  assigned_driver_id?: string | null;
+  assigned_driver_name?: string | null;
+  assigned_driver_rating?: number | null;
+  booking_id?: string | null;
+}

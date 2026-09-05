@@ -1,6 +1,8 @@
 /**
  * JobDetailScreen — mirrors web /customer/job/:id.
- * Read-only overview + list of bids received.
+ * Read-only overview + list of bids received. Shows the standard
+ * reference RouteMap whenever the job has pickup + dropoff coords
+ * so the screen never collapses to text-only (R71 map-consistency).
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
@@ -9,6 +11,7 @@ import type { RootStackParamList } from "../App";
 import { CustomerAPI, Job, Bid } from "@cargoone/core";
 import { colors, radius, typography } from "../theme";
 import { Page, PageHeader, PrimaryButton, StatusPill, SummaryRow } from "../ui";
+import { RouteMap } from "../components/RouteMap";
 
 type P = NativeStackScreenProps<RootStackParamList, "JobDetail">;
 
@@ -38,6 +41,10 @@ export function JobDetailScreen({ route, navigation }: P) {
   const goBack = () =>
     navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Bookings");
 
+  const hasRouteCoords =
+    job?.pickup_lat != null && job?.pickup_lng != null &&
+    job?.dropoff_lat != null && job?.dropoff_lng != null;
+
   return (
     <Page testID="job-detail-screen" scroll={false}>
       <PageHeader title={job?.title || "Job"} onBack={goBack} />
@@ -49,6 +56,18 @@ export function JobDetailScreen({ route, navigation }: P) {
           {job?.status ? <StatusPill status={job.status} /> : null}
           {job?.description ? (
             <Text style={[typography.body, { lineHeight: 20, color: colors.inkMuted }]}>{job.description}</Text>
+          ) : null}
+          {hasRouteCoords ? (
+            <RouteMap
+              pickup={{ lat: job!.pickup_lat!, lng: job!.pickup_lng! }}
+              dropoff={{ lat: job!.dropoff_lat!, lng: job!.dropoff_lng! }}
+              summary={{
+                pickupTown: job!.pickup_town,
+                dropoffTown: job!.dropoff_town,
+                distanceMiles: job!.distance_miles,
+                durationMinutes: job!.duration_minutes,
+              }}
+            />
           ) : null}
           <View style={styles.card}>
             <Text style={typography.micro}>Details</Text>

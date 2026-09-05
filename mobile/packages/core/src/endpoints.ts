@@ -7,6 +7,7 @@ import { api } from "./api";
 import type {
   Bid,
   Booking,
+  DispatchState,
   DriverProfile,
   Job,
   Review,
@@ -84,6 +85,11 @@ export const CustomerAPI = {
       method: "DELETE",
     }),
   tracking: (bookingId: string) => api<TrackingResponse>(`/tracking/${bookingId}`),
+  // ASAP Uber-like searching state — mirrors what web
+  // CustomerDispatch page polls every 4s at /customer/dispatch/{jobId}.
+  // Backend returns the job snapshot + assigned_driver_* fields once a
+  // driver has accepted, plus optional search_radius_miles.
+  dispatchState: (jobId: string) => api<DispatchState>(`/customer/dispatch/${jobId}`),
 };
 
 // ── Driver ──────────────────────────────────────────────────────────────
