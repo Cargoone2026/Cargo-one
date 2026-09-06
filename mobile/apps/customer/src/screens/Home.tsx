@@ -100,7 +100,7 @@ export function HomeScreen() {
   const firstName = (user?.name || "").split(" ")[0] || "there";
 
   return (
-    <Page testID="customer-dashboard">
+    <Page testID="customer-dashboard" scroll={false}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
         contentContainerStyle={{ paddingBottom: 32 }}

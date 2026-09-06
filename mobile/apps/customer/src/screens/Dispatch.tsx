@@ -73,9 +73,6 @@ function stateFor(
   if (booking?.assigned_driver_id || dispatch?.assigned_driver_id) {
     return { label: "Driver accepted", sub: booking?.assigned_driver_name || dispatch?.assigned_driver_name || "", pulse: false, variant: "accepted" };
   }
-  if (!booking?.paid_at && booking?.payment_status !== "paid") {
-    return { label: "Finalising booking", pulse: true, variant: "searching" };
-  }
   return { label: "Looking for a driver near you", pulse: true, variant: "searching" };
 }
 
@@ -85,10 +82,32 @@ export function DispatchScreen({ route, navigation }: P) {
   const [dispatch, setDispatch] = useState<DispatchState | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [tracking, setTracking] = useState<TrackingResponse | null>(null);
+  // Web-parity: /customer/dispatch/{jobId} does NOT return a booking_id.
+  // Resolve it once on mount from /bookings/mine by matching job_id,
+  // exactly like frontend/src/pages/portal/customer/Dispatch.jsx does.
+  const [bookingId, setBookingId] = useState<string | null>(null);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
   const mapRef = useRef<Mapbox.MapView>(null);
-  const [recenterTick, setRecenterTick] = useState(0);
+  const [_recenterTick, setRecenterTick] = useState(0);
+
+  // ─── Resolve bookingId once on mount (mirrors web) ───
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const mine = await CustomerAPI.myBookings();
+        if (cancelled) return;
+        const match = (mine || []).find((b) => b.job_id === jobId);
+        if (match?.id) setBookingId(match.id);
+      } catch {
+        /* transient; next poll will retry via user reload */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
 
   // ─── Poll /customer/dispatch/{jobId} ───
   useEffect(() => {
@@ -109,8 +128,7 @@ export function DispatchScreen({ route, navigation }: P) {
     };
   }, [jobId]);
 
-  // ─── Poll /bookings/{bookingId} once we know the booking id ───
-  const bookingId = booking?.id || dispatch?.booking_id || null;
+  // ─── Poll /bookings/{bookingId} once resolved ───
   useEffect(() => {
     if (!bookingId) return;
     let cancelled = false;
@@ -152,24 +170,23 @@ export function DispatchScreen({ route, navigation }: P) {
     };
   }, [bookingId, active]);
 
-  // ─── Geometry ───
+  // ─── Geometry — web parity: coordinates always come from booking.job.
+  // The /customer/dispatch/{jobId} endpoint returns pickup_town /
+  // dropoff_town only, never lat/lng.  Once booking loads we have real
+  // coords and the map renders; until then we show a Preparing state.
   const pickupPt = useMemo(
     () =>
-      dispatch?.pickup_lat != null && dispatch?.pickup_lng != null
-        ? { lat: dispatch.pickup_lat, lng: dispatch.pickup_lng }
-        : booking?.job?.pickup_lat != null && booking?.job?.pickup_lng != null
+      booking?.job?.pickup_lat != null && booking?.job?.pickup_lng != null
         ? { lat: booking.job.pickup_lat!, lng: booking.job.pickup_lng! }
         : null,
-    [dispatch, booking],
+    [booking],
   );
   const dropoffPt = useMemo(
     () =>
-      dispatch?.dropoff_lat != null && dispatch?.dropoff_lng != null
-        ? { lat: dispatch.dropoff_lat, lng: dispatch.dropoff_lng }
-        : booking?.job?.dropoff_lat != null && booking?.job?.dropoff_lng != null
+      booking?.job?.dropoff_lat != null && booking?.job?.dropoff_lng != null
         ? { lat: booking.job.dropoff_lat!, lng: booking.job.dropoff_lng! }
         : null,
-    [dispatch, booking],
+    [booking],
   );
   const driverPt = tracking?.last_location
     ? { lat: tracking.last_location.lat, lng: tracking.last_location.lng }
@@ -235,7 +252,8 @@ export function DispatchScreen({ route, navigation }: P) {
     navigation.replace("BookingDetail", { bookingId });
   }, [bookingId, navigation]);
 
-  const distanceMiles = booking?.job?.distance_miles ?? dispatch?.search_radius_miles ?? null;
+  const distanceMiles = booking?.job?.distance_miles ?? null;
+  const searchRadius = dispatch?.current_search_radius_miles ?? null;
   const eta = tracking?.eta_minutes ?? null;
   const price = booking?.total_price ?? booking?.customer_total ?? null;
 
@@ -288,9 +306,10 @@ export function DispatchScreen({ route, navigation }: P) {
               ) : null}
             </Mapbox.MapView>
           ) : (
-            <View style={styles.locating}>
-              <Text style={typography.small}>Preparing your route…</Text>
-            </View>
+            // Neutral placeholder — booking is being fetched. Should
+            // clear within the first poll interval; matches web where
+            // this state is invisible because the initial fetch is fast.
+            <View style={styles.locating} />
           )}
         </View>
 
@@ -302,6 +321,9 @@ export function DispatchScreen({ route, navigation }: P) {
               {s.label}
             </Text>
             {s.sub ? <Text style={styles.pillSub}>· {s.sub}</Text> : null}
+            {s.variant === "searching" && searchRadius != null ? (
+              <Text style={styles.pillSub}>· {searchRadius >= 500 ? "Nationwide" : `${Math.round(searchRadius)}mi`}</Text>
+            ) : null}
           </View>
         </View>
 

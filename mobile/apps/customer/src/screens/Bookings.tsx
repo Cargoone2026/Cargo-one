@@ -81,7 +81,7 @@ export function BookingsScreen() {
   }, [tab, active, past, openJobs, q]);
 
   return (
-    <Page testID="customer-bookings">
+    <Page testID="customer-bookings" scroll={false}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}
       >

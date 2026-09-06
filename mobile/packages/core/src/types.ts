@@ -195,6 +195,10 @@ export interface DispatchState {
   dropoff_town?: string;
   dropoff_address?: string;
   search_radius_miles?: number | null;
+  current_search_radius_miles?: number | null;
+  waiting_seconds?: number | null;
+  dispatch_eligible?: boolean;
+  next_radius_expansion_at?: string | null;
   assigned_driver_id?: string | null;
   assigned_driver_name?: string | null;
   assigned_driver_rating?: number | null;

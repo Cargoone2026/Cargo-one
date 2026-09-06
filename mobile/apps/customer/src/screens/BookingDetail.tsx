@@ -69,6 +69,22 @@ export function BookingDetailScreen({ route, navigation }: P) {
 
   useEffect(() => { load(); }, [load]);
 
+  // R71 web-parity — active ASAP bookings live on the map-first
+  // Dispatch screen, not this classic BookingDetail. Mirrors
+  // frontend/src/pages/portal/customer/BookingDetail.jsx: whenever the
+  // customer lands here via Bookings row / notification / cold start
+  // for an ASAP booking that isn't delivered/cancelled, we replace
+  // into Dispatch so the experience is uniform on every entry point.
+  // Completed & cancelled ASAP bookings intentionally stay here so
+  // history/POD/rating/cancellation summary remain accessible.
+  useEffect(() => {
+    if (!b || !b.job_id) return;
+    const timing = b.service_timing || b.job?.service_timing;
+    if (timing !== "asap") return;
+    if (b.status === "completed" || b.status === "delivered" || b.status === "cancelled" || b.cancelled_at) return;
+    navigation.replace("Dispatch", { jobId: b.job_id });
+  }, [b, navigation]);
+
   useEffect(() => {
     if (!b || b.payment_status !== "paid") return;
     const iv = setInterval(async () => {

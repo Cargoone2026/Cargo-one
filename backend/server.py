@@ -3389,16 +3389,27 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
         {"$set": update_fields},
     )
     try:
-        await push_notification(
-            booking["driver_id"], "Deposit received!",
-            "Customer paid the deposit. Contact details unlocked. Proceed to pickup.",
-            {"booking_id": booking["id"]},
-        )
-        await push_notification(
-            booking["customer_id"], "Booking confirmed",
-            "Deposit paid. Driver contact details are now unlocked.",
-            {"booking_id": booking["id"]},
-        )
+        # ASAP jobs have no driver yet at deposit-paid — do not send the
+        # driver-side "contact details unlocked" push, and use ASAP-
+        # accurate wording for the customer. Web/native customer app
+        # both drive off the /customer/dispatch/{job_id} state from here.
+        if is_asap:
+            await push_notification(
+                booking["customer_id"], "Booking confirmed",
+                "Payment received. We're looking for the nearest driver.",
+                {"booking_id": booking["id"], "job_id": booking["job_id"], "asap": True},
+            )
+        else:
+            await push_notification(
+                booking["driver_id"], "Deposit received!",
+                "Customer paid the deposit. Contact details unlocked. Proceed to pickup.",
+                {"booking_id": booking["id"]},
+            )
+            await push_notification(
+                booking["customer_id"], "Booking confirmed",
+                "Deposit paid. Driver contact details are now unlocked.",
+                {"booking_id": booking["id"]},
+            )
     except Exception:
         # push errors must never block the payment finalisation
         logger.exception("push_notification failed post-deposit; continuing")
