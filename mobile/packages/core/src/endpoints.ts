@@ -40,7 +40,36 @@ export const CustomerAPI = {
   createAsapBooking: (jobId: string) =>
     api<Booking>(`/bookings`, { method: "POST", body: { job_id: jobId } }),
   cancelBooking: (bookingId: string) =>
-    api<Booking>(`/bookings/${bookingId}/cancel`, { method: "POST" }),
+    // Universal customer cancel — server routes to cancel-and-refund
+    // for paid bookings, or plain cancel for unpaid/failed-payment
+    // bookings. Single call regardless of payment_status.
+    api<any>(`/customer/bookings/${bookingId}/cancel`, { method: "POST" }),
+  cancelPreview: (bookingId: string) =>
+    api<any>(`/customer/bookings/${bookingId}/cancel-preview`),
+  // Native Stripe PaymentSheet (R71).
+  //  * createDepositIntent → mints PaymentIntent + Customer + EphemeralKey
+  //    on the backend. Reuses the same open PI on retries so there is no
+  //    duplicate charge risk.
+  //  * paymentIntentStatus → polling reconciler after PaymentSheet.
+  //    Backend finalises against the SAME booking_id regardless of
+  //    which path (webhook vs polling) lands first.
+  createDepositIntent: (bookingId: string) =>
+    api<{
+      payment_intent_id: string;
+      client_secret: string;
+      ephemeral_key: string;
+      customer_id: string;
+      publishable_key: string;
+      amount: number;
+      currency: string;
+    }>(`/bookings/${bookingId}/deposit-intent`, { method: "POST" }),
+  paymentIntentStatus: (paymentIntentId: string) =>
+    api<{
+      payment_intent_id: string;
+      booking_id: string;
+      payment_status: "paid" | "initiated" | "failed" | "processing" | string;
+      booking_status?: string;
+    }>(`/payments/pi-status/${paymentIntentId}`),
   submitReview: (bookingId: string, rating: number, comment?: string) =>
     api<Review>("/reviews", {
       method: "POST",

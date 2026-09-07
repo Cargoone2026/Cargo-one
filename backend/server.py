@@ -5,6 +5,7 @@ Roles: customer, driver, admin.
 """
 
 import asyncio
+import httpx
 import logging
 import math
 import os
@@ -3343,6 +3344,193 @@ async def create_deposit_session(booking_id: str, body: dict, request: Request,
     return {"session_id": session.session_id, "url": session.url}
 
 
+# ---------------------------------------------------------------------------
+# Native iOS / Android PaymentSheet flow (R71).
+#
+# The web portal uses Stripe Checkout (hosted redirect) via
+# /bookings/{id}/deposit above. Native apps use Stripe PaymentSheet
+# (in-app card/Apple Pay UI) which requires a PaymentIntent client_secret,
+# a Customer, and an EphemeralKey. All three are minted here in a single
+# call. The resulting `payment_intent_id` is stored on
+# `payment_transactions` as `session_id` so the existing `_finalise_paid_deposit`
+# and cancel/refund pipelines work without any downstream branching.
+#
+# Stripe REST API is called directly with httpx to avoid a new SDK dep.
+# ---------------------------------------------------------------------------
+STRIPE_API_BASE = "https://api.stripe.com/v1"
+
+
+async def _stripe_post(path: str, form: dict) -> dict:
+    """POST to Stripe REST API with form-encoded body. Raises HTTPException
+    with the Stripe error message on non-2xx."""
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        r = await c.post(
+            f"{STRIPE_API_BASE}{path}",
+            data=form,
+            auth=(STRIPE_API_KEY, ""),
+            headers={"Stripe-Version": "2024-06-20"},
+        )
+    if r.status_code >= 300:
+        try:
+            err = r.json().get("error", {}).get("message") or r.text
+        except Exception:
+            err = r.text
+        raise HTTPException(status_code=502, detail=f"Stripe: {err}")
+    return r.json()
+
+
+async def _stripe_get(path: str) -> dict:
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        r = await c.get(
+            f"{STRIPE_API_BASE}{path}",
+            auth=(STRIPE_API_KEY, ""),
+            headers={"Stripe-Version": "2024-06-20"},
+        )
+    if r.status_code >= 300:
+        raise HTTPException(status_code=502, detail=f"Stripe: {r.text}")
+    return r.json()
+
+
+@api.post("/bookings/{booking_id}/deposit-intent")
+async def create_deposit_intent(booking_id: str,
+                                  user: dict = Depends(require_role("customer"))):
+    """Native PaymentSheet initialisation.
+
+    Returns `{payment_intent_id, client_secret, ephemeral_key, customer_id,
+    publishable_key, amount, currency}`. The client hands the first four
+    to Stripe PaymentSheet; on completion it polls
+    `GET /payments/pi-status/{payment_intent_id}` until the backend has
+    marked the booking paid (webhook or polling reconciler — whichever
+    lands first).
+
+    Idempotent: if the booking is already paid, returns HTTP 400
+    "Already paid" (identical contract to /deposit). If there is an
+    outstanding PaymentIntent for this booking that hasn't been paid
+    yet, we reuse it — no duplicate PI, no duplicate charge on the
+    same customer.
+    """
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking or booking["customer_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.get("payment_status") == "paid":
+        raise HTTPException(status_code=400, detail="Already paid")
+
+    amount_pence = int(round(float(booking["deposit_amount"]) * 100))
+
+    # ── Reuse existing customer + open PaymentIntent if present ────────
+    existing_txn = await db.payment_transactions.find_one(
+        {"booking_id": booking_id, "kind": "native_pi",
+         "payment_status": {"$in": ["initiated", "requires_payment_method", "processing", "failed"]}},
+        sort=[("created_at", -1)],
+    )
+
+    stripe_customer_id = user.get("stripe_customer_id")
+    if not stripe_customer_id:
+        c = await _stripe_post("/customers", {
+            "email": user.get("email") or "",
+            "name": user.get("name") or "",
+            "metadata[user_id]": user["id"],
+        })
+        stripe_customer_id = c["id"]
+        await db.users.update_one({"id": user["id"]},
+                                   {"$set": {"stripe_customer_id": stripe_customer_id}})
+
+    # Mint a fresh ephemeral key on every call (short-lived, single-use).
+    ek = await _stripe_post("/ephemeral_keys", {
+        "customer": stripe_customer_id,
+    })
+    # ephemeral_keys require the Stripe-Version header — already set.
+
+    if existing_txn:
+        # Retrieve the existing PI so we can hand back a fresh client_secret.
+        pi = await _stripe_get(f"/payment_intents/{existing_txn['session_id']}")
+        pi_id = pi["id"]
+        client_secret = pi["client_secret"]
+        # If Stripe already considers it succeeded (webhook late), reconcile.
+        if pi.get("status") == "succeeded":
+            await _finalise_paid_deposit(pi_id)
+            raise HTTPException(status_code=400, detail="Already paid")
+    else:
+        pi = await _stripe_post("/payment_intents", {
+            "amount": str(amount_pence),
+            "currency": "gbp",
+            "customer": stripe_customer_id,
+            "automatic_payment_methods[enabled]": "true",
+            "metadata[booking_id]": booking_id,
+            "metadata[customer_id]": user["id"],
+            "metadata[type]": "booking_deposit",
+        })
+        pi_id = pi["id"]
+        client_secret = pi["client_secret"]
+        await db.payment_transactions.insert_one({
+            "id": new_id(),
+            "booking_id": booking_id,
+            "session_id": pi_id,        # reuse column so _finalise_paid_deposit works unchanged
+            "payment_intent_id": pi_id,
+            "kind": "native_pi",
+            "amount": float(booking["deposit_amount"]),
+            "currency": "gbp",
+            "payment_status": "initiated",
+            "status": "open",
+            "metadata": {"type": "booking_deposit"},
+            "webhook_token": new_webhook_token(),
+            "created_at": now_iso(),
+        })
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"stripe_payment_intent_id": pi_id}},
+        )
+
+    return {
+        "payment_intent_id": pi_id,
+        "client_secret": client_secret,
+        "ephemeral_key": ek["secret"],
+        "customer_id": stripe_customer_id,
+        "publishable_key": os.environ.get("STRIPE_PUBLISHABLE_KEY", ""),
+        "amount": float(booking["deposit_amount"]),
+        "currency": "gbp",
+    }
+
+
+@api.get("/payments/pi-status/{pi_id}")
+async def payment_intent_status(pi_id: str,
+                                  user: dict = Depends(require_role("customer"))):
+    """Native polling reconciler. Client calls this after PaymentSheet
+    reports success (or on app resume). We fetch the PaymentIntent from
+    Stripe, and if it's `succeeded` we run the idempotent finaliser
+    against the matching payment_transactions row. Returns the current
+    booking payment_status."""
+    txn = await db.payment_transactions.find_one({"session_id": pi_id})
+    if not txn or not txn.get("booking_id"):
+        raise HTTPException(status_code=404, detail="Unknown payment intent")
+    booking = await db.bookings.find_one({"id": txn["booking_id"]})
+    if not booking or booking["customer_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    if booking.get("payment_status") != "paid":
+        try:
+            pi = await _stripe_get(f"/payment_intents/{pi_id}")
+        except HTTPException:
+            pi = {"status": txn.get("payment_status", "initiated")}
+        if pi.get("status") == "succeeded":
+            await _finalise_paid_deposit(pi_id)
+            booking = await db.bookings.find_one({"id": txn["booking_id"]}) or booking
+        elif pi.get("status") in {"requires_payment_method", "canceled"}:
+            await db.payment_transactions.update_one(
+                {"session_id": pi_id, "payment_status": {"$ne": "paid"}},
+                {"$set": {"payment_status": "failed",
+                          "failed_reason": pi.get("last_payment_error", {}).get("message") or pi.get("status"),
+                          "updated_at": now_iso()}},
+            )
+
+    return {
+        "payment_intent_id": pi_id,
+        "booking_id": booking["id"],
+        "payment_status": booking.get("payment_status") or "initiated",
+        "booking_status": booking.get("status"),
+    }
+
+
 async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     """Idempotent, single-writer finaliser for a paid deposit session.
 
@@ -5077,6 +5265,43 @@ async def admin_dispatch_log(job_id: str,
     ).sort("ts", -1).limit(500).to_list(500)
     return {"job_id": job_id, "rows": rows}
 
+
+
+@api.post("/customer/bookings/{booking_id}/cancel")
+async def customer_cancel_booking(
+    booking_id: str,
+    user: dict = Depends(require_role("customer")),
+):
+    """Customer cancel — handles BOTH paid and unpaid ASAP bookings.
+
+    * paid   → delegates to the /cancel-and-refund path so the existing
+               refund/audit machinery runs unchanged.
+    * unpaid → marks booking + job as cancelled, no refund attempted.
+               This is the "payment required" recovery path so a booking
+               with a failed / abandoned deposit can be discarded
+               without a duplicate cancellation route.
+    """
+    b = await db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("customer_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Not your booking")
+    if b.get("payment_status") == "paid":
+        # Reuse the full-fat refund path.
+        return await customer_cancel_and_refund(booking_id, {}, user)  # type: ignore
+    if b.get("status") == "cancelled" or b.get("cancelled_at"):
+        return {"ok": True, "already_cancelled": True, "booking_id": booking_id}
+    now = now_iso()
+    await db.bookings.update_one(
+        {"id": booking_id, "payment_status": {"$ne": "paid"}},
+        {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
+    )
+    if b.get("job_id"):
+        await db.jobs.update_one(
+            {"id": b["job_id"]},
+            {"$set": {"status": "cancelled", "cancelled_at": now}},
+        )
+    return {"ok": True, "booking_id": booking_id, "refund": None}
 
 
 @api.post("/customer/bookings/{booking_id}/cancel-and-refund")

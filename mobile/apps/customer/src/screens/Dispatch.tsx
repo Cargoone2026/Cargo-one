@@ -41,7 +41,7 @@ import {
 } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
-import { Page, PrimaryButton, SecondaryButton } from "../ui";
+import { Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || "");
 
@@ -241,16 +241,25 @@ export function DispatchScreen({ route, navigation }: P) {
   const s = stateFor(dispatch, booking);
   const showSweep = s.variant === "searching" && pickupPt != null;
   const cancelable = !!bookingId && !s.variant.startsWith("done") && s.variant !== "cancelled" && !active;
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const onCancel = useCallback(async () => {
-    if (!bookingId) return;
+    if (!bookingId || cancelBusy) return;
+    setCancelBusy(true);
+    setCancelError(null);
     try {
-      await CustomerAPI.cancelBooking(bookingId);
-    } catch {
-      /* ignore — user can retry from BookingDetail */
+      const r = await CustomerAPI.cancelBooking(bookingId);
+      // Refresh booking to pick up refund / status
+      try { setBooking(await CustomerAPI.bookingDetail(bookingId)); } catch { /* ignore */ }
+      navigation.replace("BookingDetail", { bookingId });
+      return r;
+    } catch (e: any) {
+      setCancelError(e?.message || "Cancellation failed. Please try again.");
+    } finally {
+      setCancelBusy(false);
     }
-    navigation.replace("BookingDetail", { bookingId });
-  }, [bookingId, navigation]);
+  }, [bookingId, cancelBusy, navigation]);
 
   const distanceMiles = booking?.job?.distance_miles ?? null;
   const searchRadius = dispatch?.current_search_radius_miles ?? null;
@@ -260,6 +269,21 @@ export function DispatchScreen({ route, navigation }: P) {
   return (
     <Page testID="asap-dispatch-screen" scroll={false}>
       <View style={styles.root}>
+        {/* iOS navigation header — provides swipe-back + explicit back
+            without covering the map. The stack header is disabled at
+            the navigator level, so we render our own thin PageHeader
+            with a transparent background overlaying the map top-safe
+            area. */}
+        <View style={styles.navHeader} pointerEvents="box-none">
+          <PageHeader
+            title="Live booking"
+            onBack={() =>
+              navigation.canGoBack()
+                ? navigation.goBack()
+                : navigation.navigate("Bookings")
+            }
+          />
+        </View>
         {/* Full-bleed map */}
         <View style={styles.mapLayer}>
           {pickupPt ? (
@@ -378,8 +402,23 @@ export function DispatchScreen({ route, navigation }: P) {
             />
           ) : null}
           {cancelable ? (
-            <View style={{ marginTop: 8 }}>
-              <SecondaryButton title="Cancel booking" onPress={onCancel} testID="asap-cancel" />
+            <View style={{ marginTop: 8, gap: 6 }}>
+              <SecondaryButton
+                title={
+                  cancelBusy
+                    ? "Cancelling…"
+                    : booking?.payment_status === "paid"
+                      ? "Cancel & request refund"
+                      : "Cancel booking"
+                }
+                onPress={onCancel}
+                testID="asap-cancel"
+              />
+              {cancelError ? (
+                <Text style={{ color: colors.errorInk, fontSize: 12, textAlign: "center" }} testID="asap-cancel-error">
+                  {cancelError}
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -446,6 +485,14 @@ function Stat({ label, value, testID }: { label: string; value: string; testID?:
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   mapLayer: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  navHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
   locating: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bgSecondary },
   pin: {
     width: 30,
@@ -483,7 +530,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: "absolute",
-    top: 12,
+    top: 60,
     left: 0,
     right: 0,
     alignItems: "center",

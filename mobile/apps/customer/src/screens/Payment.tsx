@@ -1,47 +1,56 @@
 /**
- * PaymentScreen — Stripe Checkout Session (mirrors web contract).
+ * PaymentScreen — native Stripe PaymentSheet (R71).
  *
- * The backend exposes ONE payment endpoint: POST /bookings/{id}/deposit,
- * which returns a Stripe Checkout Session `url`. Web redirects the browser
- * to it; on native we hand the URL to the system browser via Linking
- * (Safari on iOS). When the user returns to the app we poll
- * GET /payments/status/{session_id} until the deposit is marked paid,
- * then push through to BookingConfirmed.
+ * NEW native flow (replaces the old Linking → Safari → Checkout URL):
  *
- * NO fake success, NO Stripe bypass, NO new backend endpoint. This is the
- * same session_id / webhook / status pipeline used by the web portal.
+ *   1. Call CustomerAPI.createDepositIntent(bookingId)
+ *        → backend mints Customer + EphemeralKey + PaymentIntent
+ *        → response carries publishable_key + client_secret + ephemeral_key
+ *          + customer_id + amount
+ *   2. Initialise Stripe PaymentSheet with those values.
+ *   3. Present PaymentSheet inside the app (Apple Pay + card).
+ *   4. On success → poll GET /payments/pi-status/{pi_id} until backend
+ *      confirms paid, then push to BookingConfirmed. BookingConfirmed
+ *      itself branches ASAP → Dispatch, keeping web parity.
+ *   5. On failure → keep the booking (backend already persists it) and
+ *      show "Retry payment" against the SAME PaymentIntent (no
+ *      duplicate booking, no duplicate charge).
+ *
+ * No Safari, no Linking, no external browser. Retries reuse the same
+ * PaymentIntent so double-taps / interruptions never produce duplicate
+ * charges or bookings — protection is on the backend.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   AppStateStatus,
-  Linking,
   ScrollView,
   Text,
   View,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { CreditCard, ShieldCheck } from "lucide-react-native";
+import { CreditCard, ShieldCheck, AlertTriangle } from "lucide-react-native";
+import { initPaymentSheet, presentPaymentSheet, useStripe } from "@stripe/stripe-react-native";
 import { CustomerAPI } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
-import { Page, PageHeader, PrimaryButton } from "../ui";
+import { Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 
 type P = NativeStackScreenProps<RootStackParamList, "Payment">;
 
-// Backend uses `${origin_url}/customer/booking/{id}?payment=success` as the
-// success return URL. On native the user simply comes back to the app so
-// the value here is only used by Stripe to render the "Return to Cargo One"
-// button after payment — the app itself polls /payments/status.
-const ORIGIN_URL = "https://cargoone.co.uk";
-
 export function PaymentScreen({ route, navigation }: P) {
   const { bookingId } = route.params;
-  const [busy, setBusy] = useState(false);
+  const stripe = useStripe();
+
+  const [initialising, setInitialising] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [presenting, setPresenting] = useState(false);
   const [polling, setPolling] = useState(false);
-  const sessionIdRef = useRef<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState<number | null>(null);
+
+  const piIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -52,119 +61,216 @@ export function PaymentScreen({ route, navigation }: P) {
     setPolling(false);
   }, []);
 
-  const finalizeIfPaid = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (!sid) return false;
+  // ─── Initialise PaymentSheet (idempotent — retries reuse same PI) ───
+  const initSheet = useCallback(async () => {
+    setInitError(null);
+    setInitialising(true);
     try {
-      const s = await CustomerAPI.paymentStatus(sid);
-      if (s.payment_status === "paid") {
-        stopPolling();
-        navigation.replace("BookingConfirmed", { bookingId });
-        return true;
-      }
-    } catch {
-      // /payments/status is public; a transient error just delays the check.
+      const p = await CustomerAPI.createDepositIntent(bookingId);
+      piIdRef.current = p.payment_intent_id;
+      setDepositAmount(p.amount);
+      const { error } = await initPaymentSheet({
+        merchantDisplayName: "CargoOne",
+        customerId: p.customer_id,
+        customerEphemeralKeySecret: p.ephemeral_key,
+        paymentIntentClientSecret: p.client_secret,
+        allowsDelayedPaymentMethods: false,
+        returnURL: "co.uk.cargoone.customer://stripe-redirect",
+        applePay: { merchantCountryCode: "GB" },
+        defaultBillingDetails: {},
+        appearance: {
+          colors: {
+            primary: colors.brand,
+            background: colors.bg,
+          },
+          shapes: { borderRadius: 10 },
+        },
+      });
+      if (error) throw new Error(error.message);
+    } catch (e: any) {
+      setInitError(e?.message || "Could not start payment.");
+    } finally {
+      setInitialising(false);
     }
-    return false;
-  }, [bookingId, navigation, stopPolling]);
-
-  // Poll once every 3s while a checkout session is open, and once on every
-  // return-to-foreground (covers the case where the user just cancelled or
-  // finished payment in Safari and came back).
-  const startPolling = useCallback(() => {
-    stopPolling();
-    setPolling(true);
-    pollTimerRef.current = setInterval(finalizeIfPaid, 3000);
-  }, [finalizeIfPaid, stopPolling]);
+  }, [bookingId]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state === "active" && sessionIdRef.current) {
-        // Fire an immediate check + keep the ticker running.
-        finalizeIfPaid();
+    initSheet();
+    return () => stopPolling();
+  }, [initSheet, stopPolling]);
+
+  // ─── Poll payment status until backend confirms paid ───
+  const startPolling = useCallback(() => {
+    const piId = piIdRef.current;
+    if (!piId) return;
+    stopPolling();
+    setPolling(true);
+    let tries = 0;
+    pollTimerRef.current = setInterval(async () => {
+      tries += 1;
+      try {
+        const s = await CustomerAPI.paymentIntentStatus(piId);
+        if (s.payment_status === "paid") {
+          stopPolling();
+          navigation.replace("BookingConfirmed", { bookingId });
+          return;
+        }
+        if (s.payment_status === "failed") {
+          stopPolling();
+          setPaymentError("Payment wasn't completed. Your booking is saved — tap Retry to try again.");
+          return;
+        }
+      } catch {
+        /* transient */
       }
-    });
-    return () => {
-      sub.remove();
-      stopPolling();
-    };
-  }, [finalizeIfPaid, stopPolling]);
+      // Give up polling after ~60s; user can foreground the app to
+      // trigger the AppState listener below which will re-poll.
+      if (tries > 20) stopPolling();
+    }, 3000);
+  }, [bookingId, navigation, stopPolling]);
 
-  const pay = async () => {
-    setBusy(true);
+  // ─── Trigger PaymentSheet ───
+  const onPay = useCallback(async () => {
+    if (presenting || initialising) return;
+    setPaymentError(null);
+    setPresenting(true);
     try {
-      const { session_id, url } = await CustomerAPI.createCheckout(bookingId, ORIGIN_URL);
-      sessionIdRef.current = session_id;
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) throw new Error("Could not open the payment page.");
-      await Linking.openURL(url);
+      const { error } = await presentPaymentSheet();
+      if (error) {
+        // Canceled by user is not an error we surface loudly.
+        if (error.code !== "Canceled") {
+          setPaymentError(error.message || "Payment failed. Your booking is saved — tap Retry to try again.");
+        }
+        return;
+      }
+      // Sheet dismissed with success — verify with backend before
+      // navigating so we don't advance before the webhook lands.
       startPolling();
-    } catch (e: any) {
-      Alert.alert("Payment error", e?.message || "Could not start payment.");
+      // Also do one immediate probe (the webhook is usually faster
+      // than our 3s poll interval).
+      const piId = piIdRef.current!;
+      try {
+        const s = await CustomerAPI.paymentIntentStatus(piId);
+        if (s.payment_status === "paid") {
+          stopPolling();
+          navigation.replace("BookingConfirmed", { bookingId });
+        }
+      } catch {
+        /* fall through to polling */
+      }
     } finally {
-      setBusy(false);
+      setPresenting(false);
     }
-  };
+  }, [presenting, initialising, bookingId, navigation, startPolling, stopPolling]);
 
-  const goBack = () =>
-    navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Bookings");
+  // ─── Re-check payment on app foreground (handles webhook-late case) ───
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async (s: AppStateStatus) => {
+      if (s !== "active" || !piIdRef.current) return;
+      try {
+        const st = await CustomerAPI.paymentIntentStatus(piIdRef.current);
+        if (st.payment_status === "paid") {
+          stopPolling();
+          navigation.replace("BookingConfirmed", { bookingId });
+        }
+      } catch { /* ignore */ }
+    });
+    return () => sub.remove();
+  }, [bookingId, navigation, stopPolling]);
+
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Bookings"));
 
   return (
     <Page testID="payment-screen" scroll={false}>
-      <PageHeader
-        title="Confirm payment"
-        subtitle="Cargo One uses Stripe for secure card payments."
-        onBack={goBack}
-      />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
-        <View style={styles.card}>
-          <CreditCard size={24} color={colors.brand} />
-          <Text style={[typography.body, { marginTop: 8, lineHeight: 20 }]}>
-            Only the Cargo One booking fee is charged now via Stripe. The driver charge is paid on delivery.
+      <PageHeader title="Complete deposit" onBack={goBack} />
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+        <View style={styles.hero}>
+          <CreditCard size={28} color={colors.brand} strokeWidth={2} />
+          <Text style={typography.h1Large}>
+            {depositAmount != null ? `£${Number(depositAmount).toFixed(2)}` : "…"}
+          </Text>
+          <Text style={[typography.body, { color: colors.inkMuted, textAlign: "center" }]}>
+            Refundable deposit to secure your booking.
           </Text>
         </View>
 
-        <PrimaryButton
-          title={polling ? "Waiting for payment…" : "Pay with card"}
-          onPress={pay}
-          loading={busy}
-          disabled={polling}
-          testID="pay-card"
-        />
+        <View style={styles.card}>
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+            <ShieldCheck size={18} color={colors.success} />
+            <View style={{ flex: 1 }}>
+              <Text style={typography.strong}>Secure in-app payment</Text>
+              <Text style={typography.small}>
+                Powered by Stripe. Card details never touch our servers.
+                Retries reuse the same booking — no duplicate charges.
+              </Text>
+            </View>
+          </View>
+        </View>
 
-        {polling ? (
-          <View style={styles.pollingRow} testID="payment-polling">
-            <ActivityIndicator size="small" color={colors.brand} />
-            <Text style={[typography.small, { marginLeft: 8 }]}>
-              Complete payment in your browser then return to the app. We'll take you to your booking automatically.
-            </Text>
+        {paymentError ? (
+          <View style={[styles.card, { borderColor: colors.errorInk, backgroundColor: "#FEF2F2" }]}>
+            <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+              <AlertTriangle size={18} color={colors.errorInk} />
+              <Text style={[typography.small, { color: colors.errorInk, flex: 1 }]} testID="payment-error">
+                {paymentError}
+              </Text>
+            </View>
           </View>
         ) : null}
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
-          <ShieldCheck size={14} color={colors.inkMuted} />
-          <Text style={typography.small}>PCI-compliant Stripe Checkout</Text>
-        </View>
+        {initError ? (
+          <View style={styles.card}>
+            <Text style={[typography.small, { color: colors.errorInk }]}>{initError}</Text>
+            <View style={{ marginTop: 8 }}>
+              <SecondaryButton title="Try again" onPress={initSheet} testID="payment-init-retry" />
+            </View>
+          </View>
+        ) : (
+          <PrimaryButton
+            title={
+              initialising
+                ? "Preparing…"
+                : polling
+                  ? "Confirming payment…"
+                  : paymentError
+                    ? `Retry payment${depositAmount ? ` · £${depositAmount.toFixed(2)}` : ""}`
+                    : `Pay deposit${depositAmount ? ` · £${depositAmount.toFixed(2)}` : ""}`
+            }
+            onPress={onPay}
+            disabled={initialising || presenting || polling}
+            testID="payment-pay-btn"
+          />
+        )}
+
+        {(initialising || polling) ? (
+          <View style={{ flexDirection: "row", justifyContent: "center", padding: 8 }}>
+            <ActivityIndicator color={colors.brand} />
+          </View>
+        ) : null}
+
+        <SecondaryButton
+          title="I'll pay later — save booking"
+          onPress={() => navigation.navigate("Bookings")}
+          testID="payment-defer-btn"
+        />
       </ScrollView>
     </Page>
   );
 }
 
 const styles = {
+  hero: {
+    alignItems: "center" as const,
+    padding: 20,
+    gap: 8,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: radius.lg,
+  },
   card: {
-    padding: 16,
+    padding: 14,
     borderRadius: radius.base,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.bg,
-  },
-  pollingRow: {
-    flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    padding: 12,
-    borderRadius: radius.base,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgSecondary,
   },
 };
