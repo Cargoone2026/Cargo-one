@@ -58,7 +58,7 @@ const TRACKING_POLL_MS = 6000;
 function stateFor(
   dispatch: DispatchState | null,
   booking: Booking | null,
-): { label: string; sub?: string; pulse: boolean; variant: "searching" | "accepted" | "active" | "done" | "cancelled" } {
+): { label: string; sub?: string; pulse: boolean; variant: "searching" | "accepted" | "active" | "done" | "cancelled" | "payment_required" } {
   if (dispatch?.cancelled_at || booking?.status === "cancelled") {
     return { label: "Booking cancelled", pulse: false, variant: "cancelled" };
   }
@@ -72,6 +72,13 @@ function stateFor(
   if (phase === "to_dropoff") return { label: "Job in progress", pulse: true, variant: "active" };
   if (booking?.assigned_driver_id || dispatch?.assigned_driver_id) {
     return { label: "Driver accepted", sub: booking?.assigned_driver_name || dispatch?.assigned_driver_name || "", pulse: false, variant: "accepted" };
+  }
+  // R71 device-test fix — backend only stamps dispatch_ready_at (and
+  // starts driver matching) once payment_status === "paid". If the
+  // booking is unpaid we must NOT show "Looking for a driver" — the
+  // backend is not looking. Reflect the real state instead.
+  if (booking && booking.payment_status !== "paid") {
+    return { label: "Payment required", pulse: false, variant: "payment_required" };
   }
   return { label: "Looking for a driver near you", pulse: true, variant: "searching" };
 }
@@ -240,7 +247,9 @@ export function DispatchScreen({ route, navigation }: P) {
   // ─── UI state ───
   const s = stateFor(dispatch, booking);
   const showSweep = s.variant === "searching" && pickupPt != null;
-  const cancelable = !!bookingId && !s.variant.startsWith("done") && s.variant !== "cancelled" && !active;
+  // Cancellation stays available for both paid (refund) and unpaid
+  // (plain cancel) — backend routes each path via /customer/bookings/{id}/cancel.
+  const cancelable = !!bookingId && s.variant !== "cancelled" && s.variant !== "done" && !active;
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -394,6 +403,13 @@ export function DispatchScreen({ route, navigation }: P) {
             ) : null}
           </View>
 
+          {s.variant === "payment_required" && bookingId ? (
+            <PrimaryButton
+              title={`Retry payment${price != null ? ` · ${money(Number(price))}` : ""}`}
+              onPress={() => navigation.replace("Payment", { bookingId })}
+              testID="asap-retry-payment"
+            />
+          ) : null}
           {active || s.variant === "accepted" ? (
             <PrimaryButton
               title="Open live tracking"

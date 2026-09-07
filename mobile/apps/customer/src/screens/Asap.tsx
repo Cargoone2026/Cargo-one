@@ -178,7 +178,7 @@ export function AsapScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Page testID="customer-asap-request">
+      <Page testID="customer-asap-request" scroll={false}>
         <View style={styles.header}>
           <IconButton onPress={() => nav.goBack()} testID="asap-back" accessibilityLabel="Back">
             <ChevronLeft size={20} color={colors.ink} />
