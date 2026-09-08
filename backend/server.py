@@ -3368,13 +3368,14 @@ async def _stripe_post(path: str, form: dict) -> dict:
             f"{STRIPE_API_BASE}{path}",
             data=form,
             auth=(STRIPE_API_KEY, ""),
-            headers={"Stripe-Version": "2024-06-20"},
+            headers={"Stripe-Version": "2023-10-16"},
         )
     if r.status_code >= 300:
         try:
             err = r.json().get("error", {}).get("message") or r.text
         except Exception:
             err = r.text
+        logging.error("Stripe %s -> %s: %s", path, r.status_code, err)
         raise HTTPException(status_code=502, detail=f"Stripe: {err}")
     return r.json()
 
@@ -3384,10 +3385,11 @@ async def _stripe_get(path: str) -> dict:
         r = await c.get(
             f"{STRIPE_API_BASE}{path}",
             auth=(STRIPE_API_KEY, ""),
-            headers={"Stripe-Version": "2024-06-20"},
+            headers={"Stripe-Version": "2023-10-16"},
         )
     if r.status_code >= 300:
-        raise HTTPException(status_code=502, detail=f"Stripe: {r.text}")
+        logging.error("Stripe GET %s -> %s: %s", path, r.status_code, r.text)
+        raise HTTPException(status_code=502, detail=f"Stripe: {r.text[:200]}")
     return r.json()
 
 
@@ -3415,7 +3417,12 @@ async def create_deposit_intent(booking_id: str,
     if booking.get("payment_status") == "paid":
         raise HTTPException(status_code=400, detail="Already paid")
 
-    amount_pence = int(round(float(booking["deposit_amount"]) * 100))
+    amount_pence = int(round(float(booking.get("deposit_amount") or 0) * 100))
+    if amount_pence <= 0:
+        # Defensive — payment_intents rejects amount=0 with a cryptic
+        # error that surfaces as a Cloudflare 502 to the client.
+        logging.error("deposit-intent: booking %s has no deposit_amount", booking_id)
+        raise HTTPException(status_code=400, detail="Booking has no deposit amount")
 
     # ── Reuse existing customer + open PaymentIntent if present ────────
     existing_txn = await db.payment_transactions.find_one(

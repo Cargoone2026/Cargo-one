@@ -18,6 +18,7 @@ export function BidsScreen({ route, navigation }: P) {
   const [bids, setBids] = useState<Bid[]>([]);
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [inspecting, setInspecting] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const rows = await CustomerAPI.listBids(jobId).catch(() => [] as Bid[]);
@@ -35,19 +36,29 @@ export function BidsScreen({ route, navigation }: P) {
   }, [inspecting]);
 
   async function accept(b: Bid) {
+    if (accepting) return;
+    setAccepting(b.id);
     try {
-      const res = await CustomerAPI.acceptBid(jobId, b.id);
-      navigation.replace("Payment", { bookingId: res.booking_id });
+      await CustomerAPI.acceptBid(jobId, b.id);
+      const booking = await CustomerAPI.createBooking(jobId);
+      navigation.replace("Payment", { bookingId: booking.id });
     } catch (e: any) {
-      Alert.alert("Could not accept bid", e?.message || "");
+      Alert.alert("Could not accept bid", e?.message || "Please try again.");
+    } finally {
+      setAccepting(null);
     }
   }
 
   return (
-    <Page testID="bids-screen">
+    <Page testID="bids-screen" scroll={false}>
       <ScrollView>
         <PageHeader
           title="Bids"
+          onBack={() =>
+            navigation.canGoBack()
+              ? navigation.goBack()
+              : navigation.navigate("Bookings")
+          }
           subtitle="Tap “See reviews” to inspect a driver's rating and comments before accepting."
         />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
@@ -75,7 +86,12 @@ export function BidsScreen({ route, navigation }: P) {
                 ) : null}
                 <View style={{ flexDirection: "row", gap: 12, marginTop: 12, alignItems: "center" }}>
                   <View style={{ flex: 1 }}>
-                    <PrimaryButton title="Accept bid" onPress={() => accept(item)} testID={`bid-accept-${item.id}`} />
+                    <PrimaryButton
+                      title={accepting === item.id ? "Accepting…" : "Accept bid"}
+                      onPress={() => accept(item)}
+                      disabled={accepting !== null}
+                      testID={`bid-accept-${item.id}`}
+                    />
                   </View>
                   <Pressable onPress={() => setInspecting(item.driver_id)} testID={`bid-see-reviews-${item.id}`}>
                     <Text style={{ color: colors.brand, fontWeight: "700", fontSize: 14 }}>See reviews</Text>
@@ -88,7 +104,7 @@ export function BidsScreen({ route, navigation }: P) {
       </ScrollView>
 
       <Modal visible={!!inspecting} animationType="slide" onRequestClose={() => setInspecting(null)}>
-        <Page testID="reviews-modal">
+        <Page testID="reviews-modal" scroll={false}>
           <ScrollView>
             <PageHeader
               title={`Reviews for ${profile?.name || "driver"}`}

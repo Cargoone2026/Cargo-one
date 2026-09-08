@@ -26,7 +26,13 @@ export const CustomerAPI = {
     api<Job>("/jobs", { method: "POST", body: payload }),
   listBids: (jobId: string) => api<Bid[]>(`/jobs/${jobId}/bids`),
   acceptBid: (jobId: string, bidId: string) =>
-    api<{ booking_id: string }>(`/jobs/${jobId}/bids/${bidId}/accept`, { method: "POST" }),
+    api<{ ok: boolean }>(`/bids/${bidId}/accept`, { method: "POST" }),
+  // Scheduled marketplace flow: after acceptBid, the customer creates
+  // a Booking against the job — backend picks up the accepted price
+  // and computes deposit + total. Returns the full Booking; caller
+  // navigates to Payment with booking.id.
+  createBooking: (jobId: string) =>
+    api<Booking>("/bookings", { method: "POST", body: { job_id: jobId } }),
   driverProfile: (driverId: string) => api<DriverProfile>(`/users/${driverId}/profile`),
   createCheckout: (bookingId: string, originUrl: string) =>
     api<{ session_id: string; url: string }>(
