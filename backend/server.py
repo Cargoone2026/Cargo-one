@@ -157,6 +157,25 @@ bearer_scheme = HTTPBearer(auto_error=False)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cargoone")
 
+# Safe runtime verification of the loaded Stripe key at startup.
+# Logs ONLY the 8-char prefix and length — never the secret itself.
+# Also emits a loud ERROR for known-bad values (empty, placeholder, publishable).
+def _log_stripe_key_status() -> None:
+    k = STRIPE_API_KEY or ""
+    prefix = k[:8] if k else "(empty)"
+    length = len(k)
+    if not k:
+        logger.error("STRIPE_API_KEY is empty at startup")
+    elif k == "sk_test_emergent":
+        logger.error("STRIPE_API_KEY is the sandbox placeholder value; Stripe calls will fail")
+    elif k.startswith("pk_"):
+        logger.error("STRIPE_API_KEY looks like a PUBLISHABLE key (prefix=%s, len=%d); backend requires a SECRET key (sk_...)", prefix, length)
+    elif not (k.startswith("sk_test_") or k.startswith("sk_live_") or k.startswith("rk_")):
+        logger.error("STRIPE_API_KEY has unexpected prefix=%s len=%d; expected sk_test_/sk_live_/rk_", prefix, length)
+    else:
+        logger.info("STRIPE_API_KEY loaded prefix=%s len=%d", prefix, length)
+_log_stripe_key_status()
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
