@@ -1,5 +1,10 @@
 # Cargo-One CHANGELOG (R71 iOS mobile work)
 
+## 2026-02 — Stripe prod-key diagnosis + AddressAutocomplete VirtualizedList fix
+- P0 (Stripe deposit-intent): Diagnosis complete — production `STRIPE_API_KEY` is set to the placeholder string `sk_test_emergent` (16 chars, last 4 = "gent", exact match of the on-device error `sk_test_****gent`). Same placeholder is in `/app/backend/.env`. Backend code (`server.py:65 STRIPE_API_KEY = os.environ["STRIPE_API_KEY"]` + all Stripe calls) is correct; the secret value is not. Fix must be done in the production deployment environment variables (Emergent deploy → env vars → set `STRIPE_API_KEY` to the real `sk_test_...` from https://dashboard.stripe.com/test/apikeys, then redeploy/restart backend). No code change made to backend per user instruction.
+- P1 (VirtualizedList warning): Root cause = `AddressAutocomplete.tsx` Modal rendered `<Page bg={colors.bg}>` (defaults `scroll=true` → wraps children in `ScrollView`) with a `<FlatList>` inside for suggestions. Fixed by adding `scroll={false}` to that Page and wrapping the manual-review branch in its own local `ScrollView`. Search-mode FlatList is now the top-level scroller. `Asap.tsx` unchanged (already had `scroll={false}`).
+
+
 ## 2026-09-08 — a8dcc4f — Post-device R27.12 Bids + Stripe hardening
 - Backend: Stripe REST helpers now log actual error payload; API version pinned to `2023-10-16`; zero-deposit guard returns 400 early instead of an opaque 502.
 - Mobile: Fixed `Bids` screen `Accept bid` (was hitting non-existent `/jobs/{jobId}/bids/{bidId}/accept` → 404). Now uses `POST /bids/{bidId}/accept` then `POST /bookings` then navigates to Payment.

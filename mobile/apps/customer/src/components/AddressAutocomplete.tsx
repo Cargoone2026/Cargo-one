@@ -12,7 +12,7 @@
  *     country, country_code, place_id, lat, lng }
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { MapPin, ChevronRight, Search, X } from "lucide-react-native";
 import { SharedAPI, GeoSuggestion } from "@cargoone/core";
 import { colors, radius, typography } from "../theme";
@@ -212,7 +212,7 @@ function AddressPickerModal({
   };
 
   return (
-    <Page bg={colors.bg}>
+    <Page bg={colors.bg} scroll={false}>
       <PageHeader
         title={mode === "search" ? "Search address" : "Confirm details"}
         subtitle="Pick address"
@@ -282,7 +282,7 @@ function AddressPickerModal({
             </View>
           </>
         ) : (
-          <View>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 }}>
             <Label>Address line</Label>
             <Input
               value={form.address_line}
@@ -356,7 +356,7 @@ function AddressPickerModal({
                 />
               </View>
             </View>
-          </View>
+          </ScrollView>
         )}
       </View>
     </Page>
