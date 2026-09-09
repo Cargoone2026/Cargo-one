@@ -159,7 +159,10 @@ export function App() {
 
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PK || ""}>
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PK || ""}
+        merchantIdentifier="merchant.co.uk.cargoone"
+      >
         <AuthContext.Provider value={authValue}>
           <StatusBar style={hydrated ? "dark" : "light"} />
           {!hydrated ? (
