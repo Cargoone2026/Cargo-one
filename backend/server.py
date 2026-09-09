@@ -3376,7 +3376,7 @@ async def _stripe_post(path: str, form: dict) -> dict:
         except Exception:
             err = r.text
         logging.error("Stripe %s -> %s: %s", path, r.status_code, err)
-        raise HTTPException(status_code=502, detail=f"Stripe: {err}")
+        raise HTTPException(status_code=400, detail=f"Stripe: {err}")
     return r.json()
 
 
@@ -3389,13 +3389,25 @@ async def _stripe_get(path: str) -> dict:
         )
     if r.status_code >= 300:
         logging.error("Stripe GET %s -> %s: %s", path, r.status_code, r.text)
-        raise HTTPException(status_code=502, detail=f"Stripe: {r.text[:200]}")
+        raise HTTPException(status_code=400, detail=f"Stripe: {r.text[:200]}")
     return r.json()
 
 
 @api.post("/bookings/{booking_id}/deposit-intent")
 async def create_deposit_intent(booking_id: str,
                                   user: dict = Depends(require_role("customer"))):
+    try:
+        return await _do_create_deposit_intent(booking_id, user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.exception("deposit-intent failed booking=%s user=%s", booking_id, user.get("id"))
+        # Surface the actual failure as a 400-JSON so Cloudflare doesn't
+        # swallow it as a generic 5xx. Client shows this text to user.
+        raise HTTPException(status_code=400, detail=f"Payment init failed: {type(e).__name__}: {str(e)[:200]}")
+
+
+async def _do_create_deposit_intent(booking_id: str, user: dict):
     """Native PaymentSheet initialisation.
 
     Returns `{payment_intent_id, client_secret, ephemeral_key, customer_id,
