@@ -3,17 +3,22 @@
  */
 import React from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import Constants from "expo-constants";
 import { Globe, Briefcase } from "lucide-react-native";
+import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { MenuRow, Page, PageHeader } from "../ui";
 
-export function AboutScreen() {
+type P = NativeStackScreenProps<RootStackParamList, "About">;
+
+export function AboutScreen({ navigation }: P) {
   const version = (Constants as any).expoConfig?.version || "0.1.0";
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Settings"));
   return (
     <Page testID="about-screen">
       <ScrollView>
-        <PageHeader title="About Cargo One" />
+        <PageHeader title="About Cargo One" onBack={goBack} />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 16 }}>
           <Text style={[typography.body, { lineHeight: 22 }]}>
             Cargo One is the UK marketplace for on-demand transport, vehicle recovery and large-freight jobs. We connect

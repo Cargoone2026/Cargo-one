@@ -42,13 +42,14 @@ const DOCS: Record<string, { title: string; body: string }> = {
   },
 };
 
-export function LegalScreen({ route }: P) {
+export function LegalScreen({ route, navigation }: P) {
   const slug = route?.params?.slug || "terms";
   const doc = DOCS[slug] || DOCS.terms;
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Settings"));
   return (
     <Page testID={`legal-${slug}-screen`}>
       <ScrollView>
-        <PageHeader title={doc.title} />
+        <PageHeader title={doc.title} onBack={goBack} />
         <View style={{ paddingHorizontal: 16, paddingBottom: 40 }}>
           <Text style={[typography.body, { lineHeight: 22, color: colors.ink }]}>{doc.body}</Text>
         </View>

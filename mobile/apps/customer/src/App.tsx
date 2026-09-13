@@ -58,8 +58,8 @@ export type RootStackParamList = {
   Register: undefined;
   PasswordReset: undefined;
   Home: undefined;
-  PostJob: undefined;
-  Asap: undefined;
+  PostJob: { rebookFromJob?: any } | undefined;
+  Asap: { rebookFromJob?: any } | undefined;
   Bookings: undefined;
   Messages: undefined;
   Profile: undefined;

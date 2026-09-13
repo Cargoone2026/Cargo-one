@@ -3,17 +3,22 @@
  */
 import React, { useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CustomerAPI } from "@cargoone/core";
+import type { RootStackParamList } from "../App";
 import { useAuth } from "../AuthContext";
 import { colors, radius, typography } from "../theme";
 import { Input, Label, Page, PageHeader, PrimaryButton } from "../ui";
 
-export function DeleteAccountScreen() {
+type P = NativeStackScreenProps<RootStackParamList, "DeleteAccount">;
+
+export function DeleteAccountScreen({ navigation }: P) {
   const { logout } = useAuth();
   const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState(false);
   const CONFIRM = "DELETE";
   const canSubmit = phrase.trim() === CONFIRM;
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Settings"));
 
   async function onDelete() {
     if (!canSubmit) return;
@@ -35,6 +40,7 @@ export function DeleteAccountScreen() {
       <ScrollView>
         <PageHeader
           title={<Text style={[typography.pageTitle, { color: colors.errorInk }]}>Delete your account</Text>}
+          onBack={goBack}
         />
         <View style={{ paddingHorizontal: 16, paddingBottom: 40, gap: 16 }}>
           <Text style={[typography.body, { lineHeight: 22 }]}>

@@ -5319,27 +5319,33 @@ async def customer_cancel_booking(
                with a failed / abandoned deposit can be discarded
                without a duplicate cancellation route.
     """
-    b = await db.bookings.find_one({"id": booking_id})
-    if not b:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    if b.get("customer_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Not your booking")
-    if b.get("payment_status") == "paid":
-        # Reuse the full-fat refund path.
-        return await customer_cancel_and_refund(booking_id, {}, user)  # type: ignore
-    if b.get("status") == "cancelled" or b.get("cancelled_at"):
-        return {"ok": True, "already_cancelled": True, "booking_id": booking_id}
-    now = now_iso()
-    await db.bookings.update_one(
-        {"id": booking_id, "payment_status": {"$ne": "paid"}},
-        {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
-    )
-    if b.get("job_id"):
-        await db.jobs.update_one(
-            {"id": b["job_id"]},
-            {"$set": {"status": "cancelled", "cancelled_at": now}},
+    try:
+        b = await db.bookings.find_one({"id": booking_id})
+        if not b:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        if b.get("customer_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Not your booking")
+        if b.get("payment_status") == "paid":
+            # Reuse the full-fat refund path.
+            return await customer_cancel_and_refund(booking_id, {}, user)  # type: ignore
+        if b.get("status") == "cancelled" or b.get("cancelled_at"):
+            return {"ok": True, "already_cancelled": True, "booking_id": booking_id}
+        now = now_iso()
+        await db.bookings.update_one(
+            {"id": booking_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
         )
-    return {"ok": True, "booking_id": booking_id, "refund": None}
+        if b.get("job_id"):
+            await db.jobs.update_one(
+                {"id": b["job_id"]},
+                {"$set": {"status": "cancelled", "cancelled_at": now}},
+            )
+        return {"ok": True, "booking_id": booking_id, "refund": None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("customer_cancel_booking crashed for booking %s", booking_id)
+        raise HTTPException(status_code=400, detail=f"Cancel failed: {e}")
 
 
 @api.post("/customer/bookings/{booking_id}/cancel-and-refund")
@@ -5366,6 +5372,25 @@ async def customer_cancel_and_refund(
          helper path).
       4. Audit-log the customer-initiated refund entry.
     """
+    try:
+        return await _customer_cancel_and_refund_impl(booking_id, payload, user)
+    except HTTPException:
+        # Preserve intentional HTTP errors (403/404/409/400) — client already
+        # gets clean JSON. Never let a raw 5xx reach Cloudflare, which replaces
+        # the body with its own HTML template.
+        raise
+    except Exception as e:
+        logger.exception("customer_cancel_and_refund crashed for booking %s", booking_id)
+        # Return HTTP 400 (not 5xx) so Cloudflare passes the raw JSON body
+        # through to the mobile app. Same pattern used on /deposit-intent.
+        raise HTTPException(status_code=400, detail=f"Cancel failed: {e}")
+
+
+async def _customer_cancel_and_refund_impl(
+    booking_id: str,
+    payload: dict,
+    user: dict,
+):
     b = await db.bookings.find_one({"id": booking_id})
     if not b:
         raise HTTPException(status_code=404, detail="Booking not found")
@@ -5560,8 +5585,10 @@ async def customer_cancel_and_refund(
         except Exception as _e:
             logger.warning("R35 anti-bypass counter update failed for %s: %s", user["id"], _e)
     if refund_state == "failed":
-        # Booking is cancelled either way — but tell the customer refund failed
-        raise HTTPException(status_code=502, detail=f"Booking cancelled but refund failed: {stripe_err}. Support has been notified.")
+        # Booking is cancelled either way — but tell the customer refund failed.
+        # 400 (not 5xx) so Cloudflare doesn't replace the body with its own
+        # "invalid or incomplete response" HTML template.
+        raise HTTPException(status_code=400, detail=f"Booking cancelled but refund failed: {stripe_err}. Support has been notified.")
 
     # ---- CONFIRMATION EMAIL ---------------------------------------------
     try:

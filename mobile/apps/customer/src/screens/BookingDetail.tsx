@@ -27,6 +27,7 @@ import {
   Package as PackageIcon,
   Ruler,
   Star,
+  RotateCcw,
 } from "lucide-react-native";
 import {
   Booking,
@@ -391,29 +392,100 @@ export function BookingDetailScreen({ route, navigation }: P) {
                     testID="leave-review"
                   />
                 )}
-                {["confirmed", "deposit_paid", "posted"].includes(b.status) && (
-                  <SecondaryButton
-                    title="Cancel booking"
+                {/* R71.14 — Split cancellation UX along the business rule:
+                    unaccepted normal booking → fee-free "Delete booking";
+                    accepted (any) OR ASAP → "Cancel & request refund".
+                    Both paths hit the same /cancel endpoint; the backend
+                    applies the fee policy from job.assigned_driver_id. */}
+                {(() => {
+                  const isTerminal = b.status === "completed" || b.status === "delivered" || b.status === "cancelled" || !!b.cancelled_at;
+                  if (isTerminal) return null;
+                  const driverAccepted = !!(b.assigned_driver_id || job?.assigned_driver_id);
+                  const timing = b.service_timing || job?.service_timing;
+                  const isAsap = timing === "asap";
+                  if (!driverAccepted && !isAsap) {
+                    // Delete path — fee-free (backend enforces via _compute_cancellation_fee).
+                    return (
+                      <SecondaryButton
+                        title="Delete booking"
+                        onPress={() => {
+                          Alert.alert(
+                            "Delete booking?",
+                            b.payment_status === "paid"
+                              ? "This will cancel the booking and fully refund your deposit — no cancellation fee applies because no driver has accepted."
+                              : "This will remove the booking from your active list. No refund is required (no deposit was taken).",
+                            [
+                              { text: "Keep", style: "cancel" },
+                              {
+                                text: "Delete",
+                                style: "destructive",
+                                onPress: async () => {
+                                  try {
+                                    await CustomerAPI.cancelBooking(b.id);
+                                    load();
+                                  } catch (e: any) {
+                                    Alert.alert("Could not delete", e?.message || "Please try again in a moment.");
+                                  }
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                        testID="delete-booking"
+                      />
+                    );
+                  }
+                  // Cancel-with-refund path — backend computes fee via
+                  // _compute_cancellation_fee(deposit, policy, driver_accepted=True).
+                  return (
+                    <SecondaryButton
+                      title="Cancel & request refund"
+                      onPress={() => {
+                        Alert.alert(
+                          "Cancel booking?",
+                          driverAccepted
+                            ? "A driver has accepted your booking. A cancellation fee may be deducted from your deposit per the policy shown above."
+                            : "Cancel this ASAP booking and request a refund of your deposit.",
+                          [
+                            { text: "Keep booking", style: "cancel" },
+                            {
+                              text: "Cancel",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  await CustomerAPI.cancelBooking(b.id);
+                                  load();
+                                } catch (e: any) {
+                                  Alert.alert("Error", e?.message || "Could not cancel");
+                                }
+                              },
+                            },
+                          ],
+                        );
+                      }}
+                      testID="cancel-booking"
+                    />
+                  );
+                })()}
+                {/* R71.14 — Rebook banner for cancelled bookings (mirrors
+                    web BookingDetail goRebook). Passes the source job to
+                    the wizard as a route param; wizard pre-fills fields
+                    and submits a NEW booking on completion. */}
+                {b.cancelled_at ? (
+                  <PrimaryButton
+                    title="Rebook this job"
                     onPress={() => {
-                      Alert.alert("Cancel booking?", "Cancellation fees may apply.", [
-                        { text: "Keep booking", style: "cancel" },
-                        {
-                          text: "Cancel",
-                          style: "destructive",
-                          onPress: async () => {
-                            try {
-                              await CustomerAPI.cancelBooking(b.id);
-                              load();
-                            } catch (e: any) {
-                              Alert.alert("Error", e?.message || "Could not cancel");
-                            }
-                          },
-                        },
-                      ]);
+                      const timing = b.service_timing || job?.service_timing;
+                      const rebookFromJob = job || {};
+                      if (timing === "asap") {
+                        navigation.navigate("Asap", { rebookFromJob });
+                      } else {
+                        navigation.navigate("PostJob", { rebookFromJob });
+                      }
                     }}
-                    testID="cancel-booking"
+                    testID="rebook-cta"
                   />
-                )}
+                ) : null}
               </View>
             </>
           )}

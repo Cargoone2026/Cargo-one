@@ -3,14 +3,19 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { deletePasskey, listPasskeys, registerPasskey } from "@cargoone/core";
 import { Fingerprint } from "lucide-react-native";
+import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { EmptyState, Page, PageHeader, PrimaryButton } from "../ui";
 
-export function PasskeysScreen() {
+type P = NativeStackScreenProps<RootStackParamList, "Passkeys">;
+
+export function PasskeysScreen({ navigation }: P) {
   const [rows, setRows] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Settings"));
 
   const refresh = useCallback(async () => {
     try {
@@ -52,6 +57,7 @@ export function PasskeysScreen() {
         <PageHeader
           title="Passkeys"
           subtitle="Sign in without typing your password using Face ID."
+          onBack={goBack}
         />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
           <PrimaryButton title="Add a passkey" onPress={add} loading={busy} testID="add-passkey" />

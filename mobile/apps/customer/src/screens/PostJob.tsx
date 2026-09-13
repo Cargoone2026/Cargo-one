@@ -25,7 +25,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ChevronLeft,
@@ -75,6 +75,8 @@ function fmtDur(mins: number | null | undefined) {
 
 export function PostJobScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, "PostJob">>();
+  const rebook = route?.params?.rebookFromJob as any | undefined;
   const { openDrawer, showMenu } = useShellMenu();
 
   const [step, setStep] = useState(1);
@@ -115,6 +117,46 @@ export function PostJobScreen() {
     SharedAPI.vehicles().then((v) => setVehicles(Array.isArray(v) ? v : []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Rebook prefill — mirrors web BookingDetail goRebook + PostJob rebook read.
+  // Runs once on mount when the caller passes a source job. Creates a new
+  // booking on submit; never mutates the source (cancelled) booking.
+  const [rebookApplied, setRebookApplied] = useState(false);
+  useEffect(() => {
+    if (rebookApplied || !rebook) return;
+    if (rebook.title) setTitle(String(rebook.title));
+    if (rebook.description) setDescription(String(rebook.description));
+    if (rebook.category_key) setCategoryKey(String(rebook.category_key));
+    if (rebook.pickup_lat != null && rebook.pickup_lng != null) {
+      setPickup({
+        lat: rebook.pickup_lat, lng: rebook.pickup_lng,
+        address: rebook.pickup_address || "", town: rebook.pickup_town || "",
+        postcode: rebook.pickup_postcode || "", country: rebook.pickup_country || "",
+      } as any);
+    }
+    if (rebook.dropoff_lat != null && rebook.dropoff_lng != null) {
+      setDropoff({
+        lat: rebook.dropoff_lat, lng: rebook.dropoff_lng,
+        address: rebook.dropoff_address || "", town: rebook.dropoff_town || "",
+        postcode: rebook.dropoff_postcode || "", country: rebook.dropoff_country || "",
+      } as any);
+    }
+    if (rebook.weight_kg != null) setWeightKg(String(rebook.weight_kg));
+    if (rebook.dimensions_l_m != null) setLengthM(String(rebook.dimensions_l_m));
+    if (rebook.dimensions_w_m != null) setWidthM(String(rebook.dimensions_w_m));
+    if (rebook.dimensions_h_m != null) setHeightM(String(rebook.dimensions_h_m));
+    if (rebook.item_count != null) setItemCount(String(rebook.item_count));
+    if (rebook.needs_forklift) setNeedsForklift(true);
+    if (rebook.needs_loading_help) setNeedsLoadingHelp(true);
+    if (rebook.vehicle_required || rebook.recommended_vehicle) {
+      setVehicleKey(String(rebook.vehicle_required || rebook.recommended_vehicle));
+    }
+    if (rebook.pricing_type === "fixed" && rebook.fixed_price != null) {
+      setPricingType("fixed");
+      setFixedPrice(String(rebook.fixed_price));
+    }
+    setRebookApplied(true);
+  }, [rebook, rebookApplied]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.key === categoryKey) || null,

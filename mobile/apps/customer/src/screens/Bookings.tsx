@@ -3,17 +3,38 @@
  * Segmented tabs (Active / Past), search input, and BookingRow list.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Package } from "lucide-react-native";
+import { Package, RotateCcw, Trash2 } from "lucide-react-native";
 import { CustomerAPI, Booking, Job } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
-import { colors } from "../theme";
+import { colors, radius, typography } from "../theme";
 import { BookingRow, EmptyState, Page, PageHeader, SearchInputRow, SegmentedTabs } from "../ui";
 import { useShellMenu } from "../components/AppShell";
 
 const PAST = new Set(["completed", "cancelled", "refunded"]);
+
+// R71.14 — a normal (non-ASAP) booking is "unaccepted" when no driver has
+// claimed it yet. That's the exact state where the customer-facing action
+// is a fee-free "Delete booking" (matches web business logic). Anything
+// with an assigned driver falls into the "Cancel & request refund" path.
+function isUnacceptedNormalBooking(b: Booking): boolean {
+  const timing = (b as any).service_timing || (b as any).job?.service_timing;
+  if (timing === "asap") return false;
+  if (b.status === "completed" || b.status === "cancelled" || (b as any).cancelled_at) return false;
+  const drv = (b as any).assigned_driver_id || (b as any).job?.assigned_driver_id;
+  return !drv;
+}
+
+// R71.14 — cancelled NORMAL bookings surface a per-row "Rebook this job"
+// button. ASAP rebook is handled by the existing dispatch flow and is
+// intentionally not duplicated here.
+function isCancelledNormalBooking(b: Booking): boolean {
+  const timing = (b as any).service_timing || (b as any).job?.service_timing;
+  if (timing === "asap") return false;
+  return b.status === "cancelled" || !!(b as any).cancelled_at;
+}
 
 type Row =
   | (Booking & { _isBooking: true; _isJob?: undefined })
@@ -41,6 +62,50 @@ export function BookingsScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  // R71.14 — per-row "Delete booking" for unaccepted NORMAL bookings.
+  // Backend `/customer/bookings/{id}/cancel` handles unpaid deletes without
+  // fee and paid-unaccepted with a full refund; fee logic is server-side.
+  const onDelete = useCallback(
+    (b: Booking) => {
+      Alert.alert(
+        "Delete booking?",
+        "This will remove it from your active list. If you paid a deposit, it will be fully refunded (no driver has accepted yet).",
+        [
+          { text: "Keep", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await CustomerAPI.cancelBooking(b.id);
+                await load();
+              } catch (e: any) {
+                Alert.alert("Could not delete", e?.message || "Please try again in a moment.");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [load],
+  );
+
+  // R71.14 — per-row "Rebook this job" for cancelled NORMAL bookings.
+  // Mirrors the web goRebook: navigates to the correct wizard and pre-fills
+  // via a route param. Never mutates the source (cancelled) booking.
+  const onRebook = useCallback(
+    (b: Booking) => {
+      const timing = (b as any).service_timing || (b as any).job?.service_timing;
+      const rebookFromJob = (b as any).job || {};
+      if (timing === "asap") {
+        nav.navigate("Asap", { rebookFromJob });
+      } else {
+        nav.navigate("PostJob", { rebookFromJob });
+      }
+    },
+    [nav],
+  );
 
   useEffect(() => {
     load();
@@ -132,23 +197,46 @@ export function BookingsScreen() {
                 : cancelled
                 ? it.cancellation_refund ?? it.refund_amount
                 : it.customer_total ?? it.total_price ?? it.job?.customer_total ?? it.job?.accepted_price;
+              const showDelete = !it._isJob && isUnacceptedNormalBooking(it as Booking);
+              const showRebook = !it._isJob && isCancelledNormalBooking(it as Booking);
               return (
-                <BookingRow
-                  key={it.id}
-                  title={title}
-                  status={status}
-                  pickup={pickup}
-                  dropoff={dropoff}
-                  price={price}
-                  priceLabel={priceLabel}
-                  cancelled={cancelled}
-                  onPress={() =>
-                    it._isJob
-                      ? nav.navigate("JobDetail", { jobId: it.id })
-                      : nav.navigate("BookingDetail", { bookingId: it.id })
-                  }
-                  testID={`booking-row-${it.id}`}
-                />
+                <View key={it.id}>
+                  <BookingRow
+                    title={title}
+                    status={status}
+                    pickup={pickup}
+                    dropoff={dropoff}
+                    price={price}
+                    priceLabel={priceLabel}
+                    cancelled={cancelled}
+                    onPress={() =>
+                      it._isJob
+                        ? nav.navigate("JobDetail", { jobId: it.id })
+                        : nav.navigate("BookingDetail", { bookingId: it.id })
+                    }
+                    testID={`booking-row-${it.id}`}
+                  />
+                  {showDelete ? (
+                    <Pressable
+                      onPress={() => onDelete(it as Booking)}
+                      style={styles.rowActionDanger}
+                      testID={`booking-row-delete-${it.id}`}
+                    >
+                      <Trash2 size={14} color={colors.errorInk} />
+                      <Text style={styles.rowActionDangerText}>Delete booking</Text>
+                    </Pressable>
+                  ) : null}
+                  {showRebook ? (
+                    <Pressable
+                      onPress={() => onRebook(it as Booking)}
+                      style={styles.rowActionPrimary}
+                      testID={`booking-row-rebook-${it.id}`}
+                    >
+                      <RotateCcw size={14} color="#FFFFFF" />
+                      <Text style={styles.rowActionPrimaryText}>Rebook this job</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               );
             })
           )}
@@ -157,3 +245,40 @@ export function BookingsScreen() {
     </Page>
   );
 }
+
+const styles = {
+  rowActionDanger: {
+    marginTop: -6,
+    marginBottom: 12,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+  },
+  rowActionDangerText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: colors.errorInk,
+  },
+  rowActionPrimary: {
+    marginTop: -6,
+    marginBottom: 12,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
+  },
+  rowActionPrimaryText: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
+  },
+};

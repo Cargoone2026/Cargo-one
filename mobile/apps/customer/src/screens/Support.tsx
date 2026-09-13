@@ -3,15 +3,20 @@
  */
 import React from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Mail, AlertTriangle, HelpCircle, BookOpen, MessageSquare } from "lucide-react-native";
+import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { MenuRow, Page, PageHeader } from "../ui";
 
-export function SupportScreen() {
+type P = NativeStackScreenProps<RootStackParamList, "Support">;
+
+export function SupportScreen({ navigation }: P) {
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Settings"));
   return (
     <Page testID="support-screen">
       <ScrollView>
-        <PageHeader title="Help & Support" subtitle="Our team responds within one working day." />
+        <PageHeader title="Help & Support" subtitle="Our team responds within one working day." onBack={goBack} />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
           <View style={styles.card}>
             <MenuRow

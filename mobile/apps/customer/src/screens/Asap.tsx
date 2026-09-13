@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AlertTriangle, ChevronLeft, MapPin, ShieldCheck, Truck, Zap, Loader2 } from "lucide-react-native";
 import { SharedAPI, CustomerAPI } from "@cargoone/core";
@@ -45,6 +45,8 @@ const TRANSPORT_CATS: { value: string; label: string }[] = [
 
 export function AsapScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, "Asap">>();
+  const rebook = route?.params?.rebookFromJob as any | undefined;
   const { openDrawer, showMenu } = useShellMenu();
   const [mode, setMode] = useState<Mode>("transport");
   const [pickup, setPickup] = useState<PlaceResult | null>(null);
@@ -58,6 +60,46 @@ export function AsapScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Rebook prefill — mirrors web AsapRequest rebook read. Runs once on
+  // mount when the caller passes a source job. Never mutates the source
+  // (cancelled) booking; submit creates a fresh booking.
+  const [rebookApplied, setRebookApplied] = useState(false);
+  useEffect(() => {
+    if (rebookApplied || !rebook) return;
+    const svcType = rebook.service_type;
+    if (svcType === "recovery" || svcType === "breakdown_recovery") {
+      setMode("breakdown_recovery");
+      if (rebook.recovery_vehicle_make) setVehicle((v) => ({ ...v, make: String(rebook.recovery_vehicle_make) }));
+      if (rebook.recovery_vehicle_model) setVehicle((v) => ({ ...v, model: String(rebook.recovery_vehicle_model) }));
+      if (rebook.recovery_vehicle_registration) {
+        setVehicle((v) => ({ ...v, registration: String(rebook.recovery_vehicle_registration) }));
+      }
+      if (rebook.recovery_vehicle_condition) {
+        setVehicle((v) => ({ ...v, condition: String(rebook.recovery_vehicle_condition) }));
+      }
+    } else {
+      setMode("transport");
+      if (rebook.category_key) setTransportCategory(String(rebook.category_key));
+      if (rebook.description) setTransportDescription(String(rebook.description));
+    }
+    if (rebook.pickup_lat != null && rebook.pickup_lng != null) {
+      setPickup({
+        lat: rebook.pickup_lat, lng: rebook.pickup_lng,
+        address: rebook.pickup_address || "", town: rebook.pickup_town || "",
+        postcode: rebook.pickup_postcode || "", country: rebook.pickup_country || "",
+      } as any);
+    }
+    if (rebook.dropoff_lat != null && rebook.dropoff_lng != null) {
+      setDropoff({
+        lat: rebook.dropoff_lat, lng: rebook.dropoff_lng,
+        address: rebook.dropoff_address || "", town: rebook.dropoff_town || "",
+        postcode: rebook.dropoff_postcode || "", country: rebook.dropoff_country || "",
+      } as any);
+    }
+    if (rebook.notes || rebook.pickup_notes) setNote(String(rebook.notes || rebook.pickup_notes || ""));
+    setRebookApplied(true);
+  }, [rebook, rebookApplied]);
 
   const canSubmit = useMemo(() => {
     if (!pickup || !dropoff) return false;
