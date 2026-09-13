@@ -50,6 +50,15 @@ export const CustomerAPI = {
     // for paid bookings, or plain cancel for unpaid/failed-payment
     // bookings. Single call regardless of payment_status.
     api<any>(`/customer/bookings/${bookingId}/cancel`, { method: "POST" }),
+  // Cancel a normal posted/accepted Job that has not yet progressed into
+  // a paid booking with an assigned driver. No Stripe / no fee — backend
+  // rejects with 409 if a driver has accepted or a paid booking exists,
+  // in which case the client must use cancelBooking instead.
+  cancelJob: (jobId: string) =>
+    api<{ ok: true; job_id: string; refund: null } | { ok: true; already_cancelled: true; job_id: string }>(
+      `/customer/jobs/${jobId}/cancel`,
+      { method: "POST" },
+    ),
   cancelPreview: (bookingId: string) =>
     api<any>(`/customer/bookings/${bookingId}/cancel-preview`),
   // Native Stripe PaymentSheet (R71).

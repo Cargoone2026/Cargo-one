@@ -5348,6 +5348,75 @@ async def customer_cancel_booking(
         raise HTTPException(status_code=400, detail=f"Cancel failed: {e}")
 
 
+@api.post("/customer/jobs/{job_id}/cancel")
+async def customer_cancel_job(
+    job_id: str,
+    user: dict = Depends(require_role("customer")),
+):
+    """Customer cancel a POSTED / ACCEPTED normal Job that has NOT progressed
+    into a paid booking with an assigned driver.
+
+    Eligibility (all must hold):
+      * job.customer_id == caller
+      * job.status not in {"cancelled", "completed"}
+      * job.assigned_driver_id is falsy
+      * no booking exists on this job with payment_status="paid"
+
+    Behaviour:
+      * Marks the job cancelled (status, cancelled_at, cancelled_by).
+      * If a pending / unpaid booking exists for the job, marks it cancelled
+        too so it moves to Past alongside the job.
+      * No Stripe interaction. No fee. Does NOT call
+        _compute_cancellation_fee — enforced by construction (no driver
+        accepted + no paid booking).
+
+    Cloudflare-safe error envelope: any unexpected exception becomes an
+    HTTP 400 JSON body so the mobile client reads it as `{"detail": "..."}`
+    instead of Cloudflare's HTML template.
+    """
+    try:
+        job = await db.jobs.find_one({"id": job_id})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.get("customer_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Not your job")
+        if job.get("status") in ("completed", "cancelled") or job.get("cancelled_at"):
+            return {"ok": True, "already_cancelled": True, "job_id": job_id}
+        if job.get("assigned_driver_id"):
+            raise HTTPException(
+                status_code=409,
+                detail="A driver has already accepted this job. Use the booking cancellation flow so the correct cancellation policy applies.",
+            )
+        paid_booking = await db.bookings.find_one(
+            {"job_id": job_id, "payment_status": "paid"},
+            {"_id": 0, "id": 1},
+        )
+        if paid_booking:
+            raise HTTPException(
+                status_code=409,
+                detail="This job has a paid booking. Cancel via the booking so refund rules apply.",
+            )
+        now = now_iso()
+        await db.jobs.update_one(
+            {"id": job_id, "status": {"$nin": ["cancelled", "completed"]}, "assigned_driver_id": None},
+            {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
+        )
+        # Also cancel any pending / unpaid booking sitting on the same job so
+        # it moves to Past alongside the job. Does not touch paid bookings —
+        # the guard above already ruled those out.
+        await db.bookings.update_many(
+            {"job_id": job_id, "payment_status": {"$ne": "paid"},
+             "status": {"$nin": ["cancelled", "completed"]}},
+            {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
+        )
+        return {"ok": True, "job_id": job_id, "refund": None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("customer_cancel_job crashed for job %s", job_id)
+        raise HTTPException(status_code=400, detail=f"Cancel failed: {e}")
+
+
 @api.post("/customer/bookings/{booking_id}/cancel-and-refund")
 async def customer_cancel_and_refund(
     booking_id: str,

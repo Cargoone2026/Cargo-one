@@ -63,14 +63,23 @@ export function BookingsScreen() {
     }
   }, []);
 
-  // R71.14 — per-row "Delete booking" for unaccepted NORMAL bookings.
-  // Backend `/customer/bookings/{id}/cancel` handles unpaid deletes without
-  // fee and paid-unaccepted with a full refund; fee logic is server-side.
+  // R71.14 — per-row "Delete" action for eligible rows. Two possible
+  // targets so this dispatches to the correct endpoint:
+  //   * Booking row  → /customer/bookings/{id}/cancel  (fee-safe by
+  //                    server logic: no driver = full refund; unpaid =
+  //                    simple cancel)
+  //   * Job row      → /customer/jobs/{id}/cancel      (never invokes
+  //                    the fee/refund pipeline)
+  // Guards on the caller side keep this button off ineligible rows;
+  // the backend re-enforces the same guards defensively.
   const onDelete = useCallback(
-    (b: Booking) => {
+    (it: any) => {
+      const isJob = !!it._isJob;
       Alert.alert(
-        "Delete booking?",
-        "This will remove it from your active list. If you paid a deposit, it will be fully refunded (no driver has accepted yet).",
+        isJob ? "Delete this job?" : "Delete booking?",
+        isJob
+          ? "This will remove the job from your active list. No cancellation fee applies because no driver has accepted."
+          : "This will remove it from your active list. If you paid a deposit, it will be fully refunded (no driver has accepted yet).",
         [
           { text: "Keep", style: "cancel" },
           {
@@ -78,7 +87,11 @@ export function BookingsScreen() {
             style: "destructive",
             onPress: async () => {
               try {
-                await CustomerAPI.cancelBooking(b.id);
+                if (isJob) {
+                  await CustomerAPI.cancelJob(it.id);
+                } else {
+                  await CustomerAPI.cancelBooking(it.id);
+                }
                 await load();
               } catch (e: any) {
                 Alert.alert("Could not delete", e?.message || "Please try again in a moment.");
@@ -91,13 +104,16 @@ export function BookingsScreen() {
     [load],
   );
 
-  // R71.14 — per-row "Rebook this job" for cancelled NORMAL bookings.
-  // Mirrors the web goRebook: navigates to the correct wizard and pre-fills
-  // via a route param. Never mutates the source (cancelled) booking.
+  // R71.14 — per-row "Rebook this job" for cancelled NORMAL bookings AND
+  // cancelled NORMAL jobs. Mirrors the web goRebook: navigates to the
+  // correct wizard and pre-fills via a route param. Never mutates the
+  // source (cancelled) record.
   const onRebook = useCallback(
-    (b: Booking) => {
-      const timing = (b as any).service_timing || (b as any).job?.service_timing;
-      const rebookFromJob = (b as any).job || {};
+    (it: any) => {
+      const timing = it._isJob
+        ? it.service_timing
+        : it.service_timing || it.job?.service_timing;
+      const rebookFromJob = it._isJob ? it : it.job || {};
       if (timing === "asap") {
         nav.navigate("Asap", { rebookFromJob });
       } else {
@@ -122,12 +138,24 @@ export function BookingsScreen() {
         .map((j) => ({ ...j, _isJob: true as const })),
     [jobs, bookedJobIds],
   );
+  // R71.14 — cancelled NORMAL Jobs that never turned into a Booking are
+  // still first-class history items. Surface them in Past with a Rebook
+  // affordance. Excludes jobs that already have a booking (those rows
+  // are shown via `past` instead so we don't duplicate).
+  const cancelledJobs = useMemo(
+    () =>
+      jobs
+        .filter((j) => (j.status === "cancelled" || !!(j as any).cancelled_at))
+        .filter((j) => !bookedJobIds.has(j.id))
+        .map((j) => ({ ...j, _isJob: true as const })),
+    [jobs, bookedJobIds],
+  );
 
   const display: Row[] = useMemo(() => {
     const raw: Row[] =
       tab === "active"
         ? [...active.map((b) => ({ ...b, _isBooking: true as const })), ...openJobs]
-        : past.map((b) => ({ ...b, _isBooking: true as const }));
+        : [...past.map((b) => ({ ...b, _isBooking: true as const })), ...cancelledJobs];
     const sorted = [...raw].sort((a: any, b: any) =>
       String(b.created_at || "").localeCompare(String(a.created_at || "")),
     );
@@ -143,7 +171,7 @@ export function BookingsScreen() {
         drop.toLowerCase().includes(needle)
       );
     });
-  }, [tab, active, past, openJobs, q]);
+  }, [tab, active, past, openJobs, cancelledJobs, q]);
 
   return (
     <Page testID="customer-bookings" scroll={false}>
@@ -162,7 +190,7 @@ export function BookingsScreen() {
             onChange={setTab}
             options={[
               { value: "active" as const, label: `Active (${active.length + openJobs.length})` },
-              { value: "past" as const, label: `Past (${past.length})` },
+              { value: "past" as const, label: `Past (${past.length + cancelledJobs.length})` },
             ]}
             testIDPrefix="bookings-tab"
           />
@@ -186,7 +214,9 @@ export function BookingsScreen() {
               const pickup = it._isJob ? it.pickup_town : it.job?.pickup_town;
               const dropoff = it._isJob ? it.dropoff_town : it.job?.dropoff_town;
               const status = it.status;
-              const cancelled = !it._isJob && (status === "cancelled" || !!it.cancelled_at);
+              const cancelled = it._isJob
+                ? (status === "cancelled" || !!(it as any).cancelled_at)
+                : (status === "cancelled" || !!it.cancelled_at);
               const priceLabel = it._isJob
                 ? "Estimated"
                 : cancelled
@@ -197,8 +227,27 @@ export function BookingsScreen() {
                 : cancelled
                 ? it.cancellation_refund ?? it.refund_amount
                 : it.customer_total ?? it.total_price ?? it.job?.customer_total ?? it.job?.accepted_price;
-              const showDelete = !it._isJob && isUnacceptedNormalBooking(it as Booking);
-              const showRebook = !it._isJob && isCancelledNormalBooking(it as Booking);
+              // Delete visibility:
+              //   * Booking rows: unaccepted NORMAL bookings (existing rule).
+              //   * Job rows: NORMAL job posted/accepted with no assigned
+              //     driver and no paid booking (backend re-enforces).
+              const showDelete = it._isJob
+                ? (
+                    (it as any).service_timing !== "asap" &&
+                    (status === "posted" || status === "accepted") &&
+                    !(it as any).assigned_driver_id &&
+                    !cancelled
+                  )
+                : isUnacceptedNormalBooking(it as Booking);
+              // Rebook visibility:
+              //   * Booking rows: cancelled NORMAL bookings (existing rule).
+              //   * Job rows: cancelled NORMAL jobs (added in R71.14).
+              const showRebook = it._isJob
+                ? (
+                    (it as any).service_timing !== "asap" &&
+                    cancelled
+                  )
+                : isCancelledNormalBooking(it as Booking);
               return (
                 <View key={it.id}>
                   <BookingRow
@@ -218,17 +267,19 @@ export function BookingsScreen() {
                   />
                   {showDelete ? (
                     <Pressable
-                      onPress={() => onDelete(it as Booking)}
+                      onPress={() => onDelete(it)}
                       style={styles.rowActionDanger}
                       testID={`booking-row-delete-${it.id}`}
                     >
                       <Trash2 size={14} color={colors.errorInk} />
-                      <Text style={styles.rowActionDangerText}>Delete booking</Text>
+                      <Text style={styles.rowActionDangerText}>
+                        {it._isJob ? "Delete job" : "Delete booking"}
+                      </Text>
                     </Pressable>
                   ) : null}
                   {showRebook ? (
                     <Pressable
-                      onPress={() => onRebook(it as Booking)}
+                      onPress={() => onRebook(it)}
                       style={styles.rowActionPrimary}
                       testID={`booking-row-rebook-${it.id}`}
                     >
