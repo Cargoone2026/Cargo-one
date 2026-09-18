@@ -12,8 +12,9 @@
  *     country, country_code, place_id, lat, lng }
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { MapPin, ChevronRight, Search, X } from "lucide-react-native";
+import { Alert, FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { MapPin, ChevronRight, LocateFixed, Search, X } from "lucide-react-native";
+import * as Location from "expo-location";
 import { SharedAPI, GeoSuggestion } from "@cargoone/core";
 import { colors, radius, typography } from "../theme";
 import { Input, Label, Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
@@ -45,12 +46,17 @@ export function AddressAutocomplete({
   placeholder,
   onSelect,
   testID,
+  allowCurrentLocation,
 }: {
   label: string;
   value: PlaceResult | null;
   placeholder?: string;
   onSelect: (place: PlaceResult) => void;
   testID?: string;
+  // R71.16 — opt-in "Use my current location" affordance. Enabled from
+  // the ASAP flow only; normal booking flows do NOT pass this so the
+  // existing manual-entry-only UX stays unchanged for those.
+  allowCurrentLocation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -94,6 +100,7 @@ export function AddressAutocomplete({
       <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
         <AddressPickerModal
           initial={value}
+          allowCurrentLocation={allowCurrentLocation}
           onClose={() => setOpen(false)}
           onCommit={(place) => {
             onSelect(place);
@@ -109,10 +116,12 @@ function AddressPickerModal({
   initial,
   onClose,
   onCommit,
+  allowCurrentLocation,
 }: {
   initial: PlaceResult | null;
   onClose: () => void;
   onCommit: (place: PlaceResult) => void;
+  allowCurrentLocation?: boolean;
 }) {
   const [query, setQuery] = useState(initial?.formatted_address || "");
   const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
@@ -132,6 +141,73 @@ function AddressPickerModal({
     lng: initial?.lng ?? 0,
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [locBusy, setLocBusy] = useState(false);
+
+  // R71.16 — foreground-only location resolution for the ASAP flow.
+  // Uses expo-location (already in dependencies). Requests permission
+  // lazily on the FIRST tap; if denied, shows a single alert and lets
+  // the user fall back to manual entry. Never invokes background
+  // tracking — the Driver background-location code path is entirely
+  // separate and unaffected.
+  const useCurrentLocation = useCallback(async () => {
+    setLocBusy(true);
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      let granted = perm.granted;
+      if (!granted) {
+        const req = await Location.requestForegroundPermissionsAsync();
+        granted = req.granted;
+      }
+      if (!granted) {
+        Alert.alert(
+          "Location permission needed",
+          "To use your current location, allow CargoOne to access Location in iOS Settings. You can still enter the address manually.",
+        );
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = pos.coords;
+      // Reverse-geocode into address components. Falls back to lat/lng
+      // if the reverse fails so the user still gets an actionable value.
+      let rev: Location.LocationGeocodedAddress | null = null;
+      try {
+        const arr = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (Array.isArray(arr) && arr.length) rev = arr[0];
+      } catch {
+        rev = null;
+      }
+      const streetLine = [rev?.streetNumber, rev?.street]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const formatted = [streetLine, rev?.city, rev?.postalCode, rev?.country]
+        .filter((s) => s && String(s).trim().length > 0)
+        .join(", ");
+      const place: PlaceResult = {
+        formatted_address: formatted || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+        address_line: streetLine || undefined,
+        postcode: (rev?.postalCode as any) || undefined,
+        town: (rev?.city as any) || undefined,
+        region: (rev?.region as any) || undefined,
+        country: (rev?.country as any) || undefined,
+        country_code: (rev?.isoCountryCode as any) || undefined,
+        place_id: "",
+        lat: latitude,
+        lng: longitude,
+      };
+      onCommit(place);
+      onClose();
+    } catch (e: any) {
+      Alert.alert(
+        "Could not get location",
+        e?.message || "Please try again in a moment, or enter the address manually.",
+      );
+    } finally {
+      setLocBusy(false);
+    }
+  }, [onClose, onCommit]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -241,6 +317,33 @@ function AddressPickerModal({
               <Text style={[typography.small, { marginTop: 8 }]}>
                 Autocomplete is not yet configured for this environment — you can enter the address manually below.
               </Text>
+            ) : null}
+            {/* R71.16 — Use my current location — ASAP-only, opt-in via prop */}
+            {allowCurrentLocation ? (
+              <Pressable
+                onPress={useCurrentLocation}
+                disabled={locBusy}
+                testID="address-use-current-location"
+                style={({ pressed }) => [
+                  styles.suggestion,
+                  {
+                    marginTop: 8,
+                    borderRadius: radius.md,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    opacity: locBusy ? 0.6 : 1,
+                  },
+                  pressed && { backgroundColor: colors.bgSecondary },
+                ]}
+              >
+                <LocateFixed size={16} color={colors.brand} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, color: colors.ink, fontWeight: "600" }}>
+                    {locBusy ? "Getting your location…" : "Use my current location"}
+                  </Text>
+                  <Text style={typography.small}>Uses your device GPS (foreground only)</Text>
+                </View>
+              </Pressable>
             ) : null}
             <FlatList
               data={suggestions}

@@ -14,6 +14,15 @@ import { BookingRow, EmptyState, Page, PageHeader, SearchInputRow, SegmentedTabs
 import { useShellMenu } from "../components/AppShell";
 
 const PAST = new Set(["completed", "cancelled", "refunded"]);
+// R71.16 — a booking/job is TERMINAL for the Active/Past split if EITHER
+// its status is in PAST OR it carries a cancelled_at timestamp. Relying
+// on status alone missed real-world rows where the backend set
+// cancelled_at but the status transition raced with the fetch (e.g. a
+// "Deposit Paid" row that was subsequently cancelled — the row was
+// visually cancelled but sat in Active).
+function isTerminal(b: any): boolean {
+  return PAST.has(b?.status) || !!b?.cancelled_at;
+}
 
 // R71.14 — a normal (non-ASAP) booking is "unaccepted" when no driver has
 // claimed it yet. That's the exact state where the customer-facing action
@@ -127,13 +136,13 @@ export function BookingsScreen() {
     load();
   }, [load]);
 
-  const active = useMemo(() => items.filter((b) => !PAST.has(b.status)), [items]);
-  const past = useMemo(() => items.filter((b) => PAST.has(b.status)), [items]);
+  const active = useMemo(() => items.filter((b) => !isTerminal(b)), [items]);
+  const past = useMemo(() => items.filter((b) => isTerminal(b)), [items]);
   const bookedJobIds = useMemo(() => new Set(items.map((b) => b.job_id).filter(Boolean)), [items]);
   const openJobs = useMemo(
     () =>
       jobs
-        .filter((j) => ["posted", "accepted"].includes(j.status))
+        .filter((j) => ["posted", "accepted"].includes(j.status) && !isTerminal(j))
         .filter((j) => !bookedJobIds.has(j.id))
         .map((j) => ({ ...j, _isJob: true as const })),
     [jobs, bookedJobIds],
@@ -145,7 +154,7 @@ export function BookingsScreen() {
   const cancelledJobs = useMemo(
     () =>
       jobs
-        .filter((j) => (j.status === "cancelled" || !!(j as any).cancelled_at))
+        .filter((j) => isTerminal(j))
         .filter((j) => !bookedJobIds.has(j.id))
         .map((j) => ({ ...j, _isJob: true as const })),
     [jobs, bookedJobIds],

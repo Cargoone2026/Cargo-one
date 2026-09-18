@@ -5340,6 +5340,32 @@ async def customer_cancel_booking(
                 {"id": b["job_id"]},
                 {"$set": {"status": "cancelled", "cancelled_at": now}},
             )
+        # R71.16 — customer confirmation for the unpaid cancel path. No
+        # driver notice: unpaid means no driver ever committed. Push +
+        # email mirror the paid path for consistency. All wrapped in
+        # try/except so a mailer/push failure never breaks the cancel.
+        try:
+            fresh_b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            job_doc = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0}) if b.get("job_id") else None
+            if fresh_b:
+                fresh_b["job"] = job_doc
+                from services.email import send_booking_cancelled
+                await send_booking_cancelled(
+                    db, user=user, booking=fresh_b,
+                    reason="Customer cancelled",
+                    refund_pending=False,
+                )
+        except Exception:
+            logger.exception("customer_cancel_booking (unpaid) email failed; continuing")
+        try:
+            await push_notification(
+                user["id"],
+                "Booking cancelled",
+                "Your booking has been cancelled.",
+                {"type": "booking_cancelled", "booking_id": booking_id},
+            )
+        except Exception:
+            logger.exception("customer_cancel_booking (unpaid) push failed; continuing")
         return {"ok": True, "booking_id": booking_id, "refund": None}
     except HTTPException:
         raise
@@ -5409,6 +5435,16 @@ async def customer_cancel_job(
              "status": {"$nin": ["cancelled", "completed"]}},
             {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "customer"}},
         )
+        # R71.16 — customer confirmation push for pure-Job cancel.
+        try:
+            await push_notification(
+                user["id"],
+                "Job removed",
+                "Your job has been removed from your active list.",
+                {"type": "job_cancelled", "job_id": job_id},
+            )
+        except Exception:
+            logger.exception("customer_cancel_job push failed; continuing")
         return {"ok": True, "job_id": job_id, "refund": None}
     except HTTPException:
         raise
@@ -5696,6 +5732,24 @@ async def _customer_cancel_and_refund_impl(
                     )
     except Exception:
         logger.exception("customer refund-confirmation email failed; continuing")
+
+    # R71.16 — customer push confirmation. Emails already exist above;
+    # push mirrors them for parity with the unpaid path. Wrapped so a
+    # push failure never breaks the cancel/refund result.
+    try:
+        if refund_state == "succeeded":
+            amt = float(audit_entry.get("amount") or 0)
+            body_push = f"Booking cancelled — refund of £{amt:.2f} processed." if amt > 0 else "Booking cancelled."
+        else:
+            body_push = "Booking cancelled. Refund is being reviewed by support."
+        await push_notification(
+            user["id"],
+            "Booking cancelled",
+            body_push,
+            {"type": "booking_cancelled", "booking_id": booking_id, "refund_state": refund_state},
+        )
+    except Exception:
+        logger.exception("customer cancel push failed; continuing")
 
     return {
         "ok": True,

@@ -546,7 +546,10 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: "absolute",
-    top: 60,
+    // R71.16 — bumped from 60 to 104 so the pulsing status pill
+    // ("Looking for a driver near you") no longer visually overlaps the
+    // AppShell Live Booking banner sitting at the top of the screen.
+    top: 104,
     left: 0,
     right: 0,
     alignItems: "center",

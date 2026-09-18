@@ -265,8 +265,8 @@ export function AsapScreen() {
           </View>
 
           {/* Addresses */}
-          <AddressAutocomplete label="Collection location" value={pickup} onSelect={setPickup} testID="asap-pickup" />
-          <AddressAutocomplete label="Destination" value={dropoff} onSelect={setDropoff} testID="asap-dropoff" />
+          <AddressAutocomplete label="Collection location" value={pickup} onSelect={setPickup} testID="asap-pickup" allowCurrentLocation />
+          <AddressAutocomplete label="Destination" value={dropoff} onSelect={setDropoff} testID="asap-dropoff" allowCurrentLocation />
 
           {/* Route preview */}
           {pickup && dropoff ? (
