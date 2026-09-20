@@ -46,10 +46,21 @@ export function initPushForegroundHandler() {
     handleNotification: async () => ({
       // Show the OS banner + sound even while the app is foregrounded so
       // the customer/driver still sees status changes without in-app polling.
+      // R71.16.1 — iOS 14+ deprecated `.alert`; the modern flags are
+      // `shouldShowBanner` + `shouldShowList`. expo-notifications 0.28
+      // (SDK 51) still keys on `shouldShowAlert` in its native bridge
+      // and internally maps to UNNotificationPresentationOptionAlert,
+      // which Apple maps back to banner|list on iOS 14+. The extra
+      // banner/list flags are additive and forward-compatible with
+      // expo-notifications 0.29+ where they are read directly by the
+      // native module. Cast `as any` because 0.28's typings don't yet
+      // include the new keys.
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
-    }),
+      shouldShowBanner: true,
+      shouldShowList: true,
+    } as any),
   });
 }
 

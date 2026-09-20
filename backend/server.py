@@ -5569,6 +5569,26 @@ async def _customer_cancel_and_refund_impl(
     session_id = b.get("stripe_session_id")
     txn = await db.payment_transactions.find_one({"session_id": session_id}) if session_id else None
     pi_id = (txn or {}).get("payment_intent_id")
+
+    # R71.16.1 — Native PaymentSheet bookings (Apple Pay, native card sheet)
+    # bypass Stripe Checkout Sessions entirely: `stripe_session_id` is null
+    # and the PaymentIntent id is stored directly on the booking as
+    # `stripe_payment_intent_id` by /bookings/{id}/deposit-intent. Fall
+    # back to that field so the refund path works uniformly for both
+    # Checkout Session bookings and native PaymentIntent bookings.
+    if not pi_id:
+        pi_id = b.get("stripe_payment_intent_id")
+        if pi_id and not txn:
+            # Look up the txn by payment_intent_id so the audit trail
+            # (payment_transactions.refunds) is still appended below.
+            txn = await db.payment_transactions.find_one(
+                {"payment_intent_id": pi_id}, {"_id": 0},
+            )
+            if txn:
+                # Keep session_id in sync so the txn refund audit block
+                # below (which keys by session_id) still fires.
+                session_id = txn.get("session_id")
+
     refund_id = None
     refund_state = "failed"
     stripe_err: str | None = None
