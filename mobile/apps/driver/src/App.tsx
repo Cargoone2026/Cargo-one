@@ -124,7 +124,18 @@ export function App() {
     // invisible).
     return <View style={{ flex: 1, backgroundColor: "#111111" }} testID="driver-loading-screen" />;
   }
-  const approved = (user as any)?.approval_state === "approved" || (user as any)?.verified_driver;
+  // R71.16.3 (Driver P0-b) — Backend stores approval status on
+  // `user.status`. Match the web Driver Dashboard's gate: only
+  // `status === "active"` drivers get the full app; every other
+  // status (`pending`, `changes_requested`, `suspended`) routes to
+  // the AwaitingApproval screen where the correct message + resubmit
+  // action are rendered. Legacy `approval_state === "approved"` and
+  // `verified_driver` are kept as fallbacks for pre-migration users.
+  const status = (user as any)?.status as string | undefined;
+  const approved =
+    status === "active" ||
+    (user as any)?.approval_state === "approved" ||
+    (user as any)?.verified_driver === true;
 
   return (
     <SafeAreaProvider>

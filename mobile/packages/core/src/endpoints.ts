@@ -466,6 +466,21 @@ export const DriverAPI = {
   resubmitVerification: () =>
     api<{ ok: boolean }>("/auth/me/resubmit-verification", { method: "POST" }),
 
+  // ── Password reset ─────────────────────────────────────────────────
+  // R71.16.3 (Driver P0-b) — the shared `requestPasswordReset` helper
+  // in @cargoone/core hits `/auth/request-password-reset`, but the
+  // backend route is `/auth/forgot-password` (see server.py:1083, and
+  // the web page frontend/src/pages/auth/ForgotPassword.jsx which
+  // uses that path). Provide the correct wrapper here so the Driver
+  // password-reset screen can call it without changing shared code
+  // (which would leak into the Customer app).
+  requestPasswordReset: (email: string) =>
+    api<{ ok: boolean } | Record<string, unknown>>("/auth/forgot-password", {
+      method: "POST",
+      body: { email: email.trim().toLowerCase() },
+      auth: false,
+    }),
+
   // ── Booking-fee preview (driver-charge → customer total) ───────────
   feePreview: (driverCharge: number) =>
     api<FeePreview>(`/booking-fees/preview?driver_charge=${driverCharge}`),

@@ -16,6 +16,13 @@ export interface User {
   role: UserRole;
   verified_driver?: boolean;
   approval_state?: "pending" | "approved" | "changes_requested" | "suspended";
+  // R71.16.3 (Driver P0-b) — Backend actually persists driver approval
+  // status on `user.status` (values: "active" | "pending" |
+  // "changes_requested" | "suspended"). Web reads this; mobile needs it
+  // for the AwaitingApproval flow and the Home account-state banners.
+  status?: "active" | "pending" | "changes_requested" | "suspended" | string;
+  changes_requested_reason?: string | null;
+  changes_requested_doc_types?: string[];
   rating?: number;
   review_count?: number;
   total_jobs?: number;

@@ -13,9 +13,18 @@ export interface RegisterInput {
   email: string;
   password: string;
   name: string;
-  phone?: string;
+  phone?: string | null;
   role: UserRole;
   vehicle?: { key: string; make?: string; reg?: string };
+  // R71.16.3 (Driver P0-b) — optional address fields captured on the
+  // web register form. Backend accepts them regardless of role. All
+  // nullable so customer flows (which never send them) stay identical.
+  address_line1?: string | null;
+  address_line2?: string | null;
+  town?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  country?: string | null;
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
