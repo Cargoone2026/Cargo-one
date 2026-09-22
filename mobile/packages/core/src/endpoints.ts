@@ -192,6 +192,25 @@ export interface DriverLiveStatus {
   last_heartbeat_at?: string | null;
   active_booking_id?: string | null;
   offer_count?: number;
+  // R71.16.6 (Driver P1-c) — the backend's /driver/live/status actually
+  // returns these snake_case keys (see frontend/src/pages/portal/driver/Live.jsx).
+  // Kept optional so both shapes typecheck.
+  live_online?: boolean;
+  live_online_since?: string | null;
+  live_lat?: number | null;
+  live_lng?: number | null;
+}
+
+export interface DriverLiveOnlineResponse {
+  ok?: boolean;
+  live_online?: boolean;
+  missed_offers_count?: number;
+  [k: string]: unknown;
+}
+
+export interface DriverLiveOffersResponse {
+  offers: Job[];
+  reason?: string | null;
 }
 
 export interface DriverBid {
@@ -366,18 +385,18 @@ export const DriverAPI = {
 
   // ── Live Mode (ASAP dispatch) ──────────────────────────────────────
   liveStatus: () => api<DriverLiveStatus>("/driver/live/status"),
-  goOnline: (lat: number, lng: number) =>
-    api<DriverLiveStatus>("/driver/live/online", {
+  goOnline: (lat: number, lng: number, accuracy_m?: number) =>
+    api<DriverLiveOnlineResponse>("/driver/live/online", {
       method: "POST",
-      body: { lat, lng },
+      body: { lat, lng, accuracy_m },
     }),
   goOffline: () => api<DriverLiveStatus>("/driver/live/offline", { method: "POST" }),
-  heartbeat: (lat: number, lng: number) =>
+  heartbeat: (lat: number, lng: number, accuracy_m?: number) =>
     api<{ ok: boolean }>("/driver/live/heartbeat", {
       method: "POST",
-      body: { lat, lng },
+      body: { lat, lng, accuracy_m },
     }),
-  asapOffers: () => api<Job[]>("/driver/live/offers"),
+  asapOffers: () => api<DriverLiveOffersResponse>("/driver/live/offers"),
   // Kept for backwards-compatibility with existing screens that still
   // call DriverAPI.pushLocation(lat, lng). Routes to the correct
   // /driver/live/heartbeat endpoint.
