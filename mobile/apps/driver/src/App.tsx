@@ -22,6 +22,8 @@ import { PasskeysScreen } from "./screens/Passkeys";
 import { MyJobsScreen } from "./screens/MyJobs";
 import { FleetScreen } from "./screens/Fleet";
 import { ProfileScreen } from "./screens/Profile";
+import { NotificationsScreen } from "./screens/Notifications";
+import { DocumentsScreen } from "./screens/Documents";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
 import {
@@ -50,6 +52,8 @@ export type RootStackParamList = {
   JobDetail: { jobId: string };
   ActiveBooking: { bookingId: string };
   Passkeys: undefined;
+  Notifications: undefined;
+  Documents: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -167,6 +171,8 @@ export function App() {
                 <Stack.Screen name="JobDetail" component={JobDetailScreen} />
                 <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
                 <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                <Stack.Screen name="Documents" component={DocumentsScreen} />
               </>
             )}
           </Stack.Navigator>

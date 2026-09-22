@@ -338,6 +338,12 @@ export const DriverAPI = {
 
   // ── Dashboard + Earnings (driven from /driver/dashboard) ───────────
   dashboard: () => api<DriverDashboard>("/driver/dashboard"),
+  // R71.16.4 (Driver P0-c) — Global unread-message count for the
+  // dashboard message-chime + inbox badge. Matches the endpoint the
+  // web Dashboard.jsx polls every 15 s. Add-only on DriverAPI so
+  // shared core / CustomerAPI are not affected.
+  messagesUnreadCount: () =>
+    api<{ total: number }>("/messages/unread-count").catch(() => ({ total: 0 })),
   // Convenience — the web Earnings page re-uses the `earnings` block
   // from /driver/dashboard rather than a dedicated endpoint. Kept
   // separate here so screens can request just what they need without
