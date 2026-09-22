@@ -51,12 +51,21 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Camera,
   CheckCircle2,
+  Car,
+  HandHelping,
   ImagePlus,
+  Info,
   MapPin,
   MessageCircle,
+  Package,
+  Ruler,
+  Scale,
   Send,
   ShieldCheck,
   Star,
+  StickyNote,
+  Truck,
+  Wrench,
   X,
   AlertTriangle,
 } from "lucide-react-native";
@@ -257,6 +266,10 @@ export function ActiveBookingScreen({ route }: P) {
                   {job?.dropoff_address ? <SummaryRow label="Delivery" value={job.dropoff_address} /> : null}
                 </View>
               </View>
+
+              <AcceptanceInfoBlock job={job} />
+              <JobExtrasBlock job={job} />
+              <CustomerPhotosBlock photos={Array.isArray(job?.photos) ? job.photos : []} />
 
               {next ? <PrimaryButton title={next.label} onPress={advance} testID="progress-status" /> : null}
               {podEligible ? (
@@ -1468,6 +1481,335 @@ const reviewStyles = StyleSheet.create({
   replyBox: {
     marginTop: 12,
     padding: 10,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgSecondary,
+  },
+});
+
+
+/* ------------------------------------------------------------------ */
+/* Booking Summary Parity (P1-h) — AcceptanceInfo + JobExtras + Photos  */
+/* Ports frontend/src/components/ui-portal/AcceptanceInfo.jsx +          */
+/* JobExtras.jsx faithfully. Renders nothing when no data — mirrors     */
+/* the web guards.                                                     */
+/* ------------------------------------------------------------------ */
+
+function humaniseCategory(raw: any): string {
+  if (!raw) return "";
+  const s = String(raw).replace(/_/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function AcceptanceInfoBlock({ job }: { job: any }) {
+  if (!job || typeof job !== "object") return null;
+  const isRecovery =
+    String(job.service_type || "").toLowerCase() === "breakdown_recovery" ||
+    String(job.category || "").toLowerCase().includes("recovery") ||
+    String(job.category || "").toLowerCase().includes("breakdown");
+  const vehicleLabel = job.recommended_vehicle || job.vehicle_label;
+  const v = job.vehicle_details || {};
+  const transportItem = job.transport_category ? humaniseCategory(job.transport_category) : null;
+  const description = String(job.transport_description || "").trim();
+  const recoveryVehicleName = [v.make, v.model].filter(Boolean).join(" ").trim();
+  const fault = v.condition && v.condition !== "unknown" ? String(v.condition).replace(/_/g, " ") : "";
+  const registration = v.registration || "";
+  const hasAny =
+    vehicleLabel || transportItem || description || recoveryVehicleName || fault || registration;
+  if (!hasAny) return null;
+
+  return (
+    <View style={acceptanceStyles.card} testID="driver-booking-accept-info">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Info size={12} color={colors.inkMuted} />
+        <Text style={typography.micro}>Before you accept</Text>
+      </View>
+      {vehicleLabel ? (
+        <AcceptanceRow
+          Icon={Truck}
+          label={isRecovery ? "Recovery Vehicle Required" : "Suitable Vehicle"}
+          value={vehicleLabel}
+          testID="driver-booking-accept-vehicle"
+        />
+      ) : null}
+      {!isRecovery && transportItem ? (
+        <AcceptanceRow Icon={Package} label="Transport Item" value={transportItem} testID="driver-booking-accept-transport-item" />
+      ) : null}
+      {!isRecovery && description ? (
+        <AcceptanceRow Icon={Info} label="Description" value={description} testID="driver-booking-accept-description" />
+      ) : null}
+      {isRecovery && (recoveryVehicleName || registration) ? (
+        <AcceptanceRow
+          Icon={Car}
+          label="Vehicle to Recover"
+          value={[recoveryVehicleName, registration ? `· ${registration}` : ""].filter(Boolean).join(" ")}
+          testID="driver-booking-accept-recovery-vehicle"
+        />
+      ) : null}
+      {isRecovery && fault ? (
+        <AcceptanceRow
+          Icon={AlertTriangle}
+          label="Fault"
+          value={fault.charAt(0).toUpperCase() + fault.slice(1)}
+          testID="driver-booking-accept-fault"
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function AcceptanceRow({
+  Icon,
+  label,
+  value,
+  testID,
+}: {
+  Icon: any;
+  label: string;
+  value: string;
+  testID: string;
+}) {
+  return (
+    <View style={acceptanceStyles.row} testID={testID}>
+      <View style={acceptanceStyles.iconWrap}>
+        <Icon size={14} color={colors.brand} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.6, color: colors.inkMuted }}>
+          {label.toUpperCase()}
+        </Text>
+        <Text style={{ marginTop: 2, fontSize: 14, fontWeight: "600", color: colors.ink }}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const acceptanceStyles = StyleSheet.create({
+  card: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    gap: 12,
+  },
+  row: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+interface Chip {
+  key: string;
+  Icon: any;
+  label: string;
+  tone: "neutral" | "amber" | "emerald";
+  testID: string;
+}
+
+function JobExtrasBlock({ job }: { job: any }) {
+  if (!job || typeof job !== "object") return null;
+
+  const chips: Chip[] = [];
+  if (job.needs_forklift)
+    chips.push({ key: "forklift", Icon: Wrench, tone: "amber", label: "Forklift / loading equipment required", testID: "jobextras-forklift" });
+  if (job.needs_loading_help)
+    chips.push({ key: "loading", Icon: HandHelping, tone: "amber", label: "Loading assistance", testID: "jobextras-loading" });
+  if (job.weight_kg)
+    chips.push({ key: "weight", Icon: Scale, tone: "neutral", label: `${job.weight_kg} kg`, testID: "jobextras-weight" });
+  if (job.item_count)
+    chips.push({
+      key: "items",
+      Icon: Package,
+      tone: "neutral",
+      label: `${job.item_count} item${job.item_count > 1 ? "s" : ""}`,
+      testID: "jobextras-items",
+    });
+  const dims = [job.dimensions_l_m, job.dimensions_w_m, job.dimensions_h_m].filter(Boolean);
+  if (dims.length)
+    chips.push({
+      key: "dims",
+      Icon: Ruler,
+      tone: "neutral",
+      label: `${dims.map((d: any) => `${d}m`).join(" × ")} L·W·H`,
+      testID: "jobextras-dims",
+    });
+  if (job.recommended_vehicle || job.vehicle_label)
+    chips.push({
+      key: "vehicle",
+      Icon: Truck,
+      tone: "neutral",
+      label: job.recommended_vehicle || job.vehicle_label,
+      testID: "jobextras-vehicle",
+    });
+  if (job.transport_category)
+    chips.push({
+      key: "cargo",
+      Icon: Package,
+      tone: "emerald",
+      label: `Cargo: ${String(job.transport_category).replace(/_/g, " ")}`,
+      testID: "jobextras-transport-category",
+    });
+
+  const v = job.vehicle_details;
+  const vehicleBits: string[] = [];
+  if (v && typeof v === "object") {
+    if (v.make || v.model) {
+      vehicleBits.push(
+        [`${v.make || ""} ${v.model || ""}`.trim(), v.registration ? `· ${v.registration}` : ""]
+          .filter(Boolean)
+          .join(" "),
+      );
+    }
+    if (v.condition && v.condition !== "unknown") vehicleBits.push(String(v.condition).replace(/_/g, " "));
+    (["rolls", "steers", "brakes"] as const).forEach((k) => {
+      if (v[k] && v[k] !== "unknown") vehicleBits.push(`${k}: ${v[k]}`);
+    });
+  }
+
+  const note = [
+    String(job.customer_note || "").trim(),
+    job.transport_description ? `Cargo details: ${String(job.transport_description).trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (chips.length === 0 && vehicleBits.length === 0 && !note) return null;
+
+  return (
+    <View style={extrasStyles.card} testID="job-extras">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Info size={12} color={colors.inkMuted} />
+        <Text style={typography.micro}>Booking details</Text>
+      </View>
+
+      {chips.length > 0 ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {chips.map((c) => (
+            <ChipView key={c.key} c={c} />
+          ))}
+        </View>
+      ) : null}
+
+      {vehicleBits.length > 0 ? (
+        <View style={extrasStyles.recoveryBox} testID="jobextras-recovery">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+            <Car size={14} color="#92400E" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#92400E" }}>
+              Vehicle recovery details
+            </Text>
+          </View>
+          {vehicleBits.map((s, i) => (
+            <Text key={i} style={{ fontSize: 12, color: "#78350F", marginLeft: 12 }}>
+              • {s}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {note ? (
+        <View style={extrasStyles.noteBox} testID="jobextras-note">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+            <StickyNote size={12} color={colors.inkMuted} />
+            <Text style={{ fontSize: 11, fontWeight: "700", letterSpacing: 0.5, color: colors.inkMuted }}>
+              CUSTOMER NOTE
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, color: colors.ink, lineHeight: 19 }}>{note}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ChipView({ c }: { c: Chip }) {
+  const tones = {
+    neutral: { bg: "#F5F5F5", fg: "#171717", bd: "#E5E5E5" },
+    amber: { bg: "#FEF3C7", fg: "#92400E", bd: "#FDE68A" },
+    emerald: { bg: "#D1FAE5", fg: "#065F46", bd: "#A7F3D0" },
+  } as const;
+  const t = tones[c.tone];
+  return (
+    <View
+      style={[extrasStyles.chip, { backgroundColor: t.bg, borderColor: t.bd }]}
+      testID={c.testID}
+    >
+      <c.Icon size={12} color={t.fg} />
+      <Text style={{ fontSize: 12, fontWeight: "600", color: t.fg }}>{c.label}</Text>
+    </View>
+  );
+}
+
+const extrasStyles = StyleSheet.create({
+  card: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    gap: 12,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  recoveryBox: {
+    padding: 10,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
+  },
+  noteBox: {
+    padding: 10,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.bgSecondary,
+  },
+});
+
+function CustomerPhotosBlock({ photos }: { photos: string[] }) {
+  if (!photos || photos.length === 0) return null;
+  return (
+    <View style={photosStyles.card} testID="driver-booking-photos-block">
+      <Text style={typography.micro}>Customer photos</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+        {photos.slice(0, 12).map((src, i) => (
+          <Image
+            key={`${i}-${(src || "").slice(0, 24)}`}
+            source={{ uri: src }}
+            style={photosStyles.thumb}
+            resizeMode="cover"
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const photosStyles = StyleSheet.create({
+  card: {
+    padding: 16,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  thumb: {
+    width: 88,
+    height: 88,
     borderRadius: radius.sm,
     backgroundColor: colors.bgSecondary,
   },

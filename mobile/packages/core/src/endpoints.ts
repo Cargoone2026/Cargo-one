@@ -472,6 +472,14 @@ export const DriverAPI = {
   // ── Reviews ─────────────────────────────────────────────────────────
   myReviews: (userId: string) =>
     api<Review[]>(`/users/${userId}/reviews`).catch(() => [] as Review[]),
+  // ── Profile / auth (driver-namespace passthrough to shared endpoints)
+  updateProfile: (patch: Record<string, unknown>) =>
+    api<any>("/auth/me", { method: "PUT", body: patch }),
+  changePassword: (current_password: string, new_password: string) =>
+    api<{ ok: boolean; access_token?: string; token_type?: string }>(
+      "/auth/me/change-password",
+      { method: "POST", body: { current_password, new_password } },
+    ),
   // R71.16.11 (Driver P1-g) — driver-side review submission + fetch of
   // own review for a completed booking. Backend contracts verified:
   //   POST /bookings/{id}/review  → { rating, comment, photos: [] }
