@@ -270,9 +270,10 @@ export interface DriverVehicle {
 export interface DriverDocument {
   id: string;
   doc_type: string;
-  status?: "pending" | "verified" | "rejected" | string;
+  status?: "pending" | "approved" | "rejected" | string;
   base64?: string;
   url?: string;
+  uploaded_at?: string;
   created_at?: string;
   reviewed_at?: string | null;
   rejection_reason?: string | null;
@@ -306,7 +307,7 @@ export interface PODUploadPayload {
 }
 
 export interface DriverCancelReason {
-  code: string;
+  key: string;
   label: string;
 }
 
@@ -384,9 +385,11 @@ export const DriverAPI = {
       today: 0, week: 0, month: 0, all_time: 0, completed_count: 0,
     }),
   myCancellations: () =>
-    api<DriverCancellationRow[]>("/driver/cancellations/mine").catch(
-      () => [] as DriverCancellationRow[],
-    ),
+    api<{ cancellations: DriverCancellationRow[]; count?: number } | DriverCancellationRow[]>(
+      "/driver/cancellations/mine",
+    )
+      .then((r) => (Array.isArray(r) ? r : r?.cancellations ?? []))
+      .catch(() => [] as DriverCancellationRow[]),
 
   // ── Live Mode (ASAP dispatch) ──────────────────────────────────────
   liveStatus: () => api<DriverLiveStatus>("/driver/live/status"),
@@ -446,20 +449,24 @@ export const DriverAPI = {
       method: "POST",
       body: { lat, lng },
     }).catch(() => ({ ok: false })),
-  // Driver-initiated cancellation (uses the existing backend endpoint
-  // + reason list; the customer refund/cancel path is not touched).
+  // ── Driver-initiated cancellation ──────────────────────────────────
+  // Backend contract (server.py:5905, 6084):
+  //   GET  /driver/cancel-reasons → { reasons: [{ key, label }] }
+  //   POST /driver/bookings/{id}/cancel with body { reason, explanation }
   cancelReasons: () =>
-    api<DriverCancelReason[]>("/driver/cancel-reasons").catch(
-      () => [] as DriverCancelReason[],
-    ),
+    api<{ reasons: DriverCancelReason[] } | DriverCancelReason[]>(
+      "/driver/cancel-reasons",
+    )
+      .then((r) => (Array.isArray(r) ? r : r?.reasons ?? []))
+      .catch(() => [] as DriverCancelReason[]),
   cancelBooking: (
     bookingId: string,
-    reasonCode: string,
-    note?: string,
+    reason: string,
+    explanation?: string,
   ) =>
     api<{ ok: boolean }>(`/driver/bookings/${bookingId}/cancel`, {
       method: "POST",
-      body: { reason_code: reasonCode, note },
+      body: { reason, explanation: explanation?.trim() || null },
     }),
 
   // ── Reviews ─────────────────────────────────────────────────────────
@@ -491,8 +498,11 @@ export const DriverAPI = {
     api<{ ok: boolean }>(`/driver/vehicles/${id}`, { method: "DELETE" }),
 
   // ── Documents / verification ───────────────────────────────────────
+  // Backend returns { required: string[], documents: DriverDocument[] }.
   listDocs: () =>
-    api<DriverDocument[]>("/users/me/documents").catch(() => [] as DriverDocument[]),
+    api<{ required: string[]; documents: DriverDocument[] }>(
+      "/users/me/documents",
+    ).catch(() => ({ required: [] as string[], documents: [] as DriverDocument[] })),
   submitDoc: (payload: DocumentUploadPayload) =>
     api<DriverDocument>("/users/me/documents", {
       method: "POST",

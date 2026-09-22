@@ -36,6 +36,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal as RNModal,
   Platform,
   Pressable,
   ScrollView,
@@ -56,16 +57,18 @@ import {
   Send,
   ShieldCheck,
   X,
+  AlertTriangle,
 } from "lucide-react-native";
 import {
   Booking,
   DriverAPI,
+  DriverCancelReason,
   DriverMessage,
   POD,
   SharedAPI,
   TrackingResponse,
 } from "@cargoone/core";
-import { Page, PageHeader, PrimaryButton, SegmentedTabs, StatusPill, SummaryRow } from "../ui";
+import { Page, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatusPill, SummaryRow } from "../ui";
 import { colors, radius, typography } from "../theme";
 import { ActiveJobMap } from "../ActiveJobMap";
 import { useAuth } from "../AuthContext";
@@ -142,6 +145,9 @@ export function ActiveBookingScreen({ route }: P) {
   const paid = b.payment_status === "paid";
   const podEligible = paid && b.status === "delivered";
   const podShown = paid && ["delivered", "pod_uploaded", "completed"].includes(b.status);
+  const cancelEligible =
+    paid && !["delivered", "pod_uploaded", "completed", "cancelled", "cancelled_by_driver"].includes(b.status);
+  const [showCancel, setShowCancel] = useState(false);
 
   async function advance() {
     if (!next) return;
@@ -229,6 +235,25 @@ export function ActiveBookingScreen({ route }: P) {
                   testID="go-to-pod-tab"
                 />
               ) : null}
+              {cancelEligible ? (
+                <Pressable
+                  onPress={() => setShowCancel(true)}
+                  testID="driver-open-cancel-modal"
+                  style={({ pressed }) => [
+                    {
+                      marginTop: 4,
+                      padding: 12,
+                      borderRadius: radius.base,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: pressed ? "#FEF2F2" : colors.bg,
+                      alignItems: "center",
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.error }}>Cancel this job</Text>
+                </Pressable>
+              ) : null}
             </View>
           </ScrollView>
         ) : tab === "chat" ? (
@@ -237,6 +262,15 @@ export function ActiveBookingScreen({ route }: P) {
           <PODPane bookingId={b.id} canSubmit={podEligible} onUploaded={load} />
         )}
       </KeyboardAvoidingView>
+      <DriverCancelModal
+        open={showCancel}
+        bookingId={b.id}
+        onClose={() => setShowCancel(false)}
+        onCancelled={() => {
+          setShowCancel(false);
+          load();
+        }}
+      />
     </Page>
   );
 }
@@ -800,5 +834,296 @@ const podStyles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: colors.border,
     backgroundColor: colors.bg,
+  },
+});
+
+
+/* ------------------------------------------------------------------ */
+/* DriverCancelModal — mirrors web components/ui-portal/DriverCancelModal.jsx */
+/* ------------------------------------------------------------------ */
+
+function DriverCancelModal({
+  open,
+  bookingId,
+  onClose,
+  onCancelled,
+}: {
+  open: boolean;
+  bookingId: string;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const [reasons, setReasons] = useState<DriverCancelReason[]>([]);
+  const [reason, setReason] = useState("");
+  const [explanation, setExplanation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [step, setStep] = useState<"pick" | "confirm">("pick");
+
+  useEffect(() => {
+    if (!open) return;
+    setStep("pick");
+    setReason("");
+    setExplanation("");
+    setErr(null);
+    (async () => {
+      const rs = await DriverAPI.cancelReasons();
+      setReasons(
+        Array.isArray(rs) && rs.length > 0
+          ? rs
+          : [
+              // Fallback list — kept in sync with the server-side DRIVER_CANCEL_REASONS dict.
+              { key: "vehicle_issue", label: "Vehicle issue" },
+              { key: "breakdown", label: "Breakdown" },
+              { key: "unable_to_complete", label: "Unable to safely complete the job" },
+              { key: "vehicle_unsuitable", label: "Vehicle unsuitable" },
+              { key: "customer_or_location", label: "Customer/location issue" },
+              { key: "personal_emergency", label: "Personal emergency" },
+              { key: "route_or_access", label: "Route/access issue" },
+              { key: "other", label: "Other" },
+            ],
+      );
+    })();
+  }, [open]);
+
+  const needsExplanation = reason === "other";
+  const canProceed = !!reason && (!needsExplanation || explanation.trim().length > 0);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await DriverAPI.cancelBooking(bookingId, reason, explanation);
+      onCancelled();
+    } catch (e: any) {
+      setErr(e?.message || "Could not cancel this booking. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <RNModal
+      visible={open}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={cancelStyles.backdrop}>
+        <View style={cancelStyles.sheet} testID="driver-cancel-modal">
+          <View style={cancelStyles.header}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.ink, flex: 1 }}>
+              {step === "confirm" ? "Confirm cancellation" : "Cancel this job?"}
+            </Text>
+            <Pressable
+              onPress={onClose}
+              testID="driver-cancel-modal-close"
+              hitSlop={8}
+              style={cancelStyles.closeBtn}
+            >
+              <X size={18} color={colors.inkMuted} />
+            </Pressable>
+          </View>
+
+          {step === "pick" ? (
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+              <Text style={{ fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+                Please choose the reason that best fits. This helps us route the customer to the right next step and keeps your account in good standing.
+              </Text>
+              <View style={{ gap: 8 }} testID="driver-cancel-reasons-list">
+                {reasons.map((r) => {
+                  const on = reason === r.key;
+                  return (
+                    <Pressable
+                      key={r.key}
+                      onPress={() => setReason(r.key)}
+                      testID={`driver-cancel-reason-${r.key}`}
+                      style={[
+                        cancelStyles.reasonRow,
+                        on && { borderColor: colors.brand, backgroundColor: "#FEF2F2" },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          cancelStyles.radio,
+                          on ? { borderColor: colors.brand } : { borderColor: colors.border },
+                        ]}
+                      >
+                        {on ? <View style={cancelStyles.radioDot} /> : null}
+                      </View>
+                      <Text style={{ fontSize: 14, color: colors.ink, flex: 1 }}>{r.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {needsExplanation ? (
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.ink, marginBottom: 6 }}>
+                    Please explain briefly
+                  </Text>
+                  <TextInput
+                    value={explanation}
+                    onChangeText={setExplanation}
+                    placeholder="A short explanation helps our team understand what happened."
+                    placeholderTextColor={colors.inkFaint}
+                    multiline
+                    maxLength={500}
+                    testID="driver-cancel-explanation-input"
+                    style={{
+                      minHeight: 80,
+                      textAlignVertical: "top",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: radius.base,
+                      padding: 12,
+                      fontSize: 13,
+                      color: colors.ink,
+                      backgroundColor: colors.bg,
+                    }}
+                  />
+                </View>
+              ) : null}
+
+              {err ? (
+                <Text style={{ fontSize: 12, color: colors.error }} testID="driver-cancel-error">
+                  {err}
+                </Text>
+              ) : null}
+
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                <SecondaryButton
+                  title="Never mind"
+                  onPress={onClose}
+                  testID="driver-cancel-modal-back"
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title="Continue"
+                  onPress={() => setStep("confirm")}
+                  disabled={!canProceed}
+                  testID="driver-cancel-modal-continue"
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </ScrollView>
+          ) : (
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+              <View style={cancelStyles.warnBox}>
+                <AlertTriangle size={16} color="#B45309" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#92400E" }}>
+                    Please cancel only when necessary
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#92400E", marginTop: 4, lineHeight: 18 }}>
+                    Frequent or invalid cancellations may affect your driver account and could result in suspension or termination after manual review. Every cancellation is recorded with the reason you provide.
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 13, color: colors.ink }}>
+                Reason: <Text style={{ fontWeight: "700" }}>{reasons.find((r) => r.key === reason)?.label}</Text>
+              </Text>
+              {explanation ? (
+                <Text style={{ fontSize: 12, fontStyle: "italic", color: colors.inkMuted }}>
+                  "{explanation}"
+                </Text>
+              ) : null}
+              <Text style={{ fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+                Once you confirm, this booking will be released and other eligible drivers may accept it. You will not be able to re-accept this same booking.
+              </Text>
+              {err ? (
+                <Text style={{ fontSize: 12, color: colors.error }} testID="driver-cancel-final-error">
+                  {err}
+                </Text>
+              ) : null}
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                <SecondaryButton
+                  title="Back"
+                  onPress={() => setStep("pick")}
+                  testID="driver-cancel-modal-edit"
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title={busy ? "Cancelling…" : "Cancel this booking"}
+                  onPress={submit}
+                  loading={busy}
+                  disabled={busy}
+                  variant="danger"
+                  testID="driver-cancel-modal-confirm"
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </RNModal>
+  );
+}
+
+const cancelStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    maxHeight: "88%",
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bgSecondary,
+  },
+  reasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  radio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.brand,
+  },
+  warnBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 12,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    backgroundColor: "#FFFBEB",
   },
 });
