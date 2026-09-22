@@ -138,7 +138,165 @@ export const CustomerAPI = {
 
 // ── Driver ──────────────────────────────────────────────────────────────
 
+/**
+ * R71.16.2 (Driver P0-a) — response types for the driver endpoints as
+ * they are actually returned by the existing backend. Kept as
+ * best-effort structural types: fields the mobile UI does not read
+ * yet are typed as `unknown | undefined` rather than `any` so drift
+ * shows up at compile-time.
+ */
+export interface DriverDashboard {
+  user?: {
+    id?: string;
+    name?: string;
+    rating?: number;
+    review_count?: number;
+    changes_requested_reason?: string | null;
+    changes_requested_doc_types?: string[];
+    status?: string;
+  };
+  earnings?: DriverEarningsSummary;
+  bids?: { active?: number; accepted?: number };
+  fleet?: {
+    count?: number;
+    active_count?: number;
+    capabilities?: string[];
+    vehicles?: DriverVehicle[];
+  };
+  jobs?: {
+    nearby_count?: number;
+    active_count?: number;
+    upcoming_count?: number;
+    upcoming?: Booking[];
+  };
+  verification?: {
+    account_status?: string;
+    docs_verified?: number;
+    docs_pending?: number;
+    docs_rejected?: number;
+  };
+}
+
+export interface DriverEarningsSummary {
+  today?: number;
+  week?: number;
+  month?: number;
+  all_time?: number;
+  completed_count?: number;
+}
+
+export interface DriverLiveStatus {
+  online?: boolean;
+  last_lat?: number | null;
+  last_lng?: number | null;
+  last_heartbeat_at?: string | null;
+  active_booking_id?: string | null;
+  offer_count?: number;
+}
+
+export interface DriverBid {
+  id: string;
+  job_id: string;
+  amount: number;
+  message?: string;
+  status?: "pending" | "accepted" | "rejected" | string;
+  is_winning?: boolean;
+  created_at?: string;
+  job?: Partial<Job>;
+}
+
+export interface DriverMessage {
+  id: string;
+  booking_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at?: string | null;
+  delivered_at?: string | null;
+  has_photo?: boolean;
+  moderated?: boolean;
+  mine?: boolean;
+}
+
+export interface DriverNotification {
+  id: string;
+  user_id?: string;
+  title: string;
+  body: string;
+  data?: {
+    booking_id?: string;
+    job_id?: string;
+    type?: string;
+    [k: string]: unknown;
+  };
+  read?: boolean;
+  read_at?: string | null;
+  created_at: string;
+}
+
+export interface DriverVehicle {
+  id: string;
+  vehicle_type_key?: string;
+  vehicle_type_name?: string;
+  registration?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  colour?: string;
+  capabilities?: string[];
+  is_default?: boolean;
+  status?: "active" | "pending" | "rejected" | string;
+}
+
+export interface DriverDocument {
+  id: string;
+  doc_type: string;
+  status?: "pending" | "verified" | "rejected" | string;
+  base64?: string;
+  url?: string;
+  created_at?: string;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+}
+
+export interface DocumentUploadPayload {
+  doc_type: string;
+  base64: string;
+  filename?: string;
+  content_type?: string;
+}
+
+export interface POD {
+  id?: string;
+  booking_id: string;
+  photos?: string[];       // base64 or URLs
+  signature?: string;      // base64 or URL
+  note?: string;
+  captured_at?: string;
+}
+
+export interface PODUploadPayload {
+  photos?: string[];       // base64
+  signature?: string;      // base64
+  note?: string;
+}
+
+export interface DriverCancelReason {
+  code: string;
+  label: string;
+}
+
+export interface DriverCancellationRow {
+  booking_id: string;
+  reason_code?: string;
+  note?: string | null;
+  at: string;
+  fee_deducted?: number;
+  refund_owed?: number;
+}
+
 export const DriverAPI = {
+  // ── Available jobs / job detail ────────────────────────────────────
   nearbyJobs: (lat?: number, lng?: number, radius = 250) => {
     const q =
       lat != null && lng != null
@@ -147,37 +305,174 @@ export const DriverAPI = {
     return api<Job[]>(`/jobs/nearby${q}`);
   },
   jobDetail: (jobId: string) => api<Job>(`/jobs/${jobId}`),
-  submitBid: (jobId: string, amount: number, message?: string, etaHours?: number) =>
+
+  // ── Job actions (Accept / Bid / Claim) ─────────────────────────────
+  acceptFixedPrice: (jobId: string) =>
+    api<{ booking_id: string }>(`/jobs/${jobId}/accept`, { method: "POST" }),
+  submitBid: (
+    jobId: string,
+    amount: number,
+    message?: string,
+    etaHours?: number,
+  ) =>
     api<Bid>(`/jobs/${jobId}/bids`, {
       method: "POST",
       body: { amount, message, eta_hours: etaHours },
     }),
-  acceptFixedPrice: (jobId: string) =>
-    api<{ booking_id: string }>(`/jobs/${jobId}/accept`, { method: "POST" }),
-  myBookings: () => api<Booking[]>("/driver/bookings"),
-  bookingDetail: (bookingId: string) => api<Booking>(`/bookings/${bookingId}`),
-  progressStatus: (bookingId: string, status: string) =>
-    api<Booking>(`/bookings/${bookingId}/status`, { method: "POST", body: { status } }),
-  earnings: () => api<{ total: number; period: string; jobs: number }>("/driver/earnings"),
-  asapOffers: () => api<Job[]>("/driver/asap-offers"),
+  // R71.16.2 (Driver P0-a) — ASAP Live-mode claim. Endpoint name unchanged.
   claimAsap: (jobId: string) => api<Booking>(`/jobs/${jobId}/claim`, { method: "POST" }),
-  goOnline: () => api("/driver/online", { method: "POST" }),
-  goOffline: () => api("/driver/offline", { method: "POST" }),
+
+  // ── My work lists ───────────────────────────────────────────────────
+  // R71.16.2 (Driver P0-a) — REWIRE: mobile previously hit
+  //   /driver/bookings          → does NOT exist. Web uses /bookings/mine.
+  //   /driver/asap-offers       → does NOT exist. Web uses /driver/live/offers.
+  //   /driver/earnings          → does NOT exist. Web reads /driver/dashboard.
+  //   /driver/online|offline    → do NOT exist. Web uses /driver/live/*.
+  //   /driver/location          → does NOT exist. Web uses /driver/live/heartbeat.
+  // The correct backend routes are used below.
+  myBookings: () => api<Booking[]>("/bookings/mine"),
+  acceptedJobs: () =>
+    api<Job[]>("/driver/accepted-jobs").catch(() => [] as Job[]),
+  myBids: () => api<DriverBid[]>("/driver/my-bids").catch(() => [] as DriverBid[]),
+  bookingDetail: (bookingId: string) => api<Booking>(`/bookings/${bookingId}`),
+
+  // ── Dashboard + Earnings (driven from /driver/dashboard) ───────────
+  dashboard: () => api<DriverDashboard>("/driver/dashboard"),
+  // Convenience — the web Earnings page re-uses the `earnings` block
+  // from /driver/dashboard rather than a dedicated endpoint. Kept
+  // separate here so screens can request just what they need without
+  // committing to a full dashboard shape.
+  earnings: () =>
+    api<DriverDashboard>("/driver/dashboard").then((d) => d.earnings || {
+      today: 0, week: 0, month: 0, all_time: 0, completed_count: 0,
+    }),
+  myCancellations: () =>
+    api<DriverCancellationRow[]>("/driver/cancellations/mine").catch(
+      () => [] as DriverCancellationRow[],
+    ),
+
+  // ── Live Mode (ASAP dispatch) ──────────────────────────────────────
+  liveStatus: () => api<DriverLiveStatus>("/driver/live/status"),
+  goOnline: (lat: number, lng: number) =>
+    api<DriverLiveStatus>("/driver/live/online", {
+      method: "POST",
+      body: { lat, lng },
+    }),
+  goOffline: () => api<DriverLiveStatus>("/driver/live/offline", { method: "POST" }),
+  heartbeat: (lat: number, lng: number) =>
+    api<{ ok: boolean }>("/driver/live/heartbeat", {
+      method: "POST",
+      body: { lat, lng },
+    }),
+  asapOffers: () => api<Job[]>("/driver/live/offers"),
+  // Kept for backwards-compatibility with existing screens that still
+  // call DriverAPI.pushLocation(lat, lng). Routes to the correct
+  // /driver/live/heartbeat endpoint.
   pushLocation: (lat: number, lng: number) =>
-    api("/driver/location", { method: "POST", body: { lat, lng } }),
-  // Fleet + additional lists used by native My Jobs / Fleet / Profile.
-  acceptedJobs: () => api<Job[]>("/driver/accepted-jobs").catch(() => [] as Job[]),
-  myBids: () => api<any[]>("/driver/my-bids").catch(() => [] as any[]),
-  listVehicles: () => api<any[]>("/driver/vehicles").catch(() => [] as any[]),
+    api<{ ok: boolean }>("/driver/live/heartbeat", {
+      method: "POST",
+      body: { lat, lng },
+    }),
+
+  // ── Active-booking lifecycle ───────────────────────────────────────
+  progressStatus: (bookingId: string, status: string) =>
+    api<Booking>(`/bookings/${bookingId}/status`, {
+      method: "POST",
+      body: { status },
+    }),
+  bookingMessages: (bookingId: string) =>
+    api<DriverMessage[]>(`/bookings/${bookingId}/messages`).catch(
+      () => [] as DriverMessage[],
+    ),
+  postMessage: (bookingId: string, body: string) =>
+    api<DriverMessage>(`/bookings/${bookingId}/messages`, {
+      method: "POST",
+      body: { body },
+    }),
+  markMessagesRead: (bookingId: string) =>
+    api<{ ok: boolean }>(`/bookings/${bookingId}/messages/mark-read`, {
+      method: "POST",
+    }).catch(() => ({ ok: false })),
+  presencePing: (bookingId: string) =>
+    api<{ ok: boolean }>(`/bookings/${bookingId}/conversation/presence`, {
+      method: "POST",
+    }).catch(() => ({ ok: false })),
+  uploadPOD: (bookingId: string, payload: PODUploadPayload) =>
+    api<POD>(`/bookings/${bookingId}/pod`, {
+      method: "POST",
+      body: payload,
+    }),
+  fetchPOD: (bookingId: string) =>
+    api<POD | null>(`/bookings/${bookingId}/pod`).catch(() => null),
+  pushTracking: (bookingId: string, lat: number, lng: number) =>
+    api<{ ok: boolean }>(`/tracking/${bookingId}`, {
+      method: "POST",
+      body: { lat, lng },
+    }).catch(() => ({ ok: false })),
+  // Driver-initiated cancellation (uses the existing backend endpoint
+  // + reason list; the customer refund/cancel path is not touched).
+  cancelReasons: () =>
+    api<DriverCancelReason[]>("/driver/cancel-reasons").catch(
+      () => [] as DriverCancelReason[],
+    ),
+  cancelBooking: (
+    bookingId: string,
+    reasonCode: string,
+    note?: string,
+  ) =>
+    api<{ ok: boolean }>(`/driver/bookings/${bookingId}/cancel`, {
+      method: "POST",
+      body: { reason_code: reasonCode, note },
+    }),
+
+  // ── Reviews ─────────────────────────────────────────────────────────
+  myReviews: (userId: string) =>
+    api<Review[]>(`/users/${userId}/reviews`).catch(() => [] as Review[]),
+  replyToReview: (reviewId: string, text: string) =>
+    api<{ ok: boolean }>(`/reviews/${reviewId}/reply`, {
+      method: "POST",
+      body: { text },
+    }),
+
+  // ── Notifications ──────────────────────────────────────────────────
+  listNotifications: () =>
+    api<DriverNotification[]>("/notifications").catch(() => [] as DriverNotification[]),
+  markNotificationRead: (id: string) =>
+    api<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }).catch(
+      () => ({ ok: false }),
+    ),
+
+  // ── Fleet (vehicles) ───────────────────────────────────────────────
+  listVehicles: () =>
+    api<DriverVehicle[]>("/driver/vehicles").catch(() => [] as DriverVehicle[]),
   saveVehicle: (v: Record<string, unknown>) =>
-    api<any>(v.id ? `/driver/vehicles/${v.id}` : "/driver/vehicles", {
+    api<DriverVehicle>(v.id ? `/driver/vehicles/${v.id}` : "/driver/vehicles", {
       method: v.id ? "PUT" : "POST",
       body: v,
     }),
-  deleteVehicle: (id: string) => api<any>(`/driver/vehicles/${id}`, { method: "DELETE" }),
-  myReviews: (userId: string) => api<any[]>(`/users/${userId}/reviews`).catch(() => [] as any[]),
-  // Push-token registration is identical for both roles — kept alongside
-  // driver-only routes for convenience so DriverAPI can call it directly.
+  deleteVehicle: (id: string) =>
+    api<{ ok: boolean }>(`/driver/vehicles/${id}`, { method: "DELETE" }),
+
+  // ── Documents / verification ───────────────────────────────────────
+  listDocs: () =>
+    api<DriverDocument[]>("/users/me/documents").catch(() => [] as DriverDocument[]),
+  submitDoc: (payload: DocumentUploadPayload) =>
+    api<DriverDocument>("/users/me/documents", {
+      method: "POST",
+      body: payload,
+    }),
+  fetchDoc: (docId: string) =>
+    api<DriverDocument>(`/users/me/documents/${docId}`),
+  resubmitVerification: () =>
+    api<{ ok: boolean }>("/auth/me/resubmit-verification", { method: "POST" }),
+
+  // ── Booking-fee preview (driver-charge → customer total) ───────────
+  feePreview: (driverCharge: number) =>
+    api<FeePreview>(`/booking-fees/preview?driver_charge=${driverCharge}`),
+
+  // ── Push token registration ────────────────────────────────────────
+  // Identical shape to CustomerAPI's push registration — kept here so
+  // DriverAPI is self-sufficient for the driver push bridge.
   registerPushToken: (token: string, platform: "ios" | "android") =>
     api<{ ok: boolean }>("/users/me/push-tokens", {
       method: "POST",

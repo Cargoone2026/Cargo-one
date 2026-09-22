@@ -4,13 +4,13 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
-import { DriverAPI, money } from "@cargoone/core";
+import { DriverAPI, money, type DriverEarningsSummary } from "@cargoone/core";
 import { Page, PageHeader, SummaryRow } from "../ui";
 import { colors, radius, typography } from "../theme";
 import { useShellMenu } from "../components/AppShell";
 
 export function EarningsScreen() {
-  const [data, setData] = useState<{ total: number; period: string; jobs: number } | null>(null);
+  const [data, setData] = useState<DriverEarningsSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const { openDrawer, showMenu } = useShellMenu();
 
@@ -30,19 +30,20 @@ export function EarningsScreen() {
   return (
     <Page testID="driver-earnings">
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.brand} />}>
-        <PageHeader large title="Earnings" subtitle={data?.period || "This period"} showMenu={showMenu} onMenuPress={openDrawer} />
+        <PageHeader large title="Earnings" subtitle="All-time" showMenu={showMenu} onMenuPress={openDrawer} />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
           <View style={styles.hero}>
-            <Text style={typography.micro}>Total</Text>
-            <Text style={styles.heroValue}>{money(data?.total ?? 0)}</Text>
-            <Text style={typography.caption}>{data?.jobs ?? 0} completed jobs</Text>
+            <Text style={typography.micro}>All-time</Text>
+            <Text style={styles.heroValue}>{money(data?.all_time ?? 0)}</Text>
+            <Text style={typography.caption}>{data?.completed_count ?? 0} completed jobs</Text>
           </View>
           <View style={styles.card}>
             <Text style={typography.micro}>Summary</Text>
             <View style={{ marginTop: 8 }}>
-              <SummaryRow label="Period" value={data?.period || "—"} />
-              <SummaryRow label="Completed jobs" value={String(data?.jobs ?? 0)} />
-              <SummaryRow label="Total earnings" value={money(data?.total ?? 0)} big />
+              <SummaryRow label="Today" value={money(data?.today ?? 0)} />
+              <SummaryRow label="This week" value={money(data?.week ?? 0)} />
+              <SummaryRow label="This month" value={money(data?.month ?? 0)} />
+              <SummaryRow label="All-time" value={money(data?.all_time ?? 0)} big />
             </View>
           </View>
           <Text style={typography.small}>Cargo One pays out via Stripe. Statements arrive on Fridays.</Text>

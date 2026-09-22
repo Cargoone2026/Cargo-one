@@ -67,8 +67,21 @@ export function LiveModeScreen({ navigation }: any) {
   async function toggle(v: boolean) {
     setBusy(true);
     try {
-      if (v) await DriverAPI.goOnline();
-      else await DriverAPI.goOffline();
+      if (v) {
+        // /driver/live/online requires the current position — reuse
+        // the same permission prompt used by startLocation() so a
+        // denied permission fails fast with a clear alert instead
+        // of a 400 from the server.
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (perm.status !== "granted") {
+          Alert.alert("Location required", "Enable location to go online.");
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        await DriverAPI.goOnline(pos.coords.latitude, pos.coords.longitude);
+      } else {
+        await DriverAPI.goOffline();
+      }
       setOnline(v);
     } catch (e: any) {
       Alert.alert("Error", e?.message || "");
