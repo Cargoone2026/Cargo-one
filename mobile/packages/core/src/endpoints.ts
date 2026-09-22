@@ -305,6 +305,13 @@ export const DriverAPI = {
     return api<Job[]>(`/jobs/nearby${q}`);
   },
   jobDetail: (jobId: string) => api<Job>(`/jobs/${jobId}`),
+  // R71.16.5 (Driver P1-a) — catalog data driving the AvailableJobs
+  // capability filter chips. Categories are exposed via SharedAPI; add
+  // a driver-scoped capabilities wrapper here so we do not have to
+  // widen SharedAPI (which would touch shared code the Customer app
+  // consumes).
+  capabilities: () =>
+    api<{ key: string; name: string }[]>("/catalog/capabilities").catch(() => []),
 
   // ── Job actions (Accept / Bid / Claim) ─────────────────────────────
   acceptFixedPrice: (jobId: string) =>
