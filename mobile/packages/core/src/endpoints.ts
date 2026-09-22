@@ -228,7 +228,7 @@ export interface DriverMessage {
   id: string;
   booking_id: string;
   sender_id: string;
-  body: string;
+  text: string;
   created_at: string;
   read_at?: string | null;
   delivered_at?: string | null;
@@ -416,10 +416,10 @@ export const DriverAPI = {
     api<DriverMessage[]>(`/bookings/${bookingId}/messages`).catch(
       () => [] as DriverMessage[],
     ),
-  postMessage: (bookingId: string, body: string) =>
+  postMessage: (bookingId: string, text: string) =>
     api<DriverMessage>(`/bookings/${bookingId}/messages`, {
       method: "POST",
-      body: { body },
+      body: { text },
     }),
   markMessagesRead: (bookingId: string) =>
     api<{ ok: boolean }>(`/bookings/${bookingId}/messages/mark-read`, {
