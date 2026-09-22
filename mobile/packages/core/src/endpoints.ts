@@ -288,16 +288,21 @@ export interface DocumentUploadPayload {
 export interface POD {
   id?: string;
   booking_id: string;
+  driver_id?: string;
   photos?: string[];       // base64 or URLs
-  signature?: string;      // base64 or URL
-  note?: string;
-  captured_at?: string;
+  signature?: string | null;      // base64 or URL
+  notes?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  created_at?: string;
 }
 
 export interface PODUploadPayload {
   photos?: string[];       // base64
-  signature?: string;      // base64
-  note?: string;
+  signature?: string | null;      // base64
+  notes?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface DriverCancelReason {

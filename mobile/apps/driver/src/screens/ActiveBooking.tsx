@@ -16,25 +16,52 @@
  *       - POST /bookings/{id}/conversation/presence every 20 s
  *       - POST /bookings/{id}/messages/mark-read once when entering.
  *     Intervals + cancelled flag torn down on tab switch / unmount.
+ *
+ * R71.16.9 (Driver P1-f) — adds POD upload parity:
+ *   • POD tab visible only when paid AND b.status === "delivered"
+ *     (matches the web precondition).
+ *   • If a POD already exists → read-only summary tile with created_at,
+ *     optional notes, optional GPS.
+ *   • Otherwise → photo grid (expo-image-picker camera/library), notes
+ *     input, submit-in-flight guard, error surface, checklist.
+ *   • Signature capture DEFERRED (no native signature subsystem in
+ *     monorepo); backend accepts signature: null.
+ *   • Best-effort GPS at submit via expo-location.getCurrentPositionAsync
+ *     with a 5s race (matches the web behaviour).
+ *   • POST body: { photos, signature: null, notes, lat, lng } exactly
+ *     matching the backend PODUpload contract (see server.py:354–359).
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
-import { MapPin, MessageCircle, Send, ShieldCheck } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import {
+  Camera,
+  CheckCircle2,
+  ImagePlus,
+  MapPin,
+  MessageCircle,
+  Send,
+  ShieldCheck,
+  X,
+} from "lucide-react-native";
 import {
   Booking,
   DriverAPI,
   DriverMessage,
+  POD,
   SharedAPI,
   TrackingResponse,
 } from "@cargoone/core";
@@ -55,7 +82,7 @@ const NEXT: Record<string, { key: string; label: string }> = {
   on_route: { key: "delivered", label: "Delivered" },
 };
 
-type Tab = "overview" | "chat";
+type Tab = "overview" | "chat" | "pod";
 
 export function ActiveBookingScreen({ route }: P) {
   const { bookingId } = route.params;
@@ -113,6 +140,8 @@ export function ActiveBookingScreen({ route }: P) {
   const currentBooking = b;
   const job = b.job;
   const paid = b.payment_status === "paid";
+  const podEligible = paid && b.status === "delivered";
+  const podShown = paid && ["delivered", "pod_uploaded", "completed"].includes(b.status);
 
   async function advance() {
     if (!next) return;
@@ -127,6 +156,12 @@ export function ActiveBookingScreen({ route }: P) {
     }
   }
 
+  const tabOptions: { value: Tab; label: string }[] = [
+    { value: "overview", label: "Overview" },
+    { value: "chat", label: "Chat" },
+  ];
+  if (podShown) tabOptions.push({ value: "pod", label: "POD" });
+
   return (
     <Page testID="driver-active-booking" scroll={false}>
       <KeyboardAvoidingView
@@ -139,10 +174,7 @@ export function ActiveBookingScreen({ route }: P) {
             <SegmentedTabs
               value={tab}
               onChange={setTab}
-              options={[
-                { value: "overview", label: "Overview" },
-                { value: "chat", label: "Chat" },
-              ]}
+              options={tabOptions}
               testIDPrefix="driver-active-tab"
             />
           </View>
@@ -190,10 +222,19 @@ export function ActiveBookingScreen({ route }: P) {
               </View>
 
               {next ? <PrimaryButton title={next.label} onPress={advance} testID="progress-status" /> : null}
+              {podEligible ? (
+                <PrimaryButton
+                  title="Upload Proof of Delivery"
+                  onPress={() => setTab("pod")}
+                  testID="go-to-pod-tab"
+                />
+              ) : null}
             </View>
           </ScrollView>
-        ) : (
+        ) : tab === "chat" ? (
           <ChatPane bookingId={b.id} myUserId={user?.id ?? null} />
+        ) : (
+          <PODPane bookingId={b.id} canSubmit={podEligible} onUploaded={load} />
         )}
       </KeyboardAvoidingView>
     </Page>
@@ -427,3 +468,337 @@ const cardStyle = {
   borderColor: colors.border,
   backgroundColor: colors.bg,
 } as const;
+
+/* ------------------------------------------------------------------ */
+/* PODPane — mirrors web BookingDetail.jsx POD tab (P1-f).             */
+/* ------------------------------------------------------------------ */
+
+const MAX_POD_PHOTOS = 8;
+
+function PODPane({
+  bookingId,
+  canSubmit,
+  onUploaded,
+}: {
+  bookingId: string;
+  canSubmit: boolean;
+  onUploaded: () => void;
+}) {
+  const [existing, setExisting] = useState<POD | null | undefined>(undefined);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const p = await DriverAPI.fetchPOD(bookingId);
+      if (!cancelled) setExisting(p ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId]);
+
+  async function pickFrom(kind: "camera" | "library") {
+    if (photos.length >= MAX_POD_PHOTOS) return;
+    const perm =
+      kind === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Permission required",
+        kind === "camera" ? "Please allow camera access to take photos." : "Please allow photo library access.",
+      );
+      return;
+    }
+    const opts: ImagePicker.ImagePickerOptions = {
+      allowsEditing: false,
+      quality: 0.7,
+      base64: true,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    };
+    const res =
+      kind === "camera"
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
+    if (res.canceled || !res.assets?.length) return;
+    const next = [...photos];
+    for (const asset of res.assets) {
+      if (next.length >= MAX_POD_PHOTOS) break;
+      if (!asset.base64) continue;
+      next.push(`data:image/jpeg;base64,${asset.base64}`);
+    }
+    setPhotos(next);
+  }
+
+  function askSource() {
+    if (photos.length >= MAX_POD_PHOTOS) return;
+    Alert.alert("Add photo", "Where should we get it from?", [
+      { text: "Take photo", onPress: () => pickFrom("camera") },
+      { text: "Choose from library", onPress: () => pickFrom("library") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
+  async function bestEffortGPS(): Promise<{ lat?: number; lng?: number }> {
+    // 5s race — matches the web behaviour (line 335). Silently ignores failure.
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== "granted") {
+        const req = await Location.requestForegroundPermissionsAsync();
+        if (req.status !== "granted") return {};
+      }
+      const timed = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        timed,
+      ]);
+      if (pos && (pos as Location.LocationObject).coords) {
+        const c = (pos as Location.LocationObject).coords;
+        return { lat: c.latitude, lng: c.longitude };
+      }
+    } catch {
+      /* silent */
+    }
+    return {};
+  }
+
+  const submit = useCallback(async () => {
+    if (submitting) return;
+    if (photos.length === 0) {
+      setErr("Add at least one delivery photo.");
+      return;
+    }
+    setErr(null);
+    setSubmitting(true);
+    try {
+      const gps = await bestEffortGPS();
+      await DriverAPI.uploadPOD(bookingId, {
+        photos,
+        signature: null, // Signature capture deferred (see file header)
+        notes: notes.trim() || "Delivered as agreed.",
+        lat: gps.lat,
+        lng: gps.lng,
+      });
+      const p = await DriverAPI.fetchPOD(bookingId);
+      setExisting(p ?? null);
+      onUploaded();
+    } catch (e: any) {
+      setErr(e?.message || "Could not upload POD");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [bookingId, photos, notes, submitting, onUploaded]);
+
+  if (existing === undefined) {
+    return (
+      <View style={{ padding: 16 }}>
+        <Text style={typography.caption}>Loading POD…</Text>
+      </View>
+    );
+  }
+
+  if (existing) {
+    const stamp = existing.created_at ? new Date(existing.created_at) : null;
+    const stampStr = stamp && !isNaN(stamp.getTime()) ? stamp.toLocaleString() : "";
+    return (
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} testID="driver-pod-uploaded">
+        <Text style={typography.h2}>Proof of Delivery</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            backgroundColor: "#F0FDF4",
+            borderRadius: radius.base,
+            padding: 16,
+          }}
+        >
+          <CheckCircle2 size={24} color={colors.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: "600", color: colors.ink }}>POD uploaded ✓</Text>
+            {stampStr ? <Text style={{ fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{stampStr}</Text> : null}
+          </View>
+        </View>
+        {existing.photos && existing.photos.length > 0 ? (
+          <View style={cardStyle}>
+            <Text style={typography.micro}>Photos ({existing.photos.length})</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              {existing.photos.map((src, i) => (
+                <Image key={i} source={{ uri: src }} style={{ width: 84, height: 84, borderRadius: radius.sm, backgroundColor: colors.bgSecondary }} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+        {existing.notes ? (
+          <View style={cardStyle}>
+            <Text style={typography.micro}>Notes</Text>
+            <Text style={{ marginTop: 6, fontSize: 14, color: colors.ink }}>{existing.notes}</Text>
+          </View>
+        ) : null}
+        {existing.lat != null && existing.lng != null ? (
+          <View style={cardStyle}>
+            <Text style={typography.micro}>GPS</Text>
+            <Text style={{ marginTop: 6, fontSize: 13, color: colors.ink }}>
+              {Number(existing.lat).toFixed(5)}, {Number(existing.lng).toFixed(5)}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    );
+  }
+
+  // Upload form
+  const disabled = !canSubmit || photos.length === 0 || submitting;
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} testID="driver-pod-form">
+      <Text style={typography.h2}>Proof of Delivery</Text>
+
+      {!canSubmit ? (
+        <View style={{ padding: 12, backgroundColor: colors.warningBg, borderRadius: radius.base }}>
+          <Text style={{ fontSize: 13, color: colors.warningInk }}>
+            Mark this job as Delivered from the Overview tab to upload POD.
+          </Text>
+        </View>
+      ) : null}
+
+      <View>
+        <Text style={typography.micro}>1 · Take delivery photos</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          {photos.map((p, i) => (
+            <View key={i} style={podStyles.tile}>
+              <Image source={{ uri: p }} style={podStyles.thumb} />
+              <Pressable
+                onPress={() => setPhotos((prev) => prev.filter((_, k) => k !== i))}
+                testID={`pod-remove-photo-${i}`}
+                style={podStyles.removeBtn}
+                hitSlop={6}
+              >
+                <X size={12} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ))}
+          {photos.length < MAX_POD_PHOTOS ? (
+            <>
+              <Pressable
+                onPress={() => pickFrom("camera")}
+                testID="pod-add-photo-camera"
+                style={[podStyles.tile, podStyles.addTile]}
+                disabled={!canSubmit || submitting}
+              >
+                <Camera size={20} color={colors.ink} />
+                <Text style={{ marginTop: 4, fontSize: 11, fontWeight: "600", color: colors.ink }}>Camera</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => pickFrom("library")}
+                testID="pod-add-photo-library"
+                style={[podStyles.tile, podStyles.addTile]}
+                disabled={!canSubmit || submitting}
+              >
+                <ImagePlus size={20} color={colors.ink} />
+                <Text style={{ marginTop: 4, fontSize: 11, fontWeight: "600", color: colors.ink }}>Library</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
+      </View>
+
+      <View>
+        <Text style={typography.micro}>2 · Delivery notes</Text>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="e.g. Left with reception"
+          placeholderTextColor={colors.inkFaint}
+          editable={canSubmit && !submitting}
+          testID="pod-notes-input"
+          style={{
+            marginTop: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.base,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            fontSize: 14,
+            color: colors.ink,
+            backgroundColor: colors.bg,
+          }}
+        />
+      </View>
+
+      <View style={{ backgroundColor: "#F9FAFB", borderRadius: radius.base, padding: 12, gap: 6 }} testID="pod-checklist">
+        <PodChecklistRow ok={photos.length > 0} label={`Photos (${photos.length})`} />
+        <PodChecklistRow ok={false} label="Signature capture (deferred)" muted />
+        <PodChecklistRow ok label="GPS attempted at submit" />
+        <PodChecklistRow ok label="Timestamped" />
+      </View>
+
+      {err ? (
+        <Text style={{ fontSize: 13, color: colors.error }} testID="pod-error">
+          {err}
+        </Text>
+      ) : null}
+
+      <PrimaryButton
+        title="Submit POD"
+        onPress={submit}
+        loading={submitting}
+        disabled={disabled}
+        testID="submit-pod"
+      />
+    </ScrollView>
+  );
+}
+
+function PodChecklistRow({ ok, label, muted }: { ok: boolean; label: string; muted?: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: muted ? colors.bgTertiary : ok ? colors.success : colors.inkFaint,
+        }}
+      >
+        <Text style={{ fontSize: 10, color: "#FFFFFF", fontWeight: "700" }}>{ok && !muted ? "✓" : muted ? "…" : "•"}</Text>
+      </View>
+      <Text style={{ fontSize: 13, color: muted ? colors.inkMuted : colors.ink }}>{label}</Text>
+    </View>
+  );
+}
+
+const podStyles = StyleSheet.create({
+  tile: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.base,
+    overflow: "hidden",
+    backgroundColor: colors.bgSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumb: { width: "100%", height: "100%" },
+  removeBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addTile: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+});
