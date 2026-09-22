@@ -472,6 +472,21 @@ export const DriverAPI = {
   // ── Reviews ─────────────────────────────────────────────────────────
   myReviews: (userId: string) =>
     api<Review[]>(`/users/${userId}/reviews`).catch(() => [] as Review[]),
+  // R71.16.11 (Driver P1-g) — driver-side review submission + fetch of
+  // own review for a completed booking. Backend contracts verified:
+  //   POST /bookings/{id}/review  → { rating, comment, photos: [] }
+  //   GET  /bookings/{id}/review/mine → Review | null
+  submitReview: (
+    bookingId: string,
+    rating: number,
+    comment?: string,
+  ) =>
+    api<Review>(`/bookings/${bookingId}/review`, {
+      method: "POST",
+      body: { rating, comment, photos: [] },
+    }),
+  myReviewForBooking: (bookingId: string) =>
+    api<Review | null>(`/bookings/${bookingId}/review/mine`).catch(() => null),
   replyToReview: (reviewId: string, text: string) =>
     api<{ ok: boolean }>(`/reviews/${reviewId}/reply`, {
       method: "POST",

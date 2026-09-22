@@ -56,6 +56,7 @@ import {
   MessageCircle,
   Send,
   ShieldCheck,
+  Star,
   X,
   AlertTriangle,
 } from "lucide-react-native";
@@ -147,7 +148,37 @@ export function ActiveBookingScreen({ route }: P) {
   const podShown = paid && ["delivered", "pod_uploaded", "completed"].includes(b.status);
   const cancelEligible =
     paid && !["delivered", "pod_uploaded", "completed", "cancelled", "cancelled_by_driver"].includes(b.status);
+  const reviewShown = paid && b.status === "completed";
   const [showCancel, setShowCancel] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [myReview, setMyReview] = useState<any | null>(null);
+  const [reviewOfMe, setReviewOfMe] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!reviewShown) {
+      setMyReview(null);
+      setReviewOfMe(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const mine = await DriverAPI.myReviewForBooking(currentBooking.id);
+      if (!cancelled) setMyReview(mine || null);
+      const drvId = (currentBooking as any).driver_id || (currentBooking as any).assigned_driver_id;
+      if (drvId) {
+        const all = await DriverAPI.myReviews(drvId);
+        if (!cancelled) {
+          const forThis = (Array.isArray(all) ? all : []).find(
+            (r: any) => r.booking_id === currentBooking.id,
+          );
+          setReviewOfMe(forThis || null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewShown, currentBooking.id]);
 
   async function advance() {
     if (!next) return;
@@ -254,6 +285,36 @@ export function ActiveBookingScreen({ route }: P) {
                   <Text style={{ fontSize: 13, fontWeight: "600", color: colors.error }}>Cancel this job</Text>
                 </Pressable>
               ) : null}
+
+              {reviewShown && !myReview ? (
+                <SecondaryButton
+                  title="Leave a review for the customer"
+                  onPress={() => setShowReview(true)}
+                  testID="driver-leave-review-button"
+                />
+              ) : null}
+              {reviewShown && myReview ? (
+                <DriverMyReviewCard review={myReview} />
+              ) : null}
+              {reviewShown && reviewOfMe ? (
+                <DriverReviewOfMeCard
+                  review={reviewOfMe}
+                  onReplied={() => {
+                    // Refresh review-of-me so the reply appears
+                    (async () => {
+                      const drvId =
+                        (currentBooking as any).driver_id ||
+                        (currentBooking as any).assigned_driver_id;
+                      if (!drvId) return;
+                      const all = await DriverAPI.myReviews(drvId);
+                      const forThis = (Array.isArray(all) ? all : []).find(
+                        (r: any) => r.booking_id === currentBooking.id,
+                      );
+                      setReviewOfMe(forThis || null);
+                    })();
+                  }}
+                />
+              ) : null}
             </View>
           </ScrollView>
         ) : tab === "chat" ? (
@@ -269,6 +330,15 @@ export function ActiveBookingScreen({ route }: P) {
         onCancelled={() => {
           setShowCancel(false);
           load();
+        }}
+      />
+      <DriverReviewModal
+        open={showReview}
+        bookingId={b.id}
+        onClose={() => setShowReview(false)}
+        onSubmitted={(r) => {
+          setShowReview(false);
+          setMyReview(r);
         }}
       />
     </Page>
@@ -1127,3 +1197,279 @@ const cancelStyles = StyleSheet.create({
     backgroundColor: "#FFFBEB",
   },
 });
+
+/* ------------------------------------------------------------------ */
+/* DriverReviewModal — 5-star rating + comment for driver P1-g.        */
+/* ------------------------------------------------------------------ */
+
+function DriverReviewModal({
+  open,
+  bookingId,
+  onClose,
+  onSubmitted,
+}: {
+  open: boolean;
+  bookingId: string;
+  onClose: () => void;
+  onSubmitted: (review: any) => void;
+}) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setRating(5);
+      setComment("");
+      setErr(null);
+      setBusy(false);
+    }
+  }, [open]);
+
+  const submit = async () => {
+    if (busy) return;
+    if (rating < 1 || rating > 5) {
+      setErr("Please choose a rating from 1 to 5.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await DriverAPI.submitReview(bookingId, rating, comment.trim() || undefined);
+      onSubmitted(r);
+    } catch (e: any) {
+      setErr(e?.message || "Could not submit review. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <RNModal visible={open} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={cancelStyles.backdrop}>
+        <View style={cancelStyles.sheet} testID="driver-review-modal">
+          <View style={cancelStyles.header}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink }}>
+              Leave a review
+            </Text>
+            <Pressable onPress={onClose} testID="driver-review-modal-close" hitSlop={8} style={cancelStyles.closeBtn}>
+              <X size={18} color={colors.inkMuted} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <Text style={{ fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+              How was this delivery? Your feedback helps other drivers know what to expect.
+            </Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 8 }} testID="driver-review-stars">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Pressable
+                  key={n}
+                  onPress={() => setRating(n)}
+                  testID={`driver-review-star-${n}`}
+                  hitSlop={6}
+                >
+                  <Star
+                    size={36}
+                    color={n <= rating ? colors.accent : colors.inkFaint}
+                    fill={n <= rating ? colors.accent : "transparent"}
+                  />
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder="Optional comment for the customer"
+              placeholderTextColor={colors.inkFaint}
+              multiline
+              maxLength={1000}
+              testID="driver-review-comment"
+              style={{
+                minHeight: 90,
+                textAlignVertical: "top",
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.base,
+                padding: 12,
+                fontSize: 14,
+                color: colors.ink,
+                backgroundColor: colors.bg,
+              }}
+            />
+            {err ? (
+              <Text style={{ fontSize: 12, color: colors.error }} testID="driver-review-error">
+                {err}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <SecondaryButton title="Cancel" onPress={onClose} testID="driver-review-cancel" style={{ flex: 1 }} />
+              <PrimaryButton
+                title={busy ? "Submitting…" : "Submit review"}
+                onPress={submit}
+                loading={busy}
+                disabled={busy}
+                testID="driver-review-submit"
+                style={{ flex: 1 }}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </RNModal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* DriverMyReviewCard — read-only render of driver's own review.       */
+/* ------------------------------------------------------------------ */
+
+function DriverMyReviewCard({ review }: { review: any }) {
+  const r = Math.max(0, Math.min(5, Number(review?.rating) || 0));
+  return (
+    <View style={reviewStyles.card} testID="driver-my-review-card">
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={typography.micro}>Your review</Text>
+        <StarRow value={r} />
+      </View>
+      {review?.comment ? (
+        <Text style={{ marginTop: 8, fontSize: 14, color: colors.ink, lineHeight: 20 }}>
+          {review.comment}
+        </Text>
+      ) : null}
+      {review?.reply ? (
+        <View style={reviewStyles.replyBox}>
+          <Text style={typography.micro}>Customer replied</Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+            {review.reply}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* DriverReviewOfMeCard — customer's review of me + optional reply.    */
+/* ------------------------------------------------------------------ */
+
+function DriverReviewOfMeCard({ review, onReplied }: { review: any; onReplied: () => void }) {
+  const r = Math.max(0, Math.min(5, Number(review?.rating) || 0));
+  const alreadyReplied = !!review?.reply;
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (busy) return;
+    const text = reply.trim();
+    if (!text) {
+      setErr("Please write a reply.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await DriverAPI.replyToReview(review.id, text);
+      setReply("");
+      onReplied();
+    } catch (e: any) {
+      setErr(e?.message || "Could not send reply. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={reviewStyles.card} testID="driver-review-of-me-card">
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={typography.micro}>Customer's review</Text>
+        <StarRow value={r} />
+      </View>
+      {review?.from_name ? (
+        <Text style={{ marginTop: 4, fontSize: 12, color: colors.inkMuted }}>{review.from_name}</Text>
+      ) : null}
+      {review?.comment ? (
+        <Text style={{ marginTop: 8, fontSize: 14, color: colors.ink, lineHeight: 20 }}>
+          {review.comment}
+        </Text>
+      ) : null}
+      {alreadyReplied ? (
+        <View style={reviewStyles.replyBox}>
+          <Text style={typography.micro}>Your reply</Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+            {review.reply}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          <TextInput
+            value={reply}
+            onChangeText={setReply}
+            placeholder="Reply to this review (once only)"
+            placeholderTextColor={colors.inkFaint}
+            multiline
+            maxLength={1000}
+            editable={!busy}
+            testID="driver-review-reply-input"
+            style={{
+              minHeight: 70,
+              textAlignVertical: "top",
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.base,
+              padding: 10,
+              fontSize: 13,
+              color: colors.ink,
+              backgroundColor: colors.bg,
+            }}
+          />
+          {err ? (
+            <Text style={{ fontSize: 12, color: colors.error }} testID="driver-review-reply-error">
+              {err}
+            </Text>
+          ) : null}
+          <PrimaryButton
+            title={busy ? "Sending…" : "Send reply"}
+            onPress={submit}
+            loading={busy}
+            disabled={busy || !reply.trim()}
+            testID="driver-review-reply-submit"
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+function StarRow({ value }: { value: number }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={14}
+          color={n <= value ? colors.accent : colors.inkFaint}
+          fill={n <= value ? colors.accent : "transparent"}
+        />
+      ))}
+    </View>
+  );
+}
+
+const reviewStyles = StyleSheet.create({
+  card: {
+    padding: 14,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  replyBox: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bgSecondary,
+  },
+});
+
