@@ -3,8 +3,35 @@
  *
  * Runs at every `expo prebuild`. Repo-safe (no secrets read/written).
  *
- * Applies two iOS-side fixes that are otherwise wiped when the ios/
+ * Applies three iOS-side fixes that are otherwise wiped when the ios/
  * directory is regenerated:
+ *
+ *   0. Removes ORPHAN file references from the app target's
+ *      PBXResourcesBuildPhase. Specifically, `@expo/config-plugins`'s
+ *      `withSwiftBridgingHeader` (in Swift.js) calls
+ *      `addResourceFileToGroup({ isBuildFile: false })` for the
+ *      generated `<Project>-Bridging-Header.h` file. Under the hood
+ *      `addResourceFileToGroup` unconditionally pushes an entry into
+ *      the PBXResourcesBuildPhase files list — but skips creating the
+ *      matching PBXBuildFile section entry when `isBuildFile: false`.
+ *      Result: the resources phase contains a dangling UUID that has
+ *      no matching PBXBuildFile object, which makes the Ruby
+ *      `xcodeproj` gem emit this warning during `pod install`:
+ *
+ *        [!] <PBXResourcesBuildPhase UUID=...> attempted to initialize
+ *        an object with an unknown UUID `...` for attribute `files`.
+ *
+ *      In addition, a bridging header is a compile-time C header, not
+ *      a bundle resource — it never belonged in the Resources phase
+ *      in the first place (Xcode only reads it via the
+ *      `SWIFT_OBJC_BRIDGING_HEADER` build setting). Stripping the
+ *      dangling reference removes the warning and matches Xcode's own
+ *      behaviour when creating a bridging header manually.
+ *
+ *      Purely cosmetic on the warning level, but combined with other
+ *      output the misleading `[!]` line has repeatedly caused new
+ *      developers to abort otherwise-successful `pod install` runs
+ *      thinking the build had failed — hence the durable fix.
  *
  *   1. Sets ios.deploymentTarget = "15.0" in ios/Podfile.properties.json.
  *      Required because:
@@ -44,7 +71,7 @@
  * before the current one is written so upgrades never leave stale
  * comments behind.
  */
-const { withDangerousMod } = require('@expo/config-plugins');
+const { withDangerousMod, withXcodeProject } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -98,6 +125,19 @@ function ensurePodfileTokenBridge(iosDir) {
 }
 
 module.exports = function withCargoOneiOSFixes(config) {
+  // 1) Xcode project mod: strip dangling PBXResourcesBuildPhase entries
+  //    that `@expo/config-plugins`' withSwiftBridgingHeader introduces.
+  //    Must run AFTER Expo's own xcodeproj mods (Expo registers those
+  //    with the same withXcodeProject helper, and mods run in
+  //    registration order → this plugin is listed first in
+  //    apps/driver/app.json so its callback executes last for the
+  //    xcodeproj mod). Idempotent — a no-op once clean.
+  config = withXcodeProject(config, (cfg) => {
+    cfg.modResults = stripDanglingResources(cfg.modResults);
+    return cfg;
+  });
+
+  // 2) Podfile / Podfile.properties.json mods (see file header).
   return withDangerousMod(config, [
     'ios',
     async (cfg) => {
@@ -108,3 +148,46 @@ module.exports = function withCargoOneiOSFixes(config) {
     },
   ]);
 };
+
+/**
+ * Remove any file reference in a PBXResourcesBuildPhase whose UUID
+ * has no matching PBXBuildFile section entry. Dangling references
+ * only occur when a config plugin (upstream: Expo's Swift bridging
+ * header helper) calls `addResourceFileToGroup({ isBuildFile: false })`
+ * — the file is written into the resources phase files array without
+ * a paired PBXBuildFile object, so the Ruby xcodeproj gem warns on
+ * every `pod install`.
+ *
+ * Bridging headers are compile-time C headers, not runtime resources,
+ * so removing them from the Resources phase is the correct behaviour.
+ *
+ * @param {object} project  xcode npm `pbxProject` instance
+ * @returns {object}         the same instance, mutated in place
+ */
+function stripDanglingResources(project) {
+  const objects = project.hash && project.hash.project && project.hash.project.objects;
+  if (!objects) return project;
+  const resourcesPhases = objects.PBXResourcesBuildPhase || {};
+  const buildFileSection = objects.PBXBuildFile || {};
+
+  for (const key of Object.keys(resourcesPhases)) {
+    if (key.endsWith('_comment')) continue;
+    const phase = resourcesPhases[key];
+    if (!phase || !Array.isArray(phase.files)) continue;
+    const before = phase.files.length;
+    phase.files = phase.files.filter((entry) => {
+      const uuid = entry && entry.value;
+      if (!uuid) return true;
+      // Keep the entry only if a paired PBXBuildFile exists.
+      return Object.prototype.hasOwnProperty.call(buildFileSection, uuid);
+    });
+    if (phase.files.length !== before) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[withCargoOneiOSFixes] stripped ${before - phase.files.length} dangling ` +
+          `entr${before - phase.files.length === 1 ? 'y' : 'ies'} from PBXResourcesBuildPhase ${key}`,
+      );
+    }
+  }
+  return project;
+}
