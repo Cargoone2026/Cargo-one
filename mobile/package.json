@@ -2,10 +2,16 @@
   "name": "cargoone-mobile",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "nohoist": [
+      "**/react-native-svg",
+      "**/react-native-svg/**"
+    ]
+  },
   "scripts": {
     "postinstall": "node scripts/apply-node-modules-fixes.js",
     "customer": "yarn workspace @cargoone/customer start",

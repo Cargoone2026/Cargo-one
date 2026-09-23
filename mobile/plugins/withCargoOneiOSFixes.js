@@ -59,8 +59,21 @@ function ensureDeploymentTarget(iosDir) {
   const props = fs.existsSync(propsPath)
     ? JSON.parse(fs.readFileSync(propsPath, 'utf8'))
     : {};
+  let mutated = false;
   if (props['ios.deploymentTarget'] !== '15.0') {
     props['ios.deploymentTarget'] = '15.0';
+    mutated = true;
+  }
+  // Force Old Architecture. app.json also declares `"newArchEnabled": false`
+  // but recent Expo SDK 51 patch releases sometimes emit `"true"` here when
+  // any hoisted dep advertises Fabric support. Being explicit here prevents
+  // the `[CP-User] [RN]Check rncore` codegen step from erroring on clean
+  // installs.
+  if (props['newArchEnabled'] !== 'false') {
+    props['newArchEnabled'] = 'false';
+    mutated = true;
+  }
+  if (mutated) {
     fs.writeFileSync(propsPath, JSON.stringify(props, null, 2) + '\n');
   }
 }

@@ -131,9 +131,75 @@ function patchExpoDeviceSimulator(nodeModulesDir) {
   fixed += 1;
 }
 
+// ---------------------------------------------------------------------------
+// expo-dev-menu (SDK 51 canonical) · Swift files · TARGET_IPHONE_SIMULATOR
+// ---------------------------------------------------------------------------
+// Older expo-dev-menu code paths reference the C preprocessor symbol
+// `TARGET_IPHONE_SIMULATOR` inside Swift (`let isSimulator = TARGET_IPHONE_SIMULATOR > 0`).
+// Xcode 16 / Swift 5.10 no longer imports that macro implicitly, so the
+// compile fails with:
+//   error: cannot find 'TARGET_IPHONE_SIMULATOR' in scope
+// The upstream fix landed in expo-dev-menu 6.x (Expo SDK 52). On SDK 51 the
+// recommended workaround is to replace the C macro usage with Swift's native
+// `targetEnvironment(simulator)` compile-time check — equivalent semantics.
+//
+// We scan every .swift file in the package's ios/ tree (the exact filename
+// has drifted between SDK 51 patch releases) and rewrite two known shapes:
+//   1) `let X = TARGET_IPHONE_SIMULATOR > 0`
+//   2) `TARGET_IPHONE_SIMULATOR != 0`
+// Both are replaced with a `#if targetEnvironment(simulator)` block so
+// consumers of the Bool see the same value.
+function patchExpoDevMenuSimulator(nodeModulesDir) {
+  const iosDir = path.join(nodeModulesDir, 'expo-dev-menu', 'ios');
+  if (!fs.existsSync(iosDir)) return;
+
+  function walk(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...walk(full));
+      else if (entry.isFile() && entry.name.endsWith('.swift')) out.push(full);
+    }
+    return out;
+  }
+
+  const replacement = [
+    '{',
+    '#if targetEnvironment(simulator)',
+    '    true',
+    '#else',
+    '    false',
+    '#endif',
+    '}()',
+  ].join('\n    ');
+
+  for (const swiftPath of walk(iosDir)) {
+    const original = fs.readFileSync(swiftPath, 'utf8');
+    if (!original.includes('TARGET_IPHONE_SIMULATOR')) continue;
+
+    // Shape 1:  let <name> = TARGET_IPHONE_SIMULATOR > 0
+    let patched = original.replace(
+      /=\s*TARGET_IPHONE_SIMULATOR\s*>\s*0/g,
+      `= ${replacement}`,
+    );
+    // Shape 2:  return TARGET_IPHONE_SIMULATOR != 0
+    patched = patched.replace(
+      /TARGET_IPHONE_SIMULATOR\s*!=\s*0/g,
+      replacement,
+    );
+
+    if (patched === original) continue; // pattern absent / already fixed
+    fs.writeFileSync(swiftPath, patched);
+    const rel = path.relative(workspaceRoot, swiftPath);
+    console.log(`[cargoone-postinstall] patched TARGET_IPHONE_SIMULATOR in ${rel}`);
+    fixed += 1;
+  }
+}
+
 for (const root of candidateRoots) {
   stripAsyncStorageCodegen(root);
   patchExpoDeviceSimulator(root);
+  patchExpoDevMenuSimulator(root);
 }
 if (fixed === 0) {
   console.log(
