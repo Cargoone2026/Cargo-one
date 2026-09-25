@@ -136,10 +136,16 @@ function withShell<C extends React.ComponentType<any>>(Component: C) {
 // on its own.
 
 export function App() {
+  // eslint-disable-next-line no-console
+  console.log("[Driver:boot] step 7 — App() function entered (React invoked our root component)");
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
+  // eslint-disable-next-line no-console
+  console.log("[Driver:boot] step 8 — useAuthValue completed, hydrated=" + hydrated + " user=" + (user ? "yes" : "null"));
 
   useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("[Driver:boot] step 9 — bootstrap useEffect fired (React committed at least one render)");
     // Bootstrap: run every side-effect that used to live at module
     // scope AFTER React has committed at least the initial render, and
     // silence any failure — the error boundary catches render errors,
@@ -149,11 +155,22 @@ export function App() {
     // fires — never during first paint).
     try {
       initPushForegroundHandler();
-    } catch {
-      /* silent — best-effort, boundary catches render errors */
+      // eslint-disable-next-line no-console
+      console.log("[Driver:boot] step 10 — initPushForegroundHandler ok");
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log("[Driver:boot] step 10 FAILED — initPushForegroundHandler threw:", String(err));
     }
     SplashScreen.preventAutoHideAsync().catch(() => {});
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync()
+      .then(() => {
+        // eslint-disable-next-line no-console
+        console.log("[Driver:boot] step 11 — SplashScreen.hideAsync (App-side) resolved");
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.log("[Driver:boot] step 11 FAILED —", String(err));
+      });
   }, []);
 
   if (!hydrated) {
