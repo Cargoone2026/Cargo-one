@@ -26,6 +26,7 @@ import { NotificationsScreen } from "./screens/Notifications";
 import { DocumentsScreen } from "./screens/Documents";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import {
   initPushForegroundHandler,
   registerForPushNotifications,
@@ -34,7 +35,20 @@ import {
   type PushDataPayload,
 } from "./pushNotifications";
 
-initPushForegroundHandler();
+// Historically the two calls below (`initPushForegroundHandler()` and
+// `SplashScreen.preventAutoHideAsync()`) executed at MODULE SCOPE — i.e.
+// while App.tsx itself was being evaluated by the JS runtime. That's
+// unsafe for the initial startup path on a physical device: if either
+// side-effect throws synchronously (a native module not yet ready, an
+// upstream shape change, a misconfigured entitlement, etc.), the App
+// module fails to define and `registerRootComponent(App)` in index.ts
+// is never reached. There is no React tree, no error boundary, no
+// red-box — just the RN root view's white background — which matches
+// exactly the "blank white after native splash" symptom seen on
+// iPhone 14 device builds. Both calls are now performed inside a
+// bootstrap `useEffect` on the App component itself, so any failure
+// gets caught by <AppErrorBoundary> instead of nuking the tree, and
+// the initial <View> render still commits regardless.
 
 export type RootStackParamList = {
   Login: undefined;
@@ -112,21 +126,49 @@ function withShell<C extends React.ComponentType<any>>(Component: C) {
 // hide it immediately regardless of hydration. If hydration ever
 // hangs, the fallback loader below still renders — the native splash
 // never gets stranded on screen.
-SplashScreen.preventAutoHideAsync().catch(() => {});
+//
+// Both `preventAutoHideAsync` and `initPushForegroundHandler` are now
+// invoked from a bootstrap useEffect (see block above the App return),
+// not at module scope, so a failure in either cannot prevent the
+// initial React tree from rendering. Native iOS enforces its own
+// ~10-second auto-hide fuse on `preventAutoHideAsync`, so skipping
+// the call is a harmless degradation — the launch image simply hides
+// on its own.
 
 export function App() {
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
 
   useEffect(() => {
+    // Bootstrap: run every side-effect that used to live at module
+    // scope AFTER React has committed at least the initial render, and
+    // silence any failure — the error boundary catches render errors,
+    // but these two calls are safe to no-op if the underlying native
+    // module isn't ready (Expo enforces its own splash-hide timeout on
+    // iOS, and the push handler is only consulted when a notification
+    // fires — never during first paint).
+    try {
+      initPushForegroundHandler();
+    } catch {
+      /* silent — best-effort, boundary catches render errors */
+    }
+    SplashScreen.preventAutoHideAsync().catch(() => {});
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   if (!hydrated) {
     // Full-bleed dark surface while auth hydrates (matches native
     // splash `backgroundColor: #111111` so the transition is
-    // invisible).
-    return <View style={{ flex: 1, backgroundColor: "#111111" }} testID="driver-loading-screen" />;
+    // invisible). Wrapped in the boundary for uniform safety even
+    // though this branch renders a bare <View>.
+    return (
+      <AppErrorBoundary>
+        <View
+          style={{ flex: 1, backgroundColor: "#111111" }}
+          testID="driver-loading-screen"
+        />
+      </AppErrorBoundary>
+    );
   }
   // R71.16.3 (Driver P0-b) — Backend stores approval status on
   // `user.status`. Match the web Driver Dashboard's gate: only
@@ -142,43 +184,45 @@ export function App() {
     (user as any)?.verified_driver === true;
 
   return (
-    <SafeAreaProvider>
-      <AuthContext.Provider value={authValue}>
-        <NavigationContainer ref={navigationRef}>
-          <StatusBar style="dark" />
-          <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
-            {!user ? (
-              <>
-                <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="Register" component={RegisterScreen} />
-                <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
-              </>
-            ) : !approved ? (
-              <Stack.Screen name="AwaitingApproval" component={AwaitingApprovalScreen} />
-            ) : (
-              <>
-                {/* Primary destinations — hosted inside the driver sidebar shell. */}
-                <Stack.Screen name="Home" component={withShell(HomeScreen)} />
-                <Stack.Screen name="AvailableJobs" component={withShell(AvailableJobsScreen)} />
-                <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
-                <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
-                <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
-                <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
-                <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
-                <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
+    <AppErrorBoundary>
+      <SafeAreaProvider>
+        <AuthContext.Provider value={authValue}>
+          <NavigationContainer ref={navigationRef}>
+            <StatusBar style="dark" />
+            <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+              {!user ? (
+                <>
+                  <Stack.Screen name="Login" component={LoginScreen} />
+                  <Stack.Screen name="Register" component={RegisterScreen} />
+                  <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
+                </>
+              ) : !approved ? (
+                <Stack.Screen name="AwaitingApproval" component={AwaitingApprovalScreen} />
+              ) : (
+                <>
+                  {/* Primary destinations — hosted inside the driver sidebar shell. */}
+                  <Stack.Screen name="Home" component={withShell(HomeScreen)} />
+                  <Stack.Screen name="AvailableJobs" component={withShell(AvailableJobsScreen)} />
+                  <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
+                  <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
+                  <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
+                  <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
+                  <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
+                  <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
 
-                {/* Focused workflows */}
-                <Stack.Screen name="JobDetail" component={JobDetailScreen} />
-                <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
-                <Stack.Screen name="Passkeys" component={PasskeysScreen} />
-                <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                <Stack.Screen name="Documents" component={DocumentsScreen} />
-              </>
-            )}
-          </Stack.Navigator>
-          {user ? <PushBridge /> : null}
-        </NavigationContainer>
-      </AuthContext.Provider>
-    </SafeAreaProvider>
+                  {/* Focused workflows */}
+                  <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+                  <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
+                  <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                  <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                  <Stack.Screen name="Documents" component={DocumentsScreen} />
+                </>
+              )}
+            </Stack.Navigator>
+            {user ? <PushBridge /> : null}
+          </NavigationContainer>
+        </AuthContext.Provider>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   );
 }
