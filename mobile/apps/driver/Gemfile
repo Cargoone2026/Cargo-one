@@ -22,6 +22,23 @@ gem 'cocoapods', '>= 1.13', '< 1.15'
 # stay compatible with the widest Ruby range that the json pin allows.
 gem 'activesupport', '>= 6.1.7.5', '< 7.1.0'
 
-# xcodeproj 1.25+ requires Ruby 3.4 and pulls json 2.8. Pin to the
-# highest release still compatible with Ruby 3.3 / 3.2.
-gem 'xcodeproj', '< 1.26.0'
+# xcodeproj must be >= 1.28.1 so that Bundler pulls the `nkf` and
+# `base64` gems as transitive runtime dependencies. On Ruby 3.4+
+# (Sonoma default) and Ruby 4.x (Homebrew current) these two libraries
+# are no longer bundled with the interpreter, so `require 'kconv'`
+# — which CFPropertyList's rbCFPropertyList.rb performs at load time
+# — raises `LoadError: cannot load such file -- kconv` unless `nkf`
+# has been installed as a real gem (the `nkf` gem ships both
+# `nkf.rb` and `kconv.rb`). xcodeproj 1.28.1 was the first release
+# to declare `s.add_runtime_dependency 'nkf', '>= 0'` and
+# `s.add_runtime_dependency 'base64', '>= 0'` for exactly this
+# reason (see xcodeproj-1.28.1.gemspec).
+#
+# Compatibility of 1.28.1 with our pinned stack has been verified:
+#   • required_ruby_version = ">= 2.6.0"  (works on Ruby 2.6 → 4.x)
+#   • declares NO `json` dependency        (the `json '~> 2.7'` pin
+#                                           above stays effective for
+#                                           CocoaPods' quirks_mode)
+#   • CocoaPods 1.14.3 accepts xcodeproj   (>= 1.23.0, < 2.0)
+#   • pulls CFPropertyList 3.0.x           (>= 2.3.3, < 4.0)
+gem 'xcodeproj', '>= 1.28.1'
