@@ -157,18 +157,15 @@ export function App() {
   }, []);
 
   if (!hydrated) {
-    // Full-bleed dark surface while auth hydrates (matches native
-    // splash `backgroundColor: #111111` so the transition is
-    // invisible). Wrapped in the boundary for uniform safety even
-    // though this branch renders a bare <View>.
-    return (
-      <AppErrorBoundary>
-        <View
-          style={{ flex: 1, backgroundColor: "#111111" }}
-          testID="driver-loading-screen"
-        />
-      </AppErrorBoundary>
-    );
+    // Hydrating — but rendered inside the SAME provider tree as the
+    // post-hydration branch below (see Customer/App.tsx for the same
+    // pattern that already ships in production). Keeping a single
+    // top-level tree — <AppErrorBoundary> → <SafeAreaProvider> →
+    // <AuthContext.Provider> → <leaf> — means the SafeAreaProvider
+    // and AuthContext never remount when hydration flips; we just
+    // swap the leaf. That avoids the RN 0.74 first-paint race where
+    // an entire provider chain, including NavigationContainer's
+    // navigationRef, mounts in the same commit as its parents.
   }
   // R71.16.3 (Driver P0-b) — Backend stores approval status on
   // `user.status`. Match the web Driver Dashboard's gate: only
@@ -187,40 +184,55 @@ export function App() {
     <AppErrorBoundary>
       <SafeAreaProvider>
         <AuthContext.Provider value={authValue}>
-          <NavigationContainer ref={navigationRef}>
-            <StatusBar style="dark" />
-            <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
-              {!user ? (
-                <>
-                  <Stack.Screen name="Login" component={LoginScreen} />
-                  <Stack.Screen name="Register" component={RegisterScreen} />
-                  <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
-                </>
-              ) : !approved ? (
-                <Stack.Screen name="AwaitingApproval" component={AwaitingApprovalScreen} />
-              ) : (
-                <>
-                  {/* Primary destinations — hosted inside the driver sidebar shell. */}
-                  <Stack.Screen name="Home" component={withShell(HomeScreen)} />
-                  <Stack.Screen name="AvailableJobs" component={withShell(AvailableJobsScreen)} />
-                  <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
-                  <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
-                  <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
-                  <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
-                  <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
-                  <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
+          {/* StatusBar always mounted — style flips from light (on the
+              dark hydration screen) to dark (on the white login/nav
+              tree) so text stays legible in both. Mirrors Customer. */}
+          <StatusBar style={hydrated ? "dark" : "light"} />
+          {!hydrated ? (
+            // Full-bleed dark surface while auth hydrates — matches the
+            // native splash `backgroundColor: #111111` so the transition
+            // is invisible. Kept as a bare <View> (no SafeAreaView) so
+            // the fill reaches every edge including the notch, and no
+            // native module is touched during first paint.
+            <View
+              style={{ flex: 1, backgroundColor: "#111111" }}
+              testID="driver-loading-screen"
+            />
+          ) : (
+            <NavigationContainer ref={navigationRef}>
+              <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+                {!user ? (
+                  <>
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="Register" component={RegisterScreen} />
+                    <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
+                  </>
+                ) : !approved ? (
+                  <Stack.Screen name="AwaitingApproval" component={AwaitingApprovalScreen} />
+                ) : (
+                  <>
+                    {/* Primary destinations — hosted inside the driver sidebar shell. */}
+                    <Stack.Screen name="Home" component={withShell(HomeScreen)} />
+                    <Stack.Screen name="AvailableJobs" component={withShell(AvailableJobsScreen)} />
+                    <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
+                    <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
+                    <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
+                    <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
+                    <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
+                    <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
 
-                  {/* Focused workflows */}
-                  <Stack.Screen name="JobDetail" component={JobDetailScreen} />
-                  <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
-                  <Stack.Screen name="Passkeys" component={PasskeysScreen} />
-                  <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                  <Stack.Screen name="Documents" component={DocumentsScreen} />
-                </>
-              )}
-            </Stack.Navigator>
-            {user ? <PushBridge /> : null}
-          </NavigationContainer>
+                    {/* Focused workflows */}
+                    <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+                    <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
+                    <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                    <Stack.Screen name="Documents" component={DocumentsScreen} />
+                  </>
+                )}
+              </Stack.Navigator>
+              {user ? <PushBridge /> : null}
+            </NavigationContainer>
+          )}
         </AuthContext.Provider>
       </SafeAreaProvider>
     </AppErrorBoundary>
