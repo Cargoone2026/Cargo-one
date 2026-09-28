@@ -16,7 +16,7 @@
 import "react-native-gesture-handler";
 import { registerRootComponent } from "expo";
 
-const MINIMAL_BOOT = true;
+const MINIMAL_BOOT = false;
 
 if (MINIMAL_BOOT) {
   const { MinimalApp } = require("./src/MinimalApp") as typeof import("./src/MinimalApp");

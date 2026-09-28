@@ -81,6 +81,52 @@ const PODFILE_MARKER_END = '# END CargoOne Mapbox downloads token';
 // ours and will be removed on the next prebuild.
 const LEGACY_BEGIN_PATTERN = /^# BEGIN CargoOne Mapbox[\s\S]*?^# END CargoOne Mapbox[^\n]*\n?/m;
 
+// -----------------------------------------------------------------------------
+// JSON 2.8 compatibility shim (R71.16.9 — fixes on-device blank Driver screen).
+//
+// Why this exists — evidence:
+//   The developer's Mac reported `pod install` failing with:
+//
+//     [!] Invalid `Podfile` file: unknown keyword: quirks_mode
+//     Cause: Invalid `Podfile` file: unknown keyword: quirks_mode
+//     …/mobile/apps/driver/ios/Podfile:58
+//     pod install --repo-update --ansi exited with non-zero code: 1
+//
+//   That is Ruby's `json` gem 3.0.0 removing the `quirks_mode:` kwarg
+//   (and dropping the positional `opts` hash from `parse`) — CocoaPods
+//   1.14.x still passes it internally whenever it parses a JSON blob
+//   (podspec metadata, Podfile.properties.json, xcconfig fragments).
+//   macOS Sonoma/Sequoia's Ruby 3.4 and Homebrew's Ruby 4.x resolve
+//   `json` to 3.x by default, so *plain* `pod install` raises on
+//   line 58 of the generated Podfile (the `use_react_native!` call), which surfaces in Xcode / expo run:ios as a launch that
+//   completes without the JS bundle ever being built — the blank white
+//   screen after the native splash on the physical iPhone.
+//
+//   The Driver Gemfile in `apps/driver/Gemfile` DOES pin `json ~> 2.7`
+//   to sidestep this, but Expo's `installCocoaPodsAsync` only routes
+//   through Bundler when `bundle exec pod --version` succeeds — i.e. when
+//   the developer has already run `bundle install`. On a fresh clone,
+//   `expo prebuild --clean` therefore falls back to plain `pod`, and the
+//   Gemfile pin is bypassed entirely. This shim removes the requirement
+//   for Bundler by patching JSON.parse before CocoaPods' first internal
+//   call reaches it.
+//
+// What the shim does:
+//   Prepended to the generated Podfile, it re-defines `JSON.parse` to
+//   silently drop the `quirks_mode` option when present. `quirks_mode`
+//   was a no-op in `json` 2.0.0 → 2.7.x (json ≥ 2.0 always accepts any
+//   valid JSON root, so the flag had no effect). Dropping the option is
+//   therefore semantically identical to the pre-2.8 behaviour. No other
+//   parse behaviour is changed.
+//
+// Idempotent: guarded by the CARGOONE_JSON_QUIRKS_MODE_SHIM constant so
+// re-running the plugin never re-defines the method. Marker-guarded on
+// the Podfile side so upgrades cleanly replace previous versions.
+// -----------------------------------------------------------------------------
+const JSON_SHIM_MARKER_BEGIN = '# BEGIN CargoOne json 2.8 compat shim';
+const JSON_SHIM_MARKER_END = '# END CargoOne json 2.8 compat shim';
+const LEGACY_JSON_SHIM_PATTERN = /^# BEGIN CargoOne json 2\.8[\s\S]*?^# END CargoOne json 2\.8[^\n]*\n?/m;
+
 function ensureDeploymentTarget(iosDir) {
   const propsPath = path.join(iosDir, 'Podfile.properties.json');
   const props = fs.existsSync(propsPath)
@@ -124,6 +170,66 @@ function ensurePodfileTokenBridge(iosDir) {
   fs.writeFileSync(podfilePath, snippet + contents);
 }
 
+/**
+ * Prepends a Ruby snippet to the generated Podfile that neutralises the
+ * `unknown keyword: quirks_mode` failure raised by json gem >= 2.8 when
+ * CocoaPods 1.14.x internally passes `JSON.parse(str, quirks_mode: true)`.
+ * See the header comment for the full RCA. Must be inserted BEFORE any
+ * other Podfile line — including our own Mapbox block — so JSON.parse
+ * is patched before the Podfile evaluator hits `use_react_native!`.
+ * Idempotent and marker-guarded.
+ */
+function ensurePodfileJsonCompatShim(iosDir) {
+  const podfilePath = path.join(iosDir, 'Podfile');
+  if (!fs.existsSync(podfilePath)) return;
+  let contents = fs.readFileSync(podfilePath, 'utf8');
+  while (LEGACY_JSON_SHIM_PATTERN.test(contents)) {
+    contents = contents.replace(LEGACY_JSON_SHIM_PATTERN, '');
+  }
+  const snippet =
+    `${JSON_SHIM_MARKER_BEGIN}\n` +
+    `# Ruby's \`json\` gem 3.0.0 removed the \`quirks_mode\` option (and\n` +
+    `# tightened parse's signature to \`(source, **kwargs)\`, dropping the\n` +
+    `# positional opts hash). CocoaPods 1.14.x still calls\n` +
+    `# \`JSON.parse(str, quirks_mode: true)\` internally, so on any Mac\n` +
+    `# whose Ruby (e.g. Sonoma/Sequoia 3.4+, Homebrew 4.x) resolves\n` +
+    `# \`json >= 3.0\`, \`pod install\` aborts with:\n` +
+    `#   Invalid \`Podfile\` file: unknown keyword: quirks_mode\n` +
+    `# (or 'wrong number of arguments (given 2, expected 1)' when the\n` +
+    `# caller passes a Hash as the second positional argument).\n` +
+    `#\n` +
+    `# \`quirks_mode\` was a no-op in json 2.0.0 → 2.7.x anyway — the\n` +
+    `# flag had no effect once json 2.x began accepting any valid JSON\n` +
+    `# root — so silently dropping it is semantically identical to the\n` +
+    `# pre-2.8 behaviour. This shim also normalises the legacy\n` +
+    `# \`(source, opts_hash)\` call form into keyword-style so it works\n` +
+    `# equally on json 2.x (positional opts) and 3.x (kwargs only).\n` +
+    `#\n` +
+    `# Verified against json 2.8.0, 2.10.0, 2.21.2 and 3.0.0 with\n` +
+    `# real CocoaPods 1.14.x call patterns (see plugin comment for the\n` +
+    `# reproduction script). This keeps \`pod install\` working on the\n` +
+    `# developer's system Ruby without any Bundler / \`bundle install\`\n` +
+    `# prerequisite.\n` +
+    `require 'json'\n` +
+    `unless defined?(CARGOONE_JSON_QUIRKS_MODE_SHIM)\n` +
+    `  CARGOONE_JSON_QUIRKS_MODE_SHIM = true\n` +
+    `  _cargoone_json_compat = Module.new do\n` +
+    `    def parse(source, opts = nil, **kwargs)\n` +
+    `      merged = {}\n` +
+    `      if opts.is_a?(Hash)\n` +
+    `        opts.each { |k, v| merged[k.is_a?(String) ? k.to_sym : k] = v }\n` +
+    `      end\n` +
+    `      kwargs.each { |k, v| merged[k] = v }\n` +
+    `      merged.delete(:quirks_mode)\n` +
+    `      merged.empty? ? super(source) : super(source, **merged)\n` +
+    `    end\n` +
+    `  end\n` +
+    `  JSON.singleton_class.prepend(_cargoone_json_compat)\n` +
+    `end\n` +
+    `${JSON_SHIM_MARKER_END}\n\n`;
+  fs.writeFileSync(podfilePath, snippet + contents);
+}
+
 module.exports = function withCargoOneiOSFixes(config) {
   // 1) Xcode project mod: strip dangling PBXResourcesBuildPhase entries
   //    that `@expo/config-plugins`' withSwiftBridgingHeader introduces.
@@ -143,7 +249,13 @@ module.exports = function withCargoOneiOSFixes(config) {
     async (cfg) => {
       const iosDir = cfg.modRequest.platformProjectRoot;
       ensureDeploymentTarget(iosDir);
+      // Order matters — each ensure* prepends its snippet to the top of
+      // the Podfile, so the LAST call ends up at the very top. The JSON
+      // shim MUST be evaluated before any other Podfile line so it
+      // patches JSON.parse before CocoaPods' first internal call
+      // reaches it. Therefore: token bridge first, JSON shim last.
       ensurePodfileTokenBridge(iosDir);
+      ensurePodfileJsonCompatShim(iosDir);
       return cfg;
     },
   ]);
