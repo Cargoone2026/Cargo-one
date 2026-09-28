@@ -39,7 +39,6 @@
     },
     "plugins": [
       "../../plugins/withCargoOneiOSFixes",
-      "../../plugins/withCargoOneDriverNativeDiagnostic",
       ["@rnmapbox/maps", {}],
       [
         "expo-location",

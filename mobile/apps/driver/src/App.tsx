@@ -1,5 +1,26 @@
+/**
+ * CargoOne Driver — App root.
+ *
+ * Technical bootstrap MIRRORS the Customer app (which is a golden
+ * checkpoint that boots cleanly on physical devices):
+ *   - `initPushForegroundHandler()` and `SplashScreen.preventAutoHideAsync()`
+ *     run at MODULE SCOPE so they take effect before the first render.
+ *   - Single unbroken provider tree: SafeAreaProvider → AuthContext.Provider
+ *     → StatusBar + (LoadingScreen | NavigationContainer). Providers never
+ *     remount when hydration flips; the leaf swaps.
+ *   - Native launch splash is dismissed inside a bootstrap `useEffect`
+ *     on the App component; our branded <LoadingScreen /> covers any
+ *     hydration wait.
+ *
+ * IDENTITY IS 100% DRIVER:
+ *   - CargoOne Driver bundle id (`co.uk.cargoone.driver`), Driver icon,
+ *     Driver splash background (`#111111`), Driver LoginScreen,
+ *     DriverAPI, driver role gating (`user.role === "driver"`), driver
+ *     approval gate (AwaitingApproval), driver navigator, driver push
+ *     payload contract (`ActiveBooking` / `JobDetail` / `Home`).
+ *   - No StripeProvider (driver app doesn't take payments).
+ */
 import React, { useCallback, useEffect, useRef } from "react";
-import { View } from "react-native";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -27,7 +48,7 @@ import { DocumentsScreen } from "./screens/Documents";
 import { AuthContext, useAuthValue } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
-import { bootRecorder } from "./BootRecorder";
+import { LoadingScreen } from "./components/LoadingScreen";
 import {
   initPushForegroundHandler,
   registerForPushNotifications,
@@ -36,20 +57,15 @@ import {
   type PushDataPayload,
 } from "./pushNotifications";
 
-// Historically the two calls below (`initPushForegroundHandler()` and
-// `SplashScreen.preventAutoHideAsync()`) executed at MODULE SCOPE — i.e.
-// while App.tsx itself was being evaluated by the JS runtime. That's
-// unsafe for the initial startup path on a physical device: if either
-// side-effect throws synchronously (a native module not yet ready, an
-// upstream shape change, a misconfigured entitlement, etc.), the App
-// module fails to define and `registerRootComponent(App)` in index.ts
-// is never reached. There is no React tree, no error boundary, no
-// red-box — just the RN root view's white background — which matches
-// exactly the "blank white after native splash" symptom seen on
-// iPhone 14 device builds. Both calls are now performed inside a
-// bootstrap `useEffect` on the App component itself, so any failure
-// gets caught by <AppErrorBoundary> instead of nuking the tree, and
-// the initial <View> render still commits regardless.
+// Foreground push handler must be configured before the first
+// `Notifications.addNotificationReceivedListener` fires. Customer app
+// does exactly the same at module scope.
+initPushForegroundHandler();
+
+// Hold the native launch splash until the React tree has mounted and
+// hydration completes. iOS enforces a ~10-second fuse on this call so
+// it can never strand the splash on-screen.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export type RootStackParamList = {
   Login: undefined;
@@ -74,10 +90,14 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-/** PushBridge — same shape as customer app: register on login, unregister
- *  on logout, route notification taps into the navigator. */
+/**
+ * PushBridge — register the device token on login, unregister on
+ * logout, and route notification taps into the Driver navigator.
+ * Same shape as Customer's PushBridge.
+ */
 function PushBridge() {
   const tokenRef = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     registerForPushNotifications(DriverAPI.registerPushToken).then((tok) => {
@@ -89,6 +109,7 @@ function PushBridge() {
       tokenRef.current = null;
     };
   }, []);
+
   const navigate = useCallback((data: PushDataPayload) => {
     if (!navigationRef.isReady()) {
       setTimeout(() => navigate(data), 300);
@@ -108,10 +129,9 @@ function PushBridge() {
 }
 
 /**
- * Wrap each primary destination inside <AppShell> so the Cargo One
- * responsive sidebar is present. Detail screens (JobDetail /
- * ActiveBooking / Passkeys) render without the sidebar for focused
- * workflows — same pattern as the customer app.
+ * Wrap each primary destination inside <AppShell> so the CargoOne
+ * responsive sidebar is present. Detail screens render without the
+ * sidebar for focused workflows — same pattern as Customer.
  */
 function withShell<C extends React.ComponentType<any>>(Component: C) {
   const Wrapped: React.FC<any> = (props) => (
@@ -123,81 +143,21 @@ function withShell<C extends React.ComponentType<any>>(Component: C) {
   return Wrapped;
 }
 
-// Hold the native launch splash until the React tree mounts, then
-// hide it immediately regardless of hydration. If hydration ever
-// hangs, the fallback loader below still renders — the native splash
-// never gets stranded on screen.
-//
-// Both `preventAutoHideAsync` and `initPushForegroundHandler` are now
-// invoked from a bootstrap useEffect (see block above the App return),
-// not at module scope, so a failure in either cannot prevent the
-// initial React tree from rendering. Native iOS enforces its own
-// ~10-second auto-hide fuse on `preventAutoHideAsync`, so skipping
-// the call is a harmless degradation — the launch image simply hides
-// on its own.
-
 export function App() {
-  // eslint-disable-next-line no-console
-  console.log("[Driver:boot] step 7 — App() function entered (React invoked our root component)");
-  bootRecorder.record(14, "App() function entered (React invoked real Driver root)", true);
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
-  // eslint-disable-next-line no-console
-  console.log("[Driver:boot] step 8 — useAuthValue completed, hydrated=" + hydrated + " user=" + (user ? "yes" : "null"));
-  bootRecorder.record(15, `useAuthValue completed (hydrated=${hydrated}, user=${user ? "yes" : "null"})`, true);
 
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("[Driver:boot] step 9 — bootstrap useEffect fired (React committed at least one render)");
-    bootRecorder.record(16, "App bootstrap useEffect fired (real App first commit)", true);
-    // Bootstrap: run every side-effect that used to live at module
-    // scope AFTER React has committed at least the initial render, and
-    // silence any failure — the error boundary catches render errors,
-    // but these two calls are safe to no-op if the underlying native
-    // module isn't ready (Expo enforces its own splash-hide timeout on
-    // iOS, and the push handler is only consulted when a notification
-    // fires — never during first paint).
-    try {
-      initPushForegroundHandler();
-      // eslint-disable-next-line no-console
-      console.log("[Driver:boot] step 10 — initPushForegroundHandler ok");
-      bootRecorder.record(17, "initPushForegroundHandler ok", true);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Driver:boot] step 10 FAILED — initPushForegroundHandler threw:", String(err));
-      bootRecorder.record(17, "initPushForegroundHandler FAILED", false, String(err));
-    }
-    SplashScreen.preventAutoHideAsync().catch(() => {});
-    SplashScreen.hideAsync()
-      .then(() => {
-        // eslint-disable-next-line no-console
-        console.log("[Driver:boot] step 11 — SplashScreen.hideAsync (App-side) resolved");
-        bootRecorder.record(18, "SplashScreen.hideAsync (App-side) resolved", true);
-      })
-      .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.log("[Driver:boot] step 11 FAILED —", String(err));
-        bootRecorder.record(18, "SplashScreen.hideAsync (App-side) FAILED", false, String(err));
-      });
+    // Dismiss the native launch splash as soon as React commits.
+    // <LoadingScreen /> below covers any remaining hydration wait,
+    // so keeping the native splash alive here would just risk it
+    // lingering forever if hydration ever hangs.
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  if (!hydrated) {
-    // Hydrating — but rendered inside the SAME provider tree as the
-    // post-hydration branch below (see Customer/App.tsx for the same
-    // pattern that already ships in production). Keeping a single
-    // top-level tree — <AppErrorBoundary> → <SafeAreaProvider> →
-    // <AuthContext.Provider> → <leaf> — means the SafeAreaProvider
-    // and AuthContext never remount when hydration flips; we just
-    // swap the leaf. That avoids the RN 0.74 first-paint race where
-    // an entire provider chain, including NavigationContainer's
-    // navigationRef, mounts in the same commit as its parents.
-  }
-  // R71.16.3 (Driver P0-b) — Backend stores approval status on
-  // `user.status`. Match the web Driver Dashboard's gate: only
-  // `status === "active"` drivers get the full app; every other
-  // status (`pending`, `changes_requested`, `suspended`) routes to
-  // the AwaitingApproval screen where the correct message + resubmit
-  // action are rendered. Legacy `approval_state === "approved"` and
+  // Backend stores approval status on `user.status`. Only `active`
+  // drivers get the full app; every other status routes to
+  // AwaitingApproval. Legacy `approval_state === "approved"` and
   // `verified_driver` are kept as fallbacks for pre-migration users.
   const status = (user as any)?.status as string | undefined;
   const approved =
@@ -209,23 +169,14 @@ export function App() {
     <AppErrorBoundary>
       <SafeAreaProvider>
         <AuthContext.Provider value={authValue}>
-          {/* StatusBar always mounted — style flips from light (on the
-              dark hydration screen) to dark (on the white login/nav
-              tree) so text stays legible in both. Mirrors Customer. */}
           <StatusBar style={hydrated ? "dark" : "light"} />
           {!hydrated ? (
-            // Full-bleed dark surface while auth hydrates — matches the
-            // native splash `backgroundColor: #111111` so the transition
-            // is invisible. Kept as a bare <View> (no SafeAreaView) so
-            // the fill reaches every edge including the notch, and no
-            // native module is touched during first paint.
-            <View
-              style={{ flex: 1, backgroundColor: "#111111" }}
-              testID="driver-loading-screen"
-            />
+            <LoadingScreen />
           ) : (
             <NavigationContainer ref={navigationRef}>
-              <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+              <Stack.Navigator
+                screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+              >
                 {!user ? (
                   <>
                     <Stack.Screen name="Login" component={LoginScreen} />
@@ -233,12 +184,18 @@ export function App() {
                     <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
                   </>
                 ) : !approved ? (
-                  <Stack.Screen name="AwaitingApproval" component={AwaitingApprovalScreen} />
+                  <Stack.Screen
+                    name="AwaitingApproval"
+                    component={AwaitingApprovalScreen}
+                  />
                 ) : (
                   <>
                     {/* Primary destinations — hosted inside the driver sidebar shell. */}
                     <Stack.Screen name="Home" component={withShell(HomeScreen)} />
-                    <Stack.Screen name="AvailableJobs" component={withShell(AvailableJobsScreen)} />
+                    <Stack.Screen
+                      name="AvailableJobs"
+                      component={withShell(AvailableJobsScreen)}
+                    />
                     <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
                     <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
                     <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
