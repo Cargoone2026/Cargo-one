@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { isPasskeySupported, loginWithPasskey } from "@cargoone/core";
+import { isPasskeySupported, loginWithPasskey, NetworkError } from "@cargoone/core";
 import { useAuth } from "../AuthContext";
 import { Input, Label, Page, PrimaryButton, SecondaryButton } from "../ui";
 import { colors, radius, typography } from "../theme";
@@ -14,11 +14,33 @@ import type { RootStackParamList } from "../App";
 type P = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export function LoginScreen({ navigation }: P) {
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<null | "password" | "passkey">(null);
   const [err, setErr] = useState<string | null>(null);
+
+  /**
+   * Convert a raw exception from the auth call into a message the
+   * driver can actually act on. Mirrors Customer's helper introduced in
+   * commit 9242749 — the same three failure modes apply here:
+   *   • `NetworkError` — DNS / TLS / ATS / offline. Use the class's
+   *     built-in "Could not reach CargoOne…" wording so it never leaks
+   *     the raw "Network request failed" string.
+   *   • 401 — invalid credentials. Backend sends a generic detail but
+   *     drivers benefit from an explicit prompt.
+   *   • 429 — rate-limited. Tell them to wait rather than "Login failed".
+   * Every other error falls through to the backend `detail` (e.g. the
+   * cross-app role guard's "This app is for drivers.").
+   */
+  function friendlyError(e: any): string {
+    if (e instanceof NetworkError) return e.message;
+    if (typeof e?.status === "number") {
+      if (e.status === 401) return "Incorrect email or password.";
+      if (e.status === 429) return "Too many attempts. Please wait a moment and try again.";
+    }
+    return e?.message || "Login failed";
+  }
 
   async function onPasswordLogin() {
     setErr(null);
@@ -26,13 +48,14 @@ export function LoginScreen({ navigation }: P) {
     try {
       await login(email, password);
     } catch (e: any) {
-      setErr(e?.message || "Login failed");
+      setErr(friendlyError(e));
     } finally {
       setBusy(null);
     }
   }
 
   async function onPasskeyLogin() {
+    setErr(null);
     if (!email.trim()) {
       setErr("Enter your email first to sign in with a passkey.");
       return;
@@ -47,8 +70,14 @@ export function LoginScreen({ navigation }: P) {
       if (res.user.role !== "driver") {
         throw new Error("This app is for drivers. Please use the customer app.");
       }
+      // `loginWithPasskey` persists the token via `saveToken` but does
+      // NOT touch AuthContext state — `user` would remain null and the
+      // navigator would keep the Login screen mounted. `refresh()`
+      // fetches `/auth/me` and calls `setUser`, which flips the
+      // authenticated stack. Mirrors Customer's 9242749 fix.
+      await refresh();
     } catch (e: any) {
-      setErr(e?.message || "Passkey login failed");
+      setErr(friendlyError(e));
     } finally {
       setBusy(null);
     }
