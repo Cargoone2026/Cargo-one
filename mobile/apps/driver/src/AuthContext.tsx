@@ -1,88 +1,97 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { SharedAPI, User, login as apiLogin, logout as apiLogout, register as apiRegister, RegisterInput } from "@cargoone/core";
-
-export interface AuthState {
-  user: User | null;
-  hydrated: boolean;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
-  logout: () => Promise<void>;
-  refresh: () => Promise<void>;
-}
-
-export const AuthContext = createContext<AuthState | null>(null);
-
-export function useAuth() {
-  const v = useContext(AuthContext);
-  if (!v) throw new Error("useAuth must be used inside AuthContext");
-  return v;
-}
-
 /**
- * Session hook shared by the whole customer app. On mount it hydrates
- * `user` from `/api/auth/me` using the token that was persisted by any
- * previous session (see `@cargoone/core` `saveToken`).
+ * CargoOne Driver — AuthContext.
+ *
+ * Mirrors the web AuthContext (frontend/src/context/AuthContext.jsx)
+ * with two mobile-specific differences:
+ *   1. Bearer token via AsyncStorage (via @cargoone/core) — no cookies.
+ *   2. Login gate is by driver role; wrong-role sign-in is refused and
+ *      the token is cleared so the user is bounced back to Login.
+ *
+ * State shape (deliberately identical to web):
+ *   { user, loading, login(email, password), logout(), refresh() }
  */
-export function useAuthValue(): AuthState {
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  login as coreLogin,
+  logout as coreLogout,
+  me as coreMe,
+  saveToken,
+  ApiError,
+  type User,
+} from "@cargoone/core";
+
+interface AuthState {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<User | null>;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    // Guard against pathological network hangs during cold start —
-    // fetch has no default timeout on RN, so `SharedAPI.me()` could
-    // sit forever if DNS/TLS stalls. Race against a 6-second fuse.
-    const timed = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
-    const me = await Promise.race([SharedAPI.me().catch(() => null), timed]);
-    setUser(me && (me as User).role === "driver" ? (me as User) : null);
+    const me = await coreMe();
+    setUser(me);
+    return me;
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
     (async () => {
       try {
         await refresh();
       } finally {
-        if (!cancelled) setHydrated(true);
+        if (alive) setLoading(false);
       }
     })();
     return () => {
-      cancelled = true;
+      alive = false;
     };
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      const res = await apiLogin(email, password);
-      if (res.user.role !== "driver") {
-        await apiLogout();
-        throw new Error("This app is for drivers. Please use the customer app.");
-      }
-      setUser(res.user);
-    } finally {
-      setLoading(false);
+    const res = await coreLogin(email, password);
+    // Enforce driver-only sign-in on the Driver app. Other roles can
+    // exist on the same backend (customer, admin) but must use their
+    // own app. Clear the token so we never leave a wrong-role session.
+    if (res.user?.role !== "driver") {
+      await saveToken(null);
+      throw new ApiError(
+        "This is the Driver app. Please use the CargoOne Customer app or the web portal to sign in.",
+        403,
+      );
     }
-  }, []);
-
-  const register = useCallback(async (input: RegisterInput) => {
-    setLoading(true);
-    try {
-      const res = await apiRegister({ ...input, role: "driver" });
-      setUser(res.user);
-    } finally {
-      setLoading(false);
-    }
+    setUser(res.user);
+    return res.user;
   }, []);
 
   const logout = useCallback(async () => {
-    await apiLogout();
+    await coreLogout();
     setUser(null);
   }, []);
 
-  return useMemo(
-    () => ({ user, hydrated, loading, login, register, logout, refresh }),
-    [user, hydrated, loading, login, register, logout, refresh],
+  const value = useMemo(
+    () => ({ user, loading, login, logout, refresh }),
+    [user, loading, login, logout, refresh],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+  return ctx;
 }
