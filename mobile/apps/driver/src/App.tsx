@@ -21,6 +21,7 @@
  *   - No StripeProvider (driver app doesn't take payments).
  */
 import React, { useCallback, useEffect, useRef } from "react";
+import { Text, View } from "react-native"; // DIAG
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
@@ -165,58 +166,77 @@ export function App() {
     (user as any)?.approval_state === "approved" ||
     (user as any)?.verified_driver === true;
 
-  return (
-    <AppErrorBoundary>
-      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <AuthContext.Provider value={authValue}>
-          <StatusBar style={hydrated ? "dark" : "light"} />
-          {!hydrated ? (
-            <LoadingScreen />
-          ) : (
-            <NavigationContainer ref={navigationRef}>
-              <Stack.Navigator
-                screenOptions={{ headerShown: false, animation: "slide_from_right" }}
-              >
-                {!user ? (
-                  <>
-                    <Stack.Screen name="Login" component={LoginScreen} />
-                    <Stack.Screen name="Register" component={RegisterScreen} />
-                    <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
-                  </>
-                ) : !approved ? (
-                  <Stack.Screen
-                    name="AwaitingApproval"
-                    component={AwaitingApprovalScreen}
-                  />
-                ) : (
-                  <>
-                    {/* Primary destinations — hosted inside the driver sidebar shell. */}
-                    <Stack.Screen name="Home" component={withShell(HomeScreen)} />
-                    <Stack.Screen
-                      name="AvailableJobs"
-                      component={withShell(AvailableJobsScreen)}
-                    />
-                    <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
-                    <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
-                    <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
-                    <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
-                    <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
-                    <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
+  console.log("[DRIVER] render", { hydrated, user: !!user }); // DIAG
 
-                    {/* Focused workflows */}
-                    <Stack.Screen name="JobDetail" component={JobDetailScreen} />
-                    <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
-                    <Stack.Screen name="Passkeys" component={PasskeysScreen} />
-                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                    <Stack.Screen name="Documents" component={DocumentsScreen} />
-                  </>
-                )}
-              </Stack.Navigator>
-              {user ? <PushBridge /> : null}
-            </NavigationContainer>
-          )}
-        </AuthContext.Provider>
-      </SafeAreaProvider>
-    </AppErrorBoundary>
+  return (
+    <>
+      <AppErrorBoundary>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+          <AuthContext.Provider value={authValue}>
+            <StatusBar style={hydrated ? "dark" : "light"} />
+            {!hydrated ? (
+              <LoadingScreen />
+            ) : (
+              <NavigationContainer ref={navigationRef}>
+                <Stack.Navigator
+                  screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+                >
+                  {!user ? (
+                    <>
+                      <Stack.Screen name="Login" component={LoginScreen} />
+                      <Stack.Screen name="Register" component={RegisterScreen} />
+                      <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
+                    </>
+                  ) : !approved ? (
+                    <Stack.Screen
+                      name="AwaitingApproval"
+                      component={AwaitingApprovalScreen}
+                    />
+                  ) : (
+                    <>
+                      {/* Primary destinations — hosted inside the driver sidebar shell. */}
+                      <Stack.Screen name="Home" component={withShell(HomeScreen)} />
+                      <Stack.Screen
+                        name="AvailableJobs"
+                        component={withShell(AvailableJobsScreen)}
+                      />
+                      <Stack.Screen name="LiveMode" component={withShell(LiveModeScreen)} />
+                      <Stack.Screen name="MyJobs" component={withShell(MyJobsScreen)} />
+                      <Stack.Screen name="Earnings" component={withShell(EarningsScreen)} />
+                      <Stack.Screen name="Fleet" component={withShell(FleetScreen)} />
+                      <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
+                      <Stack.Screen name="Settings" component={withShell(SettingsScreen)} />
+
+                      {/* Focused workflows */}
+                      <Stack.Screen name="JobDetail" component={JobDetailScreen} />
+                      <Stack.Screen name="ActiveBooking" component={ActiveBookingScreen} />
+                      <Stack.Screen name="Passkeys" component={PasskeysScreen} />
+                      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                      <Stack.Screen name="Documents" component={DocumentsScreen} />
+                    </>
+                  )}
+                </Stack.Navigator>
+                {user ? <PushBridge /> : null}
+              </NavigationContainer>
+            )}
+          </AuthContext.Provider>
+        </SafeAreaProvider>
+      </AppErrorBoundary>
+      {/* DIAG */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 60,
+          left: 0,
+          right: 0,
+          backgroundColor: "red",
+          padding: 8,
+          zIndex: 9999,
+        }}
+      >
+        <Text style={{ color: "white" }}>{`hydrated=${hydrated} user=${!!user}`}</Text>
+      </View>
+    </>
   );
 }
