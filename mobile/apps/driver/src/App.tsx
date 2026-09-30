@@ -149,12 +149,20 @@ export function App() {
   const { user, hydrated } = authValue;
 
   useEffect(() => {
-    // Dismiss the native launch splash as soon as React commits.
-    // <LoadingScreen /> below covers any remaining hydration wait,
-    // so keeping the native splash alive here would just risk it
-    // lingering forever if hydration ever hangs.
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
+    // Dismiss the native launch splash ONLY after auth hydration has
+    // committed. Firing this on first render (deps: []) races with
+    // `EXSplashScreenService`'s own KVO on rootViewController.view —
+    // during dev-client's rootVC swap the service transiently removes
+    // the current VC from `_splashScreenControllers`, and any JS
+    // hideAsync landing in that window resolves via failureCallback
+    // with `ERR_SPLASH_SCREEN_CANNOT_HIDE / No native splash screen
+    // registered for given view controller`. Waiting for `hydrated`
+    // guarantees the RN root view has already been laid out and the
+    // VC is back in the map. `LoadingScreen` covers the interval.
+    if (hydrated) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [hydrated]);
 
   // Backend stores approval status on `user.status`. Only `active`
   // drivers get the full app; every other status routes to
