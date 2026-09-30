@@ -23,7 +23,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { DriverAPI } from "@cargoone/core";
@@ -167,7 +167,7 @@ export function App() {
 
   return (
     <AppErrorBoundary>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <AuthContext.Provider value={authValue}>
           <StatusBar style={hydrated ? "dark" : "light"} />
           {!hydrated ? (
