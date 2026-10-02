@@ -1,5 +1,5 @@
 import React from "react";
-import { ComingSoon } from "./AvailableJobs";
+import { ComingSoon } from "../components/ComingSoon";
 
 export default function FleetScreen() {
   return (

@@ -20,6 +20,7 @@ import { AppShell } from "./components/AppShell";
 import LoginScreen from "./screens/Login";
 import HomeScreen from "./screens/Home";
 import AvailableJobsScreen from "./screens/AvailableJobs";
+import JobDetailScreen from "./screens/JobDetail";
 import LiveModeScreen from "./screens/LiveMode";
 import MyJobsScreen from "./screens/MyJobs";
 import EarningsScreen from "./screens/Earnings";
@@ -30,6 +31,7 @@ import { colors } from "./ui";
 export type RootStackParamList = {
   Home: undefined;
   AvailableJobs: undefined;
+  JobDetail: { jobId: string };
   LiveMode: undefined;
   MyJobs: undefined;
   Earnings: undefined;
@@ -49,6 +51,7 @@ function AuthenticatedStack() {
       >
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="AvailableJobs" component={AvailableJobsScreen} />
+        <Stack.Screen name="JobDetail" component={JobDetailScreen} />
         <Stack.Screen name="LiveMode" component={LiveModeScreen} />
         <Stack.Screen name="MyJobs" component={MyJobsScreen} />
         <Stack.Screen name="Earnings" component={EarningsScreen} />
