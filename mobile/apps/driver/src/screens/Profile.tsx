@@ -6,7 +6,8 @@ export default function ProfileScreen() {
     <ComingSoon
       testID="driver-profile"
       title="Profile"
-      subtitle="Account settings, passkeys, notification preferences and driver profile arrive in a later phase."
+      glyph="user"
+      body="Account settings, passkeys, notification preferences and driver profile ship in a later phase."
       showLogout
     />
   );

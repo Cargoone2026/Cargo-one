@@ -6,7 +6,8 @@ export default function LiveModeScreen() {
     <ComingSoon
       testID="driver-live-mode"
       title="Live Mode"
-      subtitle="Location sharing and ASAP dispatch (go online, receive & accept live offers) arrive in a later phase. Location permissions will be requested at that point."
+      glyph="zap"
+      body="Go-online, live heartbeat and ASAP offer acceptance ship in a later phase. Location permission is requested then — not now."
     />
   );
 }

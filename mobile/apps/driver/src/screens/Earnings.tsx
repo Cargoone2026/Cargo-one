@@ -6,7 +6,8 @@ export default function EarningsScreen() {
     <ComingSoon
       testID="driver-earnings"
       title="Earnings"
-      subtitle="Detailed earnings breakdown by day / week / month plus payout history arrives in a later phase. Today's totals are visible on Home."
+      glyph="coin"
+      body="Detailed earnings breakdown by day, week and month plus payout history ships in a later phase. Today's totals are visible on Home."
     />
   );
 }

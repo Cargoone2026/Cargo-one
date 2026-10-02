@@ -1,18 +1,13 @@
 /**
  * CargoOne Driver — App root.
  *
- * Boot chain (kept minimal — no JS splash management, no push, no
- * mapbox, no diagnostic overlays):
- *   SafeAreaProvider
- *     └── AuthProvider (hydrates bearer token from AsyncStorage)
- *          └── NavigationContainer
- *               └── Root native-stack, gated on user presence:
- *                    • No user  → Login screen
- *                    • Signed-in → DriverTabs (bottom-tab shell mirroring
- *                                  the web DriverLayout nav items)
+ * Boot chain remains minimal (no splash JS, no push, no mapbox, no
+ * diagnostic overlays). The bottom-tab bar is styled with the shared
+ * CargoOne mobile tokens so it matches Customer polish while keeping
+ * the Driver-specific 7-item nav order.
  */
 import React from "react";
-import { ActivityIndicator, StyleSheet, View, Text } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -27,19 +22,15 @@ import MyJobsScreen from "./screens/MyJobs";
 import EarningsScreen from "./screens/Earnings";
 import FleetScreen from "./screens/Fleet";
 import ProfileScreen from "./screens/Profile";
-import { colors } from "./theme";
+import { Glyph, colors } from "./ui";
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
-/**
- * Tab icon rendered from a single glyph so we can match the web nav
- * without adding an icon-font native module in Phase 2. Icons come
- * back in a later phase once `@expo/vector-icons` (or an equivalent)
- * is required by another feature.
- */
-function TabGlyph({ glyph, color }: { glyph: string; color: string }) {
-  return <Text style={{ fontSize: 20, color }}>{glyph}</Text>;
+type GlyphName = React.ComponentProps<typeof Glyph>["name"];
+
+function TabIcon({ name, color }: { name: GlyphName; color: string }) {
+  return <Glyph name={name} size={22} color={color} />;
 }
 
 function DriverTabs() {
@@ -48,16 +39,20 @@ function DriverTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarInactiveTintColor: colors.inkFaint,
         tabBarStyle: {
+          backgroundColor: colors.bg,
           borderTopColor: colors.border,
-          height: 70,
-          paddingTop: 6,
-          paddingBottom: 12,
+          borderTopWidth: 1,
+          height: 72,
+          paddingTop: 8,
+          paddingBottom: 14,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "700",
+          letterSpacing: 0.2,
+          marginTop: 2,
         },
       }}
     >
@@ -66,7 +61,7 @@ function DriverTabs() {
         component={HomeScreen}
         options={{
           tabBarTestID: "tab-home",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="⌂" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -75,7 +70,7 @@ function DriverTabs() {
         options={{
           title: "Available",
           tabBarTestID: "tab-available",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="◎" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="compass" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -84,7 +79,7 @@ function DriverTabs() {
         options={{
           title: "Live",
           tabBarTestID: "tab-live",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="⚡" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="zap" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -93,7 +88,7 @@ function DriverTabs() {
         options={{
           title: "My Jobs",
           tabBarTestID: "tab-myjobs",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="▤" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="box" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -102,7 +97,7 @@ function DriverTabs() {
         options={{
           title: "Earnings",
           tabBarTestID: "tab-earnings",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="£" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="coin" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -111,7 +106,7 @@ function DriverTabs() {
         options={{
           title: "Fleet",
           tabBarTestID: "tab-fleet",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="🚚" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="truck" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -120,7 +115,7 @@ function DriverTabs() {
         options={{
           title: "Profile",
           tabBarTestID: "tab-profile",
-          tabBarIcon: ({ color }) => <TabGlyph glyph="◉" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="user" color={color} />,
         }}
       />
     </Tabs.Navigator>

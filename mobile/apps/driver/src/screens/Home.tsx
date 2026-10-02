@@ -1,44 +1,22 @@
 /**
  * CargoOne Driver — Home / Dashboard.
  *
- * Faithful mobile adaptation of the web driver dashboard
- * (frontend/src/pages/portal/driver/Dashboard.jsx).
- *
- * Same data source: GET /driver/dashboard via DriverAPI.dashboard().
- * Same cards, wording, spacing, colours and conditional banners.
- * Pull-to-refresh replaces the desktop "Refreshing…" indicator.
- *
- * Phase 2 deferrals (visible but stubbed):
- *   • Global search icon in the header — web-only feature, omitted.
- *   • Notifications bell — visible; tap shows a placeholder toast
- *     until the Notifications phase.
- *   • New-message chime toggle — hidden. The message unread badge is
- *     shown, sourced from /messages/unread-count (already in core).
- *   • Card `Details / Manage / See all` right-links — visible; tapping
- *     switches to the corresponding tab where a Phase 3 stub screen
- *     lives.
+ * Content faithful to the Driver web dashboard
+ * (frontend/src/pages/portal/driver/Dashboard.jsx) — same cards,
+ * same API, same conditional warning banners. Visual language from
+ * the Customer mobile design system (shared primitives in `../ui`).
  */
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { DriverAPI, type DriverDashboard } from "@cargoone/core";
+import {
+  Page, PageHeader, IconButton, Section, Card, CardTitleRow, StatCell,
+  StatusPill, SectionTitle, Body, Caption, Row, PrimaryButton, EmptyState,
+  HeroCard, MapPin, ChevronRight, Glyph,
+  colors, radius, space, typography,
+} from "../ui";
 import { useAuth } from "../AuthContext";
-import { colors, radius, spacing, typography } from "../theme";
-
-type Nav = {
-  navigate: (name: string, params?: any) => void;
-  jumpTo?: (name: string, params?: any) => void;
-};
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -69,10 +47,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      await load();
-      setLoading(false);
-    })();
+    (async () => { await load(); setLoading(false); })();
   }, [load]);
 
   const onRefresh = useCallback(async () => {
@@ -84,6 +59,7 @@ export default function HomeScreen() {
   const pending = user?.status === "pending";
   const changesRequested = user?.status === "changes_requested";
   const suspended = user?.status === "suspended";
+  const accountStatus = suspended ? "suspended" : changesRequested ? "changes_requested" : pending ? "pending" : "active";
 
   const earnings = dash.earnings || {};
   const bids = dash.bids || {};
@@ -93,12 +69,9 @@ export default function HomeScreen() {
   const rating = dash.user?.rating ?? (user as any)?.rating ?? 5;
   const reviewCount = dash.user?.review_count ?? 0;
   const changesReason =
-    (user as any)?.changes_requested_reason ||
-    dash?.user?.changes_requested_reason;
+    (user as any)?.changes_requested_reason || dash?.user?.changes_requested_reason;
   const changesDocTypes =
-    (user as any)?.changes_requested_doc_types ||
-    dash?.user?.changes_requested_doc_types ||
-    [];
+    (user as any)?.changes_requested_doc_types || dash?.user?.changes_requested_doc_types || [];
 
   const resubmit = useCallback(async () => {
     try {
@@ -110,222 +83,232 @@ export default function HomeScreen() {
     }
   }, [load]);
 
-  const statusText = suspended
+  const firstName = user?.name?.split(" ")[0] || "there";
+  const subtitle = suspended
     ? "Account suspended — contact support"
     : changesRequested
     ? "Action required — see below"
     : pending
     ? "Complete verification to earn"
     : "Ready to earn today?";
-  const statusDotColor = suspended || changesRequested
-    ? colors.danger
-    : pending
-    ? colors.warning
-    : colors.success;
-  const statusLabel = suspended
-    ? "Suspended"
-    : changesRequested
-    ? "Action needed"
-    : pending
-    ? "Pending"
-    : "Online";
-
-  const firstName = user?.name?.split(" ")[0] || "there";
 
   if (loading) {
     return (
-      <View style={styles.bootRoot} testID="driver-home-loading">
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
+      <Page testID="driver-home-loading">
+        <PageHeader title={`Hi ${firstName}`} subtitle="Loading…" large />
+      </Page>
     );
   }
 
   return (
-    <View style={styles.root}>
-      {/* Dark header */}
-      <SafeAreaView edges={["top"]} style={styles.headerSafe}>
-        <View style={styles.header} testID="driver-home-header">
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.hi} numberOfLines={1}>
-              Hi {firstName}
-            </Text>
-            <Text style={styles.headerSub} numberOfLines={1}>
-              {statusText}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() =>
-              Alert.alert("Notifications", "The notifications inbox arrives in a later phase.")
-            }
-            style={styles.headerButton}
+    <Page
+      testID="driver-home"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+    >
+      <PageHeader
+        title={`Hi ${firstName}`}
+        subtitle={subtitle}
+        large
+        right={
+          <IconButton
             testID="driver-notifications-button"
             accessibilityLabel="Notifications"
+            badged={notifUnread > 0}
+            onPress={() =>
+              Alert.alert("Notifications", "The notifications inbox ships in a later phase.")
+            }
           >
-            <Text style={styles.headerButtonGlyph}>🔔</Text>
-            {notifUnread > 0 ? (
-              <View style={styles.headerBadge} testID="driver-notifications-badge">
-                <Text style={styles.headerBadgeText}>
-                  {notifUnread > 99 ? "99+" : String(notifUnread)}
-                </Text>
-              </View>
-            ) : null}
-          </Pressable>
-          <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
-            <Text style={styles.statusPillText}>{statusLabel}</Text>
-          </View>
-        </View>
-      </SafeAreaView>
+            <Glyph name="bell" size={22} />
+          </IconButton>
+        }
+      />
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-        testID="driver-home"
-      >
+      <Section gap={space[3]}>
         {error ? (
           <View style={styles.errorBanner} testID="driver-home-error">
             <Text style={styles.errorBannerText}>{error}</Text>
           </View>
         ) : null}
 
+        {/* Account status hero — Driver equivalent of Customer's "Post a job" hero */}
+        <HeroCard
+          testID="driver-status-hero"
+          eyebrow="Today"
+          title={
+            suspended ? "Your account is suspended" :
+            changesRequested ? "Admin requested changes" :
+            pending ? "Finish verification to go live" :
+            `You've earned £${Number(earnings.today || 0).toFixed(0)} today`
+          }
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
+            <StatusPill status={accountStatus} testID="driver-status-pill" />
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 13 }}>
+              {earnings.completed_count || 0} completed deliver
+              {earnings.completed_count === 1 ? "y" : "ies"}
+            </Text>
+          </View>
+          {!suspended && !changesRequested && !pending ? (
+            <Pressable
+              onPress={() => nav.navigate("LiveMode")}
+              style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
+              testID="driver-go-live-cta"
+            >
+              <Glyph name="zap" size={16} color={colors.ink} />
+              <Text style={styles.heroCtaText}>Open Live Mode</Text>
+              <ChevronRight size={16} color={colors.ink} />
+            </Pressable>
+          ) : null}
+        </HeroCard>
+
+        {/* Pending — amber banner */}
         {pending ? (
-          <Pressable
-            onPress={() => nav.navigate("Documents" as never)}
-            style={({ pressed }) => [styles.warnCard, pressed && { backgroundColor: "#FEF3C7" }]}
+          <Card
+            onPress={() =>
+              Alert.alert("Documents", "The documents screen ships in a later phase.")
+            }
             testID="driver-warning-card"
+            style={{ backgroundColor: colors.warningBg, borderColor: "#FDE68A" }}
           >
-            <Text style={styles.warnIcon}>⚠︎</Text>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.warnTitle}>Account under review</Text>
-              <Text style={styles.warnBody}>
-                Upload driving licence, insurance, ID and vehicle photos to start receiving jobs.
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+            <Row>
+              <Glyph name="alert" size={22} color={colors.warning} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={typography.strong}>Account under review</Text>
+                <Caption style={{ color: colors.warningInk, marginTop: 2 }}>
+                  Upload driving licence, insurance, ID and vehicle photos to start receiving jobs.
+                </Caption>
+              </View>
+              <ChevronRight size={18} />
+            </Row>
+          </Card>
         ) : null}
 
+        {/* Changes requested — red banner */}
         {changesRequested ? (
-          <View style={styles.changesCard} testID="driver-changes-card">
-            <View style={styles.changesRow}>
-              <Text style={[styles.warnIcon, { color: colors.danger }]}>⚠︎</Text>
+          <Card
+            testID="driver-changes-card"
+            style={{ backgroundColor: colors.errorBg, borderColor: colors.error }}
+          >
+            <Row style={{ alignItems: "flex-start" }}>
+              <Glyph name="alert" size={22} color={colors.error} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.warnTitle}>Admin has requested changes</Text>
+                <Text style={typography.strong}>Admin has requested changes</Text>
                 {changesReason ? (
-                  <Text style={styles.changesBody}>{changesReason}</Text>
+                  <Caption style={{ color: colors.errorInk, marginTop: 4 }}>{changesReason}</Caption>
                 ) : null}
                 {changesDocTypes.length > 0 ? (
-                  <Text style={styles.changesBody}>
+                  <Caption style={{ color: colors.errorInk, marginTop: 4 }}>
                     Please re-upload: {changesDocTypes.map((k: string) => k.replace(/_/g, " ")).join(", ")}
-                  </Text>
+                  </Caption>
                 ) : null}
               </View>
-            </View>
-            <View style={styles.changesActions}>
-              <Pressable
-                onPress={() => nav.navigate("Documents" as never)}
-                style={({ pressed }) => [
-                  styles.pillBtnFilled,
-                  pressed && { backgroundColor: colors.brandHover },
-                ]}
+            </Row>
+            <View style={{ flexDirection: "row", gap: space[2], marginTop: space[3], flexWrap: "wrap" }}>
+              <PrimaryButton
+                title="Update documents"
+                onPress={() =>
+                  Alert.alert("Documents", "The documents screen ships in a later phase.")
+                }
                 testID="driver-changes-upload"
-              >
-                <Text style={styles.pillBtnFilledText}>⤴  Update documents</Text>
-              </Pressable>
-              <Pressable
+                style={{ flex: 1, minWidth: 160 }}
+              />
+              <PrimaryButton
+                title="Re-submit for review"
+                variant="danger"
                 onPress={resubmit}
-                style={({ pressed }) => [
-                  styles.pillBtnOutlined,
-                  pressed && { backgroundColor: "#FEE2E2" },
-                ]}
                 testID="driver-changes-resubmit"
-              >
-                <Text style={styles.pillBtnOutlinedText}>Re-submit for review</Text>
-              </Pressable>
+                style={{ flex: 1, minWidth: 160 }}
+              />
             </View>
-          </View>
+          </Card>
         ) : null}
 
+        {/* Suspended — red banner */}
         {suspended ? (
-          <View style={styles.suspendedCard} testID="driver-suspended-card">
-            <Text style={[styles.warnIcon, { color: colors.danger }]}>⛔︎</Text>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.warnTitle}>Account suspended</Text>
-              <Text style={styles.changesBody}>
-                Contact support if you believe this is a mistake.
-              </Text>
-            </View>
-          </View>
+          <Card
+            testID="driver-suspended-card"
+            style={{ backgroundColor: colors.errorBg, borderColor: colors.error }}
+          >
+            <Row style={{ alignItems: "flex-start" }}>
+              <Glyph name="ban" size={22} color={colors.error} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={typography.strong}>Account suspended</Text>
+                <Caption style={{ color: colors.errorInk, marginTop: 2 }}>
+                  Contact support if you believe this is a mistake.
+                </Caption>
+              </View>
+            </Row>
+          </Card>
         ) : null}
 
         {/* Earnings */}
-        <Card
-          testID="section-earnings"
-          tintBg={colors.tintRedBg}
-          tintFg={colors.tintRedFg}
-          glyph="£"
-          title="Earnings"
-          rightLabel="Details"
-          onRight={() => nav.navigate("Earnings" as never)}
-        >
-          <View style={styles.grid4}>
-            <EarnCell label="Today" value={earnings.today} accent={colors.success} />
-            <EarnCell label="Week" value={earnings.week} />
-            <EarnCell label="Month" value={earnings.month} />
-            <EarnCell label="All-time" value={earnings.all_time} accent={colors.brand} />
-          </View>
-          <Text style={styles.cardHint}>
+        <Card testID="section-earnings">
+          <CardTitleRow
+            glyph="coin"
+            tintBg={colors.errorBg}
+            tintFg={colors.brand}
+            title="Earnings"
+            rightLabel="Details"
+            onRight={() => nav.navigate("Earnings")}
+          />
+          <Row style={{ gap: space[2], flexWrap: "wrap" }}>
+            <StatCell label="Today"     value={`£${Number(earnings.today || 0).toFixed(0)}`}     accent={colors.success} />
+            <StatCell label="Week"      value={`£${Number(earnings.week || 0).toFixed(0)}`} />
+            <StatCell label="Month"     value={`£${Number(earnings.month || 0).toFixed(0)}`} />
+            <StatCell label="All-time"  value={`£${Number(earnings.all_time || 0).toFixed(0)}`} accent={colors.brand} />
+          </Row>
+          <Caption style={{ marginTop: space[3] }}>
             {earnings.completed_count || 0} completed deliver
             {earnings.completed_count === 1 ? "y" : "ies"}
-          </Text>
+          </Caption>
         </Card>
 
         {/* Fleet */}
-        <Card
-          testID="section-fleet"
-          tintBg={colors.tintBlueBg}
-          tintFg={colors.tintBlueFg}
-          glyph="🚚"
-          title="Fleet Summary"
-          rightLabel="Manage"
-          onRight={() => nav.navigate("Fleet" as never)}
-        >
+        <Card testID="section-fleet">
+          <CardTitleRow
+            glyph="truck"
+            tintBg={colors.infoBg}
+            tintFg={colors.info}
+            title="Fleet Summary"
+            rightLabel="Manage"
+            onRight={() => nav.navigate("Fleet")}
+          />
           {!fleet.count ? (
             <Pressable
-              onPress={() => nav.navigate("Fleet" as never)}
-              style={({ pressed }) => [styles.emptyCta, pressed && { backgroundColor: colors.surfaceHover }]}
+              onPress={() => nav.navigate("Fleet")}
+              style={({ pressed }) => [styles.innerRow, pressed && { backgroundColor: "#F3F4F6" }]}
               testID="fleet-empty-cta"
             >
-              <Text style={styles.emptyCtaPlus}>＋</Text>
+              <Glyph name="plus" size={18} color={colors.brand} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.emptyCtaTitle}>Register your first vehicle</Text>
-                <Text style={styles.emptyCtaBody}>
-                  Drivers must have at least one vehicle to accept jobs.
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>
+                  Register your first vehicle
                 </Text>
+                <Caption style={{ marginTop: 2 }}>
+                  Drivers must have at least one vehicle to accept jobs.
+                </Caption>
               </View>
-              <Text style={styles.chevron}>›</Text>
+              <ChevronRight size={18} />
             </Pressable>
           ) : (
             <>
-              <View style={styles.grid3}>
-                <MiniStat label="Vehicles" value={String(fleet.count)} />
-                <MiniStat label="Active" value={String(fleet.active_count || 0)} accent={colors.success} />
-                <MiniStat label="Capabilities" value={String(fleet.capabilities?.length || 0)} />
-              </View>
-              <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+              <Row style={{ gap: space[2] }}>
+                <StatCell label="Vehicles" value={String(fleet.count)} />
+                <StatCell label="Active" value={String(fleet.active_count || 0)} accent={colors.success} />
+                <StatCell label="Capabilities" value={String(fleet.capabilities?.length || 0)} />
+              </Row>
+              <View style={{ marginTop: space[3], gap: space[2] }}>
                 {(fleet.vehicles || []).slice(0, 3).map((v: any) => (
-                  <View key={v.id} style={styles.vehRow} testID={`fleet-veh-${v.id}`}>
-                    <Text style={styles.vehIcon}>🚚</Text>
+                  <View key={v.id} style={styles.innerRow} testID={`fleet-veh-${v.id}`}>
+                    <Glyph name="truck" size={20} color={colors.inkMuted} />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.vehTitle} numberOfLines={1}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
                         {v.vehicle_type_name || "Vehicle"}
                         {v.is_default ? " · Default" : ""}
                       </Text>
-                      <Text style={styles.vehSub} numberOfLines={1}>
-                        {v.registration || "—"}
-                      </Text>
+                      <Caption numberOfLines={1}>{v.registration || "—"}</Caption>
                     </View>
-                    <StatusChip status={v.status} />
+                    <StatusPill status={v.status || "pending"} />
                   </View>
                 ))}
               </View>
@@ -333,90 +316,85 @@ export default function HomeScreen() {
           )}
         </Card>
 
-        {/* Messages — chime deferred; badge only */}
-        <Card
-          testID="section-messages"
-          tintBg={colors.tintOrangeBg}
-          tintFg={colors.tintOrangeFg}
-          glyph="✉"
-          title="Messages"
-          rightLabel="Open inbox"
-          onRight={() => nav.navigate("MyJobs" as never)}
-        >
+        {/* Messages */}
+        <Card testID="section-messages">
+          <CardTitleRow
+            glyph="message"
+            tintBg="#FFF7ED"
+            tintFg={colors.accent}
+            title="Messages"
+            rightLabel="Open inbox"
+            onRight={() => nav.navigate("MyJobs")}
+          />
           {msgUnread > 0 ? (
-            <View style={styles.unreadRow} testID="driver-messages-unread-card">
+            <View style={[styles.innerRow, { backgroundColor: colors.warningBg }]} testID="driver-messages-unread-card">
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.unreadTitle}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>
                   {msgUnread} new {msgUnread === 1 ? "message" : "messages"}
                 </Text>
-                <Text style={styles.unreadBody}>
+                <Caption style={{ marginTop: 2 }}>
                   Open the booking to reply — reading a conversation marks it read.
-                </Text>
+                </Caption>
               </View>
-              <View style={styles.unreadBadge} testID="driver-messages-unread-badge">
-                <Text style={styles.unreadBadgeText}>
-                  {msgUnread > 99 ? "99+" : String(msgUnread)}
-                </Text>
+              <View style={styles.redBadge}>
+                <Text style={styles.redBadgeText}>{msgUnread > 99 ? "99+" : String(msgUnread)}</Text>
               </View>
             </View>
           ) : (
-            <View style={styles.emptyCol} testID="driver-messages-empty">
-              <Text style={styles.emptyGlyph}>✉</Text>
-              <Text style={styles.emptyText}>No unread messages.</Text>
+            <View style={styles.innerEmpty} testID="driver-messages-empty">
+              <Glyph name="message" size={22} color={colors.inkFaint} />
+              <Caption>No unread messages.</Caption>
             </View>
           )}
         </Card>
 
         {/* Upcoming Jobs */}
-        <Card
-          testID="section-upcoming"
-          tintBg={colors.tintAmberBg}
-          tintFg={colors.tintAmberFg}
-          glyph="📅"
-          title="Upcoming Jobs"
-          rightLabel="See all"
-          onRight={() => nav.navigate("MyJobs" as never)}
-        >
+        <Card testID="section-upcoming">
+          <CardTitleRow
+            glyph="calendar"
+            tintBg={colors.warningBg}
+            tintFg={colors.warning}
+            title="Upcoming Jobs"
+            rightLabel="See all"
+            onRight={() => nav.navigate("MyJobs")}
+          />
           {!jobs.upcoming_count ? (
-            <View style={styles.emptyCol} testID="upcoming-empty">
-              <Text style={styles.emptyGlyph}>📅</Text>
-              <Text style={styles.emptyText}>No confirmed pickups yet.</Text>
-              <Pressable onPress={() => nav.navigate("AvailableJobs" as never)}>
-                <Text style={styles.emptyLink}>Find jobs →</Text>
+            <View style={styles.innerEmpty} testID="upcoming-empty">
+              <Glyph name="calendar" size={22} color={colors.inkFaint} />
+              <Caption>No confirmed pickups yet.</Caption>
+              <Pressable onPress={() => nav.navigate("AvailableJobs")}>
+                <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "700", color: colors.brand }}>
+                  Find jobs →
+                </Text>
               </Pressable>
             </View>
           ) : (
-            <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: space[2] }}>
               {(jobs.upcoming || []).slice(0, 3).map((j: any) => (
                 <Pressable
                   key={j.id}
                   onPress={() =>
-                    Alert.alert(
-                      "Job details",
-                      "The booking detail screen ships in a later phase.",
-                    )
+                    Alert.alert("Job details", "The booking detail screen ships in a later phase.")
                   }
-                  style={({ pressed }) => [
-                    styles.upcomingRow,
-                    pressed && { backgroundColor: colors.surfaceHover },
-                  ]}
+                  style={({ pressed }) => [styles.innerRow, pressed && { backgroundColor: "#F3F4F6" }]}
                   testID={`upcoming-${j.id}`}
                 >
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.upcomingTitle} numberOfLines={1}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
                       {j.title || "Booking"}
                     </Text>
-                    <Text style={styles.upcomingRoute} numberOfLines={1}>
-                      {j.pickup_town} → {j.dropoff_town}
-                    </Text>
+                    <Row style={{ marginTop: 2, gap: 4 }}>
+                      <MapPin size={12} />
+                      <Caption numberOfLines={1} style={{ flex: 1 }}>
+                        {j.pickup_town || "—"} → {j.dropoff_town || "—"}
+                      </Caption>
+                    </Row>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.upcomingPrice}>
+                    <Text style={typography.price}>
                       £{Number(j.driver_charge || j.total_price || 0).toFixed(0)}
                     </Text>
-                    <Text style={styles.upcomingStatus}>
-                      {(j.status || "").replace(/_/g, " ")}
-                    </Text>
+                    <StatusPill status={j.status || "confirmed"} />
                   </View>
                 </Pressable>
               ))}
@@ -424,377 +402,112 @@ export default function HomeScreen() {
           )}
         </Card>
 
-        {/* Bids */}
-        <Card
-          testID="section-bids"
-          tintBg={colors.tintPurpleBg}
-          tintFg={colors.tintPurpleFg}
-          glyph="🏷"
-          title="Active Bids"
-          rightLabel="Browse jobs"
-          onRight={() => nav.navigate("AvailableJobs" as never)}
-        >
-          <View style={styles.grid3}>
-            <MiniStat
-              label="Pending"
-              value={String(bids.active || 0)}
-              accent={bids.active ? colors.warning : colors.textMuted}
-            />
-            <MiniStat label="Accepted" value={String(bids.accepted || 0)} accent={colors.success} />
-            <MiniStat label="Nearby jobs" value={String(jobs.nearby_count || 0)} accent={colors.brand} />
-          </View>
+        {/* Active Bids */}
+        <Card testID="section-bids">
+          <CardTitleRow
+            glyph="tag"
+            tintBg="#F3E8FF"
+            tintFg="#7C3AED"
+            title="Active Bids"
+            rightLabel="Browse jobs"
+            onRight={() => nav.navigate("AvailableJobs")}
+          />
+          <Row style={{ gap: space[2] }}>
+            <StatCell label="Pending"    value={String(bids.active || 0)}    accent={bids.active ? colors.warning : colors.inkMuted} />
+            <StatCell label="Accepted"   value={String(bids.accepted || 0)}  accent={colors.success} />
+            <StatCell label="Nearby jobs" value={String(jobs.nearby_count || 0)} accent={colors.brand} />
+          </Row>
         </Card>
 
         {/* Rating */}
-        <Card
-          testID="section-rating"
-          tintBg={colors.tintAmberBg}
-          tintFg={colors.tintAmberFg}
-          glyph="★"
-          title="Rating"
-          rightLabel="Profile"
-          onRight={() => nav.navigate("Profile" as never)}
-        >
-          <View style={styles.ratingRow}>
-            <Text style={styles.ratingValue}>{Number(rating).toFixed(2)}</Text>
+        <Card testID="section-rating">
+          <CardTitleRow
+            glyph="star"
+            tintBg={colors.warningBg}
+            tintFg={colors.warning}
+            title="Rating"
+            rightLabel="Profile"
+            onRight={() => nav.navigate("Profile")}
+          />
+          <Row style={{ gap: space[4] }}>
+            <Text style={{ fontSize: 42, fontWeight: "700", color: colors.ink, letterSpacing: -0.5 }}>
+              {Number(rating).toFixed(2)}
+            </Text>
             <View>
-              <Text style={styles.ratingStars}>
+              <Text style={{ fontSize: 16, color: colors.warning, letterSpacing: 2 }}>
                 {"★".repeat(Math.round(rating))}
-                <Text style={{ color: colors.border }}>{"★".repeat(5 - Math.round(rating))}</Text>
+                <Text style={{ color: colors.border }}>{"★".repeat(Math.max(0, 5 - Math.round(rating)))}</Text>
               </Text>
-              <Text style={styles.ratingCount}>
+              <Caption style={{ marginTop: 4 }}>
                 Based on {reviewCount} review{reviewCount === 1 ? "" : "s"}
-              </Text>
+              </Caption>
             </View>
-          </View>
+          </Row>
         </Card>
 
         {/* Verification */}
-        <Card
-          testID="section-verification"
-          tintBg={(verify.docs_rejected || 0) > 0 ? colors.tintRedBg : colors.tintGreenBg}
-          tintFg={(verify.docs_rejected || 0) > 0 ? colors.tintRedFg : colors.tintGreenFg}
-          glyph="✓"
-          title="Vehicle & Document Status"
-          rightLabel="Documents"
-          onRight={() =>
-            Alert.alert("Documents", "The documents screen ships in a later phase.")
-          }
-        >
-          <View style={styles.grid3}>
-            <MiniStat label="Verified" value={String(verify.docs_verified || 0)} accent={colors.success} />
-            <MiniStat label="Pending" value={String(verify.docs_pending || 0)} accent={colors.warning} />
-            <MiniStat label="Rejected" value={String(verify.docs_rejected || 0)} accent={colors.danger} />
-          </View>
-          <Text style={styles.cardHint}>
+        <Card testID="section-verification">
+          <CardTitleRow
+            glyph="shield"
+            tintBg={(verify.docs_rejected || 0) > 0 ? colors.errorBg : colors.successBg}
+            tintFg={(verify.docs_rejected || 0) > 0 ? colors.brand : colors.success}
+            title="Vehicle & Document Status"
+            rightLabel="Documents"
+            onRight={() =>
+              Alert.alert("Documents", "The documents screen ships in a later phase.")
+            }
+          />
+          <Row style={{ gap: space[2] }}>
+            <StatCell label="Verified" value={String(verify.docs_verified || 0)} accent={colors.success} />
+            <StatCell label="Pending"  value={String(verify.docs_pending || 0)}  accent={colors.warning} />
+            <StatCell label="Rejected" value={String(verify.docs_rejected || 0)} accent={colors.brand} />
+          </Row>
+          <Caption style={{ marginTop: space[3] }}>
             Account: {verify.account_status || user?.status || "—"}
-          </Text>
+          </Caption>
         </Card>
-
-        <View style={{ height: spacing.lg }} />
-      </ScrollView>
-    </View>
+      </Section>
+    </Page>
   );
 }
-
-/* -----------------------------------------------------------------------
- * Reusable dashboard building blocks (mirror the web helpers in
- * Dashboard.jsx: Card / EarnCell / MiniStat).
- * ----------------------------------------------------------------------- */
-
-function Card({
-  glyph,
-  tintBg,
-  tintFg,
-  title,
-  rightLabel,
-  onRight,
-  testID,
-  children,
-}: {
-  glyph: string;
-  tintBg: string;
-  tintFg: string;
-  title: string;
-  rightLabel?: string;
-  onRight?: () => void;
-  testID?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.card} testID={testID}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <View style={[styles.iconRing, { backgroundColor: tintBg }]}>
-            <Text style={[styles.iconRingGlyph, { color: tintFg }]}>{glyph}</Text>
-          </View>
-          <Text style={styles.cardTitle}>{title}</Text>
-        </View>
-        {rightLabel && onRight ? (
-          <Pressable onPress={onRight} hitSlop={8}>
-            <Text style={styles.cardLink}>{rightLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function EarnCell({ label, value, accent = colors.text }: { label: string; value?: number; accent?: string }) {
-  return (
-    <View style={styles.statCell}>
-      <Text style={[styles.statValue, { color: accent }]}>£{Number(value || 0).toFixed(0)}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function MiniStat({ label, value, accent = colors.text }: { label: string; value: string; accent?: string }) {
-  return (
-    <View style={styles.statCell}>
-      <Text style={[styles.statValue, { color: accent }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function StatusChip({ status }: { status?: string }) {
-  const on = status === "active";
-  return (
-    <View
-      style={[
-        styles.statusChip,
-        { backgroundColor: on ? colors.tintGreenBg : colors.tintAmberBg },
-      ]}
-    >
-      <Text
-        style={[
-          styles.statusChipText,
-          { color: on ? colors.success : colors.amberText },
-        ]}
-      >
-        {(status || "—").toUpperCase()}
-      </Text>
-    </View>
-  );
-}
-
-/* -------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  bootRoot: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.bg,
-  },
-  headerSafe: { backgroundColor: colors.header },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.header,
-  },
-  hi: { ...typography.headerName, color: colors.textOnDark },
-  headerSub: { marginTop: 2, fontSize: 13, color: colors.textWhiteFaint },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.headerBtnBg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerButtonGlyph: { fontSize: 18, color: colors.textOnDark },
-  headerBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    height: 18,
-    minWidth: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerBadgeText: { fontSize: 10, fontWeight: "700", color: colors.textOnDark },
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.headerBtnBg,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusPillText: { fontSize: 12, fontWeight: "700", color: colors.textOnDark },
-
-  body: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-
   errorBanner: {
-    borderRadius: radius.card,
-    backgroundColor: colors.bannerChangesBg,
+    borderRadius: radius.base,
+    backgroundColor: colors.errorBg,
     borderWidth: 1,
-    borderColor: colors.bannerChangesBorder,
-    padding: spacing.md,
+    borderColor: colors.error,
+    padding: space[3],
   },
-  errorBannerText: { color: colors.danger, ...typography.bodySm },
-
-  /* Warning banners */
-  warnCard: {
+  errorBannerText: { color: colors.error, fontSize: 14 },
+  heroCta: {
+    marginTop: space[3],
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.bannerPendingBorder,
-    backgroundColor: colors.bannerPendingBg,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-  },
-  warnIcon: { fontSize: 22, color: colors.warning },
-  warnTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-  warnBody: { marginTop: 2, fontSize: 13, color: colors.darkAmberText, lineHeight: 18 },
-  chevron: { fontSize: 20, color: colors.dividerLight },
-
-  changesCard: {
-    borderWidth: 1,
-    borderColor: colors.bannerChangesBorder,
-    backgroundColor: colors.bannerChangesBg,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-  },
-  changesRow: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
-  changesBody: { marginTop: 2, fontSize: 13, color: colors.darkAmberText, lineHeight: 18 },
-  changesActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, flexWrap: "wrap" },
-  pillBtnFilled: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    gap: space[2],
+    paddingHorizontal: space[4],
+    paddingVertical: space[2],
     borderRadius: radius.pill,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.inkInverse,
   },
-  pillBtnFilledText: { color: colors.textOnDark, fontSize: 13, fontWeight: "700" },
-  pillBtnOutlined: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.danger,
-  },
-  pillBtnOutlinedText: { color: colors.danger, fontSize: 13, fontWeight: "700" },
-
-  suspendedCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.bannerChangesBorder,
-    backgroundColor: colors.bannerChangesBg,
-    borderRadius: radius.card,
-    padding: spacing.lg,
-  },
-
-  /* Card */
-  card: {
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-    padding: spacing.lg,
-  },
-  cardHeader: {
+  heroCtaText: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  innerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.md,
+    gap: space[3],
+    backgroundColor: "#F9FAFB",
+    borderRadius: radius.md,
+    padding: space[3],
   },
-  cardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  iconRing: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.chip,
+  innerEmpty: {
     alignItems: "center",
-    justifyContent: "center",
+    gap: 4,
+    paddingVertical: space[4],
+    backgroundColor: "#F9FAFB",
+    borderRadius: radius.md,
   },
-  iconRingGlyph: { fontSize: 16, fontWeight: "700" },
-  cardTitle: { ...typography.cardTitle, color: colors.text },
-  cardLink: { fontSize: 13, fontWeight: "700", color: colors.brand },
-  cardHint: { marginTop: spacing.md, fontSize: 12, color: colors.textMuted },
-
-  /* Stats grid */
-  grid3: { flexDirection: "row", gap: spacing.sm },
-  grid4: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  statCell: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.chip,
-    padding: spacing.md,
-    minWidth: "22%",
-  },
-  statValue: { ...typography.statValue },
-  statLabel: {
-    marginTop: 4,
-    ...typography.micro,
-    textTransform: "uppercase",
-    color: colors.textMuted,
-  },
-
-  /* Fleet — vehicle row */
-  vehRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.chip,
-    padding: spacing.md,
-  },
-  vehIcon: { fontSize: 20 },
-  vehTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  vehSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  statusChipText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
-
-  /* Fleet — empty CTA */
-  emptyCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.chip,
-    padding: spacing.md,
-  },
-  emptyCtaPlus: { fontSize: 20, fontWeight: "700", color: colors.brand },
-  emptyCtaTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  emptyCtaBody: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-
-  /* Messages */
-  unreadRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    backgroundColor: colors.tintAmberBg,
-    borderRadius: radius.chip,
-    padding: spacing.md,
-  },
-  unreadTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  unreadBody: { marginTop: 2, fontSize: 12, color: colors.textMuted },
-  unreadBadge: {
+  redBadge: {
     minWidth: 28,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -803,43 +516,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  unreadBadgeText: { fontSize: 12, fontWeight: "700", color: colors.textOnDark },
-
-  emptyCol: {
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.surface,
-    borderRadius: radius.chip,
-    padding: spacing.lg,
-  },
-  emptyGlyph: { fontSize: 22, color: colors.dividerLight },
-  emptyText: { fontSize: 13, color: colors.textMuted },
-  emptyLink: { marginTop: 4, fontSize: 13, fontWeight: "700", color: colors.brand },
-
-  /* Upcoming */
-  upcomingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.chip,
-    padding: spacing.md,
-  },
-  upcomingTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  upcomingRoute: { marginTop: 2, fontSize: 12, color: colors.textMuted },
-  upcomingPrice: { ...typography.jobPrice, color: colors.text },
-  upcomingStatus: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.textMuted,
-  },
-
-  /* Rating */
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  ratingValue: { ...typography.ratingValue, color: colors.text },
-  ratingStars: { fontSize: 16, color: colors.warning, letterSpacing: 2 },
-  ratingCount: { marginTop: 4, fontSize: 12, color: colors.textMuted },
+  redBadgeText: { fontSize: 12, fontWeight: "700", color: colors.inkInverse },
 });

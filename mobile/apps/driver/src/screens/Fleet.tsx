@@ -6,7 +6,8 @@ export default function FleetScreen() {
     <ComingSoon
       testID="driver-fleet"
       title="Fleet"
-      subtitle="Vehicle registration, edit / activate / retire and capability management arrives in a later phase."
+      glyph="truck"
+      body="Vehicle registration, edit / activate / retire and capability management ship in a later phase."
     />
   );
 }
