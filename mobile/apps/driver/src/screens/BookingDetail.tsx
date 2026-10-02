@@ -35,6 +35,7 @@ import {
   SegmentedTabs, StatusPill,
   colors, radius, space, typography,
 } from "../ui";
+import { RouteMap, MapFallback } from "../components/RouteMap";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 type Tab = "overview" | "messages" | "pod";
@@ -203,6 +204,34 @@ export default function BookingDetailScreen({ route, navigation }: P) {
               <Text style={[typography.pageTitle, { marginTop: 4 }]} numberOfLines={2}>
                 {job?.title || "Booking"}
               </Text>
+
+              {/* Map preview — pickup → dropoff. Serves as the Phase-5
+                  non-live Active Job Map foundation. Falls back cleanly
+                  when the booking's job coords are incomplete. */}
+              {job
+                && Number.isFinite((job as any).pickup_lat)
+                && Number.isFinite((job as any).pickup_lng)
+                && Number.isFinite((job as any).dropoff_lat)
+                && Number.isFinite((job as any).dropoff_lng) ? (
+                <RouteMap
+                  testID="booking-detail-map"
+                  pickup={{ lat: (job as any).pickup_lat, lng: (job as any).pickup_lng }}
+                  dropoff={{ lat: (job as any).dropoff_lat, lng: (job as any).dropoff_lng }}
+                  height={220}
+                  summary={{
+                    pickupTown: job.pickup_town,
+                    dropoffTown: job.dropoff_town,
+                    distanceMiles: job.distance_miles,
+                    durationMinutes: (job as any).duration_minutes,
+                  }}
+                />
+              ) : (
+                <MapFallback
+                  testID="booking-detail-map-fallback"
+                  pickupTown={job?.pickup_town}
+                  dropoffTown={job?.dropoff_town}
+                />
+              )}
 
               {/* Pickup / Dropoff */}
               <View style={styles.routeCard} testID="booking-route-card">

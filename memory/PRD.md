@@ -3,12 +3,14 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 complete)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix) + Phase 5 pending-test
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
 - Installed/launched on physical iPhone ✓
 - Fully tested on physical iPhone — **PASS** ✓
+- Splash fix on-device **PASS** ✓
+- **Phase 5 (Maps, no Live Mode) — pending user prebuild + physical iPhone test**
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -32,7 +34,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Available Jobs list (search, filter, sort, pull-to-refresh)
 - Job Details (fixed-price Accept + bidding Submit)
 
-### Phase 4 — Remaining Driver Functions (this phase)
+### Phase 4 — Remaining Driver Functions
 - My Jobs (bookings + accepted + bids merged, segmented tabs, search)
 - Booking Details (Overview / Messages / POD tabs)
 - Booking messaging (inline chat with composer; text-only, no attachments)
@@ -49,6 +51,15 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Settings (Legal / Support / Account / Logout)
 - Legal (Terms / Privacy / Cookies)
 - Logout
+
+### Phase 5 — Maps (NO Live Mode)
+- Available Jobs: List/Map toggle (Customer-parity SegmentedTabs)
+- Available Jobs map: multi-pickup markers, bounds-fit camera, zoom/compass controls, tap-to-select → bottom sheet with price/route/CTA
+- Job Detail: embedded RouteMap preview with pickup/dropoff pins + polyline, graceful MapFallback when coords missing
+- Booking Detail Overview: embedded RouteMap preview (Phase-5 Active Job Map foundation; no live tracking)
+- Driver-local `RouteMap` + `MapFallback` + `JobsMap` components (visual parity with Customer `RouteMap`)
+- Native: `@rnmapbox/maps@10.1.31` removed from autolinking exclude, plugin added to `app.json`
+- `expo-location` **still excluded** — no user-location, no permissions, no tracking
 
 ## Code Architecture
 - `/app/backend/` — FastAPI (LOCKED)
@@ -84,11 +95,11 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 ## 📋 Future Phases (NOT started — require explicit authorization)
 Each future phase must start from the locked baseline.
 
-### P1 — Live Mode (biggest; requires native deps)
-- `expo-location` (foreground + background permissions)
-- `@rnmapbox/maps` (map SDK)
+### P1 — Phase 6: Live Mode (biggest; requires one more native dep)
+- `expo-location` (foreground + background permissions) — currently excluded
 - Driver online/offline toggle, heartbeat, ASAP offer accept
-- Native autolinking changes required
+- Live route presentation using existing `JobsMap` / `RouteMap` foundation from Phase 5
+- Native autolinking change required
 
 ### P2 — POD Capture
 - `expo-image-picker` (photo capture of delivery)

@@ -30,8 +30,9 @@ import { useNavigation } from "@react-navigation/native";
 import { DriverAPI, type Job } from "@cargoone/core";
 import {
   Page, PageHeader, Section, Icon, IconButton, Card, Caption,
-  EmptyState, PrimaryButton, colors, radius, space, typography,
+  EmptyState, PrimaryButton, SegmentedTabs, colors, radius, space, typography,
 } from "../ui";
+import { JobsMap } from "../components/JobsMap";
 
 type Sort = "nearest" | "newest" | "highest_price" | "distance_asc";
 type Pricing = "all" | "fixed" | "bidding";
@@ -58,6 +59,7 @@ export default function AvailableJobsScreen() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("newest");
   const [pricing, setPricing] = useState<Pricing>("all");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   const load = useCallback(async () => {
     setError(null);
@@ -117,27 +119,10 @@ export default function AvailableJobsScreen() {
     );
   }
 
-  return (
-    <Page
-      testID="driver-available-jobs"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
-      }
-    >
-      <PageHeader
-        title="Available Jobs"
-        subtitle={`${filtered.length} of ${jobs.length}`}
-        right={
-          <IconButton
-            testID="driver-available-refresh"
-            accessibilityLabel="Refresh"
-            onPress={onRefresh}
-          >
-            <Icon name="refresh-cw" size={20} />
-          </IconButton>
-        }
-      />
-
+  // Shared top region (search + view-mode toggle + chips) used by both
+  // list and map layouts.
+  const topRegion = (
+    <>
       {/* Search */}
       <Section>
         <View style={styles.searchRow}>
@@ -159,6 +144,19 @@ export default function AvailableJobsScreen() {
             </Pressable>
           ) : null}
         </View>
+      </Section>
+
+      {/* View-mode toggle */}
+      <Section>
+        <SegmentedTabs
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { value: "list", label: "List" },
+            { value: "map",  label: "Map" },
+          ]}
+          testIDPrefix="driver-jobs-view"
+        />
       </Section>
 
       {/* Sort chips */}
@@ -202,6 +200,59 @@ export default function AvailableJobsScreen() {
           </View>
         </Section>
       ) : null}
+    </>
+  );
+
+  // Map layout — non-scrolling Page so the map can own gestures.
+  if (viewMode === "map") {
+    return (
+      <Page testID="driver-available-jobs" scroll={false}>
+        <PageHeader
+          title="Available Jobs"
+          subtitle={`${filtered.length} of ${jobs.length}`}
+          right={
+            <IconButton
+              testID="driver-available-refresh"
+              accessibilityLabel="Refresh"
+              onPress={onRefresh}
+            >
+              <Icon name="refresh-cw" size={20} />
+            </IconButton>
+          }
+        />
+        {topRegion}
+        <View style={styles.mapContainer} testID="driver-available-jobs-map-wrap">
+          <JobsMap
+            jobs={filtered}
+            onOpenJob={(j) => nav.navigate("JobDetail", { jobId: j.id })}
+          />
+        </View>
+      </Page>
+    );
+  }
+
+  return (
+    <Page
+      testID="driver-available-jobs"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
+      }
+    >
+      <PageHeader
+        title="Available Jobs"
+        subtitle={`${filtered.length} of ${jobs.length}`}
+        right={
+          <IconButton
+            testID="driver-available-refresh"
+            accessibilityLabel="Refresh"
+            onPress={onRefresh}
+          >
+            <Icon name="refresh-cw" size={20} />
+          </IconButton>
+        }
+      />
+
+      {topRegion}
 
       {/* List */}
       {filtered.length === 0 ? (
@@ -345,6 +396,13 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 48 },
+
+  mapContainer: {
+    flex: 1,
+    marginHorizontal: space[4],
+    marginBottom: space[4],
+    marginTop: space[2],
+  },
 
   searchRow: {
     flexDirection: "row", alignItems: "center", gap: space[2],

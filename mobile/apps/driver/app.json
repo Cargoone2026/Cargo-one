@@ -26,7 +26,11 @@
       }
     },
     "plugins": [
-      "../../plugins/withCargoOneiOSFixes"
+      "../../plugins/withCargoOneiOSFixes",
+      [
+        "@rnmapbox/maps",
+        {}
+      ]
     ],
     "extra": {
       "eas": { "projectId": "REPLACE_ME_ON_EAS_INIT" }
