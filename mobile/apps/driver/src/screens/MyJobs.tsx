@@ -6,7 +6,7 @@ export default function MyJobsScreen() {
     <ComingSoon
       testID="driver-my-jobs"
       title="My Jobs"
-      glyph="box"
+      glyph="package"
       body="Your bookings, message threads and the full booking detail land in a later phase."
     />
   );

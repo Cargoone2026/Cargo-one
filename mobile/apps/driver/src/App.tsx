@@ -1,19 +1,22 @@
 /**
  * CargoOne Driver — App root.
  *
- * Boot chain remains minimal (no splash JS, no push, no mapbox, no
- * diagnostic overlays). The bottom-tab bar is styled with the shared
- * CargoOne mobile tokens so it matches Customer polish while keeping
- * the Driver-specific 7-item nav order.
+ * Navigation shell matches Customer mobile exactly: a single native
+ * stack whose authenticated routes are wrapped in an `AppShell` that
+ * renders the dark CargoOne sidebar as either a docked rail (wide
+ * screens) or a slide-in drawer (phones). No bottom tab bar.
+ *
+ * The boot chain stays minimal (no splash JS, no push, no mapbox, no
+ * diagnostic overlays).
  */
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { AppShell } from "./components/AppShell";
 import LoginScreen from "./screens/Login";
 import HomeScreen from "./screens/Home";
 import AvailableJobsScreen from "./screens/AvailableJobs";
@@ -22,109 +25,42 @@ import MyJobsScreen from "./screens/MyJobs";
 import EarningsScreen from "./screens/Earnings";
 import FleetScreen from "./screens/Fleet";
 import ProfileScreen from "./screens/Profile";
-import { Glyph, colors } from "./ui";
+import { colors } from "./ui";
 
-const Stack = createNativeStackNavigator();
-const Tabs = createBottomTabNavigator();
+export type RootStackParamList = {
+  Home: undefined;
+  AvailableJobs: undefined;
+  LiveMode: undefined;
+  MyJobs: undefined;
+  Earnings: undefined;
+  Fleet: undefined;
+  Profile: undefined;
+  Login: undefined;
+};
 
-type GlyphName = React.ComponentProps<typeof Glyph>["name"];
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function TabIcon({ name, color }: { name: GlyphName; color: string }) {
-  return <Glyph name={name} size={22} color={color} />;
-}
-
-function DriverTabs() {
+function AuthenticatedStack() {
   return (
-    <Tabs.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.inkFaint,
-        tabBarStyle: {
-          backgroundColor: colors.bg,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: 72,
-          paddingTop: 8,
-          paddingBottom: 14,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "700",
-          letterSpacing: 0.2,
-          marginTop: 2,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarTestID: "tab-home",
-          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="AvailableJobs"
-        component={AvailableJobsScreen}
-        options={{
-          title: "Available",
-          tabBarTestID: "tab-available",
-          tabBarIcon: ({ color }) => <TabIcon name="compass" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="LiveMode"
-        component={LiveModeScreen}
-        options={{
-          title: "Live",
-          tabBarTestID: "tab-live",
-          tabBarIcon: ({ color }) => <TabIcon name="zap" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="MyJobs"
-        component={MyJobsScreen}
-        options={{
-          title: "My Jobs",
-          tabBarTestID: "tab-myjobs",
-          tabBarIcon: ({ color }) => <TabIcon name="box" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="Earnings"
-        component={EarningsScreen}
-        options={{
-          title: "Earnings",
-          tabBarTestID: "tab-earnings",
-          tabBarIcon: ({ color }) => <TabIcon name="coin" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="Fleet"
-        component={FleetScreen}
-        options={{
-          title: "Fleet",
-          tabBarTestID: "tab-fleet",
-          tabBarIcon: ({ color }) => <TabIcon name="truck" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          title: "Profile",
-          tabBarTestID: "tab-profile",
-          tabBarIcon: ({ color }) => <TabIcon name="user" color={color} />,
-        }}
-      />
-    </Tabs.Navigator>
+    <AppShell>
+      <Stack.Navigator
+        initialRouteName="Home"
+        screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+      >
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="AvailableJobs" component={AvailableJobsScreen} />
+        <Stack.Screen name="LiveMode" component={LiveModeScreen} />
+        <Stack.Screen name="MyJobs" component={MyJobsScreen} />
+        <Stack.Screen name="Earnings" component={EarningsScreen} />
+        <Stack.Screen name="Fleet" component={FleetScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+      </Stack.Navigator>
+    </AppShell>
   );
 }
 
 function RootNavigator() {
   const { user, loading } = useAuth();
-
   if (loading) {
     return (
       <View style={styles.splash} testID="driver-boot-splash">
@@ -132,16 +68,14 @@ function RootNavigator() {
       </View>
     );
   }
-
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {user ? (
-        <Stack.Screen name="DriverTabs" component={DriverTabs} />
-      ) : (
+  if (!user) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
-      )}
-    </Stack.Navigator>
-  );
+      </Stack.Navigator>
+    );
+  }
+  return <AuthenticatedStack />;
 }
 
 export default function App() {

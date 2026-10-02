@@ -24,6 +24,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
+import { useShellMenu } from "./components/AppShell";
 import {
   CARGO,
   STATUS_COLOR,
@@ -37,77 +39,25 @@ import {
 
 export { CARGO, STATUS_COLOR, STATUS_LABELS, colors, radius, space, shadow, typography };
 
+export type IconName = React.ComponentProps<typeof Feather>["name"];
+
 /* -------------------------------------------------------------------- */
-/* Glyphs — minimal view/text icons so we don't need lucide/svg.         */
+/* Glyphs — thin Feather wrappers so screens never import vector-icons   */
+/* directly. Keeps the icon system swappable in one place.               */
 /* -------------------------------------------------------------------- */
 
-export function Glyph({
-  name,
-  size = 20,
-  color = colors.ink,
-}: {
-  name:
-    | "home" | "compass" | "zap" | "box" | "coin" | "truck" | "user"
-    | "bell" | "search" | "chevronRight" | "chevronLeft" | "pin"
-    | "star" | "shield" | "alert" | "ban" | "message" | "calendar"
-    | "tag" | "upload" | "plus" | "check";
-  size?: number;
-  color?: string;
-}) {
-  const char: Record<string, string> = {
-    home: "⌂", compass: "◎", zap: "⚡", box: "▣", coin: "£",
-    truck: "⛟", user: "◉", bell: "◔", search: "⌕",
-    chevronRight: "›", chevronLeft: "‹", pin: "◉",
-    star: "★", shield: "◈", alert: "⚠", ban: "⊘",
-    message: "✉", calendar: "▦", tag: "◇", upload: "↑", plus: "＋",
-    check: "✓",
-  };
-  return (
-    <Text
-      style={{
-        fontSize: size,
-        lineHeight: size + 2,
-        color,
-        textAlign: "center",
-        includeFontPadding: false,
-      }}
-    >
-      {char[name] || "•"}
-    </Text>
-  );
+export function Icon({
+  name, size = 20, color = colors.ink,
+}: { name: IconName; size?: number; color?: string }) {
+  return <Feather name={name} size={size} color={color} />;
 }
 
-/** Chevron › used by list rows. */
 export function ChevronRight({ size = 18, color = colors.inkFaint }: { size?: number; color?: string }) {
-  return <Glyph name="chevronRight" size={size} color={color} />;
+  return <Feather name="chevron-right" size={size} color={color} />;
 }
 
-/** Red map pin — rendered as a filled triangle + dot since no svg. */
 export function MapPin({ size = 14, color = colors.brand }: { size?: number; color?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <View
-        style={{
-          width: size * 0.72, height: size * 0.72, borderRadius: size * 0.36,
-          backgroundColor: color,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          width: 0,
-          height: 0,
-          borderLeftWidth: size * 0.2,
-          borderRightWidth: size * 0.2,
-          borderTopWidth: size * 0.3,
-          borderLeftColor: "transparent",
-          borderRightColor: "transparent",
-          borderTopColor: color,
-        }}
-      />
-    </View>
-  );
+  return <Feather name="map-pin" size={size} color={color} />;
 }
 
 /* -------------------------------------------------------------------- */
@@ -170,7 +120,11 @@ export function Section({
 /* Header                                                               */
 /* -------------------------------------------------------------------- */
 
-/** PageHeader — matches Customer's PageHeader. Title left, actions right. */
+/** PageHeader — matches Customer's PageHeader. Title left, actions right.
+ *  When mounted inside an `AppShell` (bottom breakpoint, drawer mode),
+ *  a 44×44 hamburger button opens the drawer. If `onBack` is given the
+ *  back button takes precedence over the menu button.
+ */
 export function PageHeader({
   title,
   subtitle,
@@ -188,6 +142,7 @@ export function PageHeader({
   large?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { openDrawer, showMenu } = useShellMenu();
   return (
     <View style={[headerStyles.row, style]} testID={testID}>
       {onBack ? (
@@ -197,7 +152,17 @@ export function PageHeader({
           style={headerStyles.menuBtn}
           hitSlop={8}
         >
-          <Glyph name="chevronLeft" size={22} />
+          <Feather name="chevron-left" size={22} />
+        </Pressable>
+      ) : showMenu ? (
+        <Pressable
+          onPress={openDrawer}
+          testID="page-header-menu"
+          accessibilityLabel="Open menu"
+          style={headerStyles.menuBtn}
+          hitSlop={8}
+        >
+          <Feather name="menu" size={22} />
         </Pressable>
       ) : null}
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -342,7 +307,7 @@ export function SearchPill({
         },
       ]}
     >
-      <Glyph name="search" size={18} color={colors.inkMuted} />
+      <Feather name="search" size={18} color={colors.inkMuted} />
       <Text style={{ flex: 1, fontSize: 14, color: colors.inkMuted }}>{placeholder}</Text>
     </Pressable>
   );
@@ -498,7 +463,7 @@ export function StatusPill({ status, testID }: { status: string; testID?: string
 export function EmptyState({
   glyph, title, body, action, testID,
 }: {
-  glyph?: React.ComponentProps<typeof Glyph>["name"];
+  glyph?: IconName;
   title: string;
   body?: string;
   action?: React.ReactNode;
@@ -518,7 +483,7 @@ export function EmptyState({
             alignItems: "center", justifyContent: "center",
           }}
         >
-          <Glyph name={glyph} size={28} color={colors.inkFaint} />
+          <Feather name={glyph} size={28} color={colors.inkFaint} />
         </View>
       ) : null}
       <Text style={[typography.cardTitle, { marginTop: space[2], textAlign: "center" }]}>{title}</Text>
@@ -595,7 +560,7 @@ export function HeroCard({
 export function StatTile({
   glyph, tintBg, tintFg, label, value, badge, onPress, testID,
 }: {
-  glyph: React.ComponentProps<typeof Glyph>["name"];
+  glyph: IconName;
   tintBg: string;
   tintFg: string;
   label: string;
@@ -622,7 +587,7 @@ export function StatTile({
             backgroundColor: tintBg, alignItems: "center", justifyContent: "center",
           }}
         >
-          <Glyph name={glyph} size={18} color={tintFg} />
+          <Feather name={glyph} size={18} color={tintFg} />
         </View>
         {badge ? (
           <View
@@ -641,14 +606,10 @@ export function StatTile({
   );
 }
 
-/**
- * CardTitleRow — reusable Card header: tinted icon well + title (+ optional
- * right link). Matches Customer's section-card header treatment.
- */
 export function CardTitleRow({
   glyph, tintBg, tintFg, title, rightLabel, onRight,
 }: {
-  glyph: React.ComponentProps<typeof Glyph>["name"];
+  glyph: IconName;
   tintBg: string;
   tintFg: string;
   title: string;
@@ -664,7 +625,7 @@ export function CardTitleRow({
             backgroundColor: tintBg, alignItems: "center", justifyContent: "center",
           }}
         >
-          <Glyph name={glyph} size={16} color={tintFg} />
+          <Feather name={glyph} size={16} color={tintFg} />
         </View>
         <Text style={typography.cardTitle}>{title}</Text>
       </View>

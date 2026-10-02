@@ -5,18 +5,16 @@
 import React from "react";
 import {
   Page, PageHeader, Section, EmptyState, PrimaryButton,
-  type Glyph as _Glyph,
+  type IconName,
 } from "../ui";
 import { useAuth } from "../AuthContext";
 
-type GlyphName = React.ComponentProps<typeof _Glyph>["name"];
-
 export function ComingSoon({
-  title, body, glyph = "box", testID, showLogout,
+  title, body, glyph = "package", testID, showLogout,
 }: {
   title: string;
   body: string;
-  glyph?: GlyphName;
+  glyph?: IconName;
   testID?: string;
   showLogout?: boolean;
 }) {

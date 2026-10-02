@@ -13,7 +13,7 @@ import { DriverAPI, type DriverDashboard } from "@cargoone/core";
 import {
   Page, PageHeader, IconButton, Section, Card, CardTitleRow, StatCell,
   StatusPill, SectionTitle, Body, Caption, Row, PrimaryButton, EmptyState,
-  HeroCard, MapPin, ChevronRight, Glyph,
+  HeroCard, MapPin, ChevronRight, Icon,
   colors, radius, space, typography,
 } from "../ui";
 import { useAuth } from "../AuthContext";
@@ -118,7 +118,7 @@ export default function HomeScreen() {
               Alert.alert("Notifications", "The notifications inbox ships in a later phase.")
             }
           >
-            <Glyph name="bell" size={22} />
+            <Icon name="bell" size={22} />
           </IconButton>
         }
       />
@@ -154,7 +154,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
               testID="driver-go-live-cta"
             >
-              <Glyph name="zap" size={16} color={colors.ink} />
+              <Icon name="zap" size={16} color={colors.ink} />
               <Text style={styles.heroCtaText}>Open Live Mode</Text>
               <ChevronRight size={16} color={colors.ink} />
             </Pressable>
@@ -171,7 +171,7 @@ export default function HomeScreen() {
             style={{ backgroundColor: colors.warningBg, borderColor: "#FDE68A" }}
           >
             <Row>
-              <Glyph name="alert" size={22} color={colors.warning} />
+              <Icon name="alert-triangle" size={22} color={colors.warning} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={typography.strong}>Account under review</Text>
                 <Caption style={{ color: colors.warningInk, marginTop: 2 }}>
@@ -190,7 +190,7 @@ export default function HomeScreen() {
             style={{ backgroundColor: colors.errorBg, borderColor: colors.error }}
           >
             <Row style={{ alignItems: "flex-start" }}>
-              <Glyph name="alert" size={22} color={colors.error} />
+              <Icon name="alert-triangle" size={22} color={colors.error} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={typography.strong}>Admin has requested changes</Text>
                 {changesReason ? (
@@ -230,7 +230,7 @@ export default function HomeScreen() {
             style={{ backgroundColor: colors.errorBg, borderColor: colors.error }}
           >
             <Row style={{ alignItems: "flex-start" }}>
-              <Glyph name="ban" size={22} color={colors.error} />
+              <Icon name="slash" size={22} color={colors.error} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={typography.strong}>Account suspended</Text>
                 <Caption style={{ color: colors.errorInk, marginTop: 2 }}>
@@ -244,7 +244,7 @@ export default function HomeScreen() {
         {/* Earnings */}
         <Card testID="section-earnings">
           <CardTitleRow
-            glyph="coin"
+            glyph="dollar-sign"
             tintBg={colors.errorBg}
             tintFg={colors.brand}
             title="Earnings"
@@ -279,7 +279,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.innerRow, pressed && { backgroundColor: "#F3F4F6" }]}
               testID="fleet-empty-cta"
             >
-              <Glyph name="plus" size={18} color={colors.brand} />
+              <Icon name="plus" size={18} color={colors.brand} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }}>
                   Register your first vehicle
@@ -300,7 +300,7 @@ export default function HomeScreen() {
               <View style={{ marginTop: space[3], gap: space[2] }}>
                 {(fleet.vehicles || []).slice(0, 3).map((v: any) => (
                   <View key={v.id} style={styles.innerRow} testID={`fleet-veh-${v.id}`}>
-                    <Glyph name="truck" size={20} color={colors.inkMuted} />
+                    <Icon name="truck" size={20} color={colors.inkMuted} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ fontSize: 14, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
                         {v.vehicle_type_name || "Vehicle"}
@@ -319,7 +319,7 @@ export default function HomeScreen() {
         {/* Messages */}
         <Card testID="section-messages">
           <CardTitleRow
-            glyph="message"
+            glyph="mail"
             tintBg="#FFF7ED"
             tintFg={colors.accent}
             title="Messages"
@@ -342,7 +342,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.innerEmpty} testID="driver-messages-empty">
-              <Glyph name="message" size={22} color={colors.inkFaint} />
+              <Icon name="mail" size={22} color={colors.inkFaint} />
               <Caption>No unread messages.</Caption>
             </View>
           )}
@@ -360,7 +360,7 @@ export default function HomeScreen() {
           />
           {!jobs.upcoming_count ? (
             <View style={styles.innerEmpty} testID="upcoming-empty">
-              <Glyph name="calendar" size={22} color={colors.inkFaint} />
+              <Icon name="calendar" size={22} color={colors.inkFaint} />
               <Caption>No confirmed pickups yet.</Caption>
               <Pressable onPress={() => nav.navigate("AvailableJobs")}>
                 <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "700", color: colors.brand }}>
