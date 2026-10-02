@@ -258,7 +258,7 @@ function SidebarContent({
         {!collapsed && <Text style={styles.itemLabel}>Public site</Text>}
       </Pressable>
       <Pressable
-        onPress={() => go("Profile")}
+        onPress={() => go("Settings")}
         testID="side-rail-settings"
         style={[styles.item, collapsed && styles.itemCollapsed]}
       >

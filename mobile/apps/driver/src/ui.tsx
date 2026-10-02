@@ -663,6 +663,121 @@ export function StatCell({
 }
 
 /* -------------------------------------------------------------------- */
+/* SegmentedTabs — matches Customer SegmentedTabs 1:1                   */
+/* -------------------------------------------------------------------- */
+
+export function SegmentedTabs<T extends string>({
+  value, onChange, options, testIDPrefix,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  testIDPrefix?: string;
+}) {
+  return (
+    <View style={segStyles.row}>
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onChange(opt.value)}
+            testID={testIDPrefix ? `${testIDPrefix}-${opt.value}` : undefined}
+            style={[segStyles.item, active && segStyles.itemActive]}
+          >
+            <Text style={[segStyles.label, active && segStyles.labelActive]} numberOfLines={1}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const segStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    gap: 4,
+    padding: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bgSecondary,
+  },
+  item: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemActive: { backgroundColor: colors.bg, ...shadow.card },
+  label: { fontSize: 13, fontWeight: "600", color: colors.inkMuted },
+  labelActive: { color: colors.ink },
+});
+
+/* -------------------------------------------------------------------- */
+/* BookingRow — list row for My Jobs / Bookings (mirrors Customer)       */
+/* -------------------------------------------------------------------- */
+
+export function BookingRow({
+  title, status, pickup, dropoff, price, priceLabel = "Earning",
+  onPress, testID, badge, muted,
+}: {
+  title: string;
+  status: string;
+  pickup?: string | null;
+  dropoff?: string | null;
+  price?: number | null;
+  priceLabel?: string;
+  onPress?: () => void;
+  testID?: string;
+  badge?: React.ReactNode;
+  muted?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.card,
+        { padding: space[4] },
+        pressed && { borderColor: colors.ink },
+      ]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
+        <Text style={[typography.strong, { flex: 1 }]} numberOfLines={1}>{title}</Text>
+        <StatusPill status={status} />
+      </View>
+      {(pickup || dropoff) ? (
+        <View style={{ marginTop: space[2], flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Feather name="map-pin" size={14} color={colors.brand} />
+          <Text style={typography.caption} numberOfLines={1}>
+            {pickup || "—"} → {dropoff || "—"}
+          </Text>
+        </View>
+      ) : null}
+      {badge ? <View style={{ marginTop: space[2] }}>{badge}</View> : null}
+      {price != null ? (
+        <View style={{
+          marginTop: space[3], paddingTop: space[3],
+          borderTopWidth: 1, borderTopColor: colors.hairline,
+          flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
+        }}>
+          <View>
+            <Text style={typography.small}>{priceLabel}</Text>
+            <Text style={[typography.priceBig, muted && { color: colors.inkMuted }]}>
+              £{Number(price).toFixed(0)}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.inkFaint} />
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/* -------------------------------------------------------------------- */
 /* Stylesheet                                                            */
 /* -------------------------------------------------------------------- */
 

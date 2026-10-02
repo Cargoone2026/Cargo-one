@@ -25,7 +25,15 @@ import LiveModeScreen from "./screens/LiveMode";
 import MyJobsScreen from "./screens/MyJobs";
 import EarningsScreen from "./screens/Earnings";
 import FleetScreen from "./screens/Fleet";
+import VehicleEditScreen from "./screens/VehicleEdit";
 import ProfileScreen from "./screens/Profile";
+import EditProfileScreen from "./screens/EditProfile";
+import ChangePasswordScreen from "./screens/ChangePassword";
+import SettingsScreen from "./screens/Settings";
+import NotificationsScreen from "./screens/Notifications";
+import DocumentsScreen from "./screens/Documents";
+import LegalScreen from "./screens/Legal";
+import BookingDetailScreen from "./screens/BookingDetail";
 import { colors } from "./ui";
 
 export type RootStackParamList = {
@@ -34,9 +42,17 @@ export type RootStackParamList = {
   JobDetail: { jobId: string };
   LiveMode: undefined;
   MyJobs: undefined;
+  BookingDetail: { bookingId: string };
   Earnings: undefined;
   Fleet: undefined;
+  VehicleEdit: { vehicleId?: string };
   Profile: undefined;
+  EditProfile: undefined;
+  ChangePassword: undefined;
+  Settings: undefined;
+  Notifications: undefined;
+  Documents: undefined;
+  Legal: { slug: "terms" | "privacy" | "cookies" };
   Login: undefined;
 };
 
@@ -54,9 +70,17 @@ function AuthenticatedStack() {
         <Stack.Screen name="JobDetail" component={JobDetailScreen} />
         <Stack.Screen name="LiveMode" component={LiveModeScreen} />
         <Stack.Screen name="MyJobs" component={MyJobsScreen} />
+        <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
         <Stack.Screen name="Earnings" component={EarningsScreen} />
         <Stack.Screen name="Fleet" component={FleetScreen} />
+        <Stack.Screen name="VehicleEdit" component={VehicleEditScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+        <Stack.Screen name="Documents" component={DocumentsScreen} />
+        <Stack.Screen name="Legal" component={LegalScreen} />
       </Stack.Navigator>
     </AppShell>
   );

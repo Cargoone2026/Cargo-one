@@ -114,9 +114,7 @@ export default function HomeScreen() {
             testID="driver-notifications-button"
             accessibilityLabel="Notifications"
             badged={notifUnread > 0}
-            onPress={() =>
-              Alert.alert("Notifications", "The notifications inbox ships in a later phase.")
-            }
+            onPress={() => nav.navigate("Notifications")}
           >
             <Icon name="bell" size={22} />
           </IconButton>
