@@ -7,7 +7,7 @@
     "start": "expo start --dev-client",
     "ios": "expo run:ios",
     "android": "expo run:android",
-    "prebuild": "bundle install --gemfile=./Gemfile && expo prebuild --clean --no-install && (cd ios && BUNDLE_GEMFILE=../Gemfile bundle exec pod install)",
+    "prebuild": "bundle install --gemfile=./Gemfile && expo prebuild --clean --no-install && node ../../scripts/apply-node-modules-fixes.js && (cd ios && BUNDLE_GEMFILE=../Gemfile bundle exec pod install)",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
