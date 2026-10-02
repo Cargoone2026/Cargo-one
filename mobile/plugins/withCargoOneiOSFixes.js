@@ -71,7 +71,7 @@
  * before the current one is written so upgrades never leave stale
  * comments behind.
  */
-const { withDangerousMod, withXcodeProject } = require('@expo/config-plugins');
+const { withDangerousMod, withInfoPlist, withXcodeProject } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -243,7 +243,44 @@ module.exports = function withCargoOneiOSFixes(config) {
     return cfg;
   });
 
-  // 2) Podfile / Podfile.properties.json mods (see file header).
+  // 2) Info.plist mod: inject MBXAccessToken from
+  //    EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN at prebuild time.
+  //
+  //    Mapbox Maps iOS SDK v10's `ResourceOptionsManager.default` reads
+  //    `MBXAccessToken` from the main bundle's Info.plist synchronously
+  //    the first time it is accessed — which happens inside the native
+  //    SDK's own startup path, BEFORE any JavaScript runs.
+  //
+  //    The runtime `Mapbox.setAccessToken(...)` bridge call in
+  //    RouteMap.tsx / JobsMap.tsx is dispatched asynchronously via the
+  //    RN bridge, so without this Info.plist entry the first MapView
+  //    captures an empty-token ResourceOptions snapshot and style
+  //    sources fetch with no auth → HTTP 403.
+  //
+  //    The value is read from the developer's local `.env` (via Expo's
+  //    env loader, which runs before plugins). It is only written into
+  //    the generated ios/<App>/Info.plist (already .gitignored). The
+  //    token value itself is never logged, printed, or stored in any
+  //    tracked file. Public pk.* tokens are by design shipped in the
+  //    client bundle, so Info.plist is the correct place.
+  //
+  //    When the env var is missing or empty, the modifier is a no-op
+  //    (no key written, no error) — this keeps `expo prebuild` working
+  //    for contributors who haven't configured a Mapbox token locally.
+  config = withInfoPlist(config, (cfg) => {
+    const raw = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    if (token.length > 0) {
+      cfg.modResults.MBXAccessToken = token;
+    } else if (
+      Object.prototype.hasOwnProperty.call(cfg.modResults, 'MBXAccessToken')
+    ) {
+      delete cfg.modResults.MBXAccessToken;
+    }
+    return cfg;
+  });
+
+  // 3) Podfile / Podfile.properties.json mods (see file header).
   return withDangerousMod(config, [
     'ios',
     async (cfg) => {
