@@ -3,14 +3,14 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix) + Phase 5 pending-test
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
 - Installed/launched on physical iPhone ✓
-- Fully tested on physical iPhone — **PASS** ✓
+- Phase 4 fully tested on physical iPhone — **PASS** ✓
 - Splash fix on-device **PASS** ✓
-- **Phase 5 (Maps, no Live Mode) — pending user prebuild + physical iPhone test**
+- **Phase 5 (Maps, no Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -18,7 +18,8 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - `backend/` — FastAPI backend
 - `packages/core/` — Shared types + API wrappers
 - Driver native configuration — `expo.autolinking.exclude` list in `apps/driver/package.json` keeps Customer-only native modules out
-- **Live Mode** — remains a placeholder stub; no Mapbox / expo-location / live tracking
+- **Phase 5 Maps implementation** — the 9 files listed under "Phase 5 — Locked Files" below are LOCKED
+- **Live Mode** — remains a placeholder stub; no `expo-location`, no continuous GPS, no background location, no live tracking
 
 ## Driver Mobile Baseline Features
 ### Phase 1 — Auth
@@ -52,14 +53,32 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Legal (Terms / Privacy / Cookies)
 - Logout
 
-### Phase 5 — Maps (NO Live Mode)
+### Phase 5 — Maps (NO Live Mode) 🔒 LOCKED
 - Available Jobs: List/Map toggle (Customer-parity SegmentedTabs)
 - Available Jobs map: multi-pickup markers, bounds-fit camera, zoom/compass controls, tap-to-select → bottom sheet with price/route/CTA
 - Job Detail: embedded RouteMap preview with pickup/dropoff pins + polyline, graceful MapFallback when coords missing
 - Booking Detail Overview: embedded RouteMap preview (Phase-5 Active Job Map foundation; no live tracking)
 - Driver-local `RouteMap` + `MapFallback` + `JobsMap` components (visual parity with Customer `RouteMap`)
 - Native: `@rnmapbox/maps@10.1.31` removed from autolinking exclude, plugin added to `app.json`
+- Native Info.plist bridge via custom `withCargoOneiOSFixes.js` plugin injecting `MBXAccessToken` from `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN.trim()` — part of locked native baseline
 - `expo-location` **still excluded** — no user-location, no permissions, no tracking
+
+#### Phase 5 — Locked Files
+- `mobile/apps/driver/app.json`
+- `mobile/apps/driver/package.json`
+- `mobile/apps/driver/plugins/withCargoOneiOSFixes.js`
+- `mobile/apps/driver/src/components/JobsMap.tsx`
+- `mobile/apps/driver/src/components/RouteMap.tsx`
+- `mobile/apps/driver/src/screens/AvailableJobs.tsx`
+- `mobile/apps/driver/src/screens/JobDetail.tsx`
+- `mobile/apps/driver/src/screens/BookingDetail.tsx`
+- `mobile/yarn.lock`
+
+#### Phase 5 — Mapbox Token Root Cause & Resolution (factual record)
+- **Symptom:** Native Mapbox iOS SDK returned `HTTP status code 403` on the `composite` vector-tile source when running on a physical iPhone, even though the token was correctly delivered to the native SDK via `MBXAccessToken` in `Info.plist`.
+- **Root cause:** The previous "Cargo One Production" public token had 3 URL restrictions configured in the Mapbox dashboard. Mapbox explicitly documents that URL-restricted tokens are not compatible with native SDKs (restrictions are only enforceable for web `Referer` headers). The native SDK's requests therefore failed authorization at Mapbox's edge → 403.
+- **Resolution:** The Driver app now uses Mapbox's **Default public token** (URLs: N/A — no URL restrictions). Composite TileJSON and Streets v8 TileJSON both return HTTP 200 with this token. The token is loaded locally through `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` in `mobile/apps/driver/.env` only.
+- **Secret hygiene (hard rule):** The actual token value is NEVER to be committed. It must not appear in `app.json`, source code, tracked `Info.plist`, GitHub, or any tracked file. Only `.env.example` (placeholder) is tracked; the real `.env` is local.
 
 ## Code Architecture
 - `/app/backend/` — FastAPI (LOCKED)
