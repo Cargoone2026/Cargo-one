@@ -3,6 +3,13 @@
  * surface. Replaces the plain ActivityIndicator previously shown in
  * App.tsx while AuthContext hydrates.
  *
+ * Revision: isometric-safe. Hermes rejects `translateZ` on RN 0.74;
+ * this file is intentionally built from only the transform properties
+ * proven safe on physical iOS devices (see list below). Any future
+ * edit MUST NOT reintroduce `translateZ`, `matrix`, or any transform
+ * that depends on the z-axis — the runtime invariant check will crash
+ * cold-start on real hardware. Verified on physical iPhone.
+ *
  * Visual language — Driver dark palette, NOT Customer red:
  *   • Full-bleed #0A0A0A background. Matches the Driver iOS LaunchScreen
  *     storyboard background (configured in app.json) so the handoff
