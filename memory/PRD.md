@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -12,6 +12,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Splash fix on-device **PASS** ✓
 - **Phase 5 (Maps, no Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 6 (Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TESTED WITH KNOWN FOLLOW-UP** ✓
+- **Phase 7 (Startup / Loading / Face ID) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -21,6 +22,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Driver native configuration — `expo.autolinking.exclude` list in `apps/driver/package.json` keeps Customer-only native modules out (minus `expo-location`, now intentionally autolinked for Phase 6)
 - **Phase 5 Maps implementation** — the 9 files listed under "Phase 5 — Locked Files" below are LOCKED
 - **Phase 6 Live Mode implementation** — the 7 files listed under "Phase 6 — Locked Files" below are LOCKED
+- **Phase 7 Startup / Loading / Face ID implementation** 🏆 GOLDEN LOCKED — the 7 files listed under "Phase 7 — Locked Files" below are LOCKED
 - **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
@@ -116,6 +118,44 @@ Uber-style, map-first Driver Live Mode. Mirrors the existing Driver Web `fronten
 
 #### Phase 6 — Known Follow-Up Issue (not fixed in this phase)
 - **`POST /driver/live/heartbeat` returns HTTP 409 during an active online session** on the physical iPhone. Backend contract (`backend/server.py:2728–2744`) raises 409 "Driver is offline" when the user record's `live_online` flag is falsy at the moment the heartbeat is processed. Mobile call sequencing matches the Driver Web Live.jsx 1:1 (heartbeat loop fires only after `setOnline(true)` which only runs after a successful `/driver/live/online`), so this is NOT a mobile sequencing bug. The 409 surfaces during the session, after Go Online succeeded. **Root cause investigation and fix are deferred to a dedicated follow-up ticket. No code changes made in this phase.** No workaround is applied; the heartbeat loop simply logs the error and schedules the next tick (visible location may become stale, which the backend then surfaces as `reason: "stale_location"` on offer polls).
+
+### Phase 7 — Startup / Loading / Face ID 🏆 GOLDEN LOCKED
+Driver cold-start experience, verified end-to-end on the physical iPhone. Replaces the plain `ActivityIndicator` with a Driver-branded animated cube loader, and gates the authenticated stack behind a passkey-aware Face ID / Touch ID prompt. Visual language is Driver-native (`#0A0A0A` dark palette + Cargo One red accents) — NOT a copy of Customer's red surface. Behaviour is a 1:1 port of Customer `BiometricGate.tsx` adapted to Driver's `AuthContext`.
+
+- **Verified physical-iPhone sequence** (end-to-end PASS): native iOS splash → Driver branded cube loading screen → Face ID biometric gate → successful unlock → Driver dashboard.
+- **Previously-seen crashes resolved and NOT returning**:
+  - `ERR_SPLASH_SCREEN_CANNOT_HIDE` — architecturally impossible this phase (no JS `SplashScreen` calls, `expo-splash-screen` remains in `expo.autolinking.exclude`; the iOS static LaunchScreen storyboard generated from `app.json`.`splash` is the only native splash in the pipeline).
+  - `Invariant Violation: Invalid transform translateZ: {"translateZ":46}` — resolved by rebuilding the cube as a Hermes-safe **cabinet-style isometric projection** (three parallelogram faces using only `skewX`, `skewY`, `scaleX`, `scaleY`, `rotate`, `translateX`, `translateY`). The file header explicitly bans any future reintroduction of `translateZ`, `matrix`, or any z-axis-dependent transform.
+- **DriverLoadingScreen.tsx**: full-bleed `#0A0A0A` surface matching the LaunchScreen; isometric cube; front face shows `assets/loading-mark.png`; Cargo-One-red edges on every face; container Z-rotation 0°→360° linear 10 s loop; scale breath 0.97↔1.03 ease-in-out 1.2 s loop reverse; 320 ms opacity fade-in; all transforms with `useNativeDriver: true`; no reanimated, no new native dep.
+- **DriverBiometricGate.tsx**: Driver-branded dark/red fallback surface. Phases `checking → prompting → unlocked → failed`. Reads `/auth/passkey/list` via shared-core `listPasskeys()` (no `react-native-passkey` native dep needed; it stays in Driver's exclude list). Only prompts Face ID when `≥1 passkey` AND `hasHardwareAsync()` AND `isEnrolledAsync()`. 5-second global fuse guarantees the driver cannot be permanently locked out. One-shot per cold start; navigation inside the app does NOT re-trigger.
+- **AuthContext.tsx**: 6-second `Promise.race` fuse on `coreMe()` so cold-start hydration can never hang indefinitely.
+- **App.tsx**: hydration state renders `<DriverLoadingScreen/>`; authenticated stack is wrapped in `<DriverBiometricGate>`; Login stack rendered directly for `!user` (fresh users never gated).
+- **Native config**: `expo-local-authentication@~14.0.1` added and autolinked; iOS `NSFaceIDUsageDescription: "Unlock the Cargo One Driver app with Face ID"` set; `withCargoOneiOSFixes.js` untouched; Mapbox config untouched; `expo-splash-screen` remains excluded; no `Always` location, no `UIBackgroundModes`, no background permissions.
+
+#### Phase 7 — Locked Files
+- `mobile/apps/driver/src/components/DriverLoadingScreen.tsx` *(Hermes-safe isometric cube; no executable `translateZ`)*
+- `mobile/apps/driver/src/components/DriverBiometricGate.tsx` *(Face ID / passkey gate + fallback UI)*
+- `mobile/apps/driver/src/App.tsx` *(hydration = DriverLoadingScreen; authed stack wrapped in DriverBiometricGate)*
+- `mobile/apps/driver/src/AuthContext.tsx` *(6-second hydration fuse)*
+- `mobile/apps/driver/app.json` *(NSFaceIDUsageDescription added; existing splash/Mapbox config untouched)*
+- `mobile/apps/driver/package.json` *(expo-local-authentication added, removed from exclude; `expo-splash-screen` stays excluded)*
+- `mobile/yarn.lock`
+
+#### Phase 7 — Physical iPhone Test Status
+- Cold-start renders native splash cleanly ✓
+- Native splash → cube loader handoff has zero visual flash (`#0A0A0A` ↔ `#0A0A0A`) ✓
+- Cube renders without Hermes invariant crash ✓
+- AuthContext hydrates within fuse ✓
+- Face ID prompt appears when a passkey is enrolled ✓
+- Successful Face ID → Driver dashboard ✓
+- `ERR_SPLASH_SCREEN_CANNOT_HIDE` did NOT return ✓
+
+#### Phase 7 — Hard Rules (DO NOT violate in future phases)
+- **DO NOT reintroduce `translateZ`, `matrix`, or any z-axis-dependent transform** anywhere in the Driver app (Hermes rejects them at the native bridge on RN 0.74).
+- **DO NOT re-enable `expo-splash-screen`** or add any JS `SplashScreen.preventAutoHideAsync()` / `SplashScreen.hideAsync()` / `SplashScreen.show()` calls — the iOS static LaunchScreen is the only native splash and must remain so.
+- **DO NOT modify `plugins/withCargoOneiOSFixes.js`** for startup/Face ID reasons; Mapbox and all native fixes it owns remain locked.
+- **DO NOT change the biometric prompt copy** (`"Unlock Cargo One Driver"` / `"Cancel"` / `"Use passcode"`) or the fallback button labels (`"Try Face ID again"` / `"Log out"`) without an explicit new phase.
+- **DO NOT shorten the 5-second gate fuse** or the 6-second AuthContext hydration fuse — they are the only safeguards against a permanently-locked boot.
 
 ## Code Architecture
 - `/app/backend/` — FastAPI (LOCKED)
