@@ -10,13 +10,14 @@
  * diagnostic overlays).
  */
 import React from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { AppShell } from "./components/AppShell";
+import { DriverLoadingScreen } from "./components/DriverLoadingScreen";
+import { DriverBiometricGate } from "./components/DriverBiometricGate";
 import LoginScreen from "./screens/Login";
 import HomeScreen from "./screens/Home";
 import AvailableJobsScreen from "./screens/AvailableJobs";
@@ -34,7 +35,6 @@ import NotificationsScreen from "./screens/Notifications";
 import DocumentsScreen from "./screens/Documents";
 import LegalScreen from "./screens/Legal";
 import BookingDetailScreen from "./screens/BookingDetail";
-import { colors } from "./ui";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -89,11 +89,14 @@ function AuthenticatedStack() {
 function RootNavigator() {
   const { user, loading } = useAuth();
   if (loading) {
-    return (
-      <View style={styles.splash} testID="driver-boot-splash">
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
+    // Driver-branded cube loader. Matches the native iOS LaunchScreen
+    // backgroundColor (#0A0A0A) so the handoff from the static splash
+    // storyboard → JS loader has zero visual flash. We intentionally
+    // do NOT re-enable `expo-splash-screen` (it is still in the
+    // autolinking exclude list) — the iOS static LaunchScreen already
+    // provides the native splash, and keeping the module out
+    // eliminates the ERR_SPLASH_SCREEN_CANNOT_HIDE class of error.
+    return <DriverLoadingScreen />;
   }
   if (!user) {
     return (
@@ -102,7 +105,13 @@ function RootNavigator() {
       </Stack.Navigator>
     );
   }
-  return <AuthenticatedStack />;
+  // Face ID / passkey gate wraps the authenticated stack only.
+  // Fresh (!user) users never see it. Fires once per cold start.
+  return (
+    <DriverBiometricGate>
+      <AuthenticatedStack />
+    </DriverBiometricGate>
+  );
 }
 
 export default function App() {
@@ -117,12 +126,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.bg,
-  },
-});

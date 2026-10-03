@@ -42,7 +42,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const me = await coreMe();
+    // 6-second cold-start fuse. Mirrors Customer's AuthContext hydration
+    // guard: fetch has no default timeout on React Native, so a stalled
+    // DNS/TLS during cold start could otherwise leave `loading: true`
+    // forever and the DriverLoadingScreen would never dismiss. On fuse
+    // we treat the user as unauthenticated (null) and let the app render
+    // the Login stack.
+    const timed = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 6000),
+    );
+    const me = (await Promise.race([
+      coreMe().catch(() => null),
+      timed,
+    ])) as User | null;
     setUser(me);
     return me;
   }, []);

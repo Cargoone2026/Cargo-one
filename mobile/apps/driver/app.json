@@ -18,7 +18,8 @@
       "supportsTablet": true,
       "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Share your location so you can go online and receive nearby ASAP jobs."
+        "NSLocationWhenInUseUsageDescription": "Share your location so you can go online and receive nearby ASAP jobs.",
+        "NSFaceIDUsageDescription": "Unlock the Cargo One Driver app with Face ID"
       }
     },
     "android": {
