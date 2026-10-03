@@ -29,6 +29,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   DriverAPI, type Booking, type DriverCancelReason, type DriverMessage, type POD,
 } from "@cargoone/core";
+import * as Location from "expo-location";
 import type { RootStackParamList } from "../App";
 import {
   Card, Icon, Page, PageHeader, PrimaryButton, SecondaryButton,
@@ -54,6 +55,17 @@ const PROGRESSION: Array<{ from: string; to: string; label: string; icon: React.
 const CANCELLABLE = new Set([
   "accepted", "deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route",
 ]);
+
+// Driver-mobile port of R61 (Driver Web auto-tracking). For paid ASAP
+// bookings in these active statuses, the driver app pushes its
+// foreground location to /tracking/{booking_id} so the customer app's
+// ActiveJobMap can plot the live driver pin. Throttled identically to
+// the web implementation (>= 30 m moved OR >= 45 s elapsed).
+const TRACKING_ACTIVE_STATUSES = new Set([
+  "confirmed", "deposit_paid", "travelling", "arrived", "collected", "on_route",
+]);
+const TRACKING_MIN_DISTANCE_METERS = 30;
+const TRACKING_MIN_INTERVAL_MS = 45_000;
 
 export default function BookingDetailScreen({ route, navigation }: P) {
   const { bookingId } = route.params;
@@ -89,6 +101,80 @@ export default function BookingDetailScreen({ route, navigation }: P) {
     if (tab !== "messages" || !b) return;
     DriverAPI.markMessagesRead(bookingId).catch(() => {});
   }, [tab, b, bookingId]);
+
+  // ASAP live tracking (R61 web-parity, Driver mobile).
+  // Starts a foreground location watch when the booking is paid, ASAP,
+  // and in an active status, pushing throttled location updates to
+  // /tracking/{booking_id} via DriverAPI.pushTracking. Stops on
+  // unmount, terminal status, or permission denial. No background
+  // tracking, no "Always" permission, no watchPositionAsync when the
+  // app is backgrounded.
+  const lastTrackPushRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  useEffect(() => {
+    if (!b) return;
+    if (b.payment_status !== "paid") return;
+    const timing = b.service_timing || (b as any).job?.service_timing;
+    if (timing !== "asap") return;
+    if (!TRACKING_ACTIVE_STATUSES.has(b.status)) return;
+    if (b.cancelled_at) return;
+
+    let subscription: Location.LocationSubscription | null = null;
+    let cancelled = false;
+
+    (async () => {
+      const perm = await Location.getForegroundPermissionsAsync();
+      let granted = perm.granted;
+      if (!granted) {
+        const req = await Location.requestForegroundPermissionsAsync();
+        granted = req.granted;
+      }
+      if (!granted || cancelled) return;
+      try {
+        subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 10_000,
+            distanceInterval: 20,
+          },
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const now = Date.now();
+            const last = lastTrackPushRef.current;
+            if (last) {
+              const dLat = (lat - last.lat) * 111000;
+              const dLng =
+                (lng - last.lng) *
+                111000 *
+                Math.cos((lat * Math.PI) / 180);
+              const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+              if (
+                dist < TRACKING_MIN_DISTANCE_METERS &&
+                now - last.t < TRACKING_MIN_INTERVAL_MS
+              ) {
+                return;
+              }
+            }
+            try {
+              await DriverAPI.pushTracking(bookingId, lat, lng);
+              lastTrackPushRef.current = { lat, lng, t: now };
+            } catch {
+              /* silent — next fix will retry */
+            }
+          },
+        );
+      } catch {
+        /* permission errors / unavailable — stop silently */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (subscription) {
+        try { subscription.remove(); } catch { /* noop */ }
+      }
+    };
+  }, [b?.id, b?.status, b?.payment_status, b?.service_timing, b?.cancelled_at, bookingId]);
 
   const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("MyJobs"));
 

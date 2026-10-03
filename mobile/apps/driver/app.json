@@ -16,20 +16,30 @@
     "ios": {
       "bundleIdentifier": "co.uk.cargoone.driver",
       "supportsTablet": true,
-      "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"]
+      "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Share your location so you can go online and receive nearby ASAP jobs."
+      }
     },
     "android": {
       "package": "co.uk.cargoone.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111111"
-      }
+      },
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "plugins": [
       "../../plugins/withCargoOneiOSFixes",
       [
         "@rnmapbox/maps",
         {}
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Share your location so you can go online and receive nearby ASAP jobs."
+        }
       ]
     ],
     "extra": {
