@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Driver Home — Phase 8 Visual Proposal</title>
+<meta name="viewport" content="width=390, initial-scale=1" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.css"/>
+<style>
+  :root{
+    /* Exact tokens from mobile/apps/driver/src/theme.ts */
+    --brand:#D62828;
+    --accent:#FF6A00;
+    --ink:#111111;
+    --inkMuted:#6B7280;
+    --inkFaint:#9CA3AF;
+    --inkInverse:#FFFFFF;
+    --bg:#FFFFFF;
+    --bgSecondary:#F4F4F4;
+    --success:#16A34A;
+    --successBg:#DCFCE7;
+    --warning:#F59E0B;
+    --warningBg:#FEF3C7;
+    --warningInk:#92400E;
+    --error:#DC2626;
+    --errorBg:#FEE2E2;
+    --info:#3B82F6;
+    --infoBg:#DBEAFE;
+    --border:#E5E7EB;
+    --hairline:#F3F4F6;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0;background:#E5E7EB;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:var(--ink);}
+  .frame{width:390px;margin:0 auto;background:var(--bg);min-height:844px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.18);}
+  .statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:14px;font-weight:600;color:var(--ink);}
+  .statusbar .right{display:flex;gap:6px;align-items:center;font-size:12px;}
+
+  /* === LOCKED PAGEHEADER (bar) — matches ui.tsx::PageHeader with hamburger + large title + bell === */
+  .pageheader{display:flex;align-items:flex-start;gap:12px;padding:8px 16px 12px 16px;}
+  .pageheader .menuBtn{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ink);}
+  .pageheader .text{flex:1;min-width:0;}
+  .pageheader h1{margin:0;font-size:28px;line-height:34px;letter-spacing:-0.3px;font-weight:800;color:var(--ink);}
+  .pageheader .sub{margin-top:2px;font-size:13px;color:var(--inkMuted);}
+  .pageheader .right{width:40px;height:40px;border-radius:999px;background:var(--bgSecondary);display:flex;align-items:center;justify-content:center;position:relative;}
+  .pageheader .right .dot{position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:4px;background:var(--brand);border:2px solid #fff;}
+
+  /* === Content === */
+  .section{padding:0 16px;display:flex;flex-direction:column;gap:12px;padding-bottom:28px;}
+
+  /* B. Hero */
+  .hero{background:var(--ink);color:#fff;border-radius:18px;padding:16px;overflow:hidden;position:relative;}
+  .hero .eyebrow{font-size:11px;letter-spacing:1.4px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;}
+  .hero .headline{margin-top:8px;font-size:28px;line-height:32px;font-weight:800;letter-spacing:-0.4px;}
+  .hero .headline .big{font-size:40px;line-height:40px;}
+  .hero .meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;}
+  .pill-active{background:rgba(22,163,74,0.18);color:#4ADE80;}
+  .pill-active .d{width:6px;height:6px;border-radius:3px;background:#4ADE80;}
+  .hero .delv{color:rgba(255,255,255,.72);font-size:13px;}
+  .heroStrip{display:flex;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);}
+  .heroStrip .cell{flex:1;}
+  .heroStrip .label{font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,0.55);font-weight:700;}
+  .heroStrip .val{margin-top:2px;font-size:15px;font-weight:800;color:#fff;}
+  .heroStrip .divider{width:1px;align-self:stretch;background:rgba(255,255,255,0.12);margin:0 8px;}
+  .heroActions{display:flex;gap:8px;margin-top:14px;}
+  .ctaWhite{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:var(--ink);border-radius:999px;padding:11px 16px;font-weight:700;font-size:14px;}
+  .ctaWhite i{width:16px;height:16px;}
+  .iconBtn{width:44px;height:44px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--ink);}
+
+  /* Shared card */
+  .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px;}
+  .cardHead{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .glyph{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
+  .glyph i{width:16px;height:16px;}
+  .cardTitle{flex:1;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-0.1px;}
+  .cardRight{font-size:13px;font-weight:700;color:var(--brand);}
+
+  /* D. Next up */
+  .nextRow{background:var(--bgSecondary);border-radius:12px;padding:14px;display:flex;gap:12px;align-items:flex-start;}
+  .nextRow .left{flex:1;min-width:0;}
+  .nextRow .title{font-size:15px;font-weight:800;color:var(--ink);}
+  .nextRow .paid{display:inline-flex;align-items:center;gap:4px;margin-top:4px;color:var(--success);font-size:13px;font-weight:600;}
+  .nextRow .paid i{width:12px;height:12px;}
+  .timeline{display:flex;align-items:center;gap:6px;margin-top:6px;}
+  .dotPickup{width:8px;height:8px;border-radius:4px;border:2px solid var(--success);background:transparent;}
+  .dotDrop{width:8px;height:8px;border-radius:2px;background:var(--brand);}
+  .tlLabel{font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--inkFaint);}
+  .nextRow .right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+  .price{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-0.3px;}
+  .statusPill{background:var(--successBg);color:#166534;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:0.3px;}
+
+  /* E. Bids */
+  .statRow{display:flex;gap:8px;}
+  .statCell{flex:1;background:var(--bgSecondary);border-radius:12px;padding:12px;}
+  .statCell .l{font-size:11px;color:var(--inkMuted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:5px;}
+  .statCell .dot{width:7px;height:7px;border-radius:4px;}
+  .statCell .v{font-size:24px;font-weight:800;color:var(--ink);letter-spacing:-0.3px;margin-top:4px;}
+  .linkRow{margin-top:12px;background:var(--bgSecondary);border-radius:999px;padding:9px 14px;display:flex;align-items:center;gap:8px;}
+  .linkRow .t{flex:1;font-size:13px;color:var(--ink);font-weight:600;}
+  .linkRow .a{font-size:13px;font-weight:800;color:var(--brand);}
+  .linkRow i{width:14px;height:14px;color:var(--inkMuted);}
+
+  /* G. Fleet */
+  .fleetRow{background:var(--bgSecondary);border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px;}
+  .fleetRow .ic{width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--inkMuted);}
+  .fleetRow .mid{flex:1;}
+  .fleetRow .title{font-size:14px;font-weight:800;color:var(--ink);}
+  .fleetRow .meta{display:flex;align-items:center;gap:6px;margin-top:3px;}
+  .plate{background:var(--warningBg);color:var(--ink);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:800;letter-spacing:1px;}
+  .caption{font-size:13px;color:var(--inkMuted);}
+
+  /* H. Mini cards */
+  .miniRow{display:flex;gap:12px;}
+  .mini{flex:1;background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px;}
+  .miniTitle{font-size:11px;font-weight:700;color:var(--inkMuted);text-transform:uppercase;letter-spacing:0.6px;display:flex;align-items:center;gap:6px;}
+  .miniTitle i{width:14px;height:14px;}
+  .miniValue{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;margin-top:4px;}
+  .stars{color:var(--warning);font-size:14px;letter-spacing:1px;}
+  .starsEmpty{color:var(--border);}
+  .link{font-size:13px;font-weight:800;color:var(--brand);margin-top:2px;}
+
+  /* Mockup watermark */
+  .wm{position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:9px;color:#9CA3AF;background:rgba(255,255,255,0.9);padding:2px 8px;border-radius:999px;letter-spacing:1px;}
+
+  /* Icon colour helper */
+  .ico-success{background:var(--successBg);color:var(--success);}
+  .ico-warning{background:var(--warningBg);color:var(--warning);}
+  .ico-info{background:var(--infoBg);color:var(--info);}
+  .ico-purple{background:#F3E8FF;color:#7C3AED;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="wm">PHASE 8 — VISUAL PROPOSAL — MOCKUP DATA ONLY</div>
+
+  <!-- Phone status bar -->
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <i data-feather="wifi"></i>
+      <i data-feather="battery-charging"></i>
+    </span>
+  </div>
+
+  <!-- LOCKED PageHeader -->
+  <div class="pageheader">
+    <div class="menuBtn"><i data-feather="menu"></i></div>
+    <div class="text">
+      <h1>Hi Test</h1>
+      <div class="sub">Ready to earn today?</div>
+    </div>
+    <div class="right">
+      <i data-feather="bell"></i>
+      <div class="dot"></div>
+    </div>
+  </div>
+
+  <div class="section">
+
+    <!-- B. Today / Earnings hero -->
+    <div class="hero">
+      <div class="eyebrow">TODAY · FRI 2 OCT</div>
+      <div class="headline"><span class="big">£0</span> earned today</div>
+      <div class="meta">
+        <span class="pill pill-active"><span class="d"></span> Online</span>
+        <span class="delv">0 completed deliveries</span>
+      </div>
+      <div class="heroStrip">
+        <div class="cell">
+          <div class="label">WEEK</div>
+          <div class="val">£0</div>
+        </div>
+        <div class="divider"></div>
+        <div class="cell">
+          <div class="label">MONTH</div>
+          <div class="val">£0</div>
+        </div>
+        <div class="divider"></div>
+        <div class="cell">
+          <div class="label">ALL-TIME</div>
+          <div class="val">£0</div>
+        </div>
+      </div>
+      <div class="heroActions">
+        <div class="ctaWhite">
+          <i data-feather="zap"></i> Open Live Mode <i data-feather="chevron-right"></i>
+        </div>
+        <div class="iconBtn"><i data-feather="trending-up"></i></div>
+      </div>
+    </div>
+
+    <!-- D. Next up -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="glyph ico-warning"><i data-feather="calendar"></i></div>
+        <div class="cardTitle">Next up</div>
+        <div class="cardRight">All upcoming →</div>
+      </div>
+      <div class="nextRow">
+        <div class="left">
+          <div class="title">Single items</div>
+          <div class="paid"><i data-feather="check"></i> Deposit paid</div>
+          <div class="timeline">
+            <div class="dotPickup"></div>
+            <div class="caption" style="color:var(--ink)"><span class="tlLabel">PICKUP </span>Nelson</div>
+          </div>
+          <div class="timeline">
+            <div class="dotDrop"></div>
+            <div class="caption" style="color:var(--ink)"><span class="tlLabel">DROP-OFF </span>Manchester</div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="price">£250</div>
+          <div class="statusPill">Confirmed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E. Your bids -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="glyph ico-purple"><i data-feather="tag"></i></div>
+        <div class="cardTitle">Your bids</div>
+        <div class="cardRight">12 placed →</div>
+      </div>
+      <div class="statRow">
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--warning)"></span> Pending</div>
+          <div class="v">8</div>
+        </div>
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--success)"></span> Accepted</div>
+          <div class="v">4</div>
+        </div>
+      </div>
+      <div class="linkRow">
+        <i data-feather="map-pin"></i>
+        <div class="t">164 jobs near you</div>
+        <div class="a">Browse →</div>
+      </div>
+    </div>
+
+    <!-- F. Documents -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="glyph ico-success"><i data-feather="shield"></i></div>
+        <div class="cardTitle">Documents</div>
+        <div class="cardRight">Manage →</div>
+      </div>
+      <div class="statRow">
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--success)"></span> Verified</div>
+          <div class="v">0</div>
+        </div>
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--warning)"></span> Pending</div>
+          <div class="v">3</div>
+        </div>
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--brand)"></span> Rejected</div>
+          <div class="v">0</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:12px;">
+        <span class="caption">Account:</span>
+        <span class="pill" style="background:var(--successBg);color:#166534;">Active</span>
+      </div>
+    </div>
+
+    <!-- G. Fleet -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="glyph ico-info"><i data-feather="truck"></i></div>
+        <div class="cardTitle">Fleet</div>
+        <div class="cardRight">Manage →</div>
+      </div>
+      <div class="fleetRow">
+        <div class="ic"><i data-feather="truck"></i></div>
+        <div class="mid">
+          <div class="title">Small Van · Default</div>
+          <div class="meta">
+            <span class="plate">HV15 CYH</span>
+            <span class="pill pill-active" style="background:var(--successBg);color:#166534;"><span class="d" style="background:var(--success)"></span>Online</span>
+          </div>
+        </div>
+      </div>
+      <div class="caption" style="margin-top:12px;">1 vehicle · 1 active · 1 capability</div>
+    </div>
+
+    <!-- H. Rating + Messages side-by-side -->
+    <div class="miniRow">
+      <div class="mini">
+        <div class="miniTitle"><i data-feather="star" style="color:var(--warning)"></i> Rating</div>
+        <div class="miniValue">5.00</div>
+        <div class="stars">★★★★★</div>
+        <div class="caption" style="margin-top:2px;">0 reviews</div>
+      </div>
+      <div class="mini">
+        <div class="miniTitle"><i data-feather="mail" style="color:var(--accent)"></i> Messages</div>
+        <div class="miniValue">3</div>
+        <div class="caption">unread messages</div>
+        <div class="link">Open inbox →</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+<script>feather.replace({ 'stroke-width': 2 });</script>
+</body>
+</html>
