@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -11,15 +11,17 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - Phase 4 fully tested on physical iPhone — **PASS** ✓
 - Splash fix on-device **PASS** ✓
 - **Phase 5 (Maps, no Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
+- **Phase 6 (Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TESTED WITH KNOWN FOLLOW-UP** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
 - `frontend/` — Driver web portal (functional reference only)
 - `backend/` — FastAPI backend
 - `packages/core/` — Shared types + API wrappers
-- Driver native configuration — `expo.autolinking.exclude` list in `apps/driver/package.json` keeps Customer-only native modules out
+- Driver native configuration — `expo.autolinking.exclude` list in `apps/driver/package.json` keeps Customer-only native modules out (minus `expo-location`, now intentionally autolinked for Phase 6)
 - **Phase 5 Maps implementation** — the 9 files listed under "Phase 5 — Locked Files" below are LOCKED
-- **Live Mode** — remains a placeholder stub; no `expo-location`, no continuous GPS, no background location, no live tracking
+- **Phase 6 Live Mode implementation** — the 7 files listed under "Phase 6 — Locked Files" below are LOCKED
+- **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
 ### Phase 1 — Auth
@@ -80,6 +82,41 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Resolution:** The Driver app now uses Mapbox's **Default public token** (URLs: N/A — no URL restrictions). Composite TileJSON and Streets v8 TileJSON both return HTTP 200 with this token. The token is loaded locally through `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` in `mobile/apps/driver/.env` only.
 - **Secret hygiene (hard rule):** The actual token value is NEVER to be committed. It must not appear in `app.json`, source code, tracked `Info.plist`, GitHub, or any tracked file. Only `.env.example` (placeholder) is tracked; the real `.env` is local.
 
+### Phase 6 — Live Mode 🔒 LOCKED
+Uber-style, map-first Driver Live Mode. Mirrors the existing Driver Web `frontend/src/pages/portal/driver/Live.jsx` 1:1 for behaviour and reuses the Phase-5 Mapbox foundation for the map canvas. Visual quality parity with the Customer `ActiveJobMap`.
+- `LiveMode.tsx` replaces the previous `ComingSoon` placeholder.
+- `GET /driver/live/status` on mount; retains last-known lat/lng.
+- **Go Online**: foreground location permission → `Location.getCurrentPositionAsync({ accuracy: High })` → `POST /driver/live/online` with `{ lat, lng, accuracy_m }`; shows "You missed N offers" toast from `missed_offers_count`.
+- **While online**: two independent loops — 30 s heartbeat (`Location.getCurrentPositionAsync` → `POST /driver/live/heartbeat`), 5 s offer poll (`GET /driver/live/offers`). Both stop on offline/unmount.
+- **Map**: driver puck at live_lat/live_lng, one price pin per offer at pickup_lat/lng, tap-pin → bottom sheet.
+- **Bottom sheet** (peek/half/full, pure RN, no new animation deps): per-offer card with 60 s countdown from `dispatch_ready_at`, pickup/dropoff addresses + distances/duration, price, Decline (local), Accept.
+- **Accept**: inlined `api("/jobs/{id}/claim", { method: "POST" })` (keeps `packages/core` locked); HTTP 409 → "Another driver just took this job" + refresh offers; success → navigate to `BookingDetail` (fallback `JobDetail`).
+- **Go Offline**: `POST /driver/live/offline` (idempotent).
+- Today's earnings/jobs pill via `GET /bookings/mine` (same compute as web).
+- **ASAP per-booking tracking** (`BookingDetail.tsx`): foreground-only `watchPositionAsync` for paid ASAP bookings in `{confirmed, deposit_paid, travelling, arrived, collected, on_route}`, throttled to **≥30 m moved OR ≥45 s elapsed**, posts to `/tracking/{bookingId}` via `DriverAPI.pushTracking`. Stops on unmount, terminal status, cancellation, or permission denial.
+- **Native**: `expo-location@~17.0.1` added (matches Customer); removed from `expo.autolinking.exclude`. iOS Info.plist: `NSLocationWhenInUseUsageDescription` only. Config plugin: `["expo-location", { locationWhenInUsePermission }]`. Android: `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION`. **No `Always` permission, no `UIBackgroundModes`, no background location.**
+- Phase-5 Mapbox token path (`EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` + `withCargoOneiOSFixes.js` MBXAccessToken bridge) reused unchanged.
+
+#### Phase 6 — Locked Files
+- `mobile/apps/driver/src/screens/LiveMode.tsx`
+- `mobile/apps/driver/src/components/LiveMap.tsx`
+- `mobile/apps/driver/src/components/LiveBottomSheet.tsx`
+- `mobile/apps/driver/src/screens/BookingDetail.tsx` *(additive ASAP tracking effect only; existing behaviour unchanged)*
+- `mobile/apps/driver/package.json` *(expo-location added, removed from exclude)*
+- `mobile/apps/driver/app.json` *(expo-location plugin + Info.plist usage string + Android permissions)*
+- `mobile/yarn.lock`
+
+#### Phase 6 — Physical iPhone Test Status
+- Live Mode map renders successfully on the physical iPhone ✓
+- Driver location marker renders ✓
+- Nearby ASAP offers load ✓
+- Offer bottom sheet renders ✓
+- Go Online reaches the live API ✓
+- Go Offline works ✓
+
+#### Phase 6 — Known Follow-Up Issue (not fixed in this phase)
+- **`POST /driver/live/heartbeat` returns HTTP 409 during an active online session** on the physical iPhone. Backend contract (`backend/server.py:2728–2744`) raises 409 "Driver is offline" when the user record's `live_online` flag is falsy at the moment the heartbeat is processed. Mobile call sequencing matches the Driver Web Live.jsx 1:1 (heartbeat loop fires only after `setOnline(true)` which only runs after a successful `/driver/live/online`), so this is NOT a mobile sequencing bug. The 409 surfaces during the session, after Go Online succeeded. **Root cause investigation and fix are deferred to a dedicated follow-up ticket. No code changes made in this phase.** No workaround is applied; the heartbeat loop simply logs the error and schedules the next tick (visible location may become stale, which the backend then surfaces as `reason: "stale_location"` on offer polls).
+
 ## Code Architecture
 - `/app/backend/` — FastAPI (LOCKED)
 - `/app/frontend/` — React web Customer + Driver portals (LOCKED)
@@ -114,11 +151,9 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 ## 📋 Future Phases (NOT started — require explicit authorization)
 Each future phase must start from the locked baseline.
 
-### P1 — Phase 6: Live Mode (biggest; requires one more native dep)
-- `expo-location` (foreground + background permissions) — currently excluded
-- Driver online/offline toggle, heartbeat, ASAP offer accept
-- Live route presentation using existing `JobsMap` / `RouteMap` foundation from Phase 5
-- Native autolinking change required
+### P1 — Phase 6 Follow-Up: Heartbeat 409 Root-Cause & Fix
+- `POST /driver/live/heartbeat` returns HTTP 409 "Driver is offline" during an active Phase-6 session on the physical iPhone (see Phase 6 — Known Follow-Up Issue above).
+- Phase-6 code remains locked; this ticket is read-only investigation first, then minimal targeted fix (likely on the mobile side only — Customer, Driver Web, backend, and shared core stay locked).
 
 ### P2 — POD Capture
 - `expo-image-picker` (photo capture of delivery)
