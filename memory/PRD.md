@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -13,6 +13,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 5 (Maps, no Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 6 (Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TESTED WITH KNOWN FOLLOW-UP** ✓
 - **Phase 7 (Startup / Loading / Face ID) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
+- **Phase 8 (Driver Home Dashboard — dark redesign) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -23,6 +24,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 5 Maps implementation** — the 9 files listed under "Phase 5 — Locked Files" below are LOCKED
 - **Phase 6 Live Mode implementation** — the 7 files listed under "Phase 6 — Locked Files" below are LOCKED
 - **Phase 7 Startup / Loading / Face ID implementation** 🏆 GOLDEN LOCKED — the 7 files listed under "Phase 7 — Locked Files" below are LOCKED
+- **Phase 8 Driver Home Dashboard implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/Home.tsx` is LOCKED as the Phase 8 baseline
 - **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
@@ -156,6 +158,54 @@ Driver cold-start experience, verified end-to-end on the physical iPhone. Replac
 - **DO NOT modify `plugins/withCargoOneiOSFixes.js`** for startup/Face ID reasons; Mapbox and all native fixes it owns remain locked.
 - **DO NOT change the biometric prompt copy** (`"Unlock Cargo One Driver"` / `"Cancel"` / `"Use passcode"`) or the fallback button labels (`"Try Face ID again"` / `"Log out"`) without an explicit new phase.
 - **DO NOT shorten the 5-second gate fuse** or the 6-second AuthContext hydration fuse — they are the only safeguards against a permanently-locked boot.
+
+### Phase 8 — Driver Home Dashboard 🏆 GOLDEN LOCKED
+Dark Cargo One Driver Home redesign, verified end-to-end on the physical iPhone 14 and explicitly approved by the user as a **FULL PASS**. Reorganises the dashboard content below the Phase 2C-LOCKED PageHeader into an information-dense, operational Uber-style home. The approved visual source of truth is `memory/mockups/phase8_driver_home_v2_dark.html`.
+
+- **Verified physical-iPhone sequence** (end-to-end PASS): iOS static LaunchScreen → Phase 7 Driver cube loader → Phase 7 Face ID biometric gate → successful unlock → **Phase 8 dark Home dashboard rendered successfully** → user explicitly approved as a FULL PASS. All previous Phase 1–7 behaviour remained intact.
+- **Visual direction (locked)**: Cargo One Driver dark dashboard surface `#0A0A0A`; elevated cards `#141414`; inner surfaces `#1A1A1A`; subtle dividers `rgba(255,255,255,0.06)`; white primary typography; muted secondary typography `rgba(255,255,255,0.56)`; Cargo One red (`#D62828`) retained for the dropoff marker, notification badge, and brand accents; warm orange-red (`#F97316 → #FB923C`) for the primary "Open Live Mode" CTA; green `#10B981` for Online / success / verified states; amber `#F59E0B` for pending / in-review; yellow `#F4C430` for the vehicle registration plate chip. Feather icon language preserved. iPhone 14 target.
+- **Home structure (locked)**:
+  1. Existing PageHeader / bar preserved exactly (hamburger menu, "Hi {firstName}", "Ready to earn today?" subtitle, notification bell with badge, interactions, spacing, typography). Rendered on the dark surface; title/subtitle/bell content passed as JSX nodes with explicit white/muted colours so the component itself is untouched.
+  2. Today / Earnings hero card: `TODAY · {date}` eyebrow + Online pill, large `£{today}.00` with offset pence, caption "Earned today · N completed deliveries", 7-segment weekday bar highlighting today, WEEK / MONTH / ALL-TIME strip **INSIDE** the hero, orange-red "Open Live Mode" CTA + 52 px trending-up icon button for Earnings details.
+  3. Status banners (conditional): pending / changes_requested / suspended — unchanged semantics; Documents links wired to the real `Documents` screen.
+  4. Next up: dark card, "All upcoming →" to `MyJobs`, inner `#1A1A1A` row with booking title, Deposit-paid chip, vertical route track (pickup ring + dropoff red square), price, 44 px white arrow button. Taps the full row → `BookingDetail` with `{ bookingId }`.
+  5. Your bids: compact card with amber/green pending-vs-accepted progress bar, two stat tiles (Pending / Accepted), "N jobs near you · Browse →" pill → `AvailableJobs`.
+  6. Documents: compact card with shield badge, "N documents in review" summary, dynamic segmented status bar (green verified / amber pending / red rejected / off), "Manage documents →" → `Documents`.
+  7. Fleet: compact card with truck tile, default vehicle row (type · Default · yellow plate · status pill), "N vehicles · N active · N capabilities" footer, "Manage →" → `Fleet`.
+  8. Rating + Messages: **side-by-side mini cards**. Rating 5.00 + star bar + review count → `Profile`. Messages unread count + "Open inbox →" → `MyJobs`.
+- **Navigation fixes (locked)** — four pre-existing `Alert.alert("ships in a later phase")` stubs replaced with real routes to screens that already exist:
+  - Pending-banner tap → `nav.navigate("Documents")`
+  - Changes-requested "Update documents" → `nav.navigate("Documents")`
+  - Next-up booking tap → `nav.navigate("BookingDetail", { bookingId })`
+  - Documents "Manage documents →" → `nav.navigate("Documents")`
+  No new routes, no new backend endpoints, no new API wrappers.
+- **Implementation footprint**: contained entirely in `mobile/apps/driver/src/screens/Home.tsx`. The `DARK` palette lives as a local constant inside Home.tsx — not added to the shared theme, so no other screen or locked phase can be visually affected. Reuses existing primitives from `../ui` verbatim: `Page` (passed `bg="#0A0A0A"` via existing prop), `PageHeader`, `IconButton`, `Icon`, `PrimaryButton`, `colors.brand`, `space`. No shared primitive redesigned. No `ui.tsx` / `PageHeader` / `AppShell` changes.
+- **Data flow**: existing `DriverAPI.dashboard() / listNotifications() / messagesUnreadCount() / resubmitVerification()` preserved. No backend contract changes, no new endpoints, no hard-coded mock values.
+- **Native / dependency footprint**: zero. No `app.json`, `package.json`, or `yarn.lock` changes. No new deps. No native config change. No translateZ / matrix transforms. No animations beyond the primitives already in place.
+
+#### Phase 8 — Locked Files
+- `mobile/apps/driver/src/screens/Home.tsx` *(entire Phase 8 implementation; dark redesign + four stale-alert → real-route fixes)*
+- `memory/mockups/phase8_driver_home_v2_dark.html` *(approved visual source of truth; stored for future reference / future-phase alignment)*
+
+#### Phase 8 — Physical iPhone Test Status
+- Driver app launched successfully on physical iPhone 14 ✓
+- Phase 7 native splash → cube loader → Face ID gate flow remained intact ✓
+- Successful biometric unlock reached Driver Home ✓
+- Phase 8 dark Home dashboard rendered successfully ✓
+- All navigation fixes verified (Documents / BookingDetail / Fleet / Available Jobs / Profile / MyJobs) ✓
+- User explicitly approved the final Home dashboard as a **FULL PASS** ✓
+
+#### Phase 8 — Hard Rules (DO NOT violate in future phases)
+- **DO NOT revert the dark Cargo One Driver Home design** back to the previous light dashboard.
+- **DO NOT redesign the PageHeader / bar** — Phase 2C locked, re-affirmed in Phase 7 and Phase 8.
+- **DO NOT introduce a second visual theme** on the Home screen (no light-mode toggle, no hybrid).
+- **DO NOT replace the approved Home composition** (hero / next-up / your-bids / documents / fleet / rating + messages ordering) without an explicit new phase/change request from the user.
+- **DO NOT alter the four locked navigation fixes** (Documents x3, BookingDetail x1) without explicit authorization.
+- **DO NOT modify the existing Phase 7 native startup / loading / Face ID implementation** as part of any Home work.
+- **DO NOT reintroduce `translateZ` or `matrix` transforms** anywhere.
+- **DO NOT re-enable `expo-splash-screen`**.
+- **DO NOT modify the background-location restriction** or any Phase 6 Live Mode behaviour as part of Home work.
+- **Any future Home redesign requires a new explicit phase/change request from the user.**
 
 ## Code Architecture
 - `/app/backend/` — FastAPI (LOCKED)
