@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Driver Home — Phase 8 Visual Proposal v2 (dark)</title>
+<meta name="viewport" content="width=390, initial-scale=1" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.css"/>
+<style>
+  :root{
+    /* Cargo One Driver dark palette (new for Phase 8 content area) */
+    --bg:#0A0A0A;
+    --surface:#141414;
+    --surface-2:#1A1A1A;
+    --surface-3:#0F0F0F;
+    --divider:rgba(255,255,255,0.06);
+    --divider-strong:rgba(255,255,255,0.10);
+
+    --text:#FFFFFF;
+    --text-muted:rgba(255,255,255,0.56);
+    --text-faint:rgba(255,255,255,0.34);
+    --text-dim:rgba(255,255,255,0.72);
+
+    /* Cargo One identity colours (unchanged from theme.ts) */
+    --brand:#D62828;              /* Cargo red — dropoff / warnings */
+    --accent-cta:#F97316;         /* red-orange primary CTA (matches reference warmth) */
+    --accent-cta-hi:#FB923C;
+
+    --success:#10B981;
+    --success-bg:rgba(16,185,129,0.14);
+    --warning:#F59E0B;
+    --warning-bg:rgba(245,158,11,0.14);
+    --info:#3B82F6;
+    --info-bg:rgba(59,130,246,0.14);
+    --purple:#A78BFA;
+    --purple-bg:rgba(167,139,250,0.14);
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;padding:0;background:#1F1F1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:var(--text);}
+  .frame{width:390px;margin:0 auto;background:var(--bg);min-height:844px;position:relative;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+  .statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:14px;font-weight:600;color:var(--text);}
+  .statusbar .right{display:flex;gap:6px;align-items:center;font-size:12px;}
+  .statusbar i{width:16px;height:16px;}
+
+  /* ===================== LOCKED PAGEHEADER ===================== */
+  .pageheader{display:flex;align-items:flex-start;gap:12px;padding:8px 16px 12px 16px;}
+  .pageheader .menuBtn{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text);}
+  .pageheader .menuBtn i{width:22px;height:22px;}
+  .pageheader .text{flex:1;min-width:0;}
+  .pageheader h1{margin:0;font-size:28px;line-height:34px;letter-spacing:-0.3px;font-weight:800;color:var(--text);}
+  .pageheader .sub{margin-top:2px;font-size:13px;color:var(--text-muted);}
+  .pageheader .right{width:40px;height:40px;border-radius:999px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;position:relative;color:var(--text);}
+  .pageheader .right i{width:20px;height:20px;}
+  .pageheader .right .dot{position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:4px;background:var(--brand);border:2px solid var(--bg);}
+
+  /* ===================== CONTENT ===================== */
+  .section{padding:0 16px 32px 16px;display:flex;flex-direction:column;gap:14px;}
+
+  /* B. Hero */
+  .hero{background:var(--surface);border:1px solid var(--divider);border-radius:22px;padding:18px;position:relative;}
+  .hero .top{display:flex;justify-content:space-between;align-items:center;}
+  .hero .eyebrow{font-size:11px;letter-spacing:1.6px;font-weight:700;color:var(--text-faint);text-transform:uppercase;}
+  .online{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:var(--success-bg);color:var(--success);font-size:12px;font-weight:700;}
+  .online .d{width:7px;height:7px;border-radius:4px;background:var(--success);}
+
+  .big-amt{font-size:56px;line-height:1;font-weight:800;letter-spacing:-1.5px;color:var(--text);margin-top:14px;font-variant-numeric:tabular-nums;}
+  .big-amt .pence{font-size:28px;font-weight:800;color:var(--text);letter-spacing:-0.5px;vertical-align:top;margin-left:2px;}
+  .big-amt .cur{font-size:36px;font-weight:800;color:var(--text);margin-right:4px;letter-spacing:-1px;}
+
+  .earn-caption{margin-top:8px;font-size:14px;color:var(--text-muted);font-weight:500;}
+
+  /* Weekday mini sparkline row */
+  .week-strip{margin-top:22px;}
+  .week-bars{display:flex;align-items:flex-end;justify-content:space-between;height:14px;}
+  .week-bar{flex:1;margin:0 2.5px;height:3px;background:var(--divider-strong);border-radius:2px;}
+  .week-bar.active{background:var(--accent-cta);height:9px;}
+  .week-letters{display:flex;justify-content:space-between;margin-top:7px;padding:0 1px;}
+  .week-letters span{flex:1;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.4px;color:var(--text-faint);}
+  .week-letters span.active{color:var(--text);}
+
+  /* 3-col labels inside hero */
+  .wma{margin-top:20px;display:flex;align-items:flex-end;justify-content:space-between;}
+  .wma .cell{flex:1;}
+  .wma .l{font-size:11px;letter-spacing:1.4px;color:var(--text-faint);font-weight:700;}
+  .wma .v{margin-top:6px;font-size:19px;color:var(--text);font-weight:800;letter-spacing:-0.4px;font-variant-numeric:tabular-nums;}
+
+  .hero-actions{margin-top:18px;display:flex;gap:10px;align-items:stretch;}
+  .cta-primary{flex:1;background:linear-gradient(180deg,var(--accent-cta-hi) 0%,var(--accent-cta) 100%);display:flex;align-items:center;justify-content:center;gap:10px;color:#fff;border-radius:14px;padding:14px 18px;font-weight:800;font-size:15px;box-shadow:0 6px 20px rgba(249,115,22,0.35);}
+  .cta-primary i{width:18px;height:18px;}
+  .cta-icon{width:52px;border-radius:14px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text);}
+  .cta-icon i{width:20px;height:20px;}
+
+  /* Shared card */
+  .card{background:var(--surface);border:1px solid var(--divider);border-radius:22px;padding:16px;}
+  .cardHead{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .cardTitle{flex:1;font-size:16px;font-weight:800;color:var(--text);letter-spacing:-0.1px;}
+  .cardRight{font-size:13px;font-weight:600;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;}
+  .cardRight.brand{color:var(--accent-cta);}
+
+  /* D. Next up */
+  .nextBox{background:var(--surface-2);border-radius:16px;padding:16px;position:relative;}
+  .nextBox .title{font-size:19px;font-weight:800;color:var(--text);letter-spacing:-0.2px;}
+  .nextBox .paid{margin-top:4px;color:var(--success);font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;}
+  .nextBox .paid i{width:14px;height:14px;}
+  .nextBox .top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .nextBox .price{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-0.3px;font-variant-numeric:tabular-nums;}
+  .route{margin-top:14px;position:relative;padding-left:22px;}
+  .route .track{position:absolute;left:5px;top:12px;bottom:22px;width:2px;background:var(--divider-strong);border-radius:1px;}
+  .route .leg{position:relative;margin-bottom:14px;}
+  .route .leg:last-child{margin-bottom:0;}
+  .route .leg .k{font-size:10px;letter-spacing:1px;color:var(--text-faint);font-weight:700;}
+  .route .leg .v{font-size:16px;color:var(--text);font-weight:700;margin-top:2px;}
+  .route .leg.pickup::before{content:"";position:absolute;left:-22px;top:3px;width:12px;height:12px;border-radius:50%;border:2px solid var(--text);background:transparent;box-sizing:border-box;}
+  .route .leg.drop::before{content:"";position:absolute;left:-22px;top:3px;width:12px;height:12px;background:var(--brand);border-radius:3px;}
+  .arrowBtn{position:absolute;right:16px;bottom:16px;width:44px;height:44px;border-radius:50%;background:#fff;color:var(--bg);display:flex;align-items:center;justify-content:center;}
+  .arrowBtn i{width:20px;height:20px;}
+
+  /* E. Your bids */
+  .bidbar{height:5px;border-radius:3px;background:var(--surface-3);display:flex;overflow:hidden;margin-top:4px;margin-bottom:14px;}
+  .bidbar .pend{background:var(--warning);width:66%;}
+  .bidbar .acc{background:var(--success);width:34%;}
+  .statRow{display:flex;gap:12px;}
+  .statCell{flex:1;background:var(--surface-2);border-radius:14px;padding:14px;}
+  .statCell .l{font-size:12px;color:var(--text-muted);font-weight:600;display:flex;align-items:center;gap:6px;}
+  .statCell .l .dot{width:8px;height:8px;border-radius:2px;}
+  .statCell .v{margin-top:10px;font-size:28px;font-weight:800;color:var(--text);letter-spacing:-0.4px;font-variant-numeric:tabular-nums;}
+  .nearRow{margin-top:14px;background:var(--surface-2);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+  .nearRow i{width:16px;height:16px;color:var(--text-muted);}
+  .nearRow .t{flex:1;font-size:14px;color:var(--text);font-weight:600;}
+  .nearRow .a{font-size:14px;font-weight:800;color:var(--accent-cta);}
+
+  /* F. Documents */
+  .docSummary{background:var(--surface-2);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;}
+  .docIcon{width:46px;height:46px;border-radius:12px;background:rgba(245,158,11,0.12);color:var(--warning);display:flex;align-items:center;justify-content:center;}
+  .docIcon i{width:22px;height:22px;}
+  .docSummary .title{font-size:15px;font-weight:800;color:var(--text);}
+  .docSummary .sub{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .docSegments{margin-top:14px;display:flex;gap:6px;}
+  .docSegments .seg{flex:1;height:5px;border-radius:3px;background:var(--warning);}
+  .docSegments .seg.off{background:var(--surface-3);}
+  .docManage{margin-top:14px;font-size:14px;font-weight:700;color:var(--text);display:inline-flex;align-items:center;gap:4px;}
+  .acctActive{font-size:12px;font-weight:700;color:var(--success);display:inline-flex;align-items:center;gap:6px;}
+  .acctActive .d{width:6px;height:6px;border-radius:3px;background:var(--success);}
+
+  /* G. Fleet */
+  .fleetRow{background:var(--surface-2);border-radius:14px;padding:14px;display:flex;align-items:center;gap:14px;}
+  .fleetIcon{width:50px;height:50px;border-radius:12px;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;color:var(--text-muted);}
+  .fleetIcon i{width:22px;height:22px;}
+  .fleetTitle{font-size:15px;font-weight:800;color:var(--text);}
+  .fleetTitle .def{color:var(--text-muted);font-weight:600;}
+  .fleetMeta{margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .plate{background:#F4C430;color:var(--bg);padding:3px 9px;border-radius:5px;font-size:12px;font-weight:800;letter-spacing:1px;font-family:ui-monospace,"SF Mono",monospace;}
+  .onlineChip{color:var(--success);font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:5px;}
+  .onlineChip .d{width:7px;height:7px;border-radius:4px;background:var(--success);}
+  .fleetFooter{margin-top:14px;display:flex;gap:16px;font-size:13px;color:var(--text-muted);}
+  .fleetFooter .b{color:var(--text);font-weight:800;}
+
+  /* H. Mini cards */
+  .miniRow{display:flex;gap:12px;}
+  .mini{flex:1;background:var(--surface);border:1px solid var(--divider);border-radius:22px;padding:16px;}
+  .miniHead{display:flex;align-items:center;gap:6px;}
+  .miniHead i{width:14px;height:14px;}
+  .miniHead .t{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;}
+  .miniValue{font-size:34px;font-weight:800;color:var(--text);letter-spacing:-0.8px;margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.1;}
+  .stars{color:var(--warning);font-size:15px;letter-spacing:2px;}
+  .starsEmpty{color:rgba(255,255,255,0.12);}
+  .miniCap{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .miniAction{margin-top:8px;font-size:13px;font-weight:800;color:var(--accent-cta);}
+
+  /* Mockup watermark */
+  .wm{position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.06);padding:2px 10px;border-radius:999px;letter-spacing:1.5px;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="wm">PHASE 8 VISUAL PROPOSAL · MOCKUP DATA ONLY</div>
+
+  <!-- iPhone status bar -->
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="right">
+      <i data-feather="wifi"></i>
+      <i data-feather="battery-charging"></i>
+    </span>
+  </div>
+
+  <!-- LOCKED PageHeader (preserved from Phase 2C) -->
+  <div class="pageheader">
+    <div class="menuBtn"><i data-feather="menu"></i></div>
+    <div class="text">
+      <h1>Hi Test</h1>
+      <div class="sub">Ready to earn today?</div>
+    </div>
+    <div class="right">
+      <i data-feather="bell"></i>
+      <div class="dot"></div>
+    </div>
+  </div>
+
+  <div class="section">
+
+    <!-- B. Today / Earnings hero -->
+    <div class="hero">
+      <div class="top">
+        <div class="eyebrow">TODAY · FRI 2 OCT</div>
+        <div class="online"><span class="d"></span> Online</div>
+      </div>
+
+      <div class="big-amt"><span class="cur">£</span>0<span class="pence">.00</span></div>
+      <div class="earn-caption">Earned today · 0 completed deliveries</div>
+
+      <div class="week-strip">
+        <div class="week-bars">
+          <div class="week-bar"></div>
+          <div class="week-bar"></div>
+          <div class="week-bar"></div>
+          <div class="week-bar"></div>
+          <div class="week-bar active"></div>
+          <div class="week-bar"></div>
+          <div class="week-bar"></div>
+        </div>
+        <div class="week-letters">
+          <span>M</span><span>T</span><span>W</span><span>T</span><span class="active">F</span><span>S</span><span>S</span>
+        </div>
+      </div>
+
+      <div class="wma">
+        <div class="cell">
+          <div class="l">WEEK</div>
+          <div class="v">£0.00</div>
+        </div>
+        <div class="cell">
+          <div class="l">MONTH</div>
+          <div class="v">£0.00</div>
+        </div>
+        <div class="cell">
+          <div class="l">ALL-TIME</div>
+          <div class="v">£0.00</div>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <div class="cta-primary"><i data-feather="zap"></i> Open Live Mode</div>
+        <div class="cta-icon"><i data-feather="trending-up"></i></div>
+      </div>
+    </div>
+
+    <!-- D. Next up -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="cardTitle">Next up</div>
+        <div class="cardRight">All upcoming <i data-feather="arrow-right" style="width:12px;height:12px;"></i></div>
+      </div>
+      <div class="nextBox">
+        <div class="top">
+          <div>
+            <div class="title">Single items</div>
+            <div class="paid"><i data-feather="check"></i> Deposit paid</div>
+          </div>
+          <div class="price">£250</div>
+        </div>
+
+        <div class="route">
+          <div class="track"></div>
+          <div class="leg pickup">
+            <div class="k">PICKUP</div>
+            <div class="v">Nelson</div>
+          </div>
+          <div class="leg drop">
+            <div class="k">DROP-OFF</div>
+            <div class="v">Manchester</div>
+          </div>
+        </div>
+
+        <div class="arrowBtn"><i data-feather="arrow-right"></i></div>
+      </div>
+    </div>
+
+    <!-- E. Your bids -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="cardTitle">Your bids</div>
+        <div class="cardRight">12 placed</div>
+      </div>
+      <div class="bidbar"><div class="pend"></div><div class="acc"></div></div>
+      <div class="statRow">
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--warning)"></span>Pending</div>
+          <div class="v">8</div>
+        </div>
+        <div class="statCell">
+          <div class="l"><span class="dot" style="background:var(--success)"></span>Accepted</div>
+          <div class="v">4</div>
+        </div>
+      </div>
+      <div class="nearRow">
+        <i data-feather="map-pin"></i>
+        <div class="t">164 jobs near you</div>
+        <div class="a">Browse →</div>
+      </div>
+    </div>
+
+    <!-- F. Documents -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="cardTitle">Documents</div>
+        <div class="acctActive"><span class="d"></span> Account active</div>
+      </div>
+      <div class="docSummary">
+        <div class="docIcon"><i data-feather="shield"></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="title">3 documents in review</div>
+          <div class="sub">0 verified · 0 rejected</div>
+        </div>
+      </div>
+      <div class="docSegments">
+        <div class="seg"></div><div class="seg"></div><div class="seg"></div>
+        <div class="seg off"></div><div class="seg off"></div>
+      </div>
+      <div class="docManage">Manage documents →</div>
+    </div>
+
+    <!-- G. Fleet -->
+    <div class="card">
+      <div class="cardHead">
+        <div class="cardTitle">Fleet</div>
+        <div class="cardRight">Manage <i data-feather="arrow-right" style="width:12px;height:12px;"></i></div>
+      </div>
+      <div class="fleetRow">
+        <div class="fleetIcon"><i data-feather="truck"></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="fleetTitle">Small Van <span class="def">· Default</span></div>
+          <div class="fleetMeta">
+            <span class="plate">HV15 CYH</span>
+            <span class="onlineChip"><span class="d"></span>Online</span>
+          </div>
+        </div>
+      </div>
+      <div class="fleetFooter">
+        <span><span class="b">1</span> vehicle</span>
+        <span><span class="b">1</span> active</span>
+        <span><span class="b">1</span> capability</span>
+      </div>
+    </div>
+
+    <!-- H. Rating + Messages side-by-side -->
+    <div class="miniRow">
+      <div class="mini">
+        <div class="miniHead"><i data-feather="star" style="color:var(--warning)"></i><span class="t">Rating</span></div>
+        <div class="miniValue">5.00</div>
+        <div class="stars">★★★★★</div>
+        <div class="miniCap">0 reviews</div>
+        <div class="miniAction">Profile →</div>
+      </div>
+      <div class="mini">
+        <div class="miniHead"><i data-feather="mail" style="color:var(--accent-cta)"></i><span class="t">Messages</span></div>
+        <div class="miniValue">3</div>
+        <div class="miniCap">unread messages</div>
+        <div class="miniAction" style="margin-top:14px;">Open inbox →</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+<script>feather.replace({ 'stroke-width': 2 });</script>
+</body>
+</html>
