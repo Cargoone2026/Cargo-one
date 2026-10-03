@@ -99,6 +99,8 @@ export function RouteMap({
           scrollEnabled={true}
           pitchEnabled={true}
           rotateEnabled={true}
+          onMapLoadingError={((e: any) =>
+            console.log('[DriverMapError]', JSON.stringify(e?.nativeEvent))) as any}
         >
           <Mapbox.Camera
             ref={cameraRef}

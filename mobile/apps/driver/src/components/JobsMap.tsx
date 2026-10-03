@@ -90,6 +90,8 @@ export function JobsMap({
         pitchEnabled={false}
         rotateEnabled={false}
         onPress={closeSheet}
+        onMapLoadingError={((e: any) =>
+          console.log('[DriverMapError]', JSON.stringify(e?.nativeEvent))) as any}
       >
         <Mapbox.Camera
           ref={cameraRef}
