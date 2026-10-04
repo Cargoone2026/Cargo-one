@@ -13,9 +13,9 @@
  * After Accept: navigate home — the booking appears in the dashboard's
  * Upcoming Jobs card and in My Jobs (both of which are already live).
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet,
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
 } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -128,8 +128,18 @@ export default function JobDetailScreen() {
   const price = isFixed ? job.fixed_price : ((job as any).max_budget ?? (job as any).suggested_price ?? 0);
   const photos = Array.isArray((job as any).photos) ? ((job as any).photos as string[]) : [];
 
+  // Phase 9: scroll bid section into view when the amount input focuses
+  // so the iOS numeric keyboard never covers it.
+  const scrollRef = useRef<ScrollView>(null);
+  const bidY = useRef(0);
+  const onBidFocus = useCallback(() => {
+    requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, bidY.current - 24), animated: true }),
+    );
+  }, []);
+
   return (
-    <Page testID="driver-job-detail">
+    <Page testID="driver-job-detail" scroll={false}>
       <PageHeader
         title="Job"
         onBack={() => nav.goBack()}
@@ -139,6 +149,20 @@ export default function JobDetailScreen() {
           </IconButton>
         }
       />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ paddingBottom: space[8] }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          showsVerticalScrollIndicator={false}
+        >
 
       <Section>
         {/* Header — title, category, price */}
@@ -308,6 +332,7 @@ export default function JobDetailScreen() {
             />
           </View>
         ) : (
+          <View onLayout={(e: any) => { bidY.current = e.nativeEvent.layout.y; }}>
           <Card>
             <Text style={typography.cardTitle}>Your bid</Text>
             <Caption style={{ marginTop: 4 }}>
@@ -323,6 +348,7 @@ export default function JobDetailScreen() {
                 placeholder="0"
                 placeholderTextColor={colors.inkFaint}
                 style={styles.bidAmountInput}
+                onFocus={onBidFocus}
                 testID="driver-bid-amount"
               />
             </View>
@@ -333,6 +359,7 @@ export default function JobDetailScreen() {
               placeholderTextColor={colors.inkFaint}
               style={styles.bidMessage}
               multiline
+              onFocus={onBidFocus}
               testID="driver-bid-message"
             />
             <View style={{ flexDirection: "row", gap: space[2], marginTop: space[3] }}>
@@ -351,8 +378,11 @@ export default function JobDetailScreen() {
               />
             </View>
           </Card>
+          </View>
         )}
       </Section>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </Page>
   );
 }

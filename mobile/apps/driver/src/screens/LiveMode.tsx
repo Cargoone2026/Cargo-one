@@ -31,6 +31,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
@@ -534,7 +535,11 @@ export default function LiveModeScreen() {
   const openIosSettings = () => Linking.openURL("app-settings:");
 
   return (
-    <View style={styles.root} testID="driver-live-mode">
+    <SafeAreaView
+      edges={["top"]}
+      style={styles.root}
+      testID="driver-live-mode"
+    >
       <PageHeader title="Live Mode" />
 
       <View style={styles.canvas}>
@@ -726,7 +731,7 @@ export default function LiveModeScreen() {
           ) : null}
         </LiveBottomSheet>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

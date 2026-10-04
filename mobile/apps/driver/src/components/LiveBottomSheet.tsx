@@ -10,8 +10,15 @@
  * Live.jsx does. This keeps the first version shippable with zero new
  * animation libraries.
  */
-import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useMemo, useRef } from "react";
+import {
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Icon, colors, radius, space, typography } from "../ui";
 
 export type SheetSnap = "peek" | "half" | "full";
@@ -42,6 +49,45 @@ export function LiveBottomSheet({
     onSnapChange(next);
   };
 
+  // --- Phase 9 drag gesture ---------------------------------------
+  // Vertical pan on the handle region cycles snap levels. Upward drag
+  // raises the sheet (peek→half→full); downward drag lowers it
+  // (full→half→peek). Horizontal gestures are ignored so the Mapbox
+  // canvas keeps its own pan/zoom handling. 24 px threshold prevents
+  // accidental changes while scrolling list content.
+  const snapRef = useRef<SheetSnap>(snap);
+  snapRef.current = snap;
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_e, g) =>
+          Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_e, g) => {
+          const THRESH = 24;
+          const current = snapRef.current;
+          let next: SheetSnap = current;
+          if (g.dy < -THRESH) {
+            next = current === "peek" ? "half" : "full";
+          } else if (g.dy > THRESH) {
+            next = current === "full" ? "half" : "peek";
+          } else {
+            // Tap (no significant drag) — cycle like before.
+            next =
+              current === "peek"
+                ? "half"
+                : current === "half"
+                  ? "full"
+                  : "peek";
+          }
+          if (next !== current) onSnapChange(next);
+        },
+      }),
+    [onSnapChange],
+  );
+
   return (
     <View
       pointerEvents="box-none"
@@ -51,17 +97,23 @@ export function LiveBottomSheet({
         style={[styles.sheet, { height: `${heightPct * 100}%` }]}
         testID={testID}
       >
-        <Pressable
-          onPress={cycle}
-          hitSlop={10}
+        <View
+          {...panResponder.panHandlers}
           style={styles.handleHit}
           testID={`${testID}-handle`}
         >
           <View style={styles.handle} />
-        </Pressable>
+        </View>
 
         <View style={styles.headerRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>{headerLeft}</View>
+          <Pressable
+            onPress={cycle}
+            hitSlop={6}
+            style={{ flex: 1, minWidth: 0 }}
+            testID={`${testID}-header`}
+          >
+            {headerLeft}
+          </Pressable>
           {headerRight ? (
             <View style={styles.headerRight}>{headerRight}</View>
           ) : null}
@@ -124,7 +176,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 12,
   },
-  handleHit: { alignItems: "center", paddingVertical: 6 },
+  handleHit: { alignItems: "center", paddingVertical: 14 },
   handle: {
     width: 44,
     height: 4,

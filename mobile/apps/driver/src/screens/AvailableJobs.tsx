@@ -147,7 +147,7 @@ export default function AvailableJobsScreen() {
       </Section>
 
       {/* View-mode toggle */}
-      <Section>
+      <Section style={{ marginTop: space[2] }}>
         <SegmentedTabs
           value={viewMode}
           onChange={setViewMode}
@@ -160,33 +160,37 @@ export default function AvailableJobsScreen() {
       </Section>
 
       {/* Sort chips */}
-      <ChipRow testID="driver-jobs-sort-row">
-        {SORTS.map((s) => (
-          <Chip
-            key={s.key}
-            active={sort === s.key}
-            onPress={() => setSort(s.key)}
-            testID={`driver-jobs-sort-${s.key}`}
-            icon={s.icon}
-          >
-            {s.label}
-          </Chip>
-        ))}
-      </ChipRow>
+      <View style={{ marginTop: space[3] }}>
+        <ChipRow testID="driver-jobs-sort-row">
+          {SORTS.map((s) => (
+            <Chip
+              key={s.key}
+              active={sort === s.key}
+              onPress={() => setSort(s.key)}
+              testID={`driver-jobs-sort-${s.key}`}
+              icon={s.icon}
+            >
+              {s.label}
+            </Chip>
+          ))}
+        </ChipRow>
+      </View>
 
       {/* Pricing filter */}
-      <ChipRow testID="driver-jobs-pricing-row">
-        {PRICINGS.map((p) => (
-          <Chip
-            key={p.key}
-            active={pricing === p.key}
-            onPress={() => setPricing(p.key)}
-            testID={`driver-jobs-pricing-${p.key}`}
-          >
-            {p.label}
-          </Chip>
-        ))}
-      </ChipRow>
+      <View style={{ marginTop: space[2] }}>
+        <ChipRow testID="driver-jobs-pricing-row">
+          {PRICINGS.map((p) => (
+            <Chip
+              key={p.key}
+              active={pricing === p.key}
+              onPress={() => setPricing(p.key)}
+              testID={`driver-jobs-pricing-${p.key}`}
+            >
+              {p.label}
+            </Chip>
+          ))}
+        </ChipRow>
+      </View>
 
       {/* Error */}
       {error ? (
