@@ -14,11 +14,15 @@
  *   • POST /bookings/{id}/messages/mark-read
  *   • GET  /driver/cancel-reasons           (cancelReasons)
  *   • POST /driver/bookings/{id}/cancel     (cancelBooking)
- *   • GET  /bookings/{id}/pod               (fetchPOD, view-only)
+ *   • GET  /bookings/{id}/pod               (fetchPOD)
+ *   • POST /bookings/{id}/pod               (uploadPOD, Phase 11)
  *
- * POD CAPTURE IS OMITTED — camera/signature capture requires
- * expo-image-picker + signature-canvas native deps that are
- * intentionally excluded from Driver autolinking. POD view-only works.
+ * Phase 11: POD capture is now implemented in Driver mobile — photos
+ * (expo-image-picker, camera + library), customer signature
+ * (react-native-signature-canvas via react-native-webview), optional
+ * delivery notes, and best-effort GPS at submit. The backend
+ * `POD`/`PODUpload` contract and the resulting `status: "pod_uploaded"`
+ * transition are unchanged. See `../components/SignaturePad.tsx`.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -29,14 +33,16 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   DriverAPI, type Booking, type DriverCancelReason, type DriverMessage, type POD,
 } from "@cargoone/core";
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import type { RootStackParamList } from "../App";
 import {
-  Card, Icon, Page, PageHeader, PrimaryButton, SecondaryButton,
+  Card, Icon, Input, Page, PageHeader, PrimaryButton, SecondaryButton,
   SegmentedTabs, StatusPill,
   colors, radius, space, typography,
 } from "../ui";
 import { RouteMap, MapFallback } from "../components/RouteMap";
+import { SignaturePad } from "../components/SignaturePad";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 type Tab = "overview" | "messages" | "pod";
@@ -445,7 +451,13 @@ export default function BookingDetailScreen({ route, navigation }: P) {
             </>
           ) : (
             // POD tab
-            <PODPane pod={pod} status={b.status} />
+            <PODPane
+              pod={pod}
+              status={b.status}
+              paymentStatus={(b as any).payment_status}
+              bookingId={bookingId}
+              onUploaded={load}
+            />
           )}
         </ScrollView>
       )}
@@ -500,50 +512,322 @@ function PriceRow({ label, value, strong, muted }: { label: string; value: strin
   );
 }
 
-function PODPane({ pod, status }: { pod: POD | null; status: string }) {
-  if (!pod && status !== "delivered" && status !== "pod_uploaded" && status !== "completed") {
+function PODPane({
+  pod, status, paymentStatus, bookingId, onUploaded,
+}: {
+  pod: POD | null;
+  status: string;
+  paymentStatus?: string;
+  bookingId: string;
+  onUploaded: () => Promise<void> | void;
+}) {
+  // Phase 11: Driver mobile POD capture — mirrors the Driver Web flow
+  // (3 steps + checklist) and submits via DriverAPI.uploadPOD. Backend
+  // owns the status transition to "pod_uploaded"; we only POST the
+  // POD payload.
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // --- Uploaded view (parity with Driver Web uploaded card) --------------
+  if (pod) {
+    const photos = Array.isArray(pod.photos) ? pod.photos : [];
+    return (
+      <Card testID="booking-pod-view">
+        <View style={styles.podBanner}>
+          <Icon name="check-circle" size={20} color={colors.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={typography.strong}>POD uploaded</Text>
+            {pod.created_at ? (
+              <Text style={[typography.caption, { marginTop: 2 }]}>
+                {new Date(pod.created_at).toLocaleString()}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {pod.notes ? (
+          <>
+            <Text style={[typography.micro, { marginTop: space[3] }]}>NOTES</Text>
+            <Text style={[typography.body, { marginTop: 4, lineHeight: 20 }]}>{pod.notes}</Text>
+          </>
+        ) : null}
+
+        {pod.lat != null && pod.lng != null ? (
+          <>
+            <Text style={[typography.micro, { marginTop: space[3] }]}>GPS</Text>
+            <Text style={[typography.body, { marginTop: 4 }]}>
+              {Number(pod.lat).toFixed(5)}, {Number(pod.lng).toFixed(5)}
+            </Text>
+          </>
+        ) : null}
+
+        {photos.length > 0 ? (
+          <>
+            <Text style={[typography.micro, { marginTop: space[3] }]}>PHOTOS</Text>
+            <View style={styles.podPhotoGrid}>
+              {photos.map((p, i) => (
+                <Image
+                  key={i}
+                  source={{ uri: p }}
+                  style={styles.podPhoto}
+                  testID={`pod-photo-${i}`}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {pod.signature ? (
+          <>
+            <Text style={[typography.micro, { marginTop: space[3] }]}>CUSTOMER SIGNATURE</Text>
+            <Image
+              source={{ uri: pod.signature }}
+              style={styles.sigImage}
+              testID="pod-signature"
+            />
+          </>
+        ) : null}
+      </Card>
+    );
+  }
+
+  // --- Pre-delivery / unpaid / terminal states ---------------------------
+  const paid = paymentStatus === "paid";
+  const terminal = ["completed", "cancelled", "cancelled_by_driver"].includes(status);
+  const canCapture = paid && !terminal;
+
+  if (!canCapture) {
     return (
       <Card testID="booking-pod-empty">
         <Text style={typography.cardTitle}>Proof of Delivery</Text>
         <Text style={[typography.caption, { marginTop: space[2], lineHeight: 19 }]}>
-          Once you mark the booking as delivered, upload POD photos and the
-          customer signature from the Driver web portal. They will appear here.
+          {!paid
+            ? "The customer hasn't paid yet. POD capture becomes available once the booking is paid."
+            : "This booking is no longer active, so POD can't be captured."}
         </Text>
       </Card>
     );
   }
-  if (!pod) {
-    return (
-      <Card testID="booking-pod-pending">
+
+  // --- Capture flow ------------------------------------------------------
+  const addFromCamera = async () => {
+    setErr(null);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        setErr("Camera permission is required to add delivery photos.");
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        base64: true,
+        quality: 0.6,
+        allowsEditing: false,
+      });
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (asset?.base64) {
+        setPhotos((prev) => [...prev, `data:image/jpeg;base64,${asset.base64}`]);
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Couldn't open camera.");
+    }
+  };
+
+  const addFromLibrary = async () => {
+    setErr(null);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setErr("Photo library permission is required to attach photos.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        base64: true,
+        quality: 0.6,
+        allowsMultipleSelection: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      if (res.canceled) return;
+      const next: string[] = [];
+      for (const a of res.assets || []) {
+        if (a.base64) next.push(`data:image/jpeg;base64,${a.base64}`);
+      }
+      if (next.length) setPhotos((prev) => [...prev, ...next]);
+    } catch (e: any) {
+      setErr(e?.message || "Couldn't open photo library.");
+    }
+  };
+
+  const removePhoto = (i: number) =>
+    setPhotos((prev) => prev.filter((_, j) => j !== i));
+
+  const submit = async () => {
+    if (photos.length === 0 || !signature) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      // Best-effort GPS snapshot — Driver Web does the same and swallows
+      // failures (POD is still valid without GPS).
+      let lat: number | undefined;
+      let lng: number | undefined;
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.granted) {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+        }
+      } catch {
+        // ignore — POD is still valid without GPS
+      }
+
+      await DriverAPI.uploadPOD(bookingId, {
+        photos,
+        signature,
+        notes: notes.trim() || "Delivered as agreed.",
+        lat,
+        lng,
+      });
+
+      // Clear local state and refresh the booking + POD so the uploaded
+      // view takes over this pane.
+      setPhotos([]);
+      setSignature(null);
+      setNotes("");
+      await onUploaded();
+    } catch (e: any) {
+      setErr(e?.message || "Couldn't upload POD. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const disabled = photos.length === 0 || !signature;
+
+  return (
+    <>
+      <Card>
         <Text style={typography.cardTitle}>Proof of Delivery</Text>
         <Text style={[typography.caption, { marginTop: space[2], lineHeight: 19 }]}>
-          No POD has been uploaded yet. Upload from the Driver web portal to
-          finalise this booking.
+          Capture delivery photos and the customer signature to finalise this
+          booking. GPS and timestamp are attached automatically.
         </Text>
       </Card>
-    );
-  }
-  const photos = pod.photos || [];
-  return (
-    <Card testID="booking-pod-view">
-      <Text style={typography.cardTitle}>Proof of Delivery</Text>
-      {pod.notes ? (
-        <Text style={[typography.caption, { marginTop: space[2], lineHeight: 19 }]}>{pod.notes}</Text>
-      ) : null}
-      {photos.length > 0 ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: space[3] }}>
-          {photos.map((p, i) => (
-            <Image key={i} source={{ uri: p }} style={styles.podPhoto} testID={`pod-photo-${i}`} />
+
+      <PodStep index={1} title="Take delivery photos">
+        <View style={styles.photoGrid}>
+          {photos.map((uri, i) => (
+            <View key={i} style={styles.photoTile}>
+              <Image source={{ uri }} style={styles.photoTileImage} />
+              <Pressable
+                onPress={() => removePhoto(i)}
+                hitSlop={8}
+                style={styles.photoRemove}
+                testID={`pod-remove-photo-${i}`}
+                accessibilityLabel="Remove photo"
+              >
+                <Icon name="x" size={12} color="#FFFFFF" />
+              </Pressable>
+            </View>
           ))}
+          <Pressable
+            onPress={addFromCamera}
+            style={styles.photoAddTile}
+            testID="pod-add-photo-camera"
+          >
+            <Icon name="camera" size={18} color={colors.ink} />
+            <Text style={styles.photoAddText}>Camera</Text>
+          </Pressable>
+          <Pressable
+            onPress={addFromLibrary}
+            style={styles.photoAddTile}
+            testID="pod-add-photo-library"
+          >
+            <Icon name="image" size={18} color={colors.ink} />
+            <Text style={styles.photoAddText}>Library</Text>
+          </Pressable>
         </View>
+      </PodStep>
+
+      <PodStep index={2} title="Customer signature">
+        <SignaturePad onChange={setSignature} testID="pod-signature-pad" />
+      </PodStep>
+
+      <PodStep index={3} title="Delivery notes">
+        <Input
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="e.g. Left with reception"
+          testID="pod-notes-input"
+        />
+      </PodStep>
+
+      <Card testID="pod-checklist">
+        <ChecklistRow ok={photos.length > 0} label={`Photos (${photos.length})`} />
+        <ChecklistRow ok={!!signature} label="Signature captured" />
+        <ChecklistRow ok={true} label="GPS attempted at submit" />
+        <ChecklistRow ok={true} label="Timestamped" />
+      </Card>
+
+      {err ? (
+        <Text
+          style={{ color: colors.error, fontSize: 13, paddingHorizontal: space[4] }}
+          testID="pod-error"
+        >
+          {err}
+        </Text>
       ) : null}
-      {pod.signature ? (
-        <>
-          <Text style={[typography.micro, { marginTop: space[3] }]}>CUSTOMER SIGNATURE</Text>
-          <Image source={{ uri: pod.signature }} style={styles.sigImage} testID="pod-signature" />
-        </>
-      ) : null}
+
+      <View style={{ paddingHorizontal: space[4] }}>
+        <PrimaryButton
+          title="Submit POD"
+          onPress={submit}
+          loading={submitting}
+          disabled={disabled}
+          testID="submit-pod"
+        />
+      </View>
+    </>
+  );
+}
+
+function PodStep({
+  index, title, children,
+}: {
+  index: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <View style={styles.stepHeader}>
+        <View style={styles.stepIndex}>
+          <Text style={styles.stepIndexText}>{index}</Text>
+        </View>
+        <Text style={typography.cardTitle}>{title}</Text>
+      </View>
+      <View style={{ marginTop: space[2] }}>{children}</View>
     </Card>
+  );
+}
+
+function ChecklistRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <View style={styles.checklistRow}>
+      <Icon
+        name={ok ? "check-circle" : "circle"}
+        size={16}
+        color={ok ? colors.success : colors.inkMuted}
+      />
+      <Text style={[typography.body, { color: ok ? colors.ink : colors.inkMuted }]}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -676,6 +960,51 @@ const styles = {
   podPhoto: {
     width: 100, height: 100, borderRadius: radius.base,
     backgroundColor: colors.bgSecondary,
+  },
+  podPhotoGrid: {
+    flexDirection: "row" as const, flexWrap: "wrap" as const,
+    gap: 8, marginTop: space[2],
+  },
+  podBanner: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: space[3],
+    paddingVertical: space[2],
+  },
+  photoGrid: {
+    flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 8,
+  },
+  photoTile: {
+    width: 92, height: 92, borderRadius: radius.base,
+    overflow: "hidden" as const, backgroundColor: colors.bgSecondary,
+    borderWidth: 1, borderColor: colors.border,
+    position: "relative" as const,
+  },
+  photoTileImage: { width: "100%" as const, height: "100%" as const },
+  photoRemove: {
+    position: "absolute" as const, top: 4, right: 4,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center" as const, justifyContent: "center" as const,
+  },
+  photoAddTile: {
+    width: 92, height: 92, borderRadius: radius.base,
+    borderWidth: 1, borderStyle: "dashed" as const, borderColor: colors.border,
+    backgroundColor: colors.bgSecondary,
+    alignItems: "center" as const, justifyContent: "center" as const,
+    gap: 4,
+  },
+  photoAddText: { fontSize: 11, fontWeight: "600" as const, color: colors.ink },
+  stepHeader: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: space[2],
+  },
+  stepIndex: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: colors.ink,
+    alignItems: "center" as const, justifyContent: "center" as const,
+  },
+  stepIndexText: { fontSize: 12, fontWeight: "700" as const, color: colors.bg },
+  checklistRow: {
+    flexDirection: "row" as const, alignItems: "center" as const, gap: space[2],
+    paddingVertical: 4,
   },
   sigImage: {
     marginTop: 6, height: 100, borderRadius: radius.base,

@@ -19,7 +19,9 @@
       "associatedDomains": ["webcredentials:cargoone.co.uk", "applinks:cargoone.co.uk"],
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Share your location so you can go online and receive nearby ASAP jobs.",
-        "NSFaceIDUsageDescription": "Unlock the Cargo One Driver app with Face ID"
+        "NSFaceIDUsageDescription": "Unlock the Cargo One Driver app with Face ID",
+        "NSCameraUsageDescription": "Capture delivery photos to prove the cargo was delivered.",
+        "NSPhotoLibraryUsageDescription": "Attach existing photos as proof of delivery."
       }
     },
     "android": {
@@ -40,6 +42,13 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Share your location so you can go online and receive nearby ASAP jobs."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Capture delivery photos to prove the cargo was delivered.",
+          "photosPermission": "Attach existing photos as proof of delivery."
         }
       ]
     ],
