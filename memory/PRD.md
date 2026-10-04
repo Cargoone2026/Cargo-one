@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard + Phase 9 UI/Interaction Polish)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -14,6 +14,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 6 (Live Mode) — COMPLETE / LOCKED / PHYSICAL IPHONE TESTED WITH KNOWN FOLLOW-UP** ✓
 - **Phase 7 (Startup / Loading / Face ID) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 8 (Driver Home Dashboard — dark redesign) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
+- **Phase 9 (Driver UI / Interaction Polish) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -25,6 +26,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 6 Live Mode implementation** — the 7 files listed under "Phase 6 — Locked Files" below are LOCKED
 - **Phase 7 Startup / Loading / Face ID implementation** 🏆 GOLDEN LOCKED — the 7 files listed under "Phase 7 — Locked Files" below are LOCKED
 - **Phase 8 Driver Home Dashboard implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/Home.tsx` is LOCKED as the Phase 8 baseline
+- **Phase 9 Driver UI / Interaction Polish implementation** 🏆 GOLDEN LOCKED — the 4 files listed under "Phase 9 — Locked Files" below are LOCKED
 - **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
@@ -237,6 +239,36 @@ Dark Cargo One Driver Home redesign, verified end-to-end on the physical iPhone 
 - Reviews reply **omitted** from Profile — API exists (`replyToReview`) for a later phase
 - **Delete account** omitted — backend has no Driver self-delete endpoint
 - **Notification chime** omitted on mobile — uses pull-to-refresh instead
+
+## 🏆 Phase 9 — Driver UI / Interaction Polish (COMPLETE / GOLDEN LOCKED)
+Physical iPhone test result: **FULL PASS** ✓
+
+### Phase 9 — Fixes Delivered
+1. **Live Mode header** — Top-left menu/back button no longer overlaps the "Live Mode" title. Button fully visible and tappable. Safe-area handling correct (`SafeAreaView`).
+2. **Live Mode bottom sheet** — "Looking for nearby jobs" handle is draggable (`PanResponder`). Vertical drag transitions between peek / half / full snap positions; short handle tap/cycle behaviour retained; horizontal gestures do not interfere; inner ScrollView remains functional.
+3. **Available Jobs spacing** — List/Map segmented controls, sort chips, and pricing chips given modest additional vertical spacing. No functionality or filtering behaviour changed.
+4. **Job Detail bidding keyboard** — Numeric keyboard no longer covers the bid amount/input area. Bid card auto-scrolls into view on focus via `KeyboardAvoidingView` + `ScrollView` with `automaticallyAdjustKeyboardInsets` and an `onBidFocus` handler. Bid amount, optional message, validation, cancel, and submit behaviour unchanged.
+5. **Job Detail hook-order hotfix** — Fixed "Rendered more hooks than during the previous render" crash. Three Phase-9 hooks (`scrollRef = useRef`, `bidY = useRef`, `onBidFocus = useCallback`) were previously declared after the `loading`/`error` early returns and so were skipped on the initial render. They have been moved above all conditional early returns so React sees the same hook sequence on every render. Tapping an Available Job now reliably opens Job Detail.
+
+### Phase 9 — Startup Baseline Reverified on iPhone
+- Native splash passes ✓
+- Driver cube loading screen passes ✓
+- Face ID biometric gate passes ✓
+- Dashboard loads successfully ✓
+
+### Phase 9 — Locked Files
+- `mobile/apps/driver/src/screens/LiveMode.tsx`
+- `mobile/apps/driver/src/components/LiveBottomSheet.tsx`
+- `mobile/apps/driver/src/screens/AvailableJobs.tsx`
+- `mobile/apps/driver/src/screens/JobDetail.tsx`
+
+### Phase 9 — Hard Rules (any future change requires an explicitly authorized new phase)
+- **DO NOT** modify any of the four Phase 9 locked files without explicit new-phase authorization from the user.
+- **DO NOT** redesign Home / modify Customer mobile / modify Driver web / modify backend / modify shared core/API.
+- **DO NOT** modify Live Mode business logic, native dependencies, `app.json`, `package.json`, or `yarn.lock`.
+- **DO NOT** change the startup architecture, re-enable `expo-splash-screen`, or re-introduce `translateZ`/`matrix` transforms.
+- **DO NOT** perform unrelated cleanup inside Phase 9 files.
+- **DO NOT** commit or push unless explicitly instructed — user handles Save to GitHub manually.
 
 ## 📋 Future Phases (NOT started — require explicit authorization)
 Each future phase must start from the locked baseline.
