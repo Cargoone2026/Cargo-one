@@ -96,6 +96,18 @@ export default function JobDetailScreen() {
     }
   }, [job, bidAmount, bidMessage, nav]);
 
+  // Phase 9: scroll bid section into view when the amount input focuses
+  // so the iOS numeric keyboard never covers it. These hooks must run on
+  // every render (including loading/error) — never place them after an
+  // early return, or React will throw "Rendered more hooks than…".
+  const scrollRef = useRef<ScrollView>(null);
+  const bidY = useRef(0);
+  const onBidFocus = useCallback(() => {
+    requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, bidY.current - 24), animated: true }),
+    );
+  }, []);
+
   if (loading) {
     return (
       <Page testID="driver-job-detail-loading">
@@ -127,16 +139,6 @@ export default function JobDetailScreen() {
   const isFixed = job.pricing_type === "fixed";
   const price = isFixed ? job.fixed_price : ((job as any).max_budget ?? (job as any).suggested_price ?? 0);
   const photos = Array.isArray((job as any).photos) ? ((job as any).photos as string[]) : [];
-
-  // Phase 9: scroll bid section into view when the amount input focuses
-  // so the iOS numeric keyboard never covers it.
-  const scrollRef = useRef<ScrollView>(null);
-  const bidY = useRef(0);
-  const onBidFocus = useCallback(() => {
-    requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y: Math.max(0, bidY.current - 24), animated: true }),
-    );
-  }, []);
 
   return (
     <Page testID="driver-job-detail" scroll={false}>
