@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard + Phase 9 UI/Interaction Polish)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard + Phase 9 UI/Interaction Polish + Phase 10 ASAP Confirm Status Fix)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -15,6 +15,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 7 (Startup / Loading / Face ID) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 8 (Driver Home Dashboard — dark redesign) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 9 (Driver UI / Interaction Polish) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
+- **Phase 10 (ASAP Booking Confirm Status Fix) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -27,6 +28,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 7 Startup / Loading / Face ID implementation** 🏆 GOLDEN LOCKED — the 7 files listed under "Phase 7 — Locked Files" below are LOCKED
 - **Phase 8 Driver Home Dashboard implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/Home.tsx` is LOCKED as the Phase 8 baseline
 - **Phase 9 Driver UI / Interaction Polish implementation** 🏆 GOLDEN LOCKED — the 4 files listed under "Phase 9 — Locked Files" below are LOCKED
+- **Phase 10 ASAP Booking Confirm Status Fix implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/BookingDetail.tsx` PROGRESSION map is LOCKED as the Phase 10 baseline
 - **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
@@ -268,6 +270,40 @@ Physical iPhone test result: **FULL PASS** ✓
 - **DO NOT** modify Live Mode business logic, native dependencies, `app.json`, `package.json`, or `yarn.lock`.
 - **DO NOT** change the startup architecture, re-enable `expo-splash-screen`, or re-introduce `translateZ`/`matrix` transforms.
 - **DO NOT** perform unrelated cleanup inside Phase 9 files.
+- **DO NOT** commit or push unless explicitly instructed — user handles Save to GitHub manually.
+
+## 🏆 Phase 10 — ASAP Booking Confirm Status Fix (COMPLETE / GOLDEN LOCKED)
+Physical iPhone test result: **FULL PASS** ✓
+
+### Phase 10 — Verified physical-iPhone flow
+Live Mode → Go Online → receive ASAP offer → Accept ASAP job → Booking Detail → Deposit Paid → tap **Confirm booking** → booking advances to **Travelling**.
+- No HTTP 400.
+- No "Invalid status" error.
+- Existing next-step UI ("Mark arrived") appears correctly.
+- All other Booking Detail flows (travelling → arrived → collected → on_route → delivered, cancellation, messages, POD, ASAP location tracking) remain functional.
+
+### Phase 10 — Root cause (documented so this cannot regress)
+Backend `POST /bookings/{booking_id}/status` (`backend/server.py:3915`) accepts only:
+`travelling`, `arrived`, `collected`, `on_route`, `delivered`, `cancelled`.
+It does **NOT** accept `confirmed`.
+Driver Web (`frontend/src/pages/portal/driver/BookingDetail.jsx` STATUS_FLOW) correctly sends `deposit_paid → travelling`. Driver mobile previously (incorrectly) sent `deposit_paid → confirmed`, triggering HTTP 400 "Invalid status".
+
+### Phase 10 — Fix delivered
+Single-file surgical change in `mobile/apps/driver/src/screens/BookingDetail.tsx` PROGRESSION map:
+```ts
+{ from: "deposit_paid", to: "travelling", label: "Confirm booking", icon: "check-circle" }
+```
+The legacy `confirmed → travelling` fallback row is retained as a safety net for any booking already stuck in a `confirmed` state. Explanatory comment added above the PROGRESSION map documenting the backend contract so future edits cannot silently reintroduce `confirmed`.
+
+### Phase 10 — Locked Files / Scope
+- `mobile/apps/driver/src/screens/BookingDetail.tsx` — PROGRESSION map (and the surrounding backend-contract comment) are the Phase 10 baseline. Do not reintroduce `to: "confirmed"` for any `from:` row.
+
+### Phase 10 — Hard Rules (any future change requires an explicitly authorized new phase)
+- **DO NOT** change the Driver-mobile BookingDetail PROGRESSION map, CANCELLABLE set, or TRACKING_ACTIVE_STATUSES without explicit new-phase authorization.
+- **DO NOT** modify backend `/bookings/{id}/status` validation / Customer / Driver Web / packages/core as part of mobile booking work.
+- **DO NOT** modify any Phase 9 locked file (LiveMode, LiveBottomSheet, AvailableJobs, JobDetail).
+- **DO NOT** modify any Phase 1–8 locked file.
+- **DO NOT** change `app.json`, `package.json`, `yarn.lock`, or native dependencies.
 - **DO NOT** commit or push unless explicitly instructed — user handles Save to GitHub manually.
 
 ## 📋 Future Phases (NOT started — require explicit authorization)
