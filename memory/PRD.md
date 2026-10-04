@@ -3,7 +3,7 @@
 ## Original Problem Statement
 Build the Cargo One Driver mobile app using an Expo monorepo with React Native, using the existing Driver Web Portal as the exact functional source of truth and the Customer mobile app as the exact visual/UX source of truth. The Customer mobile app, Driver Web app, and Backend are permanently LOCKED and strictly off-limits for modifications.
 
-## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard + Phase 9 UI/Interaction Polish + Phase 10 ASAP Confirm Status Fix)
+## Current Status — 🔒 BASELINE LOCKED (Phase 4 + splash fix + Phase 5 Maps + Phase 6 Live Mode + Phase 7 Startup/Face ID + Phase 8 Home Dashboard + Phase 9 UI/Interaction Polish + Phase 10 ASAP Confirm Status Fix + Phase 11 Driver POD)
 - Saved to GitHub ✓
 - Pulled to Mac ✓
 - Built with `npx expo run:ios --device` ✓
@@ -16,6 +16,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 8 (Driver Home Dashboard — dark redesign) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 9 (Driver UI / Interaction Polish) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 - **Phase 10 (ASAP Booking Confirm Status Fix) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
+- **Phase 11 (Driver POD — Proof of Delivery) — COMPLETE / 🏆 GOLDEN LOCKED / PHYSICAL IPHONE TEST PASSED** ✓
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
@@ -29,6 +30,7 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 - **Phase 8 Driver Home Dashboard implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/Home.tsx` is LOCKED as the Phase 8 baseline
 - **Phase 9 Driver UI / Interaction Polish implementation** 🏆 GOLDEN LOCKED — the 4 files listed under "Phase 9 — Locked Files" below are LOCKED
 - **Phase 10 ASAP Booking Confirm Status Fix implementation** 🏆 GOLDEN LOCKED — `mobile/apps/driver/src/screens/BookingDetail.tsx` PROGRESSION map is LOCKED as the Phase 10 baseline
+- **Phase 11 Driver POD (Proof of Delivery) implementation** 🏆 GOLDEN LOCKED — the files listed under "Phase 11 — Locked Files" below are LOCKED
 - **Background location** — permanently out of scope; no `Always` permission, no `UIBackgroundModes: location`, no `Location.startLocationUpdatesAsync`, no `requestBackgroundPermissionsAsync`
 
 ## Driver Mobile Baseline Features
@@ -304,6 +306,51 @@ The legacy `confirmed → travelling` fallback row is retained as a safety net f
 - **DO NOT** modify any Phase 9 locked file (LiveMode, LiveBottomSheet, AvailableJobs, JobDetail).
 - **DO NOT** modify any Phase 1–8 locked file.
 - **DO NOT** change `app.json`, `package.json`, `yarn.lock`, or native dependencies.
+- **DO NOT** commit or push unless explicitly instructed — user handles Save to GitHub manually.
+
+## 🏆 Phase 11 — Driver POD (Proof of Delivery) (COMPLETE / GOLDEN LOCKED)
+Physical iPhone test result: **FULL PASS** ✓ — complete start-to-finish POD flow verified end-to-end on-device.
+
+### Phase 11 — Verified physical-iPhone flow
+Live Mode → Go Online → ASAP offer accepted → Booking Detail → Deposit Paid → Confirm booking (Phase 10) → status progression → **POD tab** → add delivery photos (Camera + Library) → customer signature on canvas → optional delivery note → **Submit POD** → `delivered_at` set backend-side, booking status transitions to `pod_uploaded`, customer "Delivery complete!" push fires, pane flips to **POD uploaded ✓** view → reopen booking later and uploaded POD still persists via `GET /bookings/{id}/pod`.
+
+### Phase 11 — Locked POD functionality
+- POD upload / submission (`POST /bookings/{id}/pod`)
+- Delivery photos (camera + photo library, multi-select, remove per-photo, base64 JPEG payload)
+- Customer signature capture (native canvas via `react-native-signature-canvas` + `react-native-webview`, base64 PNG payload, Clear control, "Sign here" placeholder)
+- Delivery notes (optional free text, backend default `"Delivered as agreed."`)
+- GPS capture (best-effort `expo-location` snapshot at submit, swallows failures — identical to Driver Web)
+- Timestamp (backend-owned on the created POD doc)
+- Live submit-readiness checklist (photos count, signature captured, GPS attempted, timestamped)
+- Submit gating (disabled unless ≥1 photo AND signature)
+- Inline error state (friendly surface for permission denial or API error)
+- Loading / submitting state on the Submit button
+- **POD Uploaded** confirmation state (green banner, timestamp, notes, GPS coords, photo grid, signature image)
+- Booking Detail **POD tab** (Overview / Messages / POD structure preserved from Phase 4)
+- Delivery-complete customer push notification (backend-owned, triggered by the upload)
+- Full physical-iPhone start-to-finish flow
+
+### Phase 11 — Locked Files
+- `mobile/apps/driver/src/components/SignaturePad.tsx` *(new file, Phase 11 baseline)*
+- `mobile/apps/driver/src/screens/BookingDetail.tsx` *(PODPane + PodStep + ChecklistRow + related styles are the Phase 11 baseline — the Phase 10 PROGRESSION map inside this file remains independently locked)*
+- `mobile/apps/driver/package.json` *(Phase 11 dependency set + autolinking exclude is the baseline — `expo-image-picker`, `react-native-webview`, `react-native-signature-canvas` added; `expo-image-picker` removed from `expo.autolinking.exclude`)*
+- `mobile/apps/driver/app.json` *(Phase 11 iOS Info.plist permission strings and `expo-image-picker` plugin block are the baseline — `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`)*
+
+### Phase 11 — Backend / Web / Customer / Core contract (unchanged, consumed as-is)
+- Backend: `POD`/`PODUpload` schema at `backend/server.py:354–359`, endpoints at `backend/server.py:4443–4486`, status transition `→ "pod_uploaded"` and `delivered_at = now` are owned by the backend upload handler.
+- Driver Web: `frontend/src/pages/portal/driver/BookingDetail.jsx` was the source-of-truth reference; **unchanged**.
+- Customer: `mobile/apps/customer/src/screens/BookingDetail.tsx` POD view-only remains unchanged.
+- Shared core: `mobile/packages/core/src/endpoints.ts` `DriverAPI.uploadPOD` / `DriverAPI.fetchPOD` wrappers consumed as-is; **unchanged**.
+
+### Phase 11 — Hard Rules (any future change requires an explicitly authorized new phase)
+- **DO NOT** modify any Phase 11 locked file (SignaturePad.tsx, BookingDetail.tsx POD section, package.json Phase 11 deps + autolinking exclude, app.json Phase 11 permissions + plugin) without explicit new-phase authorization.
+- **DO NOT** invent new POD fields; the backend `PODUpload` schema is the sole contract.
+- **DO NOT** change the Phase 10 PROGRESSION map (`deposit_paid → travelling`).
+- **DO NOT** modify any Phase 9 locked file (LiveMode, LiveBottomSheet, AvailableJobs, JobDetail).
+- **DO NOT** modify any Phase 1–8 locked file.
+- **DO NOT** modify backend / Driver Web / Customer / `packages/core` as part of POD work.
+- **DO NOT** re-add `expo-image-picker` to the autolinking exclude list; **DO NOT** remove webview/signature-canvas/image-picker from `dependencies`.
+- **DO NOT** change `plugins/withCargoOneiOSFixes.js`, the startup / splash / Face ID architecture, or re-enable `expo-splash-screen`.
 - **DO NOT** commit or push unless explicitly instructed — user handles Save to GitHub manually.
 
 ## 📋 Future Phases (NOT started — require explicit authorization)
