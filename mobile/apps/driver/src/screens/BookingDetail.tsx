@@ -42,8 +42,17 @@ type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 type Tab = "overview" | "messages" | "pod";
 
 // Progression lifecycle used by Driver web BookingDetail.
+//
+// Backend contract (server.py `update_booking_status`): the only statuses
+// accepted by POST /bookings/{id}/status are:
+//   travelling, arrived, collected, on_route, delivered, cancelled.
+// Driver Web therefore sends `travelling` as the first driver action for a
+// `deposit_paid` (or legacy `confirmed`) booking — labelled "Start Trip to
+// Pickup". The driver-mobile UI keeps its "Confirm booking" affordance but
+// MUST send `travelling` for the same transition, otherwise the backend
+// rejects it with 400 "Invalid status" (the ASAP confirm-status bug).
 const PROGRESSION: Array<{ from: string; to: string; label: string; icon: React.ComponentProps<typeof Icon>["name"] }> = [
-  { from: "deposit_paid",  to: "confirmed",   label: "Confirm booking",  icon: "check-circle" },
+  { from: "deposit_paid",  to: "travelling",  label: "Confirm booking",  icon: "check-circle" },
   { from: "confirmed",     to: "travelling",  label: "Start travelling", icon: "truck" },
   { from: "accepted",      to: "travelling",  label: "Start travelling", icon: "truck" },
   { from: "travelling",    to: "arrived",     label: "Mark arrived",     icon: "map-pin" },
