@@ -9,6 +9,17 @@ on a physical iPhone to Metro running on the developer's Mac over the ZTE U50 Wi
 - State: Stripe cards + Apple Pay + push notifications + map + bids all verified
   end-to-end on physical iPhone.
 
+**Re-verified session (2026-10-06)**:
+- Highest Customer golden tag reachable from `main`: `customer-r71-16-1-golden`
+  → commit `ac1feef7e47b09801c3661f98ad3522f985b937e` (R71.16.1, 2026-09-20).
+- The Customer dev-client build on the physical iPhone was successfully
+  connected to Metro using the command and URL below. Confirmed working.
+- `n = 0` white-screen debugging episodes from this session are unrelated to
+  this document — they were caused by an unrelated Metro/dev-client
+  mismatch resolved by restoring Customer's locked state and restarting
+  Metro from the Customer workspace with `-c`. Do not treat the Metro
+  procedure below as the cause or the fix of that unrelated issue.
+
 ## Network requirement
 
 Both the Mac and the iPhone must be joined to the **ZTE U50** Wi-Fi. The Mac's IP on
@@ -43,6 +54,48 @@ npx expo start -c --dev-client --lan
    - Example: `http://192.168.0.101:8081`
    - Use the IP printed by the Metro startup command above.
 4. Metro should log a `BUNDLE ./index.ts` line once the app connects.
+
+### Manual URL — exact format
+
+The dev-launcher's parser is strict. It must be:
+
+```
+http://<IP>:8081
+```
+
+- Scheme: `http://` (required — not `https://`, not `exp://`, not scheme-less).
+- Host: the Mac's current U50 IP, read live from `ipconfig getifaddr en0`.
+- Port: `8081` (always — this is Metro's default. Do NOT use 8082 or any
+  other port even if a previous session used one.)
+- No trailing slash, no path, no query string.
+
+**Known failures the dev-launcher reports as
+`Calling the 'loadApp' function has failed → Cannot parse the provided url`**:
+
+| What was typed | Why it fails |
+|---|---|
+| `192.168.0.101:8081` | Missing `http://` scheme |
+| `<MAC_U50_IP>:8081` | Placeholder not substituted with a real IP |
+| `http://<MAC_U50_IP>:8081` | Placeholder not substituted with a real IP |
+| `exp://192.168.0.101:8081` | `exp://` is the Expo Go scheme — the dev-client wants plain `http://` |
+| `https://192.168.0.101:8081` | Metro serves plain HTTP, not HTTPS |
+| `http://192.168.0.101:8082` | Wrong port — Customer Metro listens on 8081 |
+| `http://192.168.0.101:8081/` *(trailing slash)* | Rejected by some dev-client versions — remove the slash |
+
+### Where to read the IP
+
+Two equivalent sources:
+
+1. The Mac's terminal:
+   ```bash
+   ipconfig getifaddr en0
+   ```
+2. Metro's own startup banner, immediately under the QR code — it prints a
+   line like:
+   ```
+   › Metro waiting on exp://192.168.0.101:8081
+   ```
+   Take the `IP:port` portion and prepend `http://` instead of `exp://`.
 
 ## Do NOT change
 

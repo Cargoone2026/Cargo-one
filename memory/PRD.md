@@ -20,6 +20,11 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
 
 ## 🔒 Locked Scope (Permanent)
 - `mobile/apps/customer/` — Customer mobile app (visual reference only)
+  - **Locked baseline**: tag `customer-r71-16-1-golden` → commit `ac1feef` (2026-09-20).
+  - **Local iOS Metro dev-client startup (locked procedure)**: see `/app/memory/CUSTOMER_IOS_METRO_SETUP.md`.
+    - Metro: run from `mobile/apps/customer` on the Mac — `npx expo start -c --dev-client --lan`
+    - Dev-launcher URL on the iPhone: `http://<ipconfig getifaddr en0>:8081` (plain `http://`, port **8081**, no scheme substitution tricks).
+    - Verified working end-to-end on physical iPhone, 2026-10-06.
 - `frontend/` — Driver web portal (functional reference only)
 - `backend/` — FastAPI backend
 - `packages/core/` — Shared types + API wrappers
