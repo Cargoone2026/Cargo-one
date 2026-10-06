@@ -93,10 +93,25 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Blank checking state ties into the branded LoadingScreen the App
-  // already shows before hydration; here we just render nothing so
-  // the loader stays visible.
-  if (phase === "checking") return null;
+  // While the async passkey + biometric lookup runs, render a branded
+  // placeholder instead of null. Returning null let the iOS window
+  // background (white) show through whenever this component re-mounted
+  // before the async check completed — e.g. during dev-client reload
+  // churn. Children are NOT rendered here: this branch is reached ONLY
+  // when phase === "checking", and the gate still blocks access until
+  // `prompt()` succeeds (sets phase="unlocked"), listPasskeys returns
+  // empty, or the 5-second fuse unlocks. No security behaviour changes.
+  if (phase === "checking") {
+    return (
+      <View style={styles.wrap} testID="biometric-gate-checking">
+        <View style={styles.center}>
+          <View style={styles.iconBadge}>
+            <Fingerprint size={40} color="#FFFFFF" strokeWidth={2} />
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap} testID="biometric-gate">
