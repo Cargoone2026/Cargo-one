@@ -50,8 +50,9 @@ import {
 // `Notifications.addNotificationReceivedListener` fires.
 initPushForegroundHandler();
 
-// Hold the native splash until we've finished the auth-hydration pass.
-SplashScreen.preventAutoHideAsync().catch(() => {});
+// DIAGNOSTIC (TEMPORARY): module-level SplashScreen.preventAutoHideAsync()
+// removed to isolate whether the white-screen symptom is caused by the
+// expo-splash-screen JS flow. Native splash config in app.json is untouched.
 
 export type RootStackParamList = {
   Login: undefined;
@@ -149,13 +150,11 @@ export function App() {
   const authValue = useAuthValue();
   const { user, hydrated } = authValue;
 
-  useEffect(() => {
-    // Dismiss the *native* Expo launch splash immediately after the
-    // React tree mounts. Our own <LoadingScreen> covers any remaining
-    // hydration wait, so keeping the native splash alive here would
-    // just risk it lingering forever if hydration ever hangs.
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
+  // DIAGNOSTIC (TEMPORARY): the useEffect that called
+  // SplashScreen.hideAsync() has been removed to isolate whether the
+  // white-screen symptom is caused by the expo-splash-screen JS flow.
+  // The repeated ERR_SPLASH_SCREEN_CANNOT_HIDE warnings in the device
+  // log should disappear while this is in effect.
 
   return (
     <SafeAreaProvider>
@@ -168,7 +167,12 @@ export function App() {
           {!hydrated ? (
             <LoadingScreen />
           ) : (
-            <BiometricGate>
+            // DIAGNOSTIC (TEMPORARY): <BiometricGate> wrapper bypassed —
+            // children render directly after hydration without passkey
+            // lookup, LocalAuthentication, or the gate UI. Authentication
+            // via AuthContext/Login is unaffected. BiometricGate.tsx
+            // itself is unchanged.
+            <>
               <NavigationContainer ref={navigationRef}>
               <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
                 {!user ? (
@@ -210,7 +214,7 @@ export function App() {
               </Stack.Navigator>
               {user ? <PushBridge /> : null}
             </NavigationContainer>
-            </BiometricGate>
+            </>
           )}
         </AuthContext.Provider>
       </StripeProvider>
