@@ -1,59 +1,64 @@
-import React, { useCallback, useEffect, useRef } from "react";
-import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+/**
+ * DIAGNOSTIC (TEMPORARY) — minimum-boot Customer app.
+ *
+ * The device log shows AppRegistry.runApplication(), HMRClient.setup()
+ * and RCTDeviceEventEmitter.emit() all firing against a JS runtime that
+ * has registered zero callable modules — i.e. the JS bundle is not
+ * completing its earliest bootstrap. That is incompatible with a module
+ * executing cleanly through to `registerRootComponent(App)`.
+ *
+ * The most likely trigger is one of the many module-scope side effects
+ * reached by importing the real App.tsx: initPushForegroundHandler(),
+ * SplashScreen.preventAutoHideAsync(), and the transitive
+ * Mapbox.setAccessToken() calls that fire the moment screens like
+ * Dispatch.tsx and RouteMap.tsx are imported. If any of these throws
+ * during Hermes evaluation, `registerRootComponent(App)` never runs,
+ * AppRegistry gets no registered component, and native's call to
+ * `runApplication` lands on a runtime with zero callable modules.
+ *
+ * This file strips App.tsx to the smallest tree that still mounts the
+ * EXISTING LoginScreen so we can observe whether the base RN handoff
+ * can render ANY content.
+ *
+ * Removed for this diagnostic:
+ *   - expo-splash-screen JS (preventAutoHideAsync, hideAsync)
+ *   - BiometricGate wrapper
+ *   - PushBridge + initPushForegroundHandler + CustomerAPI
+ *   - StripeProvider
+ *   - LoadingScreen
+ *   - AppShell wrapper
+ *   - All screen imports except LoginScreen (RegisterScreen,
+ *     HomeScreen, Dispatch, BookingDetail, …) so their module-scope
+ *     side effects (Mapbox.setAccessToken etc.) are not executed.
+ *   - useAuthValue() → avoids SharedAPI.me() API call + 6s fuse.
+ *
+ * Kept (unmodified):
+ *   - index.ts entry (unchanged — still `registerRootComponent(App)`)
+ *   - LoginScreen (imported from "./screens/Login", not modified)
+ *   - AuthContext (imported but driven with a static stub value; its
+ *     own file is not touched)
+ *   - NavigationContainer + Stack.Navigator (LoginScreen is a Screen
+ *     component so it needs the navigator wrapper)
+ *   - SafeAreaProvider + StatusBar
+ *
+ * No native, Podfile, app.json, package.json, or dependency changes.
+ * Not committed; not pushed; not rebuilt. Revert this file to restore
+ * the full Customer app.
+ */
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import * as SplashScreen from "expo-splash-screen";
-import { StripeProvider } from "@stripe/stripe-react-native";
-import { CustomerAPI } from "@cargoone/core";
 
+import { AuthContext, type AuthState } from "./AuthContext";
 import { LoginScreen } from "./screens/Login";
-import { RegisterScreen } from "./screens/Register";
-import { PasswordResetScreen } from "./screens/PasswordReset";
-import { HomeScreen } from "./screens/Home";
-import { BookingsScreen } from "./screens/Bookings";
-import { BookingDetailScreen } from "./screens/BookingDetail";
-import { CreateJobScreen } from "./screens/CreateJob";
-import { BidsScreen } from "./screens/Bids";
-import { PaymentScreen } from "./screens/Payment";
-import { ReviewScreen } from "./screens/Review";
-import { SettingsScreen } from "./screens/Settings";
-import { PasskeysScreen } from "./screens/Passkeys";
-import { MessagesScreen } from "./screens/Messages";
-import { ProfileScreen } from "./screens/Profile";
-import { EditProfileScreen } from "./screens/EditProfile";
-import { ChangePasswordScreen } from "./screens/ChangePassword";
-import { PostJobScreen } from "./screens/PostJob";
-import { AsapScreen } from "./screens/Asap";
-import { LegalScreen } from "./screens/Legal";
-import { AboutScreen } from "./screens/About";
-import { SupportScreen } from "./screens/Support";
-import { DeleteAccountScreen } from "./screens/DeleteAccount";
-import { BookingConfirmedScreen } from "./screens/BookingConfirmed";
-import { JobDetailScreen } from "./screens/JobDetail";
-import { DispatchScreen } from "./screens/Dispatch";
-import { DriverProfileScreen } from "./screens/DriverProfile";
-import { AuthContext, useAuthValue } from "./AuthContext";
-import { LoadingScreen } from "./components/LoadingScreen";
-import { AppShell } from "./components/AppShell";
-import { BiometricGate } from "./components/BiometricGate";
-import {
-  initPushForegroundHandler,
-  registerForPushNotifications,
-  unregisterCurrentToken,
-  usePushNavigation,
-  type PushDataPayload,
-} from "./pushNotifications";
 
-// Configure the foreground notification handler once at module load — the
-// customer + driver apps both need this in place before the first
-// `Notifications.addNotificationReceivedListener` fires.
-initPushForegroundHandler();
-
-// DIAGNOSTIC (TEMPORARY): module-level SplashScreen.preventAutoHideAsync()
-// removed to isolate whether the white-screen symptom is caused by the
-// expo-splash-screen JS flow. Native splash config in app.json is untouched.
-
+// RootStackParamList: kept complete (type-only) so that the other
+// Customer screens — which are NOT imported by this diagnostic App but
+// are still type-checked by tsc — continue to resolve their
+// NativeStackScreenProps<RootStackParamList, ...> references. None of
+// these routes are mounted in the Navigator below; only Login is.
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
@@ -84,140 +89,40 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-/**
- * PushBridge — lives inside the authenticated tree and glues expo-notifications
- * to the customer app. On mount (i.e. after login) it registers the current
- * device's ExponentPushToken with the backend; on unmount / logout it removes
- * that token from the account. Also routes notification taps into the
- * navigation tree using the customer's payload contract:
- *   { booking_id?: string, job_id?: string, ... }
- */
-function PushBridge() {
-  const tokenRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    registerForPushNotifications(CustomerAPI.registerPushToken).then((tok) => {
-      if (!cancelled) tokenRef.current = tok;
-    });
-    return () => {
-      cancelled = true;
-      // Fire-and-forget — logout must never be blocked by a failing unregister.
-      unregisterCurrentToken(CustomerAPI.unregisterPushToken, tokenRef.current);
-      tokenRef.current = null;
-    };
-  }, []);
-
-  const navigate = useCallback((data: PushDataPayload) => {
-    if (!navigationRef.isReady()) {
-      // Cold-start race — retry once navigation has mounted.
-      setTimeout(() => navigate(data), 300);
-      return;
-    }
-    const nav = navigationRef as unknown as { navigate: (name: string, params?: any) => void };
-    if (typeof data.booking_id === "string" && data.booking_id) {
-      nav.navigate("BookingDetail", { bookingId: data.booking_id });
-    } else if (typeof data.job_id === "string" && data.job_id) {
-      nav.navigate("JobDetail", { jobId: data.job_id });
-    } else {
-      nav.navigate("Messages");
-    }
-  }, []);
-  usePushNavigation(navigate);
-  return null;
-}
-
-/**
- * withShell wraps a route inside <AppShell> so the Cargo One
- * responsive sidebar is present on primary destinations. Detail
- * screens (Booking / Job / Dispatch / Payment / etc.) render without
- * the sidebar for a focused workflow, matching the pattern used on
- * the web portal where those pages consume the full content width.
- */
-function withShell<C extends React.ComponentType<any>>(Component: C) {
-  const Wrapped: React.FC<any> = (props) => (
-    <AppShell>
-      <Component {...props} />
-    </AppShell>
-  );
-  Wrapped.displayName = `WithShell(${(Component as any).displayName || (Component as any).name || "Screen"})`;
-  return Wrapped;
-}
+// DIAGNOSTIC-only stub so LoginScreen's `useAuth()` hook resolves
+// without running the real AuthContext hydration (which would call
+// SharedAPI.me and arm the 6s fuse). All auth methods throw/no-op —
+// this is NOT a working auth state; submitting Login will not work.
+// That is intentional for this diagnostic; we only care whether the
+// Login UI mounts and paints.
+const DIAGNOSTIC_AUTH: AuthState = {
+  user: null,
+  loading: false,
+  hydrated: true,
+  login: async () => {
+    throw new Error("DIAGNOSTIC: auth disabled");
+  },
+  register: async () => {
+    throw new Error("DIAGNOSTIC: auth disabled");
+  },
+  logout: async () => {},
+  refresh: async () => {},
+};
 
 export function App() {
-  const authValue = useAuthValue();
-  const { user, hydrated } = authValue;
-
-  // DIAGNOSTIC (TEMPORARY): the useEffect that called
-  // SplashScreen.hideAsync() has been removed to isolate whether the
-  // white-screen symptom is caused by the expo-splash-screen JS flow.
-  // The repeated ERR_SPLASH_SCREEN_CANNOT_HIDE warnings in the device
-  // log should disappear while this is in effect.
-
   return (
     <SafeAreaProvider>
-      <StripeProvider
-        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PK || ""}
-        merchantIdentifier="merchant.co.uk.cargoone"
-      >
-        <AuthContext.Provider value={authValue}>
-          <StatusBar style={hydrated ? "dark" : "light"} />
-          {!hydrated ? (
-            <LoadingScreen />
-          ) : (
-            // DIAGNOSTIC (TEMPORARY): <BiometricGate> wrapper bypassed —
-            // children render directly after hydration without passkey
-            // lookup, LocalAuthentication, or the gate UI. Authentication
-            // via AuthContext/Login is unaffected. BiometricGate.tsx
-            // itself is unchanged.
-            <>
-              <NavigationContainer ref={navigationRef}>
-              <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
-                {!user ? (
-                  <>
-                    <Stack.Screen name="Login" component={LoginScreen} />
-                    <Stack.Screen name="Register" component={RegisterScreen} />
-                    <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
-                  </>
-                ) : (
-                  <>
-                    {/* Primary destinations — hosted inside the Cargo One sidebar shell. */}
-                    <Stack.Screen name="Home" component={withShell(HomeScreen)} />
-                    <Stack.Screen name="PostJob" component={withShell(PostJobScreen)} />
-                    <Stack.Screen name="Asap" component={withShell(AsapScreen)} />
-                    <Stack.Screen name="Bookings" component={withShell(BookingsScreen)} />
-                    <Stack.Screen name="Messages" component={withShell(MessagesScreen)} />
-                    <Stack.Screen name="Profile" component={withShell(ProfileScreen)} />
-
-                    {/* Focused workflows — full-width without the sidebar. */}
-                    <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
-                    <Stack.Screen name="CreateJob" component={CreateJobScreen} />
-                    <Stack.Screen name="Bids" component={BidsScreen} />
-                    <Stack.Screen name="Payment" component={PaymentScreen} />
-                    <Stack.Screen name="Review" component={ReviewScreen} />
-                    <Stack.Screen name="Passkeys" component={PasskeysScreen} />
-                    <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-                    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-                    <Stack.Screen name="Settings" component={SettingsScreen} />
-                    <Stack.Screen name="Legal" component={LegalScreen} />
-                    <Stack.Screen name="About" component={AboutScreen} />
-                    <Stack.Screen name="Support" component={SupportScreen} />
-                    <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
-                    <Stack.Screen name="BookingConfirmed" component={BookingConfirmedScreen} />
-                    <Stack.Screen name="JobDetail" component={JobDetailScreen} />
-                    <Stack.Screen name="Dispatch" component={DispatchScreen} />
-                    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
-                  </>
-                )}
-              </Stack.Navigator>
-              {user ? <PushBridge /> : null}
-            </NavigationContainer>
-            </>
-          )}
-        </AuthContext.Provider>
-      </StripeProvider>
+      <StatusBar style="dark" />
+      <AuthContext.Provider value={DIAGNOSTIC_AUTH}>
+        <NavigationContainer>
+          <Stack.Navigator
+            screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+          >
+            <Stack.Screen name="Login" component={LoginScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthContext.Provider>
     </SafeAreaProvider>
   );
 }
