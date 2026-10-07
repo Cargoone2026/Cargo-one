@@ -107,6 +107,21 @@ Two equivalent sources:
 This is a purely local developer setup procedure. Nothing in the repo needs to
 change to support it — it works with the current codebase as-is.
 
+## Running Driver Metro simultaneously with Customer Metro
+
+Customer Metro **must stay on port 8081** (this document is authoritative).
+Driver Metro runs on **port 8082** in dual-app sessions, pinned at the CLI:
+
+```bash
+cd ~/Documents/GitHub/Cargo-one && \
+yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082
+```
+
+Driver iPhone dev-launcher URL: `http://<MAC_U50_IP>:8082` (same Mac IP, port
+8082). Driver's full procedure, including the known Stripe-NativeEventEmitter
+failure that occurs if the Driver iPhone accidentally loads from
+`:8081`, is documented in `/app/memory/DRIVER_IOS_METRO_SETUP.md`.
+
 ## Troubleshooting quick reference
 
 | Symptom | Cause | Fix |

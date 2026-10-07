@@ -25,6 +25,11 @@ Build the Cargo One Driver mobile app using an Expo monorepo with React Native, 
     - Metro: run from `mobile/apps/customer` on the Mac — `npx expo start -c --dev-client --lan`
     - Dev-launcher URL on the iPhone: `http://<ipconfig getifaddr en0>:8081` (plain `http://`, port **8081**, no scheme substitution tricks).
     - Verified working end-to-end on physical iPhone, 2026-10-06.
+  - **Driver Metro side-by-side (dual-app sessions)**: see `/app/memory/DRIVER_IOS_METRO_SETUP.md`.
+    - Driver Metro pinned to port **8082** via `yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`.
+    - Driver iPhone dev-launcher URL: `http://<ipconfig getifaddr en0>:8082`.
+    - Known failure if Driver iPhone taps a `:8081` entry: `new NativeEventEmitter() requires a non-null argument` in `useStripe.tsx` (Driver loaded the Customer bundle). Fix: re-enter `http://<IP>:8082` manually.
+    - Verified working simultaneously with Customer Metro end-to-end on both physical iPhones, 2026-10-06.
 - `frontend/` — Driver web portal (functional reference only)
 - `backend/` — FastAPI backend
 - `packages/core/` — Shared types + API wrappers
