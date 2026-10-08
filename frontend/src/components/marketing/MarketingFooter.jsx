@@ -98,15 +98,15 @@ export function MarketingFooter() {
                 public page footer offers a direct route to talk to us. */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <a
-                href="tel:+447757133163"
+                href="tel:+447983299049"
                 data-testid="footer-phone"
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:border-white/40"
               >
                 <Phone className="h-3.5 w-3.5 text-[#D62828]" />
-                07757 133163
+                07983 299049
               </a>
               <a
-                href="https://wa.me/447757133163"
+                href="https://wa.me/447983299049"
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="footer-whatsapp"
