@@ -82,11 +82,17 @@ export function BookingDetailScreen({ route, navigation }: P) {
   // history/POD/rating/cancellation summary remain accessible.
   useEffect(() => {
     if (!b || !b.job_id) return;
+    // When the user explicitly navigated to a specific tab (conversation-row
+    // tap in Messages inbox, POD/Delivered notification tap, or push with
+    // data.target), honour that intent and stay on BookingDetail. Without
+    // this guard the ASAP-live redirect below would strand them on Dispatch
+    // and the Chat / POD tabs would be unreachable for live bookings.
+    if (initialTab === "chat" || initialTab === "pod") return;
     const timing = b.service_timing || b.job?.service_timing;
     if (timing !== "asap") return;
     if (b.status === "completed" || b.status === "delivered" || b.status === "cancelled" || b.cancelled_at) return;
     navigation.replace("Dispatch", { jobId: b.job_id });
-  }, [b, navigation]);
+  }, [b, initialTab, navigation]);
 
   useEffect(() => {
     if (!b || b.payment_status !== "paid") return;
