@@ -63,7 +63,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
   // and none of the recent BookingDetail edits are being executed.
   // Reload with `r` in Metro (or shake → Reload) after `expo start -c`.
   // eslint-disable-next-line no-console
-  console.log("[BookingDetail R71.13] mounted", { bookingId });
+  console.log("[BookingDetail R71.13b] mounted", JSON.stringify({ bookingId, initialTab: initialTab === undefined ? "<undefined>" : initialTab, params: Object.keys(route.params ?? {}) }));
 
   const load = useCallback(async () => {
     const bk = await CustomerAPI.bookingDetail(bookingId);

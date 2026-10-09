@@ -86,7 +86,10 @@ export function MessagesScreen({ route }: any) {
                 <ConversationRow
                   key={t.booking_id}
                   t={t}
-                  onPress={() => nav.navigate("BookingDetail", { bookingId: t.booking_id, initialTab: "chat" })}
+                  onPress={() => {
+                    console.log("[Messages R71.13b] row tap", JSON.stringify({ bookingId: t.booking_id, params: { bookingId: t.booking_id, initialTab: "chat" } }));
+                    nav.navigate("BookingDetail", { bookingId: t.booking_id, initialTab: "chat" });
+                  }}
                 />
               ))
             )
