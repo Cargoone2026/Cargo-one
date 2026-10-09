@@ -135,41 +135,62 @@ export async function unregisterCurrentToken(
  */
 export function usePushNavigation(navigate: (data: PushDataPayload) => void) {
   const coldStartHandled = useRef(false);
+  const lastHandledResponseId = useRef<string | null>(null);
 
   useEffect(() => {
+    // Guards against two independent sources of hijacked navigation:
+    //   • expo-notifications caches the last cold-start response in a
+    //     native buffer that persists across app launches on iOS, so
+    //     without a freshness check every cold start would re-navigate
+    //     to a long-ago-tapped notification's target (e.g. the user
+    //     tries to open Messages and is hijacked into an old
+    //     BookingDetail).
+    //   • `addNotificationResponseReceivedListener` can re-fire on cold
+    //     start with the SAME response that `getLastNotificationResponseAsync`
+    //     returned, double-dispatching the stale payload even if path 1
+    //     was skipped.
+    //
+    // The freshness check normalises `notification.date` (seconds on
+    // some SDK versions, milliseconds on others) and only navigates for
+    // responses received within 60s. The response-id dedupe makes sure
+    // path 1 and path 2 do not both act on the same tap.
+    const STALE_THRESHOLD_MS = 60_000;
+    function shouldProcess(resp: Notifications.NotificationResponse | null): boolean {
+      if (!resp) return false;
+      const id = resp.notification?.request?.identifier;
+      if (typeof id === "string" && id && lastHandledResponseId.current === id) return false;
+      const rawDate = (resp.notification as any)?.date;
+      const dateMs =
+        typeof rawDate === "number" && Number.isFinite(rawDate)
+          ? rawDate < 1e12
+            ? rawDate * 1000
+            : rawDate
+          : NaN;
+      const ageMs = Number.isFinite(dateMs) ? Date.now() - dateMs : NaN;
+      if (!Number.isFinite(ageMs) || ageMs > STALE_THRESHOLD_MS) return false;
+      if (typeof id === "string" && id) lastHandledResponseId.current = id;
+      return true;
+    }
+
     // 1. Cold-start — user tapped a notification while the app was killed.
     if (!coldStartHandled.current) {
       coldStartHandled.current = true;
       Notifications.getLastNotificationResponseAsync().then((resp) => {
         const data = resp?.notification?.request?.content?.data as PushDataPayload | undefined;
         if (!data) return;
-        // Guard against stale cold-start responses. expo-notifications
-        // keeps the last response in a native buffer across app launches
-        // on iOS — without a freshness check, every cold start would
-        // re-navigate to the target of a long-ago-tapped notification
-        // (e.g. the user tries to open Messages and is hijacked into an
-        // old BookingDetail). The notification date is in seconds on some
-        // SDK versions and milliseconds on others, so we normalise.
-        // Current-session taps continue to flow through
-        // `addNotificationResponseReceivedListener` below and are not
-        // affected by this check.
-        const rawDate = (resp?.notification as any)?.date;
-        const dateMs =
-          typeof rawDate === "number" && Number.isFinite(rawDate)
-            ? rawDate < 1e12
-              ? rawDate * 1000
-              : rawDate
-            : NaN;
-        const ageMs = Number.isFinite(dateMs) ? Date.now() - dateMs : NaN;
-        const STALE_THRESHOLD_MS = 60_000;
-        if (!Number.isFinite(ageMs) || ageMs > STALE_THRESHOLD_MS) return;
+        if (!shouldProcess(resp)) return;
         navigate(data);
       });
     }
     // 2. User tapped a notification while the app was background/foreground.
+    //    On iOS this listener can also re-fire at cold start with the SAME
+    //    response that path 1 handled — the shouldProcess() dedupe + freshness
+    //    check keeps both paths honest and prevents the stale-replay hijack.
     const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
       const data = resp?.notification?.request?.content?.data as PushDataPayload | undefined;
-      if (data) navigate(data);
+      if (!data) return;
+      if (!shouldProcess(resp)) return;
+      navigate(data);
     });
     return () => sub.remove();
   }, [navigate]);
