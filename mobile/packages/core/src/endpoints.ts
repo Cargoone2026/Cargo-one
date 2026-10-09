@@ -101,6 +101,12 @@ export const CustomerAPI = {
     api<any[]>(`/bookings/${bookingId}/messages`).catch(() => [] as any[]),
   sendMessage: (bookingId: string, body: string) =>
     api<any>(`/bookings/${bookingId}/messages`, { method: "POST", body: { body } }),
+  // POD read for the customer (mirror of DriverAPI.fetchPOD). Backend GET
+  // /bookings/{id}/pod returns null when the driver has not uploaded a POD
+  // yet; the UI treats null as "not yet delivered" and shows the empty
+  // state. See apps/customer/src/components/BookingPodTab.tsx.
+  getPod: (bookingId: string) =>
+    api<POD | null>(`/bookings/${bookingId}/pod`).catch(() => null),
   listNotifications: () => api<any[]>("/notifications").catch(() => [] as any[]),
   markNotificationRead: (id: string) =>
     api<any>(`/notifications/${id}/read`, { method: "POST" }).catch(() => null),

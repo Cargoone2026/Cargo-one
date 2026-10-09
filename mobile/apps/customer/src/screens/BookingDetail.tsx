@@ -42,6 +42,8 @@ import { Page, PageHeader, PrimaryButton, SecondaryButton, StatusPill, Segmented
 import { colors, radius, typography } from "../theme";
 import { ActiveJobMap } from "../ActiveJobMap";
 import { RouteMap } from "../components/RouteMap";
+import { BookingChatTab } from "../components/BookingChatTab";
+import { BookingPodTab } from "../components/BookingPodTab";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
@@ -188,20 +190,12 @@ export function BookingDetailScreen({ route, navigation }: P) {
           />
 
           {tab === "chat" ? (
-            <View style={styles.placeholder} testID="tab-chat">
-              <Text style={typography.cardTitle}>Chat</Text>
-              <Text style={[typography.caption, { marginTop: 4 }]}>Message the driver from Messages when the trip is active.</Text>
-              <View style={{ marginTop: 12 }}>
-                <SecondaryButton title="Open Messages" onPress={() => navigation.navigate("Messages")} testID="tab-chat-open" />
-              </View>
-            </View>
+            <BookingChatTab
+              bookingId={bookingId}
+              chatUnlocked={b.payment_status === "paid"}
+            />
           ) : tab === "pod" ? (
-            <View style={styles.placeholder} testID="tab-pod">
-              <Text style={typography.cardTitle}>Proof of Delivery</Text>
-              <Text style={[typography.caption, { marginTop: 4 }]}>
-                POD photos and signature appear here after the driver marks the job delivered.
-              </Text>
-            </View>
+            <BookingPodTab bookingId={bookingId} />
           ) : (
             <>
               {/* Job title */}
