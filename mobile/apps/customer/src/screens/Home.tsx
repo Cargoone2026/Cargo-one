@@ -5,7 +5,7 @@
  * value in frontend/src/theme.js. Do NOT introduce new colour or
  * spacing tokens here — add them to /theme.ts first.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ImageBackground,
   Pressable,
@@ -16,7 +16,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   Bell,
@@ -89,9 +89,18 @@ export function HomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Refresh on every entry to the screen. Previously `useEffect(load, [load])`
+  // only ran on mount, so a transient failure at mount time (401/5xx/network
+  // blip swallowed by the per-call `.catch(() => [])`) left the Active
+  // shipments list in a sticky empty state until manual pull-to-refresh.
+  // React Navigation keeps mounted screens alive across navigation, so
+  // returning to Home via the sidebar did not re-trigger a fetch. With
+  // `useFocusEffect` any transient failure self-heals on the next visit.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const active = useMemo(
     () => bookings.filter((b) => !["completed", "cancelled"].includes(String(b.status || ""))),

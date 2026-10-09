@@ -142,7 +142,28 @@ export function usePushNavigation(navigate: (data: PushDataPayload) => void) {
       coldStartHandled.current = true;
       Notifications.getLastNotificationResponseAsync().then((resp) => {
         const data = resp?.notification?.request?.content?.data as PushDataPayload | undefined;
-        if (data) navigate(data);
+        if (!data) return;
+        // Guard against stale cold-start responses. expo-notifications
+        // keeps the last response in a native buffer across app launches
+        // on iOS — without a freshness check, every cold start would
+        // re-navigate to the target of a long-ago-tapped notification
+        // (e.g. the user tries to open Messages and is hijacked into an
+        // old BookingDetail). The notification date is in seconds on some
+        // SDK versions and milliseconds on others, so we normalise.
+        // Current-session taps continue to flow through
+        // `addNotificationResponseReceivedListener` below and are not
+        // affected by this check.
+        const rawDate = (resp?.notification as any)?.date;
+        const dateMs =
+          typeof rawDate === "number" && Number.isFinite(rawDate)
+            ? rawDate < 1e12
+              ? rawDate * 1000
+              : rawDate
+            : NaN;
+        const ageMs = Number.isFinite(dateMs) ? Date.now() - dateMs : NaN;
+        const STALE_THRESHOLD_MS = 60_000;
+        if (!Number.isFinite(ageMs) || ageMs > STALE_THRESHOLD_MS) return;
+        navigate(data);
       });
     }
     // 2. User tapped a notification while the app was background/foreground.

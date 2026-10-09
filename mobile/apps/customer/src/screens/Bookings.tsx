@@ -2,9 +2,9 @@
  * BookingsScreen — 1:1 port of frontend/src/pages/portal/customer/Bookings.jsx.
  * Segmented tabs (Active / Past), search input, and BookingRow list.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Package, RotateCcw, Trash2 } from "lucide-react-native";
 import { CustomerAPI, Booking, Job } from "@cargoone/core";
@@ -132,9 +132,18 @@ export function BookingsScreen() {
     [nav],
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Refresh on every entry to the screen. Previously `useEffect(load, [load])`
+  // only ran on mount, so a transient failure at mount time (401/5xx/network
+  // blip swallowed by the per-call `.catch(() => [])`) left the user with a
+  // sticky empty state until they manually pull-to-refreshed. React
+  // Navigation keeps mounted screens alive across navigation, so returning
+  // to Bookings via the sidebar did not re-trigger a fetch. With
+  // `useFocusEffect` any transient failure self-heals on the next visit.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const active = useMemo(() => items.filter((b) => !isTerminal(b)), [items]);
   const past = useMemo(() => items.filter((b) => isTerminal(b)), [items]);

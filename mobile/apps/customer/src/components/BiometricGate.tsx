@@ -20,6 +20,7 @@ import { Fingerprint } from "lucide-react-native";
 import { listPasskeys } from "@cargoone/core";
 import { useAuth } from "../AuthContext";
 import { colors, radius, typography } from "../theme";
+import { LoadingScreen } from "./LoadingScreen";
 
 type Phase = "checking" | "prompting" | "unlocked" | "failed";
 
@@ -93,10 +94,13 @@ export function BiometricGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Blank checking state ties into the branded LoadingScreen the App
-  // already shows before hydration; here we just render nothing so
-  // the loader stays visible.
-  if (phase === "checking") return null;
+  // The parent App renders <LoadingScreen /> only while `!hydrated`.
+  // Once hydrated flips true, LoadingScreen unmounts and BiometricGate
+  // mounts — so the previous `return null` here produced a visible blank
+  // window between hydration and the biometric decision. Rendering the
+  // same branded LoadingScreen keeps the spinner on-screen continuously
+  // through the entire startup → biometric → unlocked transition.
+  if (phase === "checking") return <LoadingScreen />;
 
   return (
     <View style={styles.wrap} testID="biometric-gate">
