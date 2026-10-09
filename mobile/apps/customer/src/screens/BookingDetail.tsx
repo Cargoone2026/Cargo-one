@@ -51,10 +51,10 @@ type Tab = "overview" | "chat" | "pod";
 const CANCELLATION_STATUSES = new Set(["accepted", "deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route"]);
 
 export function BookingDetailScreen({ route, navigation }: P) {
-  const { bookingId } = route.params;
+  const { bookingId, initialTab } = route.params;
   const [b, setB] = useState<Booking | null>(null);
   const [tracking, setTracking] = useState<TrackingResponse | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "overview");
 
   // Runtime bundle diagnostic — if you don't see this line in Metro logs
   // after opening a booking, the simulator is running a stale JS bundle

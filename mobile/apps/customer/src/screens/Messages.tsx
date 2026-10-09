@@ -86,7 +86,7 @@ export function MessagesScreen({ route }: any) {
                 <ConversationRow
                   key={t.booking_id}
                   t={t}
-                  onPress={() => nav.navigate("BookingDetail", { bookingId: t.booking_id })}
+                  onPress={() => nav.navigate("BookingDetail", { bookingId: t.booking_id, initialTab: "chat" })}
                 />
               ))
             )
@@ -116,8 +116,20 @@ async function onOpenNotif(
     CustomerAPI.markNotificationRead(n.id).catch(() => {});
   }
   const d = n.data || {};
-  if (d.booking_id) nav.navigate("BookingDetail", { bookingId: d.booking_id });
-  else if (d.job_id) nav.navigate("JobDetail", { jobId: d.job_id });
+  // Backend sets `data.target` on in-app notifications that have a
+  // specific BookingDetail tab in mind (`"chat"` for new chat messages,
+  // `"pod"` for POD-uploaded). Missing / unknown values fall through to
+  // the Overview tab, matching every other BookingDetail call site.
+  const initialTab: "chat" | "pod" | undefined =
+    d.target === "chat" ? "chat" : d.target === "pod" ? "pod" : undefined;
+  if (d.booking_id) {
+    nav.navigate(
+      "BookingDetail",
+      initialTab ? { bookingId: d.booking_id, initialTab } : { bookingId: d.booking_id },
+    );
+  } else if (d.job_id) {
+    nav.navigate("JobDetail", { jobId: d.job_id });
+  }
 }
 
 function ConversationRow({ t, onPress }: { t: any; onPress: () => void }) {

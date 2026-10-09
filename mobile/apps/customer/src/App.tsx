@@ -65,7 +65,7 @@ export type RootStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   ChangePassword: undefined;
-  BookingDetail: { bookingId: string };
+  BookingDetail: { bookingId: string; initialTab?: "overview" | "chat" | "pod" };
   CreateJob: { serviceTiming: "asap" | "scheduled"; serviceType: "transport" | "recovery" | "big" };
   Bids: { jobId: string };
   Payment: { bookingId: string };
@@ -116,8 +116,15 @@ function PushBridge() {
       return;
     }
     const nav = navigationRef as unknown as { navigate: (name: string, params?: any) => void };
+    // Honour an explicit `data.target` set by the backend (`backend/server.py`
+    // adds `"target": "chat"` to new-message pushes and `"target": "pod"` to
+    // POD-uploaded pushes). Missing / unknown targets fall through to the
+    // Overview tab, matching every other BookingDetail call site that passes
+    // only { bookingId }.
+    const initialTab: "chat" | "pod" | undefined =
+      data.target === "chat" ? "chat" : data.target === "pod" ? "pod" : undefined;
     if (typeof data.booking_id === "string" && data.booking_id) {
-      nav.navigate("BookingDetail", { bookingId: data.booking_id });
+      nav.navigate("BookingDetail", initialTab ? { bookingId: data.booking_id, initialTab } : { bookingId: data.booking_id });
     } else if (typeof data.job_id === "string" && data.job_id) {
       nav.navigate("JobDetail", { jobId: data.job_id });
     } else {

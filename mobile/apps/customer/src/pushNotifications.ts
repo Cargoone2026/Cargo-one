@@ -35,6 +35,14 @@ export type PushDataPayload = {
   booking_id?: string;
   job_id?: string;
   type?: string;
+  /**
+   * Optional hint from the backend telling the Customer app which tab of
+   * BookingDetail to open. Set by `backend/server.py` to `"chat"` on new
+   * chat-message pushes and `"pod"` on POD-uploaded pushes. All other
+   * pushes omit this field, which safely falls through to the Overview
+   * tab in `App.tsx` → `PushBridge.navigate`.
+   */
+  target?: "chat" | "pod";
   [k: string]: unknown;
 };
 

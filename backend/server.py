@@ -4126,7 +4126,7 @@ async def send_message(booking_id: str, payload: MessageCreate,
     await db.messages.insert_one(msg)
     other_id = b.get("customer_id") if user["id"] == b.get("driver_id") else b.get("driver_id")
     await push_notification(other_id, f"Message from {user['name']}",
-                             payload.text or "Sent a photo", {"booking_id": booking_id})
+                             payload.text or "Sent a photo", {"booking_id": booking_id, "target": "chat"})
 
     # Round 3 — email the recipient if they're not actively viewing and the
     # 5-minute per-conversation throttle allows it. Fire and forget so a slow
@@ -4470,7 +4470,7 @@ async def upload_pod(booking_id: str, payload: PODUpload,
     await push_notification(
         b["customer_id"], "Delivery complete!",
         "Proof of delivery uploaded. Please review and confirm.",
-        {"booking_id": booking_id},
+        {"booking_id": booking_id, "target": "pod"},
     )
     return {k: v for k, v in doc.items() if k != "_id"}
 
