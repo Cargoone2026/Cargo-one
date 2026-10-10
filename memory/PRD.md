@@ -415,3 +415,9 @@ Each future phase must start from the locked baseline.
 - Web: BookingDetail accepts `#chat`/`#messages`/`#pod`; deep-link skips the live-ASAP→Dispatch redirect. Dispatch Message button → `#chat`. Tested: /app/test_reports/iteration_r70_chat_pod_deeplink.json (8/8 pass).
 - Backend (user deploys): server.py `send_message` push adds `"target": "chat"`; `upload_pod` push adds `"target": "pod"`.
 - R71.13b diagnostic logs still present in Customer BookingDetail.tsx/Messages.tsx — remove only with user approval.
+
+## Chat send fix (2026-10-09, user-approved core edit)
+- Bug: `CustomerAPI.sendMessage` (packages/core/src/endpoints.ts) posted `{ body }`; backend `MessageCreate` expects `{ text }` → messages stored with empty text (pre-existing since golden). Fixed to `{ text: body }`. Verified via curl: old shape → text '', new shape → saved.
+- Messages already sent with old shape stay blank (data, not fixable client-side).
+- BACKLOG (P1, separate task, user said later): Driver app has NO push notifications — never registers push token; `expo-notifications` excluded from Driver autolinking. Needs Driver code + native rebuild (pod install/Xcode). Plan first, get approval.
+- Pending prod redeploy: backend `server.py` (`target` on chat/POD pushes) + web portal (BookingDetail.jsx hash tabs, Dispatch.jsx #chat).
