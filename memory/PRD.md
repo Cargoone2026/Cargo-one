@@ -408,3 +408,10 @@ Each future phase must start from the locked baseline.
 - Never start Customer Metro from `~/Documents/GitHub/Cargo-one-driver-build` → white screen after bundle load. White-screen triage: check folder/port/duplicate react-native BEFORE any code rollback. See `CUSTOMER_IOS_METRO_SETUP.md`.
 - Driver Metro (verified by user via lsof cwd): `cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`
 - Device tests run from the wrong clone are invalid. The Messages→Chat fix still needs a re-test from `Cargo-one`.
+
+## Chat/POD deep-link destinations (2026-10-09)
+- Finding: golden baseline never had working Chat/POD routing (placeholders); not lost in rebuild. Web had the same gap for live ASAP + Dispatch `#messages` bug.
+- Customer app: `resolveBookingTab(target, title)` in `pushNotifications.ts` — backend `target` wins, else title fallback ("Message from…"→chat, "Delivery complete…"→pod). Used by App.tsx PushBridge + Messages.tsx notification rows. Push title merged into payload. Keep fallback after backend deploy.
+- Web: BookingDetail accepts `#chat`/`#messages`/`#pod`; deep-link skips the live-ASAP→Dispatch redirect. Dispatch Message button → `#chat`. Tested: /app/test_reports/iteration_r70_chat_pod_deeplink.json (8/8 pass).
+- Backend (user deploys): server.py `send_message` push adds `"target": "chat"`; `upload_pod` push adds `"target": "pod"`.
+- R71.13b diagnostic logs still present in Customer BookingDetail.tsx/Messages.tsx — remove only with user approval.
