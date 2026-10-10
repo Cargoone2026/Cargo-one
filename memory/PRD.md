@@ -406,4 +406,5 @@ Each future phase must start from the locked baseline.
 ## Dev Environment Learnings (2026-10-09)
 - Customer Metro (verified by user): `cd ~/Documents/GitHub/Cargo-one/mobile && yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081`
 - Never start Customer Metro from `~/Documents/GitHub/Cargo-one-driver-build` → white screen after bundle load. White-screen triage: check folder/port/duplicate react-native BEFORE any code rollback. See `CUSTOMER_IOS_METRO_SETUP.md`.
+- Driver Metro (verified by user via lsof cwd): `cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`
 - Device tests run from the wrong clone are invalid. The Messages→Chat fix still needs a re-test from `Cargo-one`.

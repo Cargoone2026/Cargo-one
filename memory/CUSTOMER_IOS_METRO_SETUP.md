@@ -1,5 +1,18 @@
 # CargoOne Customer — iOS Development Build Metro Setup (LOCKED)
 
+> ## LOCKED DEV FOLDERS (user-verified 2026-10-09 via `lsof ... -d cwd`)
+>
+> | App | Start from | Command | Port |
+> |---|---|---|---|
+> | Customer | `~/Documents/GitHub/Cargo-one/mobile` | `yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081` | 8081 |
+> | Driver | `~/Documents/GitHub/Cargo-one-driver-build/mobile` | `yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082` | 8082 |
+>
+> - Verified Driver Metro cwd: `/Users/A.B/Documents/GitHub/Cargo-one-driver-build/mobile/apps/driver` (PID 2024, port 8082).
+> - NEVER start Customer Metro from `Cargo-one-driver-build` (caused white screen 2026-10-09).
+> - NEVER start Driver Metro from `Cargo-one` unless the user explicitly re-verifies it.
+> - Verify any running Metro: `lsof -a -p $(lsof -t -nP -iTCP:<PORT> -sTCP:LISTEN) -d cwd`
+> - Type commands by hand (phone copy turns `--` into `—`). No space after `@cargoone/`.
+
 **Purpose**: Standard procedure for connecting the CargoOne Customer development build
 on a physical iPhone to Metro running on the developer's Mac over the ZTE U50 Wi-Fi.
 
@@ -134,7 +147,7 @@ Customer Metro **must stay on port 8081** (this document is authoritative).
 Driver Metro runs on **port 8082** in dual-app sessions, pinned at the CLI:
 
 ```bash
-cd ~/Documents/GitHub/Cargo-one && \
+cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && \
 yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082
 ```
 

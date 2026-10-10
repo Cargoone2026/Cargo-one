@@ -1,10 +1,18 @@
 # CargoOne Driver — iOS Development Build Metro Setup (LOCKED)
 
 
-> **Folder note (2026-10-09):** The Mac has two clones: `~/Documents/GitHub/Cargo-one` and
-> `~/Documents/GitHub/Cargo-one-driver-build`. **Customer Metro must ALWAYS start from
-> `~/Documents/GitHub/Cargo-one/mobile`** (starting it from `Cargo-one-driver-build` caused a
-> white screen). Confirm with the user which clone Driver Metro uses before changing paths here.
+> ## LOCKED DEV FOLDERS (user-verified 2026-10-09 via `lsof ... -d cwd`)
+>
+> | App | Start from | Command | Port |
+> |---|---|---|---|
+> | Customer | `~/Documents/GitHub/Cargo-one/mobile` | `yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081` | 8081 |
+> | Driver | `~/Documents/GitHub/Cargo-one-driver-build/mobile` | `yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082` | 8082 |
+>
+> - Verified Driver Metro cwd: `/Users/A.B/Documents/GitHub/Cargo-one-driver-build/mobile/apps/driver` (PID 2024, port 8082).
+> - NEVER start Customer Metro from `Cargo-one-driver-build` (caused white screen 2026-10-09).
+> - NEVER start Driver Metro from `Cargo-one` unless the user explicitly re-verifies it.
+> - Verify any running Metro: `lsof -a -p $(lsof -t -nP -iTCP:<PORT> -sTCP:LISTEN) -d cwd`
+> - Type commands by hand (phone copy turns `--` into `—`). No space after `@cargoone/`.
 
 **Purpose**: Standard procedure for connecting the CargoOne Driver development
 build on a physical iPhone to Metro running on the developer's Mac over the
@@ -39,7 +47,7 @@ Example output: `192.168.0.101` (illustrative only — do not assume this value)
 Driver can take Metro's default port **8081**:
 
 ```bash
-cd ~/Documents/GitHub/Cargo-one && \
+cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && \
 yarn workspace @cargoone/driver expo start -c --dev-client --lan
 ```
 
@@ -55,7 +63,7 @@ Driver Metro to port **8082** at the CLI level so Expo does not need to prompt
 and so each dev-client has a deterministic URL to connect to:
 
 ```bash
-cd ~/Documents/GitHub/Cargo-one && \
+cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && \
 yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082
 ```
 
