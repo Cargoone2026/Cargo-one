@@ -265,7 +265,7 @@ function DriverCard({ booking, tracking, phase }) {
           ) : null}
           {booking?.id ? (
             <a
-              href={`/customer/booking/${booking.id}#messages`}
+              href={`/customer/booking/${booking.id}#chat`}
               data-testid="dispatch-driver-message"
               className="flex flex-1 items-center justify-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-[13px] font-semibold text-neutral-800 hover:bg-neutral-50"
             >

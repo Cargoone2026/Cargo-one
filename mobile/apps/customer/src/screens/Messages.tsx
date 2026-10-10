@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import type { RootStackParamList } from "../App";
 import { useShellMenu } from "../components/AppShell";
+import { resolveBookingTab } from "../pushNotifications";
 import { colors, radius, typography } from "../theme";
 import { EmptyState, Page, PageHeader, SegmentedTabs } from "../ui";
 
@@ -123,8 +124,7 @@ async function onOpenNotif(
   // specific BookingDetail tab in mind (`"chat"` for new chat messages,
   // `"pod"` for POD-uploaded). Missing / unknown values fall through to
   // the Overview tab, matching every other BookingDetail call site.
-  const initialTab: "chat" | "pod" | undefined =
-    d.target === "chat" ? "chat" : d.target === "pod" ? "pod" : undefined;
+  const initialTab = resolveBookingTab(d.target, n.title);
   if (d.booking_id) {
     nav.navigate(
       "BookingDetail",

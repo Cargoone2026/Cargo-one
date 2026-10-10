@@ -42,6 +42,7 @@ import {
   registerForPushNotifications,
   unregisterCurrentToken,
   usePushNavigation,
+  resolveBookingTab,
   type PushDataPayload,
 } from "./pushNotifications";
 
@@ -121,8 +122,7 @@ function PushBridge() {
     // POD-uploaded pushes). Missing / unknown targets fall through to the
     // Overview tab, matching every other BookingDetail call site that passes
     // only { bookingId }.
-    const initialTab: "chat" | "pod" | undefined =
-      data.target === "chat" ? "chat" : data.target === "pod" ? "pod" : undefined;
+    const initialTab = resolveBookingTab(data.target, data.title);
     if (typeof data.booking_id === "string" && data.booking_id) {
       nav.navigate("BookingDetail", initialTab ? { bookingId: data.booking_id, initialTab } : { bookingId: data.booking_id });
     } else if (typeof data.job_id === "string" && data.job_id) {

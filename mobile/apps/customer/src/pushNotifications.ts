@@ -43,6 +43,8 @@ export type PushDataPayload = {
    * tab in `App.tsx` → `PushBridge.navigate`.
    */
   target?: "chat" | "pod";
+  // Notification title, merged in client-side for the title fallback below.
+  title?: string;
   [k: string]: unknown;
 };
 
@@ -141,6 +143,16 @@ export async function unregisterCurrentToken(
  * `getLastNotificationResponseAsync` and is dispatched exactly ONCE per
  * mount to avoid re-navigating on every focus change.
  */
+// Explicit backend `target` wins; otherwise infer from title (older/production notifications).
+export function resolveBookingTab(target?: string, title?: string | null): "chat" | "pod" | undefined {
+  if (target === "chat" || target === "pod") return target;
+  if (typeof title === "string") {
+    if (title.startsWith("Message from")) return "chat";
+    if (title.startsWith("Delivery complete")) return "pod";
+  }
+  return undefined;
+}
+
 export function usePushNavigation(navigate: (data: PushDataPayload) => void) {
   const coldStartHandled = useRef(false);
   const lastHandledResponseId = useRef<string | null>(null);
@@ -187,7 +199,7 @@ export function usePushNavigation(navigate: (data: PushDataPayload) => void) {
         const data = resp?.notification?.request?.content?.data as PushDataPayload | undefined;
         if (!data) return;
         if (!shouldProcess(resp)) return;
-        navigate(data);
+        navigate({ ...data, title: resp?.notification?.request?.content?.title ?? undefined });
       });
     }
     // 2. User tapped a notification while the app was background/foreground.
@@ -198,7 +210,7 @@ export function usePushNavigation(navigate: (data: PushDataPayload) => void) {
       const data = resp?.notification?.request?.content?.data as PushDataPayload | undefined;
       if (!data) return;
       if (!shouldProcess(resp)) return;
-      navigate(data);
+      navigate({ ...data, title: resp?.notification?.request?.content?.title ?? undefined });
     });
     return () => sub.remove();
   }, [navigate]);

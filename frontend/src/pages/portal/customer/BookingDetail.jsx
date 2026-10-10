@@ -114,12 +114,14 @@ export default function CustomerBookingDetail() {
     load();
   }, [load]);
 
-  // Auto-open the chat tab when reached via the messaging-email link
-  // (e.g. https://.../customer/booking/<id>#chat).
+  // Deep-link tab from URL hash (#chat, legacy #messages, #pod).
+  const hashTabRef = useRef(
+    typeof window !== "undefined"
+      ? { "#chat": "chat", "#messages": "chat", "#pod": "pod" }[window.location.hash]
+      : undefined,
+  );
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#chat") {
-      setTab("chat");
-    }
+    if (hashTabRef.current) setTab(hashTabRef.current);
   }, []);
 
   // R59 — active ASAP bookings live on the new map-first Uber-style
@@ -134,6 +136,8 @@ export default function CustomerBookingDetail() {
   // remains accessible with its full information density.
   useEffect(() => {
     if (!b || !b.job_id) return;
+    // Explicit Chat/POD deep link stays here (matches Customer app exception).
+    if (hashTabRef.current) return;
     if ((b.service_timing || b.job?.service_timing) !== "asap") return;
     if (b.status === "completed" || b.status === "cancelled" || b.cancelled_at) return;
     // Replace to keep the browser history clean — the Bookings list
