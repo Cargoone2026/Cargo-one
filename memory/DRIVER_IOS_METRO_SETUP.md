@@ -1,5 +1,11 @@
 # CargoOne Driver — iOS Development Build Metro Setup (LOCKED)
 
+
+> **Folder note (2026-10-09):** The Mac has two clones: `~/Documents/GitHub/Cargo-one` and
+> `~/Documents/GitHub/Cargo-one-driver-build`. **Customer Metro must ALWAYS start from
+> `~/Documents/GitHub/Cargo-one/mobile`** (starting it from `Cargo-one-driver-build` caused a
+> white screen). Confirm with the user which clone Driver Metro uses before changing paths here.
+
 **Purpose**: Standard procedure for connecting the CargoOne Driver development
 build on a physical iPhone to Metro running on the developer's Mac over the
 ZTE U50 Wi-Fi, including the exact procedure for running Driver Metro

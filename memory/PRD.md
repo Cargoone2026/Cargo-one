@@ -402,3 +402,8 @@ Each future phase must start from the locked baseline.
 - Never modify Customer / Driver web / backend / shared core
 - Native autolinking excludes must only be touched when a new native dep is explicitly authorized
 - No commits/pushes by the agent — user handles Save to GitHub manually
+
+## Dev Environment Learnings (2026-10-09)
+- Customer Metro (verified by user): `cd ~/Documents/GitHub/Cargo-one/mobile && yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081`
+- Never start Customer Metro from `~/Documents/GitHub/Cargo-one-driver-build` → white screen after bundle load. White-screen triage: check folder/port/duplicate react-native BEFORE any code rollback. See `CUSTOMER_IOS_METRO_SETUP.md`.
+- Device tests run from the wrong clone are invalid. The Messages→Chat fix still needs a re-test from `Cargo-one`.

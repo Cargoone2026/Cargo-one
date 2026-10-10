@@ -33,7 +33,28 @@ ipconfig getifaddr en0
 
 Example output: `192.168.0.101` (illustrative only — do not assume this value).
 
-## Starting Metro (from the customer directory only)
+## Starting Metro — VERIFIED COMMAND (user-confirmed 2026-10-09)
+
+```bash
+cd ~/Documents/GitHub/Cargo-one/mobile
+yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081
+```
+
+> **CRITICAL — correct folder.** The Mac has TWO clones:
+> - `~/Documents/GitHub/Cargo-one` → **Customer** Metro (port 8081). ✅
+> - `~/Documents/GitHub/Cargo-one-driver-build` → **NOT for Customer.** Starting Customer
+>   Metro here produced a **white screen after bundle load** (2026-10-09). Different code +
+>   different `node_modules` (possible duplicate `react-native` → Hermes n=0 crash).
+> - Workspace name is `@cargoone/customer` — **no space** after `@cargoone/`
+>   (a space gives `Unknown workspace "@cargoone/"` and Metro never starts → white screen).
+> - Type commands by hand; copying from phone/iMessage turns `--` into `—` and quotes into
+>   smart quotes (git then prints its usage/help screen).
+> - Any Customer device test run from the wrong clone is invalid — re-test from `Cargo-one`.
+> - Before debugging a white screen: check folder (`pwd`), port owner
+>   (`lsof -nP -iTCP:8081 -sTCP:LISTEN` → `lsof -p <PID> | grep cwd`), and duplicate RN
+>   (`find mobile -maxdepth 5 -type d -path "*node_modules/react-native"`). Do NOT roll back code first.
+
+Legacy alternative (older doc, from the customer directory):
 
 ```bash
 cd ~/Documents/GitHub/Cargo-one/mobile/apps/customer && \
