@@ -414,7 +414,7 @@ Each future phase must start from the locked baseline.
 - Customer app: `resolveBookingTab(target, title)` in `pushNotifications.ts` — backend `target` wins, else title fallback ("Message from…"→chat, "Delivery complete…"→pod). Used by App.tsx PushBridge + Messages.tsx notification rows. Push title merged into payload. Keep fallback after backend deploy.
 - Web: BookingDetail accepts `#chat`/`#messages`/`#pod`; deep-link skips the live-ASAP→Dispatch redirect. Dispatch Message button → `#chat`. Tested: /app/test_reports/iteration_r70_chat_pod_deeplink.json (8/8 pass).
 - Backend (user deploys): server.py `send_message` push adds `"target": "chat"`; `upload_pod` push adds `"target": "pod"`.
-- R71.13b diagnostic logs still present in Customer BookingDetail.tsx/Messages.tsx — remove only with user approval.
+- R71.13b diagnostic logs removed from Customer BookingDetail.tsx/Messages.tsx (2026-10-10, user-approved; routing confirmed, chat send verified on iPhone).
 
 ## Chat send fix (2026-10-09, user-approved core edit)
 - Bug: `CustomerAPI.sendMessage` (packages/core/src/endpoints.ts) posted `{ body }`; backend `MessageCreate` expects `{ text }` → messages stored with empty text (pre-existing since golden). Fixed to `{ text: body }`. Verified via curl: old shape → text '', new shape → saved.
