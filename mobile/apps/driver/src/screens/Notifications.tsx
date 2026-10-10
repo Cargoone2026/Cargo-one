@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { DriverAPI, type DriverNotification } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
+import { resolveDriverRoute } from "../pushRoutes";
 import {
   Card, EmptyState, Icon, Page, PageHeader, PrimaryButton, Section,
   colors, radius, space, typography,
@@ -44,18 +45,22 @@ export default function NotificationsScreen() {
     }
   };
 
+  const route = selected ? resolveDriverRoute({ ...(selected.data || {}), title: selected.title }) : null;
+
   const openTarget = () => {
-    if (!selected) return;
-    const d = selected.data || {};
-    if (d.booking_id) nav.navigate("BookingDetail", { bookingId: String(d.booking_id) });
-    else if (d.job_id) nav.navigate("JobDetail", { jobId: String(d.job_id) });
+    if (!route) return;
+    (nav as any).navigate(route.name, "params" in route ? route.params : undefined);
   };
 
   const goBackList = () => setSelected(null);
 
   if (selected) {
-    const d = selected.data || {};
-    const target = d.booking_id ? "booking" : d.job_id ? "job" : null;
+    const targetLabel =
+      route?.name === "BookingDetail"
+        ? route.params.initialTab === "messages" ? "Open chat" : route.params.initialTab === "pod" ? "Open POD" : "Open booking"
+        : route?.name === "JobDetail" ? "Open job"
+        : route?.name === "Documents" ? "Open documents"
+        : null;
     return (
       <Page testID="driver-notification-detail">
         <PageHeader title="Notification" onBack={goBackList} />
@@ -73,10 +78,10 @@ export default function NotificationsScreen() {
                 {selected.body}
               </Text>
             ) : null}
-            {target ? (
+            {targetLabel ? (
               <View style={{ marginTop: space[4] }}>
                 <PrimaryButton
-                  title={target === "booking" ? "Open booking" : "Open job"}
+                  title={targetLabel}
                   onPress={openTarget}
                   testID="driver-notification-open-link"
                 />

@@ -83,11 +83,11 @@ const TRACKING_MIN_DISTANCE_METERS = 30;
 const TRACKING_MIN_INTERVAL_MS = 45_000;
 
 export default function BookingDetailScreen({ route, navigation }: P) {
-  const { bookingId } = route.params;
+  const { bookingId, initialTab } = route.params;
   const [b, setB] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "overview");
   const [messages, setMessages] = useState<DriverMessage[]>([]);
   const [pod, setPod] = useState<POD | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);

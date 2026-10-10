@@ -14,6 +14,8 @@
 > - Verify any running Metro: `lsof -a -p $(lsof -t -nP -iTCP:<PORT> -sTCP:LISTEN) -d cwd`
 > - Type commands by hand (phone copy turns `--` into `—`). No space after `@cargoone/`.
 
+> **Driver push v1 (2026-10-10):** `expo-notifications` is now autolinked for Driver (loaded lazily after login). Native rebuild required: `pod install` in `apps/driver/ios` + Xcode. Rollback tag on Mac: `driver-pre-push-checkpoint`.
+
 **Purpose**: Standard procedure for connecting the CargoOne Driver development
 build on a physical iPhone to Metro running on the developer's Mac over the
 ZTE U50 Wi-Fi, including the exact procedure for running Driver Metro

@@ -2,6 +2,7 @@
   "expo": {
     "name": "CargoOne Driver",
     "slug": "cargoone-driver",
+    "owner": "cargo-one-uk",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "cargoonedriver",
@@ -53,7 +54,7 @@
       ]
     ],
     "extra": {
-      "eas": { "projectId": "REPLACE_ME_ON_EAS_INIT" }
+      "eas": { "projectId": "79d831f0-8213-4844-95f5-7ac3fadb4866" }
     }
   }
 }

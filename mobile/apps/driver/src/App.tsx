@@ -6,11 +6,11 @@
  * renders the dark CargoOne sidebar as either a docked rail (wide
  * screens) or a slide-in drawer (phones). No bottom tab bar.
  *
- * The boot chain stays minimal (no splash JS, no push, no mapbox, no
- * diagnostic overlays).
+ * The boot chain stays minimal (no splash JS, no mapbox, no diagnostic
+ * overlays). Push is loaded lazily only after login (LazyPushBridge).
  */
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -42,7 +42,7 @@ export type RootStackParamList = {
   JobDetail: { jobId: string };
   LiveMode: undefined;
   MyJobs: undefined;
-  BookingDetail: { bookingId: string };
+  BookingDetail: { bookingId: string; initialTab?: "messages" | "pod" };
   Earnings: undefined;
   Fleet: undefined;
   VehicleEdit: { vehicleId?: string };
@@ -57,10 +57,18 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+// Lazy require keeps expo-notifications out of the boot chain until after login.
+function LazyPushBridge() {
+  const { PushBridge } = require("./PushBridge") as typeof import("./PushBridge");
+  return <PushBridge navigationRef={navigationRef} />;
+}
 
 function AuthenticatedStack() {
   return (
     <AppShell>
+      <LazyPushBridge />
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{ headerShown: false, animation: "slide_from_right" }}
@@ -119,7 +127,7 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <StatusBar style="dark" />
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <RootNavigator />
         </NavigationContainer>
       </AuthProvider>

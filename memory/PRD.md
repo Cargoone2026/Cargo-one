@@ -421,3 +421,16 @@ Each future phase must start from the locked baseline.
 - Messages already sent with old shape stay blank (data, not fixable client-side).
 - BACKLOG (P1, separate task, user said later): Driver app has NO push notifications — never registers push token; `expo-notifications` excluded from Driver autolinking. Needs Driver code + native rebuild (pod install/Xcode). Plan first, get approval.
 - Pending prod redeploy: backend `server.py` (`target` on chat/POD pushes) + web portal (BookingDetail.jsx hash tabs, Dispatch.jsx #chat).
+
+## LOCKED Customer baseline: `customer-r71-17-chat-pod-golden` (2026-10-10, user-approved)
+- Commit `593358b` (annotated tag). Supersedes `customer-r71-16-1-golden` as the Customer rollback point.
+- Includes: Fix A/A-2 (push dedupe), Fix B (focus refresh), Fix E (biometric loading screen), Phase 1/1b (initialTab routing + ASAP redirect exception), Phase 2/3 (Chat + POD tabs), title fallback `resolveBookingTab`, chat send fix (`{ text }`), R71.13b diagnostics removed. Verified on physical iPhone (Messages/notifications → Chat/POD, two-way chat) and production deployed.
+- Customer Metro: `cd ~/Documents/GitHub/Cargo-one/mobile && yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081`
+- Do not modify Customer app without explicit user authorization.
+
+## Driver push notifications v1 (2026-10-10, user-approved) — CODE DONE, DEVICE TEST PENDING
+- Driver only. `package.json`: + `expo-notifications ~0.28.19`, + `expo-device ~6.0.2`; `expo-notifications` removed from autolinking exclude (rest unchanged). `app.json`: `owner: cargo-one-uk`, `extra.eas.projectId: 79d831f0-8213-4844-95f5-7ac3fadb4866`.
+- New `src/pushNotifications.ts` (same logic as Customer), `src/pushRoutes.ts` (pure mapping, no native import), `src/PushBridge.tsx` (register on login / unregister on logout). `App.tsx` loads PushBridge via lazy `require` inside authenticated tree only (keeps native module out of boot chain — reason it was excluded in 276b4d0) + navigationRef.
+- Routing: booking_id → BookingDetail (chat target/"Message from" → Messages tab; pod/"Delivery complete" → POD tab); job_id → JobDetail; doc_id/doc_types/"You're approved!" → Documents; else → Notifications. Driver Notifications screen uses same mapping.
+- Mac: Cargo-one-driver-build → tag `driver-pre-push-checkpoint`, pull, `yarn install` (mobile), `pod install` (apps/driver/ios), Xcode build, Driver Metro 8082. Possible blocker: APNs key for `co.uk.cargoone.driver` in EAS project.
+- Rollback: `git restore --source=driver-pre-push-checkpoint -- mobile/apps/driver` + pod install + rebuild. Earlier Driver golden: `driver-r71-16-h-golden`.
