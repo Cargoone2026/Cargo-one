@@ -434,3 +434,7 @@ Each future phase must start from the locked baseline.
 - Routing: booking_id → BookingDetail (chat target/"Message from" → Messages tab; pod/"Delivery complete" → POD tab); job_id → JobDetail; doc_id/doc_types/"You're approved!" → Documents; else → Notifications. Driver Notifications screen uses same mapping.
 - Mac: Cargo-one-driver-build → tag `driver-pre-push-checkpoint`, pull, `yarn install` (mobile), `pod install` (apps/driver/ios), Xcode build, Driver Metro 8082. Possible blocker: APNs key for `co.uk.cargoone.driver` in EAS project.
 - Rollback: `git restore --source=driver-pre-push-checkpoint -- mobile/apps/driver` + pod install + rebuild. Earlier Driver golden: `driver-r71-16-h-golden`.
+
+## LOCKED Driver baseline (pre-push): `driver-r71-17-pre-push-golden` (2026-10-10, user-approved)
+- Commit `593358b` — last Driver state BEFORE push notifications v1 (`b465e02`). Supersedes `driver-r71-16-h-golden` (2026-09-22) as Driver rollback point.
+- Rollback (Mac, Cargo-one-driver-build): `git restore --source=driver-r71-17-pre-push-golden -- mobile/apps/driver` → `cd mobile && yarn install` → `cd apps/driver/ios && pod install` → Xcode rebuild.
