@@ -14,7 +14,14 @@
 > - Verify any running Metro: `lsof -a -p $(lsof -t -nP -iTCP:<PORT> -sTCP:LISTEN) -d cwd`
 > - Type commands by hand (phone copy turns `--` into `—`). No space after `@cargoone/`.
 
-> **Driver push v1 (2026-10-10):** `expo-notifications` is now autolinked for Driver (loaded lazily after login). Native rebuild required: `pod install` in `apps/driver/ios` + Xcode. Rollback: tag `driver-r71-17-pre-push-golden` (commit `593358b`, pre-push golden) or Mac-local `driver-pre-push-checkpoint`.
+> **Driver push v1 — COMPLETE (iPhone-tested 2026-10-10).** Golden tag `driver-r71-17-push-golden` (`36504a0`); pre-push rollback `driver-r71-17-pre-push-golden` (`593358b`).
+> - APNs push key `MDN3T637V3` (team `76XPJG3C72`) assigned to `@cargo-one-uk/cargoone-driver` via `eas credentials` (shared with Customer). `mobile/apps/driver/eas.json` added (development profile: developmentClient, internal).
+> - Driver iOS pods: use `bundle exec pod install` in `apps/driver/ios` — plain `pod install` fails with `quirks_mode` (Ruby `json` pin in Gemfile).
+> - Xcode: Push Notifications capability added in Signing & Capabilities (CargoOneDriver target).
+> - After a fresh install, connect the dev client via "Enter URL manually": `http://<Mac IP>:8082`.
+> - White screen between launch logo and app = dev-client bundling only; release/TestFlight builds don't show it.
+
+> **Driver push v1 (2026-10-10):** `expo-notifications` is now autolinked for Driver (loaded lazily after login). Native rebuild required: `bundle exec pod install` in `apps/driver/ios` + Xcode. Rollback: tag `driver-r71-17-pre-push-golden` (commit `593358b`, pre-push golden) or Mac-local `driver-pre-push-checkpoint`.
 
 **Purpose**: Standard procedure for connecting the CargoOne Driver development
 build on a physical iPhone to Metro running on the developer's Mac over the

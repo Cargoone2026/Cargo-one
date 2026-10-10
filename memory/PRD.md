@@ -428,13 +428,27 @@ Each future phase must start from the locked baseline.
 - Customer Metro: `cd ~/Documents/GitHub/Cargo-one/mobile && yarn workspace @cargoone/customer expo start -c --dev-client --lan --port 8081`
 - Do not modify Customer app without explicit user authorization.
 
-## Driver push notifications v1 (2026-10-10, user-approved) — CODE DONE, DEVICE TEST PENDING
+## Driver push notifications v1 (2026-10-10, user-approved) — COMPLETE, iPhone-tested 2026-10-10
 - Driver only. `package.json`: + `expo-notifications ~0.28.19`, + `expo-device ~6.0.2`; `expo-notifications` removed from autolinking exclude (rest unchanged). `app.json`: `owner: cargo-one-uk`, `extra.eas.projectId: 79d831f0-8213-4844-95f5-7ac3fadb4866`.
 - New `src/pushNotifications.ts` (same logic as Customer), `src/pushRoutes.ts` (pure mapping, no native import), `src/PushBridge.tsx` (register on login / unregister on logout). `App.tsx` loads PushBridge via lazy `require` inside authenticated tree only (keeps native module out of boot chain — reason it was excluded in 276b4d0) + navigationRef.
 - Routing: booking_id → BookingDetail (chat target/"Message from" → Messages tab; pod/"Delivery complete" → POD tab); job_id → JobDetail; doc_id/doc_types/"You're approved!" → Documents; else → Notifications. Driver Notifications screen uses same mapping.
-- Mac: Cargo-one-driver-build → tag `driver-pre-push-checkpoint`, pull, `yarn install` (mobile), `pod install` (apps/driver/ios), Xcode build, Driver Metro 8082. Possible blocker: APNs key for `co.uk.cargoone.driver` in EAS project.
-- Rollback: `git restore --source=driver-pre-push-checkpoint -- mobile/apps/driver` + pod install + rebuild. Earlier Driver golden: `driver-r71-16-h-golden`.
+- Mac: Cargo-one-driver-build → tag `driver-pre-push-checkpoint`, pull, `yarn install` (mobile), `bundle exec pod install` (apps/driver/ios), Xcode build, Driver Metro 8082. Possible blocker: APNs key for `co.uk.cargoone.driver` in EAS project.
+- Rollback: `git restore --source=driver-pre-push-checkpoint -- mobile/apps/driver` + `bundle exec pod install` + rebuild. Earlier Driver golden: `driver-r71-16-h-golden`.
 
 ## LOCKED Driver baseline (pre-push): `driver-r71-17-pre-push-golden` (2026-10-10, user-approved)
 - Commit `593358b` — last Driver state BEFORE push notifications v1 (`b465e02`). Supersedes `driver-r71-16-h-golden` (2026-09-22) as Driver rollback point.
-- Rollback (Mac, Cargo-one-driver-build): `git restore --source=driver-r71-17-pre-push-golden -- mobile/apps/driver` → `cd mobile && yarn install` → `cd apps/driver/ios && pod install` → Xcode rebuild.
+- Rollback (Mac, Cargo-one-driver-build): `git restore --source=driver-r71-17-pre-push-golden -- mobile/apps/driver` → `cd mobile && yarn install` → `cd apps/driver/ios && bundle exec pod install` → Xcode rebuild.
+
+## Driver push v1 — verified notes (2026-10-10)
+- Driver push v1 COMPLETE — iPhone-tested 2026-10-10 (banner arrives; tap opens the booking's Messages tab). Customer unaffected.
+- APNs push key `MDN3T637V3` (team `76XPJG3C72`) assigned to `@cargo-one-uk/cargoone-driver` via `eas credentials` (shared with Customer). `mobile/apps/driver/eas.json` added (development profile: developmentClient, internal).
+- Driver iOS pods: use `bundle exec pod install` in `apps/driver/ios` — plain `pod install` fails with `quirks_mode` (Ruby `json` pin in Gemfile).
+- Xcode: Push Notifications capability added in Signing & Capabilities (CargoOneDriver target).
+- After a fresh install, connect the dev client via "Enter URL manually": `http://<Mac IP>:8082`.
+- White screen between launch logo and app = dev-client bundling only; release/TestFlight builds don't show it.
+
+## LOCKED Driver baseline: `driver-r71-17-push-golden` (2026-10-10, user-approved)
+- Commit `36504a0` (annotated tag) — Driver push v1, iPhone-verified. Supersedes `driver-r71-17-pre-push-golden` (`593358b`) as the current Driver golden; keep that one as the pre-push rollback.
+- `mobile/apps/driver/eas.json` was added after this commit (config-only, not app code) and lands in the next commit.
+- Driver Metro: `cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`
+- Do not modify Driver app without explicit user authorization.
