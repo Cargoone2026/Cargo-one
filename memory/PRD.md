@@ -478,3 +478,7 @@ Each future phase must start from the locked baseline.
 - Driver `pushRoutes.ts`: `type === "asap_offer"` → LiveMode (no LiveMode.tsx change). JS only, no native rebuild.
 - Preview test (/tmp/asap_alert_test.py, Expo send stubbed): locked-phone driver (5-min-old location, 0.8 mi) alerted at t=0.2 s; 15.9 mi driver alerted only at 30 s step; 20-min-stale driver never; duplicate deposit webhook no-op; no duplicate pushes; heartbeat+claim 200; cancelled job B got no further pushes; all loops exited; 0 inbox docs; 3 dispatch_log rows.
 - Known limit: in-process asyncio task — a pod restart inside the 5-min window skips remaining steps (Live Mode polling unaffected).
+
+## LOCKED Driver baseline: `driver-r71-18-offer-alerts-golden` (2026-10-11, user-created on Mac)
+- Commit `55846ec` — contains ASAP offer alerts (backend `_start_asap_offer_alerts` + Driver `pushRoutes.ts` asap_offer → LiveMode). Supersedes `driver-r71-17-push-golden` (`36504a0`), kept as previous rollback; `driver-r71-17-pre-push-golden` (`593358b`) = pre-push.
+- Driver/backend files identical between 55846ec and HEAD at tagging time. Production deploy initiated 2026-10-11; offer alert iPhone/prod verification to be confirmed by user.

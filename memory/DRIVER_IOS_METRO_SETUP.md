@@ -1,5 +1,7 @@
 # CargoOne Driver — iOS Development Build Metro Setup (LOCKED)
 
+> **LOCKED Driver baseline (2026-10-11): `driver-r71-18-offer-alerts-golden` (`55846ec`).** Previous: `driver-r71-17-push-golden` (`36504a0`), pre-push `driver-r71-17-pre-push-golden` (`593358b`).
+
 
 > ## LOCKED DEV FOLDERS (user-verified 2026-10-09 via `lsof ... -d cwd`)
 >
