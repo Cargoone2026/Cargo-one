@@ -86,9 +86,9 @@ export const CustomerAPI = {
       booking_status?: string;
     }>(`/payments/pi-status/${paymentIntentId}`),
   submitReview: (bookingId: string, rating: number, comment?: string) =>
-    api<Review>("/reviews", {
+    api<Review>(`/bookings/${bookingId}/review`, {
       method: "POST",
-      body: { booking_id: bookingId, rating, comment },
+      body: { rating, comment, photos: [] },
     }),
   // Messaging + notifications (mirrors web /customer/messages page).
   // Web uses /messages/summary for conversation previews — /threads doesn't
