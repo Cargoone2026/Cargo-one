@@ -453,8 +453,16 @@ Each future phase must start from the locked baseline.
 - Driver Metro: `cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`
 - Do not modify Driver app without explicit user authorization.
 
-## Customer JobDetail — pay deposit after driver accepts (2026-10-10, user-approved) — DEVICE TEST PENDING
+## Customer JobDetail — pay deposit after driver accepts (2026-10-10, user-approved) — COMPLETE, iPhone-tested
 - Bug (pre-existing since golden): scheduled fixed-price (and bid, if customer left Payment) jobs with `status=accepted` + `assigned_driver_id` showed "Awaiting Deposit" but no way to pay; only "No bids yet"/"Review bids".
 - Fix (Customer `screens/JobDetail.tsx` only, mirrors web JobDetail "Continue to Payment"): accepted box (driver name + rating) + "Continue to payment" → `CustomerAPI.createBooking(jobId)` (idempotent) → `Payment`. Bids button hidden for fixed-price and awaiting-deposit jobs. ASAP explicitly excluded (`service_timing !== "asap"`).
 - Verified: tsc pass; preview curl flow (fixed job → driver accept → job fields present → createBooking returns same booking twice, deposit £35). Test job left in preview DB: `f26286f6-…` "QA fixed deposit test".
 - Next queue (user order): Heartbeat 409 fix → Job offer alerts (push) → TestFlight via Xcode Archive.
+
+## LOCKED Customer baseline: `customer-r71-18-deposit-golden` (2026-10-11, user-approved)
+- Commit `bd29359` (tag created on user's Mac and in agent env). Supersedes `customer-r71-17-chat-pod-golden` (`593358b`), which stays as the previous rollback.
+- Adds over r71-17: JobDetail accepted box + "Continue to payment" for scheduled fixed-price/bid jobs (ASAP excluded). iPhone-tested: fixed job → driver accepts → green box → Continue to payment → deposit paid → chat/contact unlocked.
+- Rollback (Mac, Cargo-one): `git restore --source=customer-r71-18-deposit-golden -- mobile/apps/customer` (or `customer-r71-17-chat-pod-golden` for the previous one).
+
+## Tags confirmed on user's Mac (2026-10-11)
+- `customer-r71-18-deposit-golden` (`bd29359`), `driver-r71-17-push-golden` (`36504a0`), `driver-r71-17-pre-push-golden` (`593358b`).

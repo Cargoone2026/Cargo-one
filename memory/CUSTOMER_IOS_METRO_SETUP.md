@@ -1,6 +1,6 @@
 # CargoOne Customer — iOS Development Build Metro Setup (LOCKED)
 
-> **LOCKED Customer baseline (2026-10-10): tag `customer-r71-17-chat-pod-golden` (commit `593358b`).** Supersedes `customer-r71-16-1-golden`. Verified on iPhone + production.
+> **LOCKED Customer baseline (2026-10-11): tag `customer-r71-18-deposit-golden` (commit `bd29359`).** iPhone-tested deposit payment after driver accepts. Previous rollback: `customer-r71-17-chat-pod-golden` (`593358b`). Older: `customer-r71-16-1-golden`.
 
 > ## LOCKED DEV FOLDERS (user-verified 2026-10-09 via `lsof ... -d cwd`)
 >
