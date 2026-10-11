@@ -67,17 +67,18 @@ export function BookingDetailScreen({ route, navigation }: P) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Delivered (POD) bookings can be reviewed; refetch on focus so the button hides after submitting.
+  // Delivered (POD) bookings can be reviewed. Fetch once the booking loads, and again on focus
+  // (so the button hides after returning from the Review screen).
   const isDelivered = b?.status === "pod_uploaded" || b?.status === "delivered" || b?.status === "completed";
   const [myReview, setMyReview] = useState<unknown>(undefined);
-  useFocusEffect(
-    useCallback(() => {
-      if (!isDelivered) return;
-      api<unknown>(`/bookings/${bookingId}/review/mine`)
-        .then((r) => setMyReview(r ?? null))
-        .catch(() => setMyReview(null));
-    }, [isDelivered, bookingId]),
-  );
+  const fetchMyReview = useCallback(() => {
+    if (!isDelivered) return;
+    api<unknown>(`/bookings/${bookingId}/review/mine`)
+      .then((r) => setMyReview(r ?? null))
+      .catch(() => setMyReview(null));
+  }, [isDelivered, bookingId]);
+  useEffect(() => { fetchMyReview(); }, [fetchMyReview]);
+  useFocusEffect(fetchMyReview);
 
   // R71 web-parity — active ASAP bookings live on the map-first
   // Dispatch screen, not this classic BookingDetail. Mirrors

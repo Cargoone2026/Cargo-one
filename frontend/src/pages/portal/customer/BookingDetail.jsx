@@ -279,17 +279,6 @@ export default function CustomerBookingDetail() {
     }
   }
 
-  async function completeBooking() {
-    if (!id) return;
-    try {
-      await api(`/bookings/${id}/complete`, { method: "POST" });
-      load();
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e?.message || "Could not confirm delivery");
-    }
-  }
-
   // R68 — memoise map points on PRIMITIVES so RouteMapMapbox /
   // AsapMapCanvas effects don't refire on every parent re-render. Hooks
   // must be called BEFORE the `if (!b)` early return.
@@ -763,14 +752,7 @@ export default function CustomerBookingDetail() {
               </div>
             )}
 
-            {paid && b.status === "pod_uploaded" && (
-              <Button
-                title="Confirm delivery & complete"
-                variant="primary"
-                onClick={completeBooking}
-                testID="complete-booking-button"
-              />
-            )}
+            {/* No "Confirm delivery & complete" on pod_uploaded: payment is settled with the driver before POD. */}
 
             {paid && ["completed", "pod_uploaded"].includes(b.status) && b.other_party && !myReview && (
               <Button
