@@ -37,7 +37,7 @@ export function BookingConfirmedScreen({ route, navigation }: P) {
         if (isAsap && jobId) {
           // ASAP: skip the static success card — go straight to the
           // Uber-like live driver-search experience.
-          navigation.replace("Dispatch", { jobId });
+          navigation.replace("Dispatch", { jobId, bookingId });
         }
       })
       .catch(() => null);

@@ -26,7 +26,7 @@
  *                      3-snap sheet for the initial mobile pass).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LocateFixed, X as XIcon } from "lucide-react-native";
@@ -36,7 +36,6 @@ import {
   DispatchState,
   Job,
   TrackingResponse,
-  bookingPhase,
   money,
 } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
@@ -51,72 +50,86 @@ const DISPATCH_POLL_MS = 4000;
 const BOOKING_POLL_MS = 5000;
 const TRACKING_POLL_MS = 6000;
 
+type Variant = "loading" | "preparing" | "searching" | "accepted" | "active" | "done" | "cancelled" | "payment_required";
+
+// Lifecycle order — the screen shows whichever of booking/dispatch status is furthest along,
+// so a stale poll on one endpoint can't hold the UI back.
+const STATUS_RANK: Record<string, number> = {
+  posted: 0, accepted: 1, deposit_paid: 2, confirmed: 2, dispatch_ready: 2,
+  travelling: 3, arrived: 4, collected: 5, on_route: 6, delivered: 7, pod_uploaded: 8, completed: 9,
+};
+export function furthestStatus(a?: string | null, b?: string | null): string | undefined {
+  if (!a) return b || undefined;
+  if (!b) return a;
+  return (STATUS_RANK[b] ?? -1) > (STATUS_RANK[a] ?? -1) ? b : a;
+}
+
 /**
  * Given the current backend state, produce (label, variant, pulsing).
- * Mirrors the copy from web Dispatch.jsx state machine.
+ * Mirrors web Dispatch.jsx derivePhase + PILL_BY_PHASE.
  */
-function stateFor(
+export function stateFor(
   dispatch: DispatchState | null,
   booking: Booking | null,
-): { label: string; sub?: string; pulse: boolean; variant: "searching" | "accepted" | "active" | "done" | "cancelled" | "payment_required" } {
-  if (dispatch?.cancelled_at || booking?.status === "cancelled") {
+): { label: string; sub?: string; pulse: boolean; variant: Variant } {
+  if (dispatch?.cancelled_at || booking?.status === "cancelled" || booking?.cancelled_at) {
     return { label: "Booking cancelled", pulse: false, variant: "cancelled" };
   }
-  const status = booking?.status || dispatch?.status;
+  const status = furthestStatus(booking?.status, dispatch?.status);
   if (status === "delivered" || status === "completed" || status === "pod_uploaded") {
     return { label: "Delivered", pulse: false, variant: "done" };
   }
-  const phase = bookingPhase(status);
-  if (phase === "to_pickup") return { label: "Driver on the way", pulse: true, variant: "active" };
-  if (phase === "arrived") return { label: "Driver arriving", pulse: true, variant: "active" };
-  if (phase === "to_dropoff") return { label: "Job in progress", pulse: true, variant: "active" };
-  if (booking?.assigned_driver_id || dispatch?.assigned_driver_id) {
-    return { label: "Driver accepted", sub: booking?.assigned_driver_name || dispatch?.assigned_driver_name || "", pulse: false, variant: "accepted" };
+  if (status === "on_route") return { label: "Job in progress", pulse: true, variant: "active" };
+  if (status === "collected") return { label: "Cargo collected", pulse: true, variant: "active" };
+  if (status === "arrived") return { label: "Driver arriving", pulse: true, variant: "active" };
+  if (status === "travelling") return { label: "Driver on the way", pulse: true, variant: "active" };
+  const d = dispatch as any;
+  if (booking?.assigned_driver_id || d?.assigned_driver_id) {
+    return { label: "Driver accepted", sub: booking?.assigned_driver_name || d?.assigned_driver_name || "", pulse: true, variant: "accepted" };
   }
-  // R71 device-test fix — backend only stamps dispatch_ready_at (and
-  // starts driver matching) once payment_status === "paid". If the
-  // booking is unpaid we must NOT show "Looking for a driver" — the
-  // backend is not looking. Reflect the real state instead.
-  if (booking && booking.payment_status !== "paid") {
+  if (d?.dispatch_eligible) return { label: "Finding a driver", pulse: true, variant: "searching" };
+  // Unpaid only when BOTH sources agree (job still posted and booking not paid).
+  const jobPaid = ["confirmed", "dispatch_ready", "deposit_paid"].includes(String(d?.status || ""));
+  if (booking && booking.payment_status !== "paid" && !jobPaid) {
     return { label: "Payment required", pulse: false, variant: "payment_required" };
   }
-  return { label: "Looking for a driver near you", pulse: true, variant: "searching" };
+  if (dispatch) return { label: "Finalising booking", pulse: true, variant: "preparing" };
+  return { label: "Loading", pulse: false, variant: "loading" };
+}
+
+// Prefer the newest non-cancelled booking for this job.
+function pickBookingForJob(mine: Booking[] | null | undefined, jobId: string): Booking | undefined {
+  const rows = (mine || []).filter((b) => b.job_id === jobId);
+  const live = rows.filter((b) => b.status !== "cancelled" && !(b as any).cancelled_at);
+  const pool = live.length ? live : rows;
+  return [...pool].sort((x, y) => String((y as any).created_at || "").localeCompare(String((x as any).created_at || "")))[0];
 }
 
 export function DispatchScreen({ route, navigation }: P) {
-  const { jobId } = route.params;
+  const { jobId, bookingId: paramBookingId } = route.params;
 
   const [dispatch, setDispatch] = useState<DispatchState | null>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [tracking, setTracking] = useState<TrackingResponse | null>(null);
-  // Web-parity: /customer/dispatch/{jobId} does NOT return a booking_id.
-  // Resolve it once on mount from /bookings/mine by matching job_id,
-  // exactly like frontend/src/pages/portal/customer/Dispatch.jsx does.
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  // bookingId comes from the caller when known; otherwise resolved from /bookings/mine and
+  // retried on every dispatch poll until found.
+  const [bookingId, setBookingId] = useState<string | null>(paramBookingId ?? null);
+  const bookingIdRef = useRef<string | null>(paramBookingId ?? null);
+  // Bumped when the app returns to the foreground → every poll restarts with an immediate fetch.
+  const [resumeTick, setResumeTick] = useState(0);
 
   const cameraRef = useRef<Mapbox.Camera>(null);
   const mapRef = useRef<Mapbox.MapView>(null);
   const [_recenterTick, setRecenterTick] = useState(0);
 
-  // ─── Resolve bookingId once on mount (mirrors web) ───
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const mine = await CustomerAPI.myBookings();
-        if (cancelled) return;
-        const match = (mine || []).find((b) => b.job_id === jobId);
-        if (match?.id) setBookingId(match.id);
-      } catch {
-        /* transient; next poll will retry via user reload */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId]);
+    const sub = AppState.addEventListener("change", (st) => {
+      if (st === "active") setResumeTick((n) => n + 1);
+    });
+    return () => sub.remove();
+  }, []);
 
-  // ─── Poll /customer/dispatch/{jobId} ───
+  // ─── Poll /customer/dispatch/{jobId} (+ retry bookingId lookup until found) ───
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -126,6 +139,17 @@ export function DispatchScreen({ route, navigation }: P) {
       } catch {
         /* ignore transient */
       }
+      if (!bookingIdRef.current) {
+        try {
+          const match = pickBookingForJob(await CustomerAPI.myBookings(), jobId);
+          if (!cancelled && match?.id) {
+            bookingIdRef.current = match.id;
+            setBookingId(match.id);
+          }
+        } catch {
+          /* retry next poll */
+        }
+      }
     };
     load();
     const iv = setInterval(load, DISPATCH_POLL_MS);
@@ -133,7 +157,7 @@ export function DispatchScreen({ route, navigation }: P) {
       cancelled = true;
       clearInterval(iv);
     };
-  }, [jobId]);
+  }, [jobId, resumeTick]);
 
   // ─── Poll /bookings/{bookingId} once resolved ───
   useEffect(() => {
@@ -153,13 +177,14 @@ export function DispatchScreen({ route, navigation }: P) {
       cancelled = true;
       clearInterval(iv);
     };
-  }, [bookingId]);
+  }, [bookingId, resumeTick]);
 
-  // ─── Poll /tracking/{bookingId} only while active ───
-  const status = booking?.status || dispatch?.status;
-  const active = !!bookingPhase(status);
+  // ─── Poll /tracking/{bookingId} from "Driver accepted" until delivered (web parity) ───
+  const s = stateFor(dispatch, booking);
+  const active = s.variant === "active";
+  const trackingOn = active || s.variant === "accepted";
   useEffect(() => {
-    if (!bookingId || !active) return;
+    if (!bookingId || !trackingOn) return;
     let cancelled = false;
     const load = async () => {
       try {
@@ -175,7 +200,7 @@ export function DispatchScreen({ route, navigation }: P) {
       cancelled = true;
       clearInterval(iv);
     };
-  }, [bookingId, active]);
+  }, [bookingId, trackingOn, resumeTick]);
 
   // ─── Geometry — web parity: coordinates always come from booking.job.
   // The /customer/dispatch/{jobId} endpoint returns pickup_town /
@@ -245,7 +270,6 @@ export function DispatchScreen({ route, navigation }: P) {
   }, [bounds, recenter]);
 
   // ─── UI state ───
-  const s = stateFor(dispatch, booking);
   const showSweep = s.variant === "searching" && pickupPt != null;
   // Cancellation stays available for both paid (refund) and unpaid
   // (plain cancel) — backend routes each path via /customer/bookings/{id}/cancel.
@@ -410,11 +434,11 @@ export function DispatchScreen({ route, navigation }: P) {
               testID="asap-retry-payment"
             />
           ) : null}
-          {active || s.variant === "accepted" ? (
+          {(active || s.variant === "accepted") && bookingId && booking?.payment_status === "paid" ? (
             <PrimaryButton
-              title="Open live tracking"
-              onPress={() => bookingId && navigation.replace("BookingDetail", { bookingId })}
-              testID="asap-open-tracking"
+              title="Message driver"
+              onPress={() => navigation.navigate("BookingDetail", { bookingId, initialTab: "chat" })}
+              testID="asap-message-driver"
             />
           ) : null}
           {cancelable ? (

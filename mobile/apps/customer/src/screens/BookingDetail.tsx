@@ -99,7 +99,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
     const timing = b.service_timing || b.job?.service_timing;
     if (timing !== "asap") return;
     if (b.status === "completed" || b.status === "delivered" || b.status === "pod_uploaded" || b.status === "cancelled" || b.cancelled_at) return;
-    navigation.replace("Dispatch", { jobId: b.job_id });
+    navigation.replace("Dispatch", { jobId: b.job_id, bookingId: b.id });
   }, [b, initialTab, navigation]);
 
   useEffect(() => {

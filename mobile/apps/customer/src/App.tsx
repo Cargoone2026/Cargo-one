@@ -79,7 +79,7 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   BookingConfirmed: { bookingId: string };
   JobDetail: { jobId: string };
-  Dispatch: { jobId: string };
+  Dispatch: { jobId: string; bookingId?: string };
   DriverProfile: { driverId: string };
 };
 
