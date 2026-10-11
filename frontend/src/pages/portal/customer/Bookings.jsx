@@ -4,7 +4,9 @@ import { Search, X as XIcon, MapPin, ChevronRight, Package, RotateCcw } from "lu
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
-const PAST = new Set(["completed", "cancelled"]);
+const PAST = new Set(["completed", "cancelled", "pod_uploaded", "delivered"]);
+// Customer-facing badge: a POD-uploaded booking reads as "Delivered".
+const customerStatus = (s) => (s === "pod_uploaded" ? "delivered" : s);
 
 // R60 — safe resolver for the amount displayed on a Bookings row.
 //
@@ -58,7 +60,7 @@ function isActiveAsap(b) {
   const timing = b.service_timing || b.job?.service_timing;
   if (timing !== "asap") return false;
   const status = b.status;
-  return status !== "completed" && status !== "cancelled" && !b.cancelled_at;
+  return !PAST.has(status) && !b.cancelled_at;
 }
 function bookingHref(it) {
   if (it._isJob) return `/customer/job/${it.id}`;
@@ -239,7 +241,7 @@ export default function CustomerBookings() {
                         >
                           {it._isJob ? it.title : it.job?.title}
                         </h3>
-                        <StatusPill status={it.status} />
+                        <StatusPill status={customerStatus(it.status)} />
                       </div>
                       <div className="mt-2 flex items-center gap-1 text-[14px] text-[#6B7280]">
                         <MapPin className="h-3.5 w-3.5 text-[#D62828]" />

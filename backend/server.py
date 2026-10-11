@@ -2622,6 +2622,9 @@ def _driver_is_capable(driver: dict, job: dict) -> bool:
     return True
 
 
+# Delivered/finished bookings: customer cancel & refund is refused (409).
+DELIVERED_BOOKING_STATUSES = ("pod_uploaded", "delivered", "completed")
+
 # ---------------------------------------------------------------------------
 # ASAP job offer alerts — push-only (no inbox record) to online drivers inside
 # the job's current search radius, re-run at each radius-ladder step until the
@@ -5422,6 +5425,8 @@ async def customer_cancel_booking(
             raise HTTPException(status_code=404, detail="Booking not found")
         if b.get("customer_id") != user["id"]:
             raise HTTPException(status_code=403, detail="Not your booking")
+        if b.get("status") in DELIVERED_BOOKING_STATUSES:
+            raise HTTPException(status_code=409, detail="This booking has been delivered and can no longer be cancelled or refunded")
         if b.get("payment_status") == "paid":
             # Reuse the full-fat refund path.
             return await customer_cancel_and_refund(booking_id, {}, user)  # type: ignore
@@ -5612,6 +5617,8 @@ async def _customer_cancel_and_refund_impl(
         raise HTTPException(status_code=409, detail="Refund already recorded or in progress")
     if b.get("cancelled_at"):
         raise HTTPException(status_code=409, detail="Booking already cancelled")
+    if b.get("status") in DELIVERED_BOOKING_STATUSES or job.get("status") in DELIVERED_BOOKING_STATUSES:
+        raise HTTPException(status_code=409, detail="This booking has been delivered and can no longer be cancelled or refunded")
     if job.get("assigned_driver_id"):
         # R35 — Driver has accepted; a deposit-based cancellation fee may apply.
         # We DO NOT block cancellation — we just apply the configured fee.

@@ -139,7 +139,7 @@ export default function CustomerBookingDetail() {
     // Explicit Chat/POD deep link stays here (matches Customer app exception).
     if (hashTabRef.current) return;
     if ((b.service_timing || b.job?.service_timing) !== "asap") return;
-    if (b.status === "completed" || b.status === "cancelled" || b.cancelled_at) return;
+    if (b.status === "completed" || b.status === "pod_uploaded" || b.status === "delivered" || b.status === "cancelled" || b.cancelled_at) return;
     // Replace to keep the browser history clean — the Bookings list
     // already links directly, so this handles the "landed here somehow"
     // fallback rather than being the primary path.
@@ -389,7 +389,7 @@ export default function CustomerBookingDetail() {
         ? "arrived"
         : b.status === "collected" || b.status === "on_route"
           ? "to_dropoff"
-          : b.status === "delivered" || b.status === "completed"
+          : b.status === "delivered" || b.status === "completed" || b.status === "pod_uploaded"
             ? "completed"
             : null;
   const mapTrail = tracking?.trail;
@@ -429,7 +429,7 @@ export default function CustomerBookingDetail() {
           <ChevronLeft className="h-5 w-5 text-[#111111]" />
         </button>
         <h1 className="flex-1 text-[20px] font-bold text-[#111111]">Booking</h1>
-        <StatusPill status={b.status} />
+        <StatusPill status={b.status === "pod_uploaded" ? "delivered" : b.status} />
       </header>
 
       {/* R49 — Rebook CTA on cancelled bookings. Full refund already
@@ -463,7 +463,7 @@ export default function CustomerBookingDetail() {
       {/* R35 — Cancellation policy banner. Shown on any paid, non-cancelled
           booking regardless of job type (ASAP / scheduled / fixed / bidding).
           Wording depends on whether a driver has accepted yet. */}
-      {b.payment_status === "paid" && !b.cancelled_at && b.status !== "completed" ? (
+      {b.payment_status === "paid" && !b.cancelled_at && !["completed", "pod_uploaded", "delivered"].includes(b.status) ? (
         <div
           className={`mx-4 mt-3 rounded-[10px] px-3 py-2 md:mx-8 ${
             b.assigned_driver_id
@@ -772,7 +772,7 @@ export default function CustomerBookingDetail() {
               />
             )}
 
-            {paid && b.status === "completed" && b.other_party && !myReview && (
+            {paid && ["completed", "pod_uploaded"].includes(b.status) && b.other_party && !myReview && (
               <Button
                 title="Leave a review"
                 variant="secondary"
@@ -784,7 +784,7 @@ export default function CustomerBookingDetail() {
             {/* R23 — Once the customer has reviewed, hide the CTA and render
                 the submitted review inline. Backend also enforces the
                 one-review-per-(booking, from_id) invariant. */}
-            {paid && b.status === "completed" && myReview ? (
+            {paid && ["completed", "pod_uploaded"].includes(b.status) && myReview ? (
               <div
                 className="rounded-[16px] border border-[#E5E7EB] bg-white p-4"
                 data-testid="customer-my-review-card"
@@ -822,7 +822,7 @@ export default function CustomerBookingDetail() {
 
             {/* R23 — Driver's review of the customer (if any). Customer can
                 reply exactly once — mirrors the driver-side reply UI. */}
-            {paid && b.status === "completed" && reviewOfMe ? (
+            {paid && ["completed", "pod_uploaded"].includes(b.status) && reviewOfMe ? (
               <ReviewOfMeCard
                 review={reviewOfMe}
                 onReplied={async () => {

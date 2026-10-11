@@ -63,7 +63,7 @@ function stateFor(
     return { label: "Booking cancelled", pulse: false, variant: "cancelled" };
   }
   const status = booking?.status || dispatch?.status;
-  if (status === "delivered" || status === "completed") {
+  if (status === "delivered" || status === "completed" || status === "pod_uploaded") {
     return { label: "Delivered", pulse: false, variant: "done" };
   }
   const phase = bookingPhase(status);

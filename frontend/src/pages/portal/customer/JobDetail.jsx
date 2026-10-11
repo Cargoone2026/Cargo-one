@@ -134,7 +134,7 @@ export default function CustomerJobDetail() {
           <h2 className="text-[26px] font-bold leading-tight tracking-tight text-[#111111]">
             {job.title}
           </h2>
-          <StatusPill status={job.status} />
+          <StatusPill status={job.status === "pod_uploaded" ? "delivered" : job.status} />
         </div>
 
         <RouteMap

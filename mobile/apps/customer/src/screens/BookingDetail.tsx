@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   MapPin,
   Phone,
@@ -34,6 +35,7 @@ import {
   CustomerAPI,
   SharedAPI,
   TrackingResponse,
+  api,
   bookingPhase,
   contactVisible,
   money,
@@ -65,6 +67,18 @@ export function BookingDetailScreen({ route, navigation }: P) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Delivered (POD) bookings can be reviewed; refetch on focus so the button hides after submitting.
+  const isDelivered = b?.status === "pod_uploaded" || b?.status === "delivered" || b?.status === "completed";
+  const [myReview, setMyReview] = useState<unknown>(undefined);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isDelivered) return;
+      api<unknown>(`/bookings/${bookingId}/review/mine`)
+        .then((r) => setMyReview(r ?? null))
+        .catch(() => setMyReview(null));
+    }, [isDelivered, bookingId]),
+  );
+
   // R71 web-parity — active ASAP bookings live on the map-first
   // Dispatch screen, not this classic BookingDetail. Mirrors
   // frontend/src/pages/portal/customer/BookingDetail.jsx: whenever the
@@ -83,7 +97,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
     if (initialTab === "chat" || initialTab === "pod") return;
     const timing = b.service_timing || b.job?.service_timing;
     if (timing !== "asap") return;
-    if (b.status === "completed" || b.status === "delivered" || b.status === "cancelled" || b.cancelled_at) return;
+    if (b.status === "completed" || b.status === "delivered" || b.status === "pod_uploaded" || b.status === "cancelled" || b.cancelled_at) return;
     navigation.replace("Dispatch", { jobId: b.job_id });
   }, [b, initialTab, navigation]);
 
@@ -378,7 +392,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
                     testID="continue-payment"
                   />
                 )}
-                {b.status === "delivered" && (
+                {isDelivered && myReview === null && (
                   <PrimaryButton
                     title="Leave a review"
                     onPress={() => navigation.navigate("Review", { bookingId: b.id, driverId: b.driver_id || undefined })}
@@ -391,7 +405,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
                     Both paths hit the same /cancel endpoint; the backend
                     applies the fee policy from job.assigned_driver_id. */}
                 {(() => {
-                  const isTerminal = b.status === "completed" || b.status === "delivered" || b.status === "cancelled" || !!b.cancelled_at;
+                  const isTerminal = isDelivered || b.status === "cancelled" || !!b.cancelled_at;
                   if (isTerminal) return null;
                   const driverAccepted = !!(b.assigned_driver_id || job?.assigned_driver_id);
                   const timing = b.service_timing || job?.service_timing;

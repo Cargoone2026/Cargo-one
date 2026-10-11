@@ -102,7 +102,7 @@ export const STATUS_LABELS: Record<string, string> = {
   collected: "Collected",
   on_route: "On Route",
   delivered: "Delivered",
-  pod_uploaded: "POD Uploaded",
+  pod_uploaded: "Delivered",
   completed: "Completed",
   cancelled: "Cancelled",
   refunded: "Refunded",

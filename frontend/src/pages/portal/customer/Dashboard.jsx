@@ -67,7 +67,7 @@ export default function CustomerDashboard() {
   const active = useMemo(
     () =>
       bookings.filter(
-        (b) => !["completed", "cancelled"].includes(b.status),
+        (b) => !["completed", "cancelled", "pod_uploaded", "delivered"].includes(b.status),
       ),
     [bookings],
   );
@@ -248,7 +248,7 @@ export default function CustomerDashboard() {
                     <h3 className="min-w-0 flex-1 truncate text-[16px] font-semibold text-[#111111]">
                       {b.job?.title || "Shipment"}
                     </h3>
-                    <StatusPill status={b.status} />
+                    <StatusPill status={b.status === "pod_uploaded" ? "delivered" : b.status} />
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[14px] text-[#6B7280]">
                     <MapPin className="h-3.5 w-3.5 text-[#D62828]" />

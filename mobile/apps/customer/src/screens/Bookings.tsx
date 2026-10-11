@@ -13,7 +13,7 @@ import { colors, radius, typography } from "../theme";
 import { BookingRow, EmptyState, Page, PageHeader, SearchInputRow, SegmentedTabs } from "../ui";
 import { useShellMenu } from "../components/AppShell";
 
-const PAST = new Set(["completed", "cancelled", "refunded"]);
+const PAST = new Set(["completed", "cancelled", "refunded", "pod_uploaded", "delivered"]);
 // R71.16 — a booking/job is TERMINAL for the Active/Past split if EITHER
 // its status is in PAST OR it carries a cancelled_at timestamp. Relying
 // on status alone missed real-world rows where the backend set

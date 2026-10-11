@@ -103,7 +103,7 @@ export function HomeScreen() {
   );
 
   const active = useMemo(
-    () => bookings.filter((b) => !["completed", "cancelled"].includes(String(b.status || ""))),
+    () => bookings.filter((b) => !["completed", "cancelled", "pod_uploaded", "delivered"].includes(String(b.status || ""))),
     [bookings],
   );
   const firstName = (user?.name || "").split(" ")[0] || "there";

@@ -471,7 +471,7 @@ Each future phase must start from the locked baseline.
 - User: Live Mode online/offline works on iPhone, offers arrive, Driver web portal never opened. No changes to LiveMode.tsx or backend.
 - Evidence (prod read-only, deployer RCA `/app/deployer-agent-docs/RCA_7f49054c-...MD`): `live_online` is account-global, flipped false ONLY by POST /driver/live/offline; single prod DB, 2 pods; driver heartbeats advancing normally 7 days. Prod access logs not retained. Theory if it recurs: concurrent session Go Offline + LiveMode swallows 409 (stays "online"). Fix options recorded: auto re-online on 409 / truthful offline UI / backend per-device presence.
 
-## ASAP job offer alerts (push) v1 (2026-10-11, user-approved) — PREVIEW-TESTED, DEVICE/PROD PENDING
+## ASAP job offer alerts (push) v1 (2026-10-11, user-approved) — COMPLETE: iPhone-tested + production deployed 2026-10-11
 - Backend `server.py`: `_send_asap_offer_alerts` / `_asap_offer_alert_loop` / `_start_asap_offer_alerts` (after `_driver_is_capable`). Steps 0/30/90/180/300 s (+1 s, matches DISPATCH_RADIUS_LADDER). Eligible: role driver, status active, live_online, live_updated_at ≤ 15 min, capable, not blocked, not busy on ASAP, within current job radius. Dedupe: atomic `$addToSet offer_alerted_driver_ids` (cross-pod safe). Push-only via `_deliver_expo_push` (NO inbox record). Logged in dispatch_log as `push_alerted`. Loop stops when `_dispatch_eligible` false or `dispatch_ready_at` changed.
 - Hooks (1–2 lines each): `_finalise_paid_deposit` (only when ASAP job update modified) and driver-cancel ASAP re-dispatch.
 - Push: title "New ASAP job nearby · £{accepted_price}", body "{pickup} → {dropoff} · {d} mi away", data `{type: "asap_offer", job_id}`.
@@ -481,4 +481,5 @@ Each future phase must start from the locked baseline.
 
 ## LOCKED Driver baseline: `driver-r71-18-offer-alerts-golden` (2026-10-11, user-created on Mac)
 - Commit `55846ec` — contains ASAP offer alerts (backend `_start_asap_offer_alerts` + Driver `pushRoutes.ts` asap_offer → LiveMode). Supersedes `driver-r71-17-push-golden` (`36504a0`), kept as previous rollback; `driver-r71-17-pre-push-golden` (`593358b`) = pre-push.
-- Driver/backend files identical between 55846ec and HEAD at tagging time. Production deploy initiated 2026-10-11; offer alert iPhone/prod verification to be confirmed by user.
+- Driver/backend files identical between 55846ec and HEAD at tagging time. VERIFIED 2026-10-11: iPhone (Live Mode online → backgrounded → customer paid ASAP deposit → banner → tap opened Live Mode → Accept worked); backend deployed to production.
+- Known limitations: single-server (in-process) alert task — pod restart inside the 5-min window skips remaining steps; drivers alerted in the first round are NOT re-alerted after a driver cancel/re-dispatch (`offer_alerted_driver_ids` persists on the job).
