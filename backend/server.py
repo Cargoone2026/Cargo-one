@@ -2622,6 +2622,101 @@ def _driver_is_capable(driver: dict, job: dict) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# ASAP job offer alerts — push-only (no inbox record) to online drivers inside
+# the job's current search radius, re-run at each radius-ladder step until the
+# job is claimed/cancelled. One push per driver per job (atomic $addToSet).
+# ---------------------------------------------------------------------------
+ASAP_ALERT_STEPS_SECONDS = [0, 30, 90, 180, 300]
+ASAP_ALERT_LOCATION_WINDOW_SECONDS = 15 * 60
+_asap_alert_tasks: set = set()
+
+
+def _parse_iso(value) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+async def _send_asap_offer_alerts(job: dict) -> int:
+    now_dt = datetime.now(timezone.utc)
+    radius = _current_search_radius_miles(job, now=now_dt)
+    excluded = set(job.get("blocked_driver_ids") or []) | set(job.get("offer_alerted_driver_ids") or [])
+    try:
+        p_lat, p_lng = float(job["pickup_lat"]), float(job["pickup_lng"])
+    except Exception:
+        return 0
+    price = job.get("accepted_price") or job.get("fixed_price")
+    sent = 0
+    async for d in db.users.find(
+        {"role": "driver", "status": "active", "live_online": True},
+        {"_id": 0, "id": 1, "status": 1, "capabilities": 1, "service_types": 1,
+         "live_lat": 1, "live_lng": 1, "live_updated_at": 1},
+    ):
+        if d["id"] in excluded or d.get("live_lat") is None or d.get("live_lng") is None:
+            continue
+        seen = _parse_iso(d.get("live_updated_at"))
+        if not seen or (now_dt - seen).total_seconds() > ASAP_ALERT_LOCATION_WINDOW_SECONDS:
+            continue
+        if not _driver_is_capable(d, job):
+            continue
+        dist = haversine_miles(float(d["live_lat"]), float(d["live_lng"]), p_lat, p_lng)
+        if dist > radius:
+            continue
+        busy = await db.jobs.find_one({
+            "assigned_driver_id": d["id"], "service_timing": "asap",
+            "status": {"$in": ["accepted", "confirmed", "dispatch_ready", "travelling",
+                                 "arrived", "collected", "on_route", "delivered"]},
+        }, {"_id": 0, "id": 1})
+        if busy:
+            continue
+        claim = await db.jobs.update_one(
+            {"id": job["id"], "offer_alerted_driver_ids": {"$ne": d["id"]}},
+            {"$addToSet": {"offer_alerted_driver_ids": d["id"]}},
+        )
+        if claim.modified_count == 0:
+            continue
+        title = f"New ASAP job nearby · £{price:g}" if isinstance(price, (int, float)) else "New ASAP job nearby"
+        body = f"{job.get('pickup_town') or 'Pickup'} → {job.get('dropoff_town') or 'Drop-off'} · {dist:.1f} mi away"
+        await _deliver_expo_push(d["id"], title, body, {"type": "asap_offer", "job_id": job["id"]})
+        await _log_dispatch_attempt(
+            job_id=job["id"], driver_id=d["id"], distance_miles=round(dist, 1),
+            radius_used=radius, outcome="push_alerted",
+        )
+        sent += 1
+    return sent
+
+
+async def _asap_offer_alert_loop(job_id: str, ready_at: str) -> None:
+    t0 = _parse_iso(ready_at)
+    if not t0:
+        return
+    for step in ASAP_ALERT_STEPS_SECONDS:
+        # +1s so each run lands inside the newly widened radius band.
+        wait = (t0 + timedelta(seconds=step + (1 if step else 0)) - datetime.now(timezone.utc)).total_seconds()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+        # Stop when claimed/cancelled, or re-dispatched (a newer loop owns it).
+        if not _dispatch_eligible(job) or job.get("dispatch_ready_at") != ready_at:
+            return
+        try:
+            await _send_asap_offer_alerts(job)
+        except Exception:
+            logger.exception("asap offer alerts failed job=%s step=%s", job_id, step)
+
+
+def _start_asap_offer_alerts(job_id: str, ready_at: str) -> None:
+    try:
+        task = asyncio.create_task(_asap_offer_alert_loop(job_id, ready_at))
+        _asap_alert_tasks.add(task)
+        task.add_done_callback(_asap_alert_tasks.discard)
+    except Exception:
+        logger.exception("could not start asap offer alerts job=%s", job_id)
+
+
+
 @api.post("/driver/live/online")
 async def driver_go_online(payload: DriverLivePayload,
                             user: dict = Depends(require_role("driver"))):
@@ -3610,10 +3705,12 @@ async def _finalise_paid_deposit(session_id: str) -> Optional[dict]:
     update_fields = {"status": "confirmed"}
     if is_asap:
         update_fields["dispatch_ready_at"] = now_iso()
-    await db.jobs.update_one(
+    job_res = await db.jobs.update_one(
         {"id": booking["job_id"], "status": {"$ne": "confirmed"}},
         {"$set": update_fields},
     )
+    if is_asap and job_res.modified_count:
+        _start_asap_offer_alerts(booking["job_id"], update_fields["dispatch_ready_at"])
     try:
         # ASAP jobs have no driver yet at deposit-paid — do not send the
         # driver-side "contact details unlocked" push, and use ASAP-
@@ -6007,6 +6104,8 @@ async def driver_cancel_booking(
         {"$set": job_update,
          "$addToSet": {"blocked_driver_ids": user["id"]}},
     )
+    if is_asap:
+        _start_asap_offer_alerts(job["id"], now)
 
     # ---- AUDIT LOG -----------------------------------------------------
     audit_doc = {

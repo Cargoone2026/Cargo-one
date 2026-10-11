@@ -466,3 +466,15 @@ Each future phase must start from the locked baseline.
 
 ## Tags confirmed on user's Mac (2026-10-11)
 - `customer-r71-18-deposit-golden` (`bd29359`), `driver-r71-17-push-golden` (`36504a0`), `driver-r71-17-pre-push-golden` (`593358b`).
+
+## Heartbeat 409 — PARKED: NOT REPRODUCED (2026-10-11, user decision)
+- User: Live Mode online/offline works on iPhone, offers arrive, Driver web portal never opened. No changes to LiveMode.tsx or backend.
+- Evidence (prod read-only, deployer RCA `/app/deployer-agent-docs/RCA_7f49054c-...MD`): `live_online` is account-global, flipped false ONLY by POST /driver/live/offline; single prod DB, 2 pods; driver heartbeats advancing normally 7 days. Prod access logs not retained. Theory if it recurs: concurrent session Go Offline + LiveMode swallows 409 (stays "online"). Fix options recorded: auto re-online on 409 / truthful offline UI / backend per-device presence.
+
+## ASAP job offer alerts (push) v1 (2026-10-11, user-approved) — PREVIEW-TESTED, DEVICE/PROD PENDING
+- Backend `server.py`: `_send_asap_offer_alerts` / `_asap_offer_alert_loop` / `_start_asap_offer_alerts` (after `_driver_is_capable`). Steps 0/30/90/180/300 s (+1 s, matches DISPATCH_RADIUS_LADDER). Eligible: role driver, status active, live_online, live_updated_at ≤ 15 min, capable, not blocked, not busy on ASAP, within current job radius. Dedupe: atomic `$addToSet offer_alerted_driver_ids` (cross-pod safe). Push-only via `_deliver_expo_push` (NO inbox record). Logged in dispatch_log as `push_alerted`. Loop stops when `_dispatch_eligible` false or `dispatch_ready_at` changed.
+- Hooks (1–2 lines each): `_finalise_paid_deposit` (only when ASAP job update modified) and driver-cancel ASAP re-dispatch.
+- Push: title "New ASAP job nearby · £{accepted_price}", body "{pickup} → {dropoff} · {d} mi away", data `{type: "asap_offer", job_id}`.
+- Driver `pushRoutes.ts`: `type === "asap_offer"` → LiveMode (no LiveMode.tsx change). JS only, no native rebuild.
+- Preview test (/tmp/asap_alert_test.py, Expo send stubbed): locked-phone driver (5-min-old location, 0.8 mi) alerted at t=0.2 s; 15.9 mi driver alerted only at 30 s step; 20-min-stale driver never; duplicate deposit webhook no-op; no duplicate pushes; heartbeat+claim 200; cancelled job B got no further pushes; all loops exited; 0 inbox docs; 3 dispatch_log rows.
+- Known limit: in-process asyncio task — a pod restart inside the 5-min window skips remaining steps (Live Mode polling unaffected).
