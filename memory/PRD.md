@@ -452,3 +452,9 @@ Each future phase must start from the locked baseline.
 - `mobile/apps/driver/eas.json` was added after this commit (config-only, not app code) and lands in the next commit.
 - Driver Metro: `cd ~/Documents/GitHub/Cargo-one-driver-build/mobile && yarn workspace @cargoone/driver expo start -c --dev-client --lan --port 8082`
 - Do not modify Driver app without explicit user authorization.
+
+## Customer JobDetail — pay deposit after driver accepts (2026-10-10, user-approved) — DEVICE TEST PENDING
+- Bug (pre-existing since golden): scheduled fixed-price (and bid, if customer left Payment) jobs with `status=accepted` + `assigned_driver_id` showed "Awaiting Deposit" but no way to pay; only "No bids yet"/"Review bids".
+- Fix (Customer `screens/JobDetail.tsx` only, mirrors web JobDetail "Continue to Payment"): accepted box (driver name + rating) + "Continue to payment" → `CustomerAPI.createBooking(jobId)` (idempotent) → `Payment`. Bids button hidden for fixed-price and awaiting-deposit jobs. ASAP explicitly excluded (`service_timing !== "asap"`).
+- Verified: tsc pass; preview curl flow (fixed job → driver accept → job fields present → createBooking returns same booking twice, deposit £35). Test job left in preview DB: `f26286f6-…` "QA fixed deposit test".
+- Next queue (user order): Heartbeat 409 fix → Job offer alerts (push) → TestFlight via Xcode Archive.

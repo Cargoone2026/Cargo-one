@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RotateCcw, Trash2 } from "lucide-react-native";
+import { CheckCircle2, RotateCcw, Trash2 } from "lucide-react-native";
 import type { RootStackParamList } from "../App";
 import { CustomerAPI, Job, Bid } from "@cargoone/core";
 import { colors, radius, typography } from "../theme";
@@ -46,6 +46,26 @@ export function JobDetailScreen({ route, navigation }: P) {
     job?.pickup_lat != null && job?.pickup_lng != null &&
     job?.dropoff_lat != null && job?.dropoff_lng != null;
 
+  // Scheduled (fixed-price or bid) job a driver has accepted but deposit not yet paid. ASAP excluded.
+  const j = job as any;
+  const awaitingDeposit =
+    !!j && j.service_timing !== "asap" && j.status === "accepted" && !!j.assigned_driver_id && !j.cancelled_at;
+  const showBidsButton = !!j && j.pricing_type !== "fixed" && !awaitingDeposit;
+  const [paying, setPaying] = useState(false);
+
+  async function continueToPayment() {
+    if (paying) return;
+    setPaying(true);
+    try {
+      const booking = await CustomerAPI.createBooking(jobId);
+      navigation.replace("Payment", { bookingId: booking.id });
+    } catch (e: any) {
+      Alert.alert("Could not continue", e?.message || "Please try again in a moment.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
   return (
     <Page testID="job-detail-screen" scroll={false}>
       <PageHeader title={job?.title || "Job"} onBack={goBack} />
@@ -79,12 +99,38 @@ export function JobDetailScreen({ route, navigation }: P) {
               <SummaryRow label="Bids received" value={String(bids.length)} emphasise />
             </View>
           </View>
-          <PrimaryButton
-            title={bids.length ? `Review ${bids.length} bid${bids.length === 1 ? "" : "s"}` : "No bids yet"}
-            onPress={() => navigation.navigate("Bids", { jobId })}
-            disabled={!bids.length}
-            testID="job-detail-bids-btn"
-          />
+          {awaitingDeposit ? (
+            <View style={styles.acceptedBox} testID="job-detail-accepted-box">
+              <CheckCircle2 size={20} color={colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.body, { color: colors.ink }]}>
+                  {j.assigned_driver_name ? `${j.assigned_driver_name} accepted your job!` : "Driver accepted your job!"}
+                  {" "}Pay deposit to unlock contact details and chat.
+                </Text>
+                {typeof j.assigned_driver_rating === "number" ? (
+                  <Text style={[typography.small, { marginTop: 4 }]} testID="job-detail-accepted-rating">
+                    Rating {Number(j.assigned_driver_rating).toFixed(1)} / 5
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+          {awaitingDeposit ? (
+            <PrimaryButton
+              title={paying ? "Opening payment…" : "Continue to payment"}
+              onPress={continueToPayment}
+              disabled={paying}
+              testID="job-detail-continue-payment-btn"
+            />
+          ) : null}
+          {showBidsButton ? (
+            <PrimaryButton
+              title={bids.length ? `Review ${bids.length} bid${bids.length === 1 ? "" : "s"}` : "No bids yet"}
+              onPress={() => navigation.navigate("Bids", { jobId })}
+              disabled={!bids.length}
+              testID="job-detail-bids-btn"
+            />
+          ) : null}
           {/* R71.14 — Delete job for eligible normal posted/accepted jobs
               with no driver assigned. Backend enforces the same guards
               (409 if driver accepted or a paid booking exists), so this
@@ -134,6 +180,14 @@ export function JobDetailScreen({ route, navigation }: P) {
 }
 
 const styles = {
+  acceptedBox: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 12,
+    padding: 16,
+    borderRadius: radius.base,
+    backgroundColor: colors.successBg,
+  },
   card: {
     padding: 16,
     borderRadius: radius.base,
