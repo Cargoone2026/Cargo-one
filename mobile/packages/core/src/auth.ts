@@ -65,7 +65,7 @@ export async function me(): Promise<User | null> {
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
-  await api("/auth/request-password-reset", {
+  await api("/auth/forgot-password", {
     method: "POST",
     body: { email: email.trim().toLowerCase() },
     auth: false,

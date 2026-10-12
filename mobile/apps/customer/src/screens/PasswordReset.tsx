@@ -27,7 +27,11 @@ export function PasswordResetScreen({ navigation }: any) {
   return (
     <Page testID="password-reset-screen">
       <ScrollView>
-        <PageHeader title="Reset password" subtitle="Enter your email and we'll send a reset link." />
+        <PageHeader
+          title="Reset password"
+          subtitle="Enter your email and we'll send a reset link."
+          onBack={() => navigation.goBack()}
+        />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
           <Label>Email</Label>
           <Input
