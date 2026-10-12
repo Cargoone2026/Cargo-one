@@ -671,6 +671,37 @@ CATEGORY_VEHICLES = {
 }
 
 
+# One shared HTTP client for all Google Maps calls (avoids a new connection pool per request).
+_google_http: Optional[httpx.AsyncClient] = None
+
+
+def _google_client() -> httpx.AsyncClient:
+    global _google_http
+    if _google_http is None or _google_http.is_closed:
+        _google_http = httpx.AsyncClient(timeout=6.0)
+    return _google_http
+
+
+# Per-booking ETA cache for GET /tracking: at most one Distance Matrix call per
+# (booking, target) per 60 s per pod; the last result is reused in between.
+ETA_CACHE_SECONDS = 60
+_eta_cache: dict = {}
+
+
+async def _cached_tracking_eta(booking_id: str, target: str, origin: tuple[float, float],
+                               dest: tuple[float, float]) -> Optional[dict]:
+    key = (booking_id, target)
+    now_m = time.monotonic()
+    hit = _eta_cache.get(key)
+    if hit and now_m - hit[0] < ETA_CACHE_SECONDS:
+        return hit[1]
+    gm = await google_distance_matrix(origin, dest)
+    for k in [k for k, v in _eta_cache.items() if now_m - v[0] >= ETA_CACHE_SECONDS]:
+        _eta_cache.pop(k, None)
+    _eta_cache[key] = (now_m, gm)
+    return gm
+
+
 async def google_distance_matrix(origin: tuple[float, float],
                                   dest: tuple[float, float]) -> Optional[dict]:
     """Return {distance_meters, duration_seconds} or None on failure."""
@@ -686,9 +717,8 @@ async def google_distance_matrix(origin: tuple[float, float],
         "key": GOOGLE_MAPS_API_KEY,
     }
     try:
-        async with httpx.AsyncClient(timeout=6) as client:
-            r = await client.get(url, params=params)
-            data = r.json()
+        r = await _google_client().get(url, params=params)
+        data = r.json()
         row = data["rows"][0]["elements"][0]
         if row.get("status") != "OK":
             return None
@@ -4151,8 +4181,8 @@ async def get_tracking(booking_id: str, user: dict = Depends(get_current_user)):
                     haversine_miles(loc["lat"], loc["lng"], dest_lat, dest_lng), 1,
                 )
                 # Try Google Distance Matrix for a more accurate ETA
-                gm = await google_distance_matrix(
-                    (loc["lat"], loc["lng"]), (dest_lat, dest_lng),
+                gm = await _cached_tracking_eta(
+                    booking_id, target, (loc["lat"], loc["lng"]), (dest_lat, dest_lng),
                 )
                 if gm:
                     remaining_miles = round(gm["distance_meters"] / 1609.34, 1)
@@ -7049,8 +7079,7 @@ async def geo_autocomplete(q: str = ""):
                 f"country:{m['iso2'].lower()}" for m in SUPPORTED_MARKETS[:5]
             ),
         }
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            r = await client.get(url, params=params)
+        r = await _google_client().get(url, params=params)
         if r.status_code != 200:
             return {"suggestions": [], "source": "google_error", "query": q}
         data = r.json()
@@ -7117,8 +7146,7 @@ async def geo_details(place_id: str = ""):
             # Only request the fields we actually consume — reduces cost.
             "fields": "place_id,formatted_address,geometry/location,address_components",
         }
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            r = await client.get(url, params=params)
+        r = await _google_client().get(url, params=params)
         if r.status_code != 200:
             return {"source": "google_error", **empty}
         data = r.json()
@@ -8042,6 +8070,8 @@ async def seed_startup():
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
+    if _google_http is not None:
+        await _google_http.aclose()
 
 
 app.include_router(api)
