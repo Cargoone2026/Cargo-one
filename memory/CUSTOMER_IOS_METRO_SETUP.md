@@ -1,5 +1,7 @@
 # CargoOne Customer — iOS Development Build Metro Setup (LOCKED)
 
+> **Release/TestFlight (2026-10-13):** bitcode fix (ITMS-90482, Mapbox). Once per clone: `cd mobile && node scripts/apply-ios-bitcode-strip.js customer` then `cd apps/customer/ios && pod install` (expect `[CargoOne] stripped bitcode:` lines). Until then, strip manually with `xcrun bitcode_strip -r` before archiving. Each upload needs a higher Build number.
+
 > **LOCKED Customer baseline (2026-10-12): tag `customer-r71-19-golden` (commit `8381319`).** iPhone-tested ASAP live parity, delivered/Past, reviews, password reset. Previous rollback: `customer-r71-18-deposit-golden` (`bd29359`); older `customer-r71-17-chat-pod-golden`, `customer-r71-16-1-golden`.
 
 > ## LOCKED DEV FOLDERS (user-verified 2026-10-09 via `lsof ... -d cwd`)

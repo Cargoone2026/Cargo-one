@@ -524,4 +524,13 @@ Each future phase must start from the locked baseline.
 ## PRE-LAUNCH LIST (open)
 - [ ] Switch Stripe to live — follow the "Stripe live-switch CHECKLIST" recorded above (backend secrets, live webhook endpoint, Customer app `EXPO_PUBLIC_STRIPE_PK` + new build, Apple Pay cert, verify with real payment + refund).
 - [ ] Restrict CORS to `https://cargoone.co.uk` (currently `*`).
-- [ ] TestFlight builds for Customer + Driver via Xcode Archive (in progress 2026-10-12).
+- [x] TestFlight builds for Customer + Driver via Xcode Archive — 1.0.0 (1) uploaded 13 Oct 2026.
+- [ ] Raise iOS deployment target to 15.1 for BOTH apps (App Store Connect warning: currently 13.4 on the app target; Pods already 15.0 via Podfile.properties.json; Apple minimum iOS 15 from April 2027; Expo SDK 51 supports 15.1). Set in Xcode target → General → Minimum Deployments (ios/ is gitignored) and keep `ios.deploymentTarget` in Podfile.properties.json/plugin in sync.
+
+## iOS release / TestFlight (2026-10-13)
+- App Store Connect records: "CargoOne" (`co.uk.cargoone.customer`) and "CargoOne Driver" (`co.uk.cargoone.driver`), team `76XPJG3C72`.
+- First TestFlight builds uploaded 13 Oct 2026 via Xcode Archive: both apps 1.0.0 (1). EVERY future upload needs a higher Build number (CURRENT_PROJECT_VERSION) for the same version.
+- ITMS-90482 (bitcode in MapboxCoreMaps / MapboxCommon / MapboxMobileEvents): permanent fix = Podfile `post_install` step "CargoOne strip bitcode" (strips `__LLVM` in place from every `Pods/**/ios-arm64/*.framework` binary via `xcrun bitcode_strip -r`; temp file in system tmp, nothing extra left in Pods; simulator slices untouched).
+  - `ios/` is gitignored, so the step reaches the Mac via `mobile/plugins/withCargoOneiOSFixes.js` (`ensurePodfileBitcodeStrip`, runs on expo prebuild) and the tracked one-off patcher `mobile/scripts/apply-ios-bitcode-strip.js` (idempotent).
+  - Mac, once per clone: `cd mobile && node scripts/apply-ios-bitcode-strip.js customer` (Cargo-one) / `... driver` (Cargo-one-driver-build), then `cd apps/<app>/ios && pod install` (Driver: `bundle exec pod install`). Look for "[CargoOne] stripped bitcode: …" lines.
+  - Until that is done on a clone, run the manual `xcrun bitcode_strip -r` on the ios-arm64 Mapbox slices before archiving.

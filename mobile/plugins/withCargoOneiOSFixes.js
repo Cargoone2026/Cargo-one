@@ -230,6 +230,26 @@ function ensurePodfileJsonCompatShim(iosDir) {
   fs.writeFileSync(podfilePath, snippet + contents);
 }
 
+const BITCODE_MARKER_BEGIN = '# BEGIN CargoOne strip bitcode';
+const BITCODE_MARKER_END = '# END CargoOne strip bitcode';
+const LEGACY_BITCODE_PATTERN = /^# BEGIN CargoOne strip bitcode[\s\S]*?^# END CargoOne strip bitcode[^\n]*\n?/m;
+const BITCODE_BODY = "    # App Store rejects binaries that contain bitcode (ITMS-90482), e.g. the\n    # Mapbox xcframeworks. Strip __LLVM in place from every ios-arm64 framework\n    # binary under Pods; temp output goes to the system tmp dir, not Pods.\n    require 'tmpdir'\n    require 'fileutils'\n    pods_root = installer.sandbox.root.to_s\n    Dir.glob(File.join(pods_root, '**', 'ios-arm64', '*.framework')).each do |fw|\n      bin = File.join(fw, File.basename(fw, '.framework'))\n      next unless File.file?(bin)\n      next unless `otool -l \"#{bin}\" 2>/dev/null`.include?('__LLVM')\n      tmp = File.join(Dir.tmpdir, \"cargoone-nobitcode-#{Process.pid}-#{File.basename(bin)}\")\n      if system('xcrun', 'bitcode_strip', bin, '-r', '-o', tmp)\n        FileUtils.mv(tmp, bin, force: true)\n        Pod::UI.puts \"[CargoOne] stripped bitcode: #{fw.sub(pods_root + '/', '')}\"\n      else\n        FileUtils.rm_f(tmp)\n        Pod::UI.warn \"[CargoOne] bitcode_strip failed: #{bin}\"\n      end\n    end\n";
+
+// Insert a bitcode-strip step at the top of post_install (ITMS-90482: Mapbox
+// xcframeworks ship bitcode). Marker-guarded + idempotent, like the shims above.
+function ensurePodfileBitcodeStrip(iosDir) {
+  const podfilePath = path.join(iosDir, 'Podfile');
+  if (!fs.existsSync(podfilePath)) return;
+  let contents = fs.readFileSync(podfilePath, 'utf8');
+  while (LEGACY_BITCODE_PATTERN.test(contents)) {
+    contents = contents.replace(LEGACY_BITCODE_PATTERN, '');
+  }
+  const anchor = /^(\s*post_install do \|installer\|\n)/m;
+  if (!anchor.test(contents)) return;
+  contents = contents.replace(anchor, `$1${BITCODE_MARKER_BEGIN}\n${BITCODE_BODY}${BITCODE_MARKER_END}\n`);
+  fs.writeFileSync(podfilePath, contents);
+}
+
 module.exports = function withCargoOneiOSFixes(config) {
   // 1) Xcode project mod: strip dangling PBXResourcesBuildPhase entries
   //    that `@expo/config-plugins`' withSwiftBridgingHeader introduces.
@@ -293,6 +313,7 @@ module.exports = function withCargoOneiOSFixes(config) {
       // reaches it. Therefore: token bridge first, JSON shim last.
       ensurePodfileTokenBridge(iosDir);
       ensurePodfileJsonCompatShim(iosDir);
+      ensurePodfileBitcodeStrip(iosDir);
       return cfg;
     },
   ]);
@@ -340,3 +361,6 @@ function stripDanglingResources(project) {
   }
   return project;
 }
+
+// Exposed for scripts/apply-ios-bitcode-strip.js (patches an existing local ios/Podfile without prebuild).
+module.exports.ensurePodfileBitcodeStrip = ensurePodfileBitcodeStrip;
