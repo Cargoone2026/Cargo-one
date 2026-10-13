@@ -515,3 +515,13 @@ Each future phase must start from the locked baseline.
 ## Customer app password reset fix (2026-10-12, user-approved core edit)
 - core `auth.ts` `requestPasswordReset` posted to non-existent `/auth/request-password-reset` (404) → now `/auth/forgot-password` (`{ email }`, auth:false). Only Customer PasswordReset.tsx uses it (Driver uses DriverAPI.requestPasswordReset). PasswordReset PageHeader now has `onBack={() => navigation.goBack()}`.
 - Verified preview: old path 404; forgot-password 200 `{ok:true}` + token issued; email_log row written (status `skipped` — preview has no RESEND_API_KEY; prod key invalid per RCA → emails won't send until key fixed); reset-password 200 → login with new password 200; token reuse 403; web `/auth/reset?token=…` renders form. Email link = `${APP_BASE_URL or https://cargoone.co.uk}/auth/reset?token=…` (web serves both /auth/reset and /auth/reset-password). testcustomer password restored. tsc pass.
+
+## LOCKED Customer baseline: `customer-r71-19-golden` (2026-10-12, user-created on Mac; also tagged in agent env)
+- Commit `8381319`. Supersedes `customer-r71-18-deposit-golden` (`bd29359`), kept as previous rollback.
+- iPhone-verified: ASAP live screen (all stages, resume, Message driver), delivered → Past + "Delivered" + no cancel/refund, Leave a review in app, password reset (back button, email received, reset link, login with new password).
+- Production: new `RESEND_API_KEY` works (welcome email received); server tier upgraded to Launch (2 GB); `GOOGLE_MAPS_API_KEY` fixed (plain ASCII "A").
+
+## PRE-LAUNCH LIST (open)
+- [ ] Switch Stripe to live — follow the "Stripe live-switch CHECKLIST" recorded above (backend secrets, live webhook endpoint, Customer app `EXPO_PUBLIC_STRIPE_PK` + new build, Apple Pay cert, verify with real payment + refund).
+- [ ] Restrict CORS to `https://cargoone.co.uk` (currently `*`).
+- [ ] TestFlight builds for Customer + Driver via Xcode Archive (in progress 2026-10-12).
