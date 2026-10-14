@@ -15,9 +15,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, FlatList, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { MapPin, ChevronRight, LocateFixed, Search, X } from "lucide-react-native";
 import * as Location from "expo-location";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SharedAPI, GeoSuggestion } from "@cargoone/core";
 import { colors, radius, typography } from "../theme";
-import { Input, Label, Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
+import { Input, Label, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 
 export interface PlaceResult {
   formatted_address: string;
@@ -125,7 +126,10 @@ function AddressPickerModal({
 }) {
   const [query, setQuery] = useState(initial?.formatted_address || "");
   const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
-  const [source, setSource] = useState<"google" | "manual">("manual");
+  const [source, setSource] = useState<"google" | "manual" | null>(null);
+  const insets = useSafeAreaInsets();
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"search" | "review">(initial ? "review" : "search");
   const [form, setForm] = useState<PlaceResult>({
@@ -272,12 +276,45 @@ function AddressPickerModal({
     (hasCoords || ((form.postcode || "").trim().length > 0 && (form.town || "").trim().length > 0)) &&
     !!form.country_code;
 
-  const commit = () => {
-    if (!canCommit) return;
+  // Manual / detail-less addresses have no coords; resolve them with the iOS geocoder.
+  const geocode = async (marketName: string): Promise<{ lat: number; lng: number } | null> => {
+    const queries = [
+      [form.address_line, form.town, form.postcode, marketName].filter((x) => (x || "").trim()).join(", "),
+      form.formatted_address,
+      [form.postcode, marketName].filter((x) => (x || "").trim()).join(", "),
+    ].filter((q) => (q || "").trim().length > 2);
+    for (const q of queries) {
+      try {
+        const r = await Location.geocodeAsync(q);
+        if (r?.length && Number.isFinite(r[0].latitude) && Number.isFinite(r[0].longitude)) {
+          return { lat: r[0].latitude, lng: r[0].longitude };
+        }
+      } catch {
+        /* try next query */
+      }
+    }
+    return null;
+  };
+
+  const commit = async () => {
+    if (!canCommit || saving) return;
     const marketName =
       MARKETS.find((m) => m.iso2 === form.country_code)?.name || form.country_code || "";
+    setSaveErr(null);
+    let coords = { lat: form.lat, lng: form.lng };
+    if (!hasCoords) {
+      setSaving(true);
+      const g = await geocode(marketName);
+      setSaving(false);
+      if (!g) {
+        setSaveErr("We couldn't locate this address, please check the postcode.");
+        return;
+      }
+      coords = g;
+    }
     onCommit({
       ...form,
+      ...coords,
       country: form.country || marketName,
       formatted_address:
         form.formatted_address ||
@@ -288,12 +325,15 @@ function AddressPickerModal({
   };
 
   return (
-    <Page bg={colors.bg} scroll={false}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      testID="address-picker-modal"
+    >
       <PageHeader
         title={mode === "search" ? "Search address" : "Confirm details"}
         subtitle="Pick address"
         right={
-          <Pressable onPress={onClose} testID="address-close" hitSlop={8}>
+          <Pressable onPress={onClose} testID="address-close" hitSlop={12} style={{ padding: 4 }}>
             <X size={22} color={colors.ink} />
           </Pressable>
         }
@@ -313,7 +353,7 @@ function AddressPickerModal({
                 testID="address-search-input"
               />
             </View>
-            {source === "manual" ? (
+            {source === "manual" && query.trim().length >= 2 ? (
               <Text style={[typography.small, { marginTop: 8 }]}>
                 Autocomplete is not yet configured for this environment — you can enter the address manually below.
               </Text>
@@ -446,15 +486,20 @@ function AddressPickerModal({
               onChangeText={(v) => setForm((f) => ({ ...f, formatted_address: v }))}
               testID="address-formatted"
             />
+            {saveErr ? (
+              <Text style={{ color: "#B91C1C", fontSize: 13, marginTop: 12 }} testID="address-save-error">
+                {saveErr}
+              </Text>
+            ) : null}
             <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
               <View style={{ flex: 1 }}>
                 <SecondaryButton title="Back to search" onPress={() => setMode("search")} testID="address-back" />
               </View>
               <View style={{ flex: 1 }}>
                 <PrimaryButton
-                  title="Save address"
+                  title={saving ? "Locating…" : "Save address"}
                   onPress={commit}
-                  disabled={!canCommit}
+                  disabled={!canCommit || saving}
                   testID="address-save"
                 />
               </View>
@@ -462,7 +507,7 @@ function AddressPickerModal({
           </ScrollView>
         )}
       </View>
-    </Page>
+    </View>
   );
 }
 

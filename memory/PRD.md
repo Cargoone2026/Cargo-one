@@ -534,3 +534,11 @@ Each future phase must start from the locked baseline.
   - `ios/` is gitignored, so the step reaches the Mac via `mobile/plugins/withCargoOneiOSFixes.js` (`ensurePodfileBitcodeStrip`, runs on expo prebuild) and the tracked one-off patcher `mobile/scripts/apply-ios-bitcode-strip.js` (idempotent).
   - Mac, once per clone: `cd mobile && node scripts/apply-ios-bitcode-strip.js customer` (Cargo-one) / `... driver` (Cargo-one-driver-build), then `cd apps/<app>/ios && pod install` (Driver: `bundle exec pod install`). Look for "[CargoOne] stripped bitcode: …" lines.
   - Until that is done on a clone, run the manual `xcrun bitcode_strip -r` on the ios-arm64 Mapbox slices before archiving.
+
+## 2026-06 — TestFlight round 1 fixes (build 2)
+- Driver notified on customer cancel (paid + unpaid paths): `_notify_driver_customer_cancel` (one-time, flag `bookings.driver_cancel_notified_at`), called from `/customer/bookings/{id}/cancel` (unpaid) and in `finally` of `/customer/bookings/{id}/cancel-and-refund` route wrapper. Refund/fee code untouched.
+- `_reject_if_cancelled`: driver `POST /bookings/{id}/status` and `/bookings/{id}/pod` → 409 on customer-cancelled bookings. `/driver/dashboard` drops `cancelled_at` bookings.
+- Driver app: cancelled_at ⇒ shown as Cancelled (banner, no step/POD/cancel), 15s poll on detail, My Jobs refresh on focus. Driver web: same display normalisation (BookingDetail + MyJobs).
+- Customer app AddressAutocomplete: safe-area insets in Modal; "not configured" note only after a real manual response; manual/no-coords addresses geocoded via expo-location (iOS CLGeocoder), save blocked if not found.
+- Customer ASAP summary reads distance/time from `pricing_snapshot.inputs` fallback.
+- Still pending: iOS deployment target 15.1, Stripe Live, CORS lock.

@@ -34,7 +34,7 @@ export default function DriverMyJobs() {
         title: b?.job?.title || "Job",
         pickup_town: b?.job?.pickup_town,
         dropoff_town: b?.job?.dropoff_town,
-        status: b.status,
+        status: b.cancelled_at ? "cancelled" : b.status,
         earning: Number(b.driver_charge ?? b.total_price ?? 0),
         link: `/driver/booking/${b.id}`,
         awaiting_deposit: false,

@@ -216,6 +216,9 @@ export function AsapScreen() {
   const feePercent = quote?.booking_fee_percent ?? null;
   const estDriver = Number(quote?.driver_charge ?? quote?.suggested_price ?? 0);
   const estFee = Number(quote?.booking_fee ?? quote?.booking_fee_preview ?? 0);
+  // /asap/quote returns distance/time inside pricing_snapshot.inputs.
+  const qDistance = quote?.distance_miles ?? quote?.pricing_snapshot?.inputs?.distance_miles ?? null;
+  const qDuration = quote?.duration_minutes ?? quote?.pricing_snapshot?.inputs?.duration_minutes ?? null;
   const estTotal = Number(quote?.customer_total ?? estDriver + estFee);
 
   return (
@@ -276,8 +279,8 @@ export function AsapScreen() {
               summary={{
                 pickupTown: pickup.town,
                 dropoffTown: dropoff.town,
-                distanceMiles: quote?.distance_miles,
-                durationMinutes: quote?.duration_minutes,
+                distanceMiles: qDistance ?? undefined,
+                durationMinutes: qDuration ?? undefined,
               }}
             />
           ) : null}
@@ -389,7 +392,7 @@ export function AsapScreen() {
                 <SummaryRow
                   label="Distance"
                   value={
-                    quoteLoading ? "Calculating…" : quote?.distance_miles != null ? `${quote.distance_miles} mi` : "—"
+                    quoteLoading ? "Calculating…" : qDistance != null ? `${qDistance} mi` : "—"
                   }
                 />
                 <SummaryRow
@@ -397,10 +400,10 @@ export function AsapScreen() {
                   value={
                     quoteLoading
                       ? "Calculating…"
-                      : quote?.duration_minutes != null
-                      ? quote.duration_minutes < 60
-                        ? `${Math.round(quote.duration_minutes)} min`
-                        : `${Math.floor(quote.duration_minutes / 60)}h ${Math.round(quote.duration_minutes % 60)}m`
+                      : qDuration != null
+                      ? qDuration < 60
+                        ? `${Math.round(qDuration)} min`
+                        : `${Math.floor(qDuration / 60)}h ${Math.round(qDuration % 60)}m`
                       : "—"
                   }
                 />

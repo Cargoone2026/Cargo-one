@@ -4034,6 +4034,12 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
     return b
 
 
+async def _reject_if_cancelled(b: dict) -> None:
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0, "status": 1}) if b.get("job_id") else None
+    if b.get("cancelled_at") or b.get("status") == "cancelled" or (job or {}).get("status") == "cancelled":
+        raise HTTPException(status_code=409, detail="This booking was cancelled by the customer and can no longer be updated.")
+
+
 @api.post("/bookings/{booking_id}/status")
 async def update_booking_status(booking_id: str, payload: StatusUpdate,
                                  user: dict = Depends(get_current_user)):
@@ -4045,6 +4051,8 @@ async def update_booking_status(booking_id: str, payload: StatusUpdate,
     valid = ["travelling", "arrived", "collected", "on_route", "delivered", "cancelled"]
     if payload.status not in valid:
         raise HTTPException(status_code=400, detail="Invalid status")
+    if user["role"] == "driver":
+        await _reject_if_cancelled(b)
 
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": payload.status,
                                                                  "updated_at": now_iso()}})
@@ -4580,6 +4588,7 @@ async def upload_pod(booking_id: str, payload: PODUpload,
     b = await db.bookings.find_one({"id": booking_id})
     if not b or b.get("driver_id") != user["id"]:
         raise HTTPException(status_code=404, detail="Not found")
+    await _reject_if_cancelled(b)
     doc = {
         "id": new_id(),
         "booking_id": booking_id,
@@ -5435,6 +5444,35 @@ async def admin_dispatch_log(job_id: str,
 
 
 
+async def _notify_driver_customer_cancel(booking_id: str) -> None:
+    """One-time push + inbox entry to the assigned driver after a customer cancel."""
+    try:
+        b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not b or not (b.get("cancelled_at") or b.get("status") == "cancelled"):
+            return
+        job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0}) if b.get("job_id") else None
+        driver_id = b.get("driver_id") or (job or {}).get("assigned_driver_id")
+        if not driver_id:
+            return
+        claim = await db.bookings.update_one(
+            {"id": booking_id, "driver_cancel_notified_at": None},
+            {"$set": {"driver_cancel_notified_at": now_iso()}},
+        )
+        if claim.modified_count == 0:
+            return
+        job = job or {}
+        route = " → ".join(t for t in (job.get("pickup_town"), job.get("dropoff_town")) if t)
+        label = job.get("title") or "Your booking"
+        await push_notification(
+            driver_id,
+            "Booking cancelled by customer",
+            f"{label}{f' ({route})' if route else ''} was cancelled by the customer. Please don't travel to the pickup.",
+            {"type": "booking_cancelled", "booking_id": booking_id},
+        )
+    except Exception:
+        logger.exception("driver cancel notification failed for booking %s", booking_id)
+
+
 @api.post("/customer/bookings/{booking_id}/cancel")
 async def customer_cancel_booking(
     booking_id: str,
@@ -5498,6 +5536,7 @@ async def customer_cancel_booking(
             )
         except Exception:
             logger.exception("customer_cancel_booking (unpaid) push failed; continuing")
+        await _notify_driver_customer_cancel(booking_id)
         return {"ok": True, "booking_id": booking_id, "refund": None}
     except HTTPException:
         raise
@@ -5621,6 +5660,8 @@ async def customer_cancel_and_refund(
         # Return HTTP 400 (not 5xx) so Cloudflare passes the raw JSON body
         # through to the mobile app. Same pattern used on /deposit-intent.
         raise HTTPException(status_code=400, detail=f"Cancel failed: {e}")
+    finally:
+        await _notify_driver_customer_cancel(booking_id)
 
 
 async def _customer_cancel_and_refund_impl(
@@ -7355,7 +7396,7 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
         st = b.get("status")
         if st == "completed":
             completed.append(b)
-        elif st in ("cancelled",):
+        elif st in ("cancelled",) or b.get("cancelled_at"):
             pass
         elif st in ("deposit_paid", "confirmed"):
             upcoming.append(b)

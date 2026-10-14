@@ -67,6 +67,8 @@ const PROGRESSION: Array<{ from: string; to: string; label: string; icon: React.
   { from: "on_route",      to: "delivered",   label: "Mark delivered",   icon: "flag" },
 ];
 
+const TERMINAL_STATUSES = new Set(["cancelled", "cancelled_by_driver", "completed", "pod_uploaded", "delivered"]);
+
 const CANCELLABLE = new Set([
   "accepted", "deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route",
 ]);
@@ -100,7 +102,7 @@ export default function BookingDetailScreen({ route, navigation }: P) {
         DriverAPI.bookingMessages(bookingId).catch(() => [] as DriverMessage[]),
         DriverAPI.fetchPOD(bookingId).catch(() => null),
       ]);
-      setB(bk);
+      setB(bk && bk.cancelled_at && bk.status !== "cancelled" ? { ...bk, status: "cancelled" } : bk);
       setMessages(Array.isArray(msgs) ? msgs : []);
       setPod(p);
     } finally {
@@ -110,6 +112,16 @@ export default function BookingDetailScreen({ route, navigation }: P) {
   }, [bookingId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Poll while the booking is still live so a customer cancel is picked up.
+  const isLive = !!b && !TERMINAL_STATUSES.has(b.status);
+  useEffect(() => {
+    if (!isLive) return;
+    const t = setInterval(() => { DriverAPI.bookingDetail(bookingId).then((bk) => {
+      if (bk?.cancelled_at) load();
+    }).catch(() => {}); }, 15_000);
+    return () => clearInterval(t);
+  }, [isLive, bookingId, load]);
 
   // Mark messages read whenever user switches to the Messages tab.
   useEffect(() => {
@@ -233,6 +245,7 @@ export default function BookingDetailScreen({ route, navigation }: P) {
       await load();
     } catch (e: any) {
       Alert.alert("Could not update", e?.message || "Please try again.");
+      load();
     } finally {
       setSavingStatus(false);
     }
@@ -358,6 +371,18 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                   </View>
                 </View>
               </View>
+
+              {b.cancelled_at ? (
+                <View style={styles.cancelledBanner} testID="booking-cancelled-banner">
+                  <Icon name="x-circle" size={18} color="#B91C1C" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: "#991B1B", fontWeight: "700", fontSize: 14 }}>Cancelled by customer</Text>
+                    <Text style={{ color: "#7F1D1D", fontSize: 13, marginTop: 2 }}>
+                      This booking is no longer active. Please don't travel to the pickup.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
 
               {/* Status progression CTA */}
               {nextStep ? (
@@ -933,6 +958,16 @@ function formatMessageTime(iso?: string): string {
 }
 
 const styles = {
+  cancelledBanner: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 10,
+    padding: space[3],
+    borderRadius: radius.base,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
   routeCard: {
     padding: space[4],
     borderRadius: radius.base,

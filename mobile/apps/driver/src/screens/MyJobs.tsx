@@ -13,7 +13,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshControl, Text, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { DriverAPI, type Booking, type Job } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
@@ -72,7 +72,7 @@ export default function MyJobsScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const cards: Card[] = useMemo(() => {
     const bookingCards: Card[] = bookings.map((b: any) => ({
@@ -83,7 +83,7 @@ export default function MyJobsScreen() {
       title: b?.job?.title || "Job",
       pickup_town: b?.job?.pickup_town,
       dropoff_town: b?.job?.dropoff_town,
-      status: b.status,
+      status: b.cancelled_at ? "cancelled" : b.status,
       earning: Number(b.driver_charge ?? b.total_price ?? 0),
       priceLabel: "Earning",
       terminal: isTerminal(b),

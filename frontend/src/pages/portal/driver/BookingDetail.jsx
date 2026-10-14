@@ -106,7 +106,7 @@ export default function DriverBookingDetail() {
     setLoading(true);
     try {
       const bk = await api(`/bookings/${id}`);
-      setB(bk);
+      setB(bk?.cancelled_at && bk.status !== "cancelled" ? { ...bk, status: "cancelled" } : bk);
       if (bk.payment_status === "paid") {
         const [t, m, p] = await Promise.all([
           api(`/tracking/${id}`).catch(() => null),
