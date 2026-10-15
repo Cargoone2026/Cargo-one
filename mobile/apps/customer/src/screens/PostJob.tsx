@@ -14,7 +14,7 @@
  * absent in native and will land in a follow-up commit that pulls in
  * the picker. Every OTHER field is fully implemented.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -89,6 +89,12 @@ export function PostJobScreen() {
   const [pickup, setPickup] = useState<PlaceResult | null>(null);
   const [dropoff, setDropoff] = useState<PlaceResult | null>(null);
   const [quote, setQuote] = useState<QuoteEstimate | null>(null);
+  // Last successful distance/time, kept across failed quotes until an address changes.
+  const [routeInfo, setRouteInfo] = useState<{ distance_miles: number; duration_minutes: number } | null>(null);
+  const routeRef = useRef(routeInfo);
+  routeRef.current = routeInfo;
+  const [routeFailed, setRouteFailed] = useState(false);
+  const [routeRetryTick, setRouteRetryTick] = useState(0);
 
   const [weightKg, setWeightKg] = useState("");
   const [lengthM, setLengthM] = useState("");
@@ -167,6 +173,11 @@ export function PostJobScreen() {
     [vehicles, vehicleKey],
   );
 
+  useEffect(() => {
+    setRouteInfo(null);
+    setRouteFailed(false);
+  }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng]);
+
   // Live quote — same guard as web: only fire when both lat/lng are valid.
   useEffect(() => {
     const pickupOk =
@@ -178,29 +189,55 @@ export function PostJobScreen() {
       return;
     }
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const vol = volumeFromDims(lengthM, widthM, heightM);
+    const params = {
+      pickup_lat: pickup!.lat,
+      pickup_lng: pickup!.lng,
+      dropoff_lat: dropoff!.lat,
+      dropoff_lng: dropoff!.lng,
+      category: categoryKey,
+      pickup_country_code: pickup!.country_code,
+      dropoff_country_code: dropoff!.country_code,
+      weight_kg: weightKg || null,
+      volume_m3: vol,
+    };
+    const onOk = (q: QuoteEstimate) => {
+      setQuote(q);
+      if (q?.distance_miles != null && q?.duration_minutes != null) {
+        setRouteInfo({ distance_miles: q.distance_miles, duration_minutes: q.duration_minutes });
+        setRouteFailed(false);
+      }
+    };
     (async () => {
       try {
-        const vol = volumeFromDims(lengthM, widthM, heightM);
-        const q = await SharedAPI.quoteEstimate({
-          pickup_lat: pickup!.lat,
-          pickup_lng: pickup!.lng,
-          dropoff_lat: dropoff!.lat,
-          dropoff_lng: dropoff!.lng,
-          category: categoryKey,
-          pickup_country_code: pickup!.country_code,
-          dropoff_country_code: dropoff!.country_code,
-          weight_kg: weightKg || null,
-          volume_m3: vol,
-        });
-        if (!cancelled) setQuote(q);
+        const q = await SharedAPI.quoteEstimate(params);
+        if (!cancelled) onOk(q);
       } catch {
-        if (!cancelled) setQuote(null);
+        if (cancelled) return;
+        setQuote(null);
+        if (routeRef.current) return;
+        // No previous distance/time: one retry of the same request after ~2 s.
+        retryTimer = setTimeout(async () => {
+          try {
+            const q = await SharedAPI.quoteEstimate(params);
+            if (!cancelled) onOk(q);
+          } catch {
+            if (!cancelled && !routeRef.current) setRouteFailed(true);
+          }
+        }, 2000);
       }
     })();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [pickup, dropoff, categoryKey, weightKg, lengthM, widthM, heightM]);
+  }, [pickup, dropoff, categoryKey, weightKg, lengthM, widthM, heightM, routeRetryTick]);
+
+  const retryRoute = () => {
+    setRouteFailed(false);
+    setRouteRetryTick((t) => t + 1);
+  };
 
   const previewCharge = useMemo(() => {
     if (pricingType === "fixed" && fixedPrice) return Number(fixedPrice);
@@ -386,12 +423,12 @@ export function PostJobScreen() {
                     pickup={{ lat: pickup.lat, lng: pickup.lng, label: "Pickup" }}
                     dropoff={{ lat: dropoff.lat, lng: dropoff.lng, label: "Dropoff" }}
                     summary={
-                      quote && !quote.requires_manual_review
+                      routeInfo && !quote?.requires_manual_review
                         ? {
                             pickupTown: pickup.town,
                             dropoffTown: dropoff.town,
-                            distanceMiles: quote.distance_miles,
-                            durationMinutes: quote.duration_minutes,
+                            distanceMiles: routeInfo.distance_miles,
+                            durationMinutes: routeInfo.duration_minutes,
                           }
                         : { pickupTown: pickup.town, dropoffTown: dropoff.town }
                     }
@@ -409,13 +446,20 @@ export function PostJobScreen() {
                       </View>
                     </View>
                   ) : null}
-                  {quote && !quote.requires_manual_review ? (
+                  {(quote || routeInfo) && !quote?.requires_manual_review ? (
                     <View style={{ flexDirection: "row", gap: 8 }}>
-                      <QuoteStat Icon={NavIcon} label="Distance" value={`${quote.distance_miles} mi`} />
-                      <QuoteStat Icon={Clock} label="Est. time" value={fmtDur(quote.duration_minutes)} />
-                      <QuoteStat Icon={PoundSterling} label="Suggested" value={`£${quote.suggested_price}`} />
+                      {routeInfo ? (
+                        <>
+                          <QuoteStat Icon={NavIcon} label="Distance" value={`${routeInfo.distance_miles} mi`} />
+                          <QuoteStat Icon={Clock} label="Est. time" value={fmtDur(routeInfo.duration_minutes)} />
+                        </>
+                      ) : null}
+                      {quote ? (
+                        <QuoteStat Icon={PoundSterling} label="Suggested" value={`£${quote.suggested_price}`} />
+                      ) : null}
                     </View>
                   ) : null}
+                  {routeFailed && !routeInfo ? <RouteRetry onPress={retryRoute} /> : null}
                 </View>
               ) : null}
             </View>
@@ -558,8 +602,9 @@ export function PostJobScreen() {
                 <View style={{ marginTop: 8 }}>
                   <SummaryRow label="Service" value={selectedCategory?.name || "—"} />
                   <SummaryRow label="Vehicle" value={selectedVehicle?.name || "—"} />
-                  <SummaryRow label="Distance" value={quote ? `${quote.distance_miles} miles` : "—"} />
-                  <SummaryRow label="Journey time" value={quote ? fmtDur(quote.duration_minutes) : "—"} />
+                  <SummaryRow label="Distance" value={routeInfo ? `${routeInfo.distance_miles} miles` : "—"} />
+                  <SummaryRow label="Journey time" value={routeInfo ? fmtDur(routeInfo.duration_minutes) : "—"} />
+                  {routeFailed && !routeInfo ? <RouteRetry onPress={retryRoute} /> : null}
                   <View style={styles.divider} />
                   <SummaryRow label="Driver charge" value={previewCharge ? `£${previewCharge.toFixed(2)}` : "—"} emphasise />
                   <SummaryRow
@@ -609,6 +654,16 @@ export function PostJobScreen() {
 }
 
 /* ---------------- leaf components ---------------- */
+
+function RouteRetry({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={8} testID="postjob-route-retry" accessibilityRole="button">
+      <Text style={{ color: colors.brand, fontSize: 13, fontWeight: "600", marginTop: 6 }}>
+        Couldn't calculate distance, tap to retry
+      </Text>
+    </Pressable>
+  );
+}
 
 function QuoteStat({ Icon, label, value }: { Icon: any; label: string; value: string }) {
   return (

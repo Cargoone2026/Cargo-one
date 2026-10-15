@@ -546,3 +546,4 @@ Each future phase must start from the locked baseline.
 
 ### Post-launch list
 - Background driver tracking (Always location) — after launch prep.
+- Build 3 (pending Save to GitHub): PostJob (fixed/bid) keeps last successful distance/time (`routeInfo`) across failed /quote/estimate calls, cleared on address change; one 2s retry when none; "Couldn't calculate distance, tap to retry". AddressAutocomplete.pickSuggestion resets lat/lng to 0 on pick. Root cause: 422 PricingError (e.g. volume_too_large 125 m³) nulled quote → silent "—". ASAP and backend untouched. Open: httpx logs full Google API key in prod (user declined backend change for now).

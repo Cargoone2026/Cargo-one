@@ -240,6 +240,9 @@ function AddressPickerModal({
         ...f,
         formatted_address: s.formatted_address || query,
         town: s.town || f.town,
+        // Never carry the previous address's coordinates into a new pick.
+        lat: 0,
+        lng: 0,
       }));
       setMode("review");
       if (!s.place_id) return;
