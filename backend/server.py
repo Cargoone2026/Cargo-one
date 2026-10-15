@@ -2367,6 +2367,35 @@ async def get_job(job_id: str, user: dict = Depends(get_current_user)):
     return public_job(job, include_private=include_private)
 
 
+async def _reassign_cancelled_booking(job_id: str, driver: dict, now: str) -> Optional[dict]:
+    """Hand a driver-cancelled booking to the new driver (one booking per job).
+
+    Paid → deposit_paid; unpaid → accepted (pending deposit). Money, Stripe ids
+    and driver-cancel history fields are left untouched.
+    """
+    b = await db.bookings.find_one(
+        {"job_id": job_id, "status": "cancelled_by_driver", "cancelled_at": None, "deleted_at": None},
+        {"_id": 0},
+    )
+    if not b:
+        return None
+    new_status = "deposit_paid" if b.get("payment_status") == "paid" else "accepted"
+    res = await db.bookings.update_one(
+        {"id": b["id"], "status": "cancelled_by_driver", "cancelled_at": None},
+        {"$set": {"driver_id": driver["id"], "status": new_status, "reassigned_at": now},
+         "$push": {"reassign_history": {
+             "driver_id": driver["id"],
+             "driver_name": driver.get("name"),
+             "previous_driver_id": b.get("previous_driver_id"),
+             "status_restored": new_status,
+             "at": now,
+         }}},
+    )
+    if res.modified_count == 0:
+        return None
+    return {**b, "driver_id": driver["id"], "status": new_status, "reassigned_at": now}
+
+
 @api.post("/jobs/{job_id}/accept")
 async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("driver"))):
     if user.get("status") != "active":
@@ -2402,6 +2431,37 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=409, detail="Job already claimed or no longer available")
+    reassigned = await _reassign_cancelled_booking(job_id, user, now_iso())
+    if reassigned and reassigned["status"] == "deposit_paid":
+        # Deposit already paid on the driver-cancelled booking: confirm straight away.
+        await db.jobs.update_one({"id": job_id}, {"$set": {"status": "confirmed"}})
+        try:
+            await push_notification(
+                job["customer_id"],
+                f"New driver assigned: {user['name']}",
+                f"{user['name']} has taken over your {job['title']} job. Your deposit is already paid.",
+                {"booking_id": reassigned["id"], "job_id": job_id, "kind": "driver_reassigned"},
+            )
+            await push_notification(
+                user["id"],
+                "New job assigned — deposit already paid",
+                "Contact details unlocked. Proceed to pickup.",
+                {"booking_id": reassigned["id"]},
+            )
+        except Exception:
+            logger.exception("reassign push failed; continuing")
+        try:
+            from services.email import send_driver_booking_accepted_email
+            cust = await db.users.find_one({"id": job["customer_id"]}, {"_id": 0, "password_hash": 0})
+            fresh_b = await db.bookings.find_one({"id": reassigned["id"]}, {"_id": 0})
+            fresh_job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+            if cust and fresh_b and fresh_job:
+                await send_driver_booking_accepted_email(
+                    db, driver=user, customer=cust, booking=fresh_b, job=fresh_job,
+                )
+        except Exception:
+            logger.exception("reassign driver email failed; continuing")
+        return {"ok": True, "reassigned": True, "booking_id": reassigned["id"]}
     await push_notification(
         job["customer_id"],
         "Driver accepted your job",
@@ -3117,6 +3177,8 @@ async def claim_asap_job(job_id: str, user: dict = Depends(require_role("driver"
             return {"ok": True, "job_id": job_id, "idempotent": True}
         raise HTTPException(status_code=409, detail="Job already claimed or no longer available")
 
+    # Hand over a driver-cancelled booking (status restored) before the stamp below.
+    await _reassign_cancelled_booking(job_id, user, now)
     # Also stamp the winning driver id onto the pre-created booking so
     # `/bookings/mine` (driver) and downstream tracking work end-to-end.
     await db.bookings.update_one(
@@ -6243,6 +6305,14 @@ async def driver_cancel_booking(
             "accepted_at": None,
             "last_driver_cancel_at": now,
         }
+        # Paid bid job: re-post as fixed at the accepted price so the deposit stays correct.
+        if (job.get("pricing_type") == "bidding" and b.get("payment_status") == "paid"
+                and job.get("accepted_price")):
+            job_update.update({
+                "pricing_type": "fixed",
+                "fixed_price": job["accepted_price"],
+                "original_pricing_type": "bidding",
+            })
     await db.jobs.update_one(
         {"id": job["id"]},
         {"$set": job_update,
