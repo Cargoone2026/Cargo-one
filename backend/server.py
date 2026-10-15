@@ -3961,7 +3961,12 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         q = {"driver_id": user["id"]}
     else:
         q = {}
-    q["deleted_at"] = None
+    if user["role"] == "driver":
+        # Drivers keep deleted bookings that count towards earnings.
+        q["$and"] = [{"$or": [{"deleted_at": None},
+                              {"status": {"$in": ["completed", "delivered", "pod_uploaded"]}}]}]
+    else:
+        q["deleted_at"] = None
     bookings = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     # Batch fetch jobs and users to avoid N+1 queries
     job_ids = [b["job_id"] for b in bookings]
