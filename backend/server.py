@@ -4154,6 +4154,36 @@ async def update_location(booking_id: str, payload: LocationUpdate,
     return {"ok": True}
 
 
+TRACKING_FRESH_SECONDS = 120
+
+
+def _age_seconds(ts: Optional[str]) -> Optional[float]:
+    dt = _parse_iso(ts) if ts else None
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - dt).total_seconds()
+
+
+async def _tracking_live_fallback(b: dict, loc: Optional[dict]) -> Optional[dict]:
+    """Use the driver's Live Mode heartbeat when booking tracking is missing/stale."""
+    age = _age_seconds((loc or {}).get("ts"))
+    if loc and age is not None and age <= TRACKING_FRESH_SECONDS:
+        return loc
+    if b.get("cancelled_at") or b.get("status") in ("cancelled", "cancelled_by_driver", *DELIVERED_BOOKING_STATUSES):
+        return loc
+    if not b.get("driver_id"):
+        return loc
+    d = await db.users.find_one(
+        {"id": b["driver_id"]}, {"_id": 0, "live_lat": 1, "live_lng": 1, "live_updated_at": 1},
+    )
+    d_age = _age_seconds((d or {}).get("live_updated_at"))
+    if not d or d.get("live_lat") is None or d.get("live_lng") is None or d_age is None or d_age > TRACKING_FRESH_SECONDS:
+        return loc
+    return {"lat": float(d["live_lat"]), "lng": float(d["live_lng"]), "ts": d["live_updated_at"]}
+
+
 @api.get("/tracking/{booking_id}")
 async def get_tracking(booking_id: str, user: dict = Depends(get_current_user)):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
@@ -4170,6 +4200,7 @@ async def get_tracking(booking_id: str, user: dict = Depends(get_current_user)):
     heading: Optional[float] = None
     target: Optional[str] = None
     loc = b.get("last_location")
+    loc = await _tracking_live_fallback(b, loc)
     if loc:
         job = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0})
         if job:

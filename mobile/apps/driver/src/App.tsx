@@ -65,10 +65,17 @@ function LazyPushBridge() {
   return <PushBridge navigationRef={navigationRef} />;
 }
 
+// Lazy require: ASAP tracking only loads after login, never on the boot path.
+function LazyAsapTrackingBridge() {
+  const { AsapTrackingBridge } = require("./AsapTrackingBridge") as typeof import("./AsapTrackingBridge");
+  return <AsapTrackingBridge navigationRef={navigationRef} />;
+}
+
 function AuthenticatedStack() {
   return (
     <AppShell>
       <LazyPushBridge />
+      <LazyAsapTrackingBridge />
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{ headerShown: false, animation: "slide_from_right" }}

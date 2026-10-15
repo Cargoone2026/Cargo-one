@@ -542,3 +542,7 @@ Each future phase must start from the locked baseline.
 - Customer app AddressAutocomplete: safe-area insets in Modal; "not configured" note only after a real manual response; manual/no-coords addresses geocoded via expo-location (iOS CLGeocoder), save blocked if not found.
 - Customer ASAP summary reads distance/time from `pricing_snapshot.inputs` fallback.
 - Still pending: iOS deployment target 15.1, Stripe Live, CORS lock.
+- ASAP live tracking (build 2): `GET /tracking/{id}` falls back to the assigned driver's Live Mode heartbeat (`live_lat/lng`, ≤120s) when `last_location` is missing/stale, active bookings only; trail/ETA cache unchanged. Driver app: `AsapTrackingBridge` (lazy-loaded after login, like PushBridge) replaces the BookingDetail-only watch; checks `/bookings/mine` on login/foreground/navigation (≥20s gap), 30s re-check only while an active paid ASAP booking exists; foreground When-In-Use watch, same 30m/45s throttle.
+
+### Post-launch list
+- Background driver tracking (Always location) — after launch prep.
