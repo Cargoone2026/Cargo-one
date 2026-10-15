@@ -532,19 +532,79 @@ export default function AdminDriverDetail() {
             {preview.startsWith("data:image") ? (
               <img src={preview} alt="doc" className="max-h-[80vh] max-w-full object-contain" />
             ) : (
-              <a
-                href={preview}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-[#111111]"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Open document
-              </a>
+              <DocBlobPreview src={preview} />
             )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Detect type from the data: prefix, or from the base64 content when there is none.
+function detectDoc(src) {
+  const m = /^data:([^;,]+)?(;base64)?,/.exec(src);
+  const b64 = (m ? src.slice(m[0].length) : src).replace(/\s/g, "");
+  let mime = m?.[1] || "";
+  if (!mime || mime === "application/octet-stream") {
+    if (b64.startsWith("JVBER")) mime = "application/pdf";
+    else if (b64.startsWith("/9j/")) mime = "image/jpeg";
+    else if (b64.startsWith("iVBORw0KGgo")) mime = "image/png";
+    else mime = mime || "application/octet-stream";
+  }
+  return { mime, b64 };
+}
+
+function DocBlobPreview({ src }) {
+  const [doc, setDoc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let url = null;
+    try {
+      const { mime, b64 } = detectDoc(src);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      setDoc({ url, mime });
+    } catch {
+      setFailed(true);
+    }
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src]);
+
+  if (failed) {
+    return (
+      <p className="rounded-[10px] bg-white px-4 py-3 text-[13px] text-[#B91C1C]" data-testid="admin-doc-preview-error">
+        This document could not be read.
+      </p>
+    );
+  }
+  if (!doc) return <p className="text-[13px] text-white">Loading document…</p>;
+  const ext = doc.mime === "application/pdf" ? "pdf" : doc.mime.split("/")[1] || "bin";
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {doc.mime === "application/pdf" ? (
+        <iframe
+          src={doc.url}
+          title="Document preview"
+          className="h-[80vh] w-[90vw] max-w-3xl rounded-[8px] bg-white"
+          data-testid="admin-doc-preview-pdf"
+        />
+      ) : doc.mime.startsWith("image/") ? (
+        <img src={doc.url} alt="doc" className="max-h-[80vh] max-w-full object-contain" data-testid="admin-doc-preview-img" />
+      ) : null}
+      <a
+        href={doc.url}
+        download={`document.${ext}`}
+        data-testid="admin-doc-download"
+        className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-[#111111]"
+      >
+        <ExternalLink className="h-4 w-4" />
+        Download
+      </a>
     </div>
   );
 }

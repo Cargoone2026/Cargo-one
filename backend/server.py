@@ -1787,7 +1787,7 @@ async def create_job(payload: JobCreate, user: dict = Depends(require_role("cust
 
 @api.get("/jobs/mine")
 async def my_jobs(user: dict = Depends(require_role("customer"))):
-    jobs = await db.jobs.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    jobs = await db.jobs.find({"customer_id": user["id"], "deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return jobs
 
 
@@ -2219,7 +2219,7 @@ async def nearby_jobs(
     # (no `service_timing` field) remain visible via `$ne "asap"`.
     all_jobs = await db.jobs.find(
         {"status": "posted", "service_timing": {"$ne": "asap"},
-         "blocked_driver_ids": {"$ne": user.get("id")}},
+         "blocked_driver_ids": {"$ne": user.get("id")}, "deleted_at": None},
         {"_id": 0},
     ).sort("created_at", -1).to_list(500)
     result: list[dict] = []
@@ -2268,7 +2268,7 @@ async def driver_accepted_jobs(user: dict = Depends(require_role("driver"))):
     booking is created here. No pricing, fee, or deposit logic is touched.
     """
     docs = await db.jobs.find(
-        {"assigned_driver_id": user["id"], "status": "accepted"},
+        {"assigned_driver_id": user["id"], "status": "accepted", "deleted_at": None},
         {"_id": 0},
     ).sort("updated_at", -1).to_list(200)
     out: list[dict] = []
@@ -2346,7 +2346,7 @@ async def driver_my_bids(user: dict = Depends(require_role("driver"))):
 @api.get("/jobs/{job_id}")
 async def get_job(job_id: str, user: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
-    if not job:
+    if not job or (job.get("deleted_at") and user["role"] != "admin"):
         raise HTTPException(status_code=404, detail="Job not found")
 
     # Check if user has access to private details
@@ -2372,7 +2372,7 @@ async def accept_fixed_job(job_id: str, user: dict = Depends(require_role("drive
     if user.get("status") != "active":
         raise HTTPException(status_code=403, detail="Driver not approved yet")
     job = await db.jobs.find_one({"id": job_id})
-    if not job:
+    if not job or job.get("deleted_at"):
         raise HTTPException(status_code=404, detail="Job not found")
     if job.get("pricing_type") != "fixed":
         raise HTTPException(status_code=400, detail="Job requires bidding")
@@ -3230,7 +3230,7 @@ async def submit_bid(job_id: str, payload: BidCreate, user: dict = Depends(requi
     if user.get("status") != "active":
         raise HTTPException(status_code=403, detail="Driver not approved yet")
     job = await db.jobs.find_one({"id": job_id})
-    if not job:
+    if not job or job.get("deleted_at"):
         raise HTTPException(status_code=404, detail="Job not found")
     if job["pricing_type"] != "bidding":
         raise HTTPException(status_code=400, detail="Job is not open for bids")
@@ -3961,6 +3961,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         q = {"driver_id": user["id"]}
     else:
         q = {}
+    q["deleted_at"] = None
     bookings = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
     # Batch fetch jobs and users to avoid N+1 queries
     job_ids = [b["job_id"] for b in bookings]
@@ -4406,7 +4407,7 @@ async def messages_unread_count(user: dict = Depends(get_current_user)):
     """Aggregate unread messages per booking (for the dashboard badge + the
     sidebar nav pip). Only bookings the caller is a party to."""
     # Find every booking this user is on.
-    q = {"$or": [{"customer_id": user["id"]}, {"driver_id": user["id"]}]}
+    q = {"$or": [{"customer_id": user["id"]}, {"driver_id": user["id"]}], "deleted_at": None}
     bookings = await db.bookings.find(q, {"id": 1, "_id": 0}).to_list(500)
     booking_ids = [b["id"] for b in bookings]
     if not booking_ids:
@@ -4433,6 +4434,7 @@ async def messages_summary(user: dict = Depends(get_current_user)):
     q = {
         "$or": [{"customer_id": user["id"]}, {"driver_id": user["id"]}],
         "payment_status": "paid",
+        "deleted_at": None,
     }
     bookings = await db.bookings.find(
         q,
@@ -4842,10 +4844,11 @@ async def admin_stats(user: dict = Depends(require_role("admin"))):
     total_users = await db.users.count_documents({"role": "customer"})
     total_drivers = await db.users.count_documents({"role": "driver"})
     pending_drivers = await db.users.count_documents({"role": "driver", "status": "pending"})
-    total_jobs = await db.jobs.count_documents({})
+    total_jobs = await db.jobs.count_documents({"deleted_at": None})
     active_jobs = await db.jobs.count_documents({"status": {"$in": ["posted", "accepted", "confirmed",
-                                                                      "travelling", "collected", "on_route"]}})
-    total_bookings = await db.bookings.count_documents({})
+                                                                      "travelling", "collected", "on_route"]},
+                                                 "deleted_at": None})
+    total_bookings = await db.bookings.count_documents({"deleted_at": None})
     paid_bookings = await db.bookings.count_documents({"payment_status": "paid"})
     revenue_agg = await db.bookings.aggregate([
         {"$match": {"payment_status": "paid"}},
@@ -5043,14 +5046,14 @@ async def admin_user_detail(user_id: str,
     recent_bookings: list = []
     if role == "customer":
         recent_jobs = await db.jobs.find(
-            {"customer_id": user_id}, {"_id": 0}
+            {"customer_id": user_id, "deleted_at": None}, {"_id": 0}
         ).sort("created_at", -1).to_list(20)
         recent_bookings = await db.bookings.find(
-            {"customer_id": user_id}, {"_id": 0}
+            {"customer_id": user_id, "deleted_at": None}, {"_id": 0}
         ).sort("created_at", -1).to_list(20)
     elif role == "driver":
         recent_bookings = await db.bookings.find(
-            {"driver_id": user_id}, {"_id": 0}
+            {"driver_id": user_id, "deleted_at": None}, {"_id": 0}
         ).sort("created_at", -1).to_list(20)
     # Attach compact job summary to each booking for the modal card
     for b in recent_bookings:
@@ -5256,7 +5259,7 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
         {"driver_id": driver_id, "status": "completed"}
     )
     active_bookings = await db.bookings.count_documents(
-        {"driver_id": driver_id, "status": {"$nin": ["completed", "cancelled"]}}
+        {"driver_id": driver_id, "status": {"$nin": ["completed", "cancelled"]}, "deleted_at": None}
     )
     reviews = await db.reviews.find(
         {"target_id": driver_id}, {"_id": 0}
@@ -5301,9 +5304,36 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
 
 
 @api.get("/admin/jobs")
-async def admin_list_jobs(user: dict = Depends(require_role("admin"))):
-    jobs = await db.jobs.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def admin_list_jobs(include_deleted: bool = False, user: dict = Depends(require_role("admin"))):
+    jobs = await db.jobs.find({} if include_deleted else {"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return jobs
+
+
+INACTIVE_BOOKING_STATUSES = ("cancelled", "delivered", "pod_uploaded", "completed")
+
+
+@api.delete("/admin/jobs/{job_id}")
+async def admin_soft_delete_job(job_id: str, user: dict = Depends(require_role("admin"))):
+    """Soft delete: hides the job + its bookings from lists. No refunds/Stripe/notifications."""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0, "id": 1, "deleted_at": 1})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("deleted_at"):
+        return {"ok": True, "job_id": job_id, "deleted_at": job["deleted_at"]}
+    active_paid = await db.bookings.find_one(
+        {"job_id": job_id, "payment_status": "paid",
+         "status": {"$nin": list(INACTIVE_BOOKING_STATUSES)}},
+        {"_id": 0, "id": 1},
+    )
+    if active_paid:
+        raise HTTPException(
+            status_code=409,
+            detail="This job has an active paid booking. Cancel it through the normal cancel/refund flow first.",
+        )
+    stamp = {"deleted_at": now_iso(), "deleted_by": user["id"], "hidden": True}
+    await db.jobs.update_one({"id": job_id}, {"$set": stamp})
+    await db.bookings.update_many({"job_id": job_id}, {"$set": stamp})
+    return {"ok": True, "job_id": job_id, "deleted_at": stamp["deleted_at"]}
 
 
 @api.get("/admin/jobs/{job_id}")
@@ -5343,7 +5373,7 @@ async def admin_job_detail(job_id: str,
 
 @api.get("/admin/bookings")
 async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
-    bookings = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    bookings = await db.bookings.find({"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return bookings
 
 
@@ -7048,6 +7078,8 @@ async def global_search(
             # Drivers only see posted jobs or their own assigned bookings
             base_query["$and"] = [{"$or": [{"status": "posted"}, {"assigned_driver_id": user["id"]}]}]
         # admin sees everything
+        if user["role"] != "admin":
+            base_query["deleted_at"] = None
 
         docs = await db.jobs.find(base_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
         results["jobs"] = [
@@ -7427,7 +7459,7 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
         st = b.get("status")
         if st == "completed":
             completed.append(b)
-        elif st in ("cancelled",) or b.get("cancelled_at"):
+        elif st in ("cancelled",) or b.get("cancelled_at") or b.get("deleted_at"):
             pass
         elif st in ("deposit_paid", "confirmed"):
             upcoming.append(b)
@@ -7484,7 +7516,7 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
     docs_rejected = sum(1 for d in docs if d.get("status") == "rejected")
 
     # Nearby posted-job count (radius 75 default)
-    posted = await db.jobs.find({"status": "posted"}, {"_id": 0, "id": 1}).to_list(1000)
+    posted = await db.jobs.find({"status": "posted", "deleted_at": None}, {"_id": 0, "id": 1}).to_list(1000)
     nearby_count = len(posted)  # driver home also filters by radius using /jobs/nearby
 
     # Enrich upcoming with the job snippet

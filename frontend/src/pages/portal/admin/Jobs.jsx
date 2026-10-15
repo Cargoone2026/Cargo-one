@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, X as XIcon, MapPin, Package, User, Truck, ExternalLink } from "lucide-react";
+import { Search, X as XIcon, MapPin, Package, User, Truck, ExternalLink, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
@@ -10,16 +10,17 @@ export default function AdminJobs() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api("/admin/jobs").catch(() => []);
+      const list = await api(`/admin/jobs${showDeleted ? "?include_deleted=true" : ""}`).catch(() => []);
       setJobs(Array.isArray(list) ? list : []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showDeleted]);
   useEffect(() => {
     load();
   }, [load]);
@@ -38,9 +39,21 @@ export default function AdminJobs() {
     <div className="min-h-screen bg-white pb-6" data-testid="admin-jobs">
       <header className="flex items-center justify-between px-4 pt-6 md:px-8">
         <h1 className="text-[30px] font-bold tracking-tight text-[#111111]">All Jobs</h1>
-        <span className="text-[13px] text-[#6B7280]">
-          {filtered.length} of {jobs.length}
-        </span>
+        <div className="flex items-center gap-4">
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-[#6B7280]">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => setShowDeleted(e.target.checked)}
+              data-testid="admin-jobs-show-deleted"
+              className="h-4 w-4 accent-[#D62828]"
+            />
+            Show deleted
+          </label>
+          <span className="text-[13px] text-[#6B7280]" data-testid="admin-jobs-count">
+            {filtered.length} of {jobs.length}
+          </span>
+        </div>
       </header>
 
       <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-[#F4F4F4] px-3 py-2 md:mx-8">
@@ -85,7 +98,10 @@ export default function AdminJobs() {
                       {(j.category || "").replace(/_/g, " ")} · {j.pricing_type}
                     </p>
                   </div>
-                  <StatusPill status={j.status} />
+                  <div className="flex items-center gap-2">
+                    {j.deleted_at ? <DeletedBadge testId={`admin-job-deleted-${j.id}`} /> : null}
+                    <StatusPill status={j.status} />
+                  </div>
                 </div>
                 <div className="mt-2 flex items-center gap-1 text-[14px] text-[#6B7280]">
                   <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
@@ -113,13 +129,96 @@ export default function AdminJobs() {
       </ul>
 
       {openId ? (
-        <JobDetailModal jobId={openId} onClose={() => setOpenId(null)} />
+        <JobDetailModal
+          jobId={openId}
+          onClose={() => setOpenId(null)}
+          onDeleted={() => {
+            setOpenId(null);
+            load();
+          }}
+        />
       ) : null}
     </div>
   );
 }
 
-function JobDetailModal({ jobId, onClose }) {
+function DeletedBadge({ testId }) {
+  return (
+    <span
+      className="rounded-full bg-[#FEE2E2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#B91C1C]"
+      data-testid={testId}
+    >
+      Deleted
+    </span>
+  );
+}
+
+function DeleteJobAction({ jobId, onDeleted }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const doDelete = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/admin/jobs/${jobId}`, { method: "DELETE" });
+      onDeleted();
+    } catch (e) {
+      setError(e?.message || "Delete failed");
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="border-t border-[#F3F4F6] pt-4" data-testid="admin-job-delete-section">
+      {error ? (
+        <p className="mb-3 rounded-[10px] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#B91C1C]" data-testid="admin-job-delete-error">
+          {error}
+        </p>
+      ) : null}
+      {confirming ? (
+        <div className="rounded-[10px] border border-[#FCA5A5] bg-[#FEF2F2] p-3" data-testid="admin-job-delete-confirm">
+          <p className="text-[13px] text-[#7F1D1D]">
+            Delete this job? It will be hidden from customers, drivers and lists. Payments, earnings and records are not changed.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              data-testid="admin-job-delete-cancel"
+              className="rounded-full bg-white px-4 py-1.5 text-[13px] font-semibold text-[#111111] ring-1 ring-[#E5E7EB] hover:bg-[#F4F4F4]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={doDelete}
+              disabled={busy}
+              data-testid="admin-job-delete-confirm-btn"
+              className="rounded-full bg-[#DC2626] px-4 py-1.5 text-[13px] font-bold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+            >
+              {busy ? "Deleting…" : "Yes, delete job"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          data-testid="admin-job-delete-btn"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#B91C1C]"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete job
+        </button>
+      )}
+    </div>
+  );
+}
+
+function JobDetailModal({ jobId, onClose, onDeleted }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
@@ -167,7 +266,10 @@ function JobDetailModal({ jobId, onClose }) {
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[18px] font-bold text-[#111111]">{data.job.title}</p>
-                  <StatusPill status={data.job.status} />
+                  <div className="flex items-center gap-2">
+                    {data.job.deleted_at ? <DeletedBadge testId="admin-job-modal-deleted" /> : null}
+                    <StatusPill status={data.job.status} />
+                  </div>
                 </div>
                 <p className="mt-1 text-[12px] capitalize text-[#6B7280]">
                   {(data.job.category || "").replace(/_/g, " ")} · {data.job.pricing_type} · {data.job.service_timing || "scheduled"}
@@ -263,6 +365,14 @@ function JobDetailModal({ jobId, onClose }) {
                 <p className="rounded-[10px] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#6B7280]">
                   No booking exists yet for this job.
                 </p>
+              )}
+
+              {data.job.deleted_at ? (
+                <p className="rounded-[10px] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#7F1D1D]" data-testid="admin-job-modal-deleted-note">
+                  Deleted {new Date(data.job.deleted_at).toLocaleString()} — read-only record.
+                </p>
+              ) : (
+                <DeleteJobAction jobId={jobId} onDeleted={onDeleted} />
               )}
             </div>
           )}
