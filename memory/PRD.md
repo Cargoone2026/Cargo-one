@@ -526,6 +526,8 @@ Each future phase must start from the locked baseline.
 - [ ] Restrict CORS to `https://cargoone.co.uk` (currently `*`).
 - [x] TestFlight builds for Customer + Driver via Xcode Archive — 1.0.0 (1) uploaded 13 Oct 2026.
 - [ ] Raise iOS deployment target to 15.1 for BOTH apps (App Store Connect warning: currently 13.4 on the app target; Pods already 15.0 via Podfile.properties.json; Apple minimum iOS 15 from April 2027; Expo SDK 51 supports 15.1). Set in Xcode target → General → Minimum Deployments (ios/ is gitignored) and keep `ios.deploymentTarget` in Podfile.properties.json/plugin in sync.
+- [ ] Customer app, Post Job pricing step: when `/quote/estimate` fails with `vehicle_capacity_exceeded` (or volume/weight over limits), show "This load is too large for our vehicles. Check your dimensions are in metres (e.g. 1.2 × 1.0 × 1.0)." Display only; no change to quote or pricing logic. Bundle with the iOS 15.1 / Stripe-live final build.
+- [ ] Backend: stop httpx INFO logs printing the Google Maps API key.
 
 ## iOS release / TestFlight (2026-10-13)
 - App Store Connect records: "CargoOne" (`co.uk.cargoone.customer`) and "CargoOne Driver" (`co.uk.cargoone.driver`), team `76XPJG3C72`.
@@ -546,4 +548,5 @@ Each future phase must start from the locked baseline.
 
 ### Post-launch list
 - Background driver tracking (Always location) — after launch prep.
+- Customer map: driver pin always drawn above the A/B markers.
 - Build 3 (pending Save to GitHub): PostJob (fixed/bid) keeps last successful distance/time (`routeInfo`) across failed /quote/estimate calls, cleared on address change; one 2s retry when none; "Couldn't calculate distance, tap to retry". AddressAutocomplete.pickSuggestion resets lat/lng to 0 on pick. Root cause: 422 PricingError (e.g. volume_too_large 125 m³) nulled quote → silent "—". ASAP and backend untouched. Open: httpx logs full Google API key in prod (user declined backend change for now).
