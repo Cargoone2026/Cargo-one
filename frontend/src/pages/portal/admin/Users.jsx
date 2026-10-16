@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle, Send } from "lucide-react";
+import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle, Send, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
@@ -21,6 +21,7 @@ export default function AdminUsers() {
   const [phoneless, setPhoneless] = useState(null); // {count,total_drivers,drivers}
   const [nudgeResult, setNudgeResult] = useState(null);
   const [nudging, setNudging] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const runNudge = useCallback(async () => {
     // eslint-disable-next-line no-alert
@@ -46,7 +47,10 @@ export default function AdminUsers() {
     setLoading(true);
     try {
       const tabDef = ROLE_TABS.find((t) => t.key === tab);
-      const path = tabDef?.role ? `/admin/users?role=${tabDef.role}` : "/admin/users";
+      const params = new URLSearchParams();
+      if (tabDef?.role) params.set("role", tabDef.role);
+      if (showDeleted) params.set("include_deleted", "true");
+      const path = `/admin/users${params.toString() ? `?${params}` : ""}`;
       const [list, missing] = await Promise.all([
         api(path).catch(() => []),
         api("/admin/drivers-missing-phone").catch(() => null),
@@ -56,7 +60,7 @@ export default function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  }, [tab]);
+  }, [tab, showDeleted]);
   useEffect(() => {
     load();
   }, [load]);
@@ -212,6 +216,17 @@ export default function AdminUsers() {
         )}
       </div>
 
+      <label className="mx-4 mt-3 flex w-fit cursor-pointer items-center gap-2 text-[13px] text-[#6B7280] md:mx-8">
+        <input
+          type="checkbox"
+          checked={showDeleted}
+          onChange={(e) => setShowDeleted(e.target.checked)}
+          data-testid="admin-users-show-deleted"
+          className="h-4 w-4 accent-[#D62828]"
+        />
+        Show deleted
+      </label>
+
       <ul className="mx-4 mt-3 space-y-3 md:mx-8">
         {loading && users.length === 0 ? (
           <li className="text-[13px] text-[#6B7280]">Loading users…</li>
@@ -247,6 +262,7 @@ export default function AdminUsers() {
                       {u.name || "—"}
                     </p>
                     <RoleBadge role={u.role} />
+                    {u.deleted_at ? <DeletedBadge testId={`admin-user-deleted-${u.id}`} /> : null}
                   </div>
                   <p className="truncate text-[12px] text-[#6B7280]">{u.email}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6B7280]">
@@ -269,7 +285,7 @@ export default function AdminUsers() {
                     </span>
                   </div>
                 </div>
-                {u.status !== "suspended" && u.role !== "admin" && (
+                {u.status !== "suspended" && u.role !== "admin" && !u.deleted_at && (
                   <button
                     type="button"
                     onClick={(e) => suspend(u.id, e)}
@@ -288,7 +304,14 @@ export default function AdminUsers() {
       </ul>
 
       {openId ? (
-        <UserDetailModal userId={openId} onClose={() => setOpenId(null)} />
+        <UserDetailModal
+          userId={openId}
+          onClose={() => setOpenId(null)}
+          onDeleted={() => {
+            setOpenId(null);
+            load();
+          }}
+        />
       ) : null}
     </div>
   );
@@ -312,7 +335,84 @@ function RoleBadge({ role }) {
   );
 }
 
-function UserDetailModal({ userId, onClose }) {
+function DeletedBadge({ testId }) {
+  return (
+    <span
+      className="shrink-0 rounded-full bg-[#FEE2E2] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#B91C1C]"
+      data-testid={testId}
+    >
+      Deleted
+    </span>
+  );
+}
+
+function DeleteUserAction({ userId, onDeleted }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const doDelete = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/admin/users/${userId}`, { method: "DELETE" });
+      onDeleted();
+    } catch (e) {
+      setError(e?.message || "Delete failed");
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="border-t border-[#F3F4F6] pt-4" data-testid="admin-user-delete-section">
+      {error ? (
+        <p className="mb-3 rounded-[10px] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#B91C1C]" data-testid="admin-user-delete-error">
+          {error}
+        </p>
+      ) : null}
+      {confirming ? (
+        <div className="rounded-[10px] border border-[#FCA5A5] bg-[#FEF2F2] p-3" data-testid="admin-user-delete-confirm">
+          <p className="text-[13px] text-[#7F1D1D]">
+            Delete this user? Their personal details are anonymised and they can no longer log in. Bookings, payments,
+            reviews and earnings records are kept.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              data-testid="admin-user-delete-cancel"
+              className="rounded-full bg-white px-4 py-1.5 text-[13px] font-semibold text-[#111111] ring-1 ring-[#E5E7EB] hover:bg-[#F4F4F4]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={doDelete}
+              disabled={busy}
+              data-testid="admin-user-delete-confirm-btn"
+              className="rounded-full bg-[#DC2626] px-4 py-1.5 text-[13px] font-bold text-white hover:bg-[#B91C1C] disabled:opacity-60"
+            >
+              {busy ? "Deleting…" : "Yes, delete user"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          data-testid="admin-user-delete-btn"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#DC2626] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#B91C1C]"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete user
+        </button>
+      )}
+    </div>
+  );
+}
+
+function UserDetailModal({ userId, onClose, onDeleted }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
@@ -366,6 +466,7 @@ function UserDetailModal({ userId, onClose }) {
                   <div className="flex items-center gap-2">
                     <p className="truncate text-[18px] font-bold text-[#111111]">{u.name || "—"}</p>
                     <RoleBadge role={u.role} />
+                    {u.deleted_at ? <DeletedBadge testId="admin-user-modal-deleted" /> : null}
                   </div>
                   <p className="truncate text-[13px] text-[#6B7280]">{u.email}</p>
                   {u.phone ? (
@@ -446,6 +547,14 @@ function UserDetailModal({ userId, onClose }) {
                     ))}
                   </ul>
                 </div>
+              ) : null}
+
+              {u.deleted_at ? (
+                <p className="rounded-[10px] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#7F1D1D]" data-testid="admin-user-modal-deleted-note">
+                  Deleted {new Date(u.deleted_at).toLocaleString()} — read-only record.
+                </p>
+              ) : u.role !== "admin" ? (
+                <DeleteUserAction userId={u.id} onDeleted={onDeleted} />
               ) : null}
             </div>
           )}

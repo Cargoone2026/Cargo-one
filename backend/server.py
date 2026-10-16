@@ -1286,8 +1286,28 @@ async def me(request: Request, response: Response, user: dict = Depends(get_curr
     return user_to_public(user)
 
 
-@api.post("/auth/me/delete")
-async def delete_me(user: dict = Depends(get_current_user)):
+ACCOUNT_DELETE_BLOCK_MSG = "This user has an active booking. Complete or cancel it first."
+_FINISHED_BOOKING_STATUSES = ["cancelled", "cancelled_by_driver", "delivered", "pod_uploaded", "completed"]
+
+
+async def _active_booking_for(user_id: str) -> bool:
+    """True if the user has an unfinished booking (either side) or an assigned accepted/confirmed job."""
+    b = await db.bookings.find_one(
+        {"$or": [{"customer_id": user_id}, {"driver_id": user_id}],
+         "status": {"$nin": _FINISHED_BOOKING_STATUSES},
+         "cancelled_at": None, "deleted_at": None},
+        {"_id": 0, "id": 1},
+    )
+    if b:
+        return True
+    j = await db.jobs.find_one(
+        {"assigned_driver_id": user_id, "status": {"$in": ["accepted", "confirmed"]}, "deleted_at": None},
+        {"_id": 0, "id": 1},
+    )
+    return bool(j)
+
+
+async def _anonymise_user(user: dict) -> None:
     """Soft-delete: anonymise personal data, suspend account. Booking records retained.
     GDPR data scrubbing: also anonymises the user's display name across historical
     bookings, jobs, bids, reviews and messages so PII is not visible to other parties."""
@@ -1320,6 +1340,13 @@ async def delete_me(user: dict = Depends(get_current_user)):
     await db.messages.update_many(
         {"sender_id": user["id"]}, {"$set": {"sender_name": anon_name}}
     )
+
+
+@api.post("/auth/me/delete")
+async def delete_me(user: dict = Depends(get_current_user)):
+    if await _active_booking_for(user["id"]):
+        raise HTTPException(status_code=409, detail=ACCOUNT_DELETE_BLOCK_MSG)
+    await _anonymise_user(user)
     return {"ok": True}
 
 
@@ -4908,8 +4935,8 @@ async def mark_read(note_id: str, user: dict = Depends(get_current_user)):
 
 @api.get("/admin/stats")
 async def admin_stats(user: dict = Depends(require_role("admin"))):
-    total_users = await db.users.count_documents({"role": "customer"})
-    total_drivers = await db.users.count_documents({"role": "driver"})
+    total_users = await db.users.count_documents({"role": "customer", "deleted_at": None})
+    total_drivers = await db.users.count_documents({"role": "driver", "deleted_at": None})
     pending_drivers = await db.users.count_documents({"role": "driver", "status": "pending"})
     total_jobs = await db.jobs.count_documents({"deleted_at": None})
     active_jobs = await db.jobs.count_documents({"status": {"$in": ["posted", "accepted", "confirmed",
@@ -5012,12 +5039,46 @@ async def admin_analytics_rebooks(
 
 
 @api.get("/admin/users")
-async def admin_list_users(role: Optional[str] = None,
+async def admin_list_users(role: Optional[str] = None, include_deleted: bool = False,
                             user: dict = Depends(require_role("admin"))):
     q = {"role": role} if role else {}
+    if not include_deleted:
+        q["deleted_at"] = None
     users = await db.users.find(q, {"_id": 0, "password_hash": 0}) \
                             .sort("created_at", -1).to_list(500)
     return users
+
+
+@api.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, actor: dict = Depends(require_role("admin"))):
+    """Admin account deletion: same anonymisation as /auth/me/delete. No refunds/Stripe/emails."""
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") == "admin" or user_id == actor["id"]:
+        raise HTTPException(status_code=403, detail="Admin accounts and your own account cannot be deleted here.")
+    if target.get("deleted_at"):
+        return {"ok": True, "user_id": user_id, "deleted_at": target["deleted_at"]}
+    if await _active_booking_for(user_id):
+        raise HTTPException(status_code=409, detail=ACCOUNT_DELETE_BLOCK_MSG)
+    now = now_iso()
+    open_jobs = await db.jobs.find(
+        {"customer_id": user_id, "status": {"$in": ["posted", "accepted"]}, "deleted_at": None},
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    for j in open_jobs:
+        if not await db.bookings.find_one({"job_id": j["id"]}, {"_id": 0, "id": 1}):
+            await db.jobs.update_one(
+                {"id": j["id"]},
+                {"$set": {"deleted_at": now, "deleted_by": actor["id"], "hidden": True}},
+            )
+    await db.bids.update_many(
+        {"driver_id": user_id, "status": "pending"},
+        {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "account_deleted"}},
+    )
+    await _anonymise_user(target)
+    await db.users.update_one({"id": user_id}, {"$set": {"deleted_by": actor["id"]}})
+    return {"ok": True, "user_id": user_id}
 
 
 @api.get("/admin/drivers-missing-phone")
@@ -5027,7 +5088,7 @@ async def admin_drivers_missing_phone(_: dict = Depends(require_role("admin"))):
     fields are safe for the admin console; passwords + tokens excluded.
     """
     drivers = await db.users.find(
-        {"role": "driver"},
+        {"role": "driver", "deleted_at": None},
         {"_id": 0, "password_hash": 0},
     ).sort("created_at", -1).to_list(2000)
     flagged = [d for d in drivers if not is_valid_phone((d.get("phone") or "").strip())]
@@ -5046,7 +5107,7 @@ async def admin_nudge_drivers_missing_phone(admin: dict = Depends(require_role("
     is a no-op for already-nudged drivers.
     """
     drivers = await db.users.find(
-        {"role": "driver"},
+        {"role": "driver", "deleted_at": None},
         {"_id": 0, "password_hash": 0},
     ).to_list(2000)
     flagged = [d for d in drivers if not is_valid_phone((d.get("phone") or "").strip())]
@@ -5142,6 +5203,8 @@ async def admin_approve(user_id: str, actor: dict = Depends(require_role("admin"
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.get("deleted_at"):
+        raise HTTPException(status_code=409, detail="This account was deleted.")
     entry = {
         "id": new_id(),
         "action": "approve",
@@ -5225,6 +5288,8 @@ async def admin_request_changes(
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.get("deleted_at"):
+        raise HTTPException(status_code=409, detail="This account was deleted.")
     if target.get("role") != "driver":
         raise HTTPException(status_code=400, detail="request-changes only applies to drivers")
     reason = (payload.reason or "").strip()
