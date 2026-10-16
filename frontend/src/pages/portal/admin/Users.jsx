@@ -109,9 +109,6 @@ export default function AdminUsers() {
         </span>
       </header>
 
-      {/* TEMPORARY: one-off test clean-up — remove together with POST /admin/test-cleanup */}
-      <TempTestCleanupButton />
-
       {phoneless && phoneless.count > 0 ? (
         <div
           className="mx-4 mt-3 flex items-start gap-3 rounded-[12px] border border-[#F59E0B] bg-[#FFFBEB] p-3 md:mx-8"
@@ -335,51 +332,6 @@ function RoleBadge({ role }) {
     >
       {role || "user"}
     </span>
-  );
-}
-
-// TEMPORARY: one-off test clean-up button — remove together with POST /admin/test-cleanup.
-function TempTestCleanupButton() {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const run = async () => {
-    if (
-      !window.confirm(
-        "This will close 2 old test bookings and their 2 jobs for abdulbasit2016diesel@gmail.com. Continue?",
-      )
-    )
-      return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await api("/admin/test-cleanup", { method: "POST" });
-      setResult({ ok: true, text: `Done: bookings_updated ${r.bookings_updated} / jobs_updated ${r.jobs_updated}` });
-    } catch (e) {
-      setResult({ ok: false, text: e?.message || "Clean-up failed" });
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="mx-4 mt-3 flex flex-wrap items-center gap-3 md:mx-8" data-testid="temp-test-cleanup">
-      <button
-        type="button"
-        onClick={run}
-        disabled={busy}
-        data-testid="temp-test-cleanup-btn"
-        className="rounded-full bg-[#111111] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#333333] disabled:opacity-60"
-      >
-        {busy ? "Running…" : "Run one-off test clean-up"}
-      </button>
-      {result ? (
-        <span
-          className={`text-[13px] ${result.ok ? "text-[#15803D]" : "text-[#B91C1C]"}`}
-          data-testid="temp-test-cleanup-result"
-        >
-          {result.text}
-        </span>
-      ) : null}
-    </div>
   );
 }
 
