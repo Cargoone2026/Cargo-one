@@ -5444,6 +5444,68 @@ async def admin_list_jobs(include_deleted: bool = False, user: dict = Depends(re
 INACTIVE_BOOKING_STATUSES = ("cancelled", "delivered", "pod_uploaded", "completed")
 
 
+# TEMPORARY one-off production test-data clean-up (approved IDs only). Remove after it has run.
+_TEST_CLEANUP_RUN_ID = "test_cleanup_abdulbasit_2026_08_02"
+_TEST_CLEANUP_CUSTOMER_ID = "09c2cefd-c36c-458d-a86a-54d17240ef62"
+_TEST_CLEANUP_BOOKING_IDS = (
+    "bad80318-c297-4174-8f16-abf765eb372f",
+    "d3993bf4-d1ac-4779-b5b1-717f35d6946e",
+)
+_TEST_CLEANUP_JOB_IDS = (
+    "55e615b7-f298-4da2-b75d-c2d5e6e39447",
+    "9ff5ecc2-3ac8-41f0-9bb1-879dedd720d4",
+)
+
+
+@api.post("/admin/test-cleanup")
+async def admin_one_off_test_cleanup(actor: dict = Depends(require_role("admin"))):
+    """Single-use. Cancels the hardcoded test bookings and cancels + soft-deletes their jobs.
+    No refunds, Stripe calls, notifications or emails."""
+    if await db.admin_oneoff_runs.find_one({"_id": _TEST_CLEANUP_RUN_ID}):
+        raise HTTPException(status_code=409, detail="This clean-up has already run.")
+    bookings = await db.bookings.find(
+        {"id": {"$in": list(_TEST_CLEANUP_BOOKING_IDS)}}, {"_id": 0}
+    ).to_list(10)
+    jobs = await db.jobs.find({"id": {"$in": list(_TEST_CLEANUP_JOB_IDS)}}, {"_id": 0}).to_list(10)
+    problems = []
+    if len(bookings) != len(_TEST_CLEANUP_BOOKING_IDS):
+        problems.append("not all bookings found")
+    if len(jobs) != len(_TEST_CLEANUP_JOB_IDS):
+        problems.append("not all jobs found")
+    for b in bookings:
+        if b.get("customer_id") != _TEST_CLEANUP_CUSTOMER_ID:
+            problems.append(f"booking {b['id']} has a different customer")
+        if b.get("payment_status") == "paid":
+            problems.append(f"booking {b['id']} is paid")
+        if b.get("stripe_session_id") and not str(b["stripe_session_id"]).startswith("cs_test_"):
+            problems.append(f"booking {b['id']} has a non-test Stripe session")
+        if b.get("job_id") not in _TEST_CLEANUP_JOB_IDS:
+            problems.append(f"booking {b['id']} belongs to an unexpected job")
+    for j in jobs:
+        if j.get("customer_id") != _TEST_CLEANUP_CUSTOMER_ID:
+            problems.append(f"job {j['id']} has a different customer")
+    if problems:
+        raise HTTPException(status_code=409, detail="Clean-up refused: " + "; ".join(problems))
+    now = now_iso()
+    try:
+        await db.admin_oneoff_runs.insert_one({"_id": _TEST_CLEANUP_RUN_ID, "run_by": actor["id"], "started_at": now})
+    except Exception:
+        raise HTTPException(status_code=409, detail="This clean-up has already run.")
+    b_res = await db.bookings.update_many(
+        {"id": {"$in": list(_TEST_CLEANUP_BOOKING_IDS)}, "customer_id": _TEST_CLEANUP_CUSTOMER_ID},
+        {"$set": {"status": "cancelled", "cancelled_at": now, "cancel_reason": "admin_test_cleanup"}},
+    )
+    j_res = await db.jobs.update_many(
+        {"id": {"$in": list(_TEST_CLEANUP_JOB_IDS)}, "customer_id": _TEST_CLEANUP_CUSTOMER_ID},
+        {"$set": {"status": "cancelled", "deleted_at": now, "deleted_by": actor["id"], "hidden": True}},
+    )
+    summary = {"bookings_updated": b_res.modified_count, "jobs_updated": j_res.modified_count}
+    await db.admin_oneoff_runs.update_one(
+        {"_id": _TEST_CLEANUP_RUN_ID}, {"$set": {"finished_at": now_iso(), **summary}}
+    )
+    return {"ok": True, **summary}
+
+
 @api.delete("/admin/jobs/{job_id}")
 async def admin_soft_delete_job(job_id: str, user: dict = Depends(require_role("admin"))):
     """Soft delete: hides the job + its bookings from lists. No refunds/Stripe/notifications."""
