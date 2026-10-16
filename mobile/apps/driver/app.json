@@ -34,7 +34,7 @@
       "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "plugins": [
-      "../../plugins/withCargoOneiOSFixes",
+      ["../../plugins/withCargoOneiOSFixes", { "deploymentTarget": "15.1" }],
       [
         "@rnmapbox/maps",
         {}

@@ -19,6 +19,9 @@ import { AppShell } from "./components/AppShell";
 import { DriverLoadingScreen } from "./components/DriverLoadingScreen";
 import { DriverBiometricGate } from "./components/DriverBiometricGate";
 import LoginScreen from "./screens/Login";
+import RegisterScreen from "./screens/Register";
+import ForgotPasswordScreen from "./screens/ForgotPassword";
+import DeleteAccountScreen from "./screens/DeleteAccount";
 import HomeScreen from "./screens/Home";
 import AvailableJobsScreen from "./screens/AvailableJobs";
 import JobDetailScreen from "./screens/JobDetail";
@@ -54,6 +57,9 @@ export type RootStackParamList = {
   Documents: undefined;
   Legal: { slug: "terms" | "privacy" | "cookies" };
   Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
+  DeleteAccount: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -96,6 +102,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Documents" component={DocumentsScreen} />
         <Stack.Screen name="Legal" component={LegalScreen} />
+        <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       </Stack.Navigator>
     </AppShell>
   );
@@ -117,6 +124,9 @@ function RootNavigator() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        <Stack.Screen name="Legal" component={LegalScreen} />
       </Stack.Navigator>
     );
   }

@@ -124,7 +124,7 @@ export const CustomerAPI = {
       method: "POST",
       body: { doc_type: "profile_photo", base64 },
     }),
-  deleteAccount: () => api<any>("/users/me", { method: "DELETE" }),
+  deleteAccount: () => api<{ ok: boolean }>("/auth/me/delete", { method: "POST" }),
   registerPushToken: (token: string, platform: "ios" | "android") =>
     api<{ ok: boolean }>("/users/me/push-tokens", {
       method: "POST",

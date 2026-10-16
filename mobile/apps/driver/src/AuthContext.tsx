@@ -19,6 +19,7 @@ import React, {
   useState,
 } from "react";
 import {
+  register as coreRegister,
   login as coreLogin,
   logout as coreLogout,
   me as coreMe,
@@ -31,6 +32,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
+  register: (input: { name: string; email: string; phone: string; password: string }) => Promise<User>;
   logout: () => Promise<void>;
   refresh: () => Promise<User | null>;
 }
@@ -89,14 +91,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.user;
   }, []);
 
+  // Driver sign-up: always role "driver"; the new account is pending approval.
+  const register = useCallback(
+    async (input: { name: string; email: string; phone: string; password: string }) => {
+      const res = await coreRegister({ ...input, role: "driver" });
+      setUser(res.user);
+      return res.user;
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     await coreLogout();
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, refresh }),
-    [user, loading, login, logout, refresh],
+    () => ({ user, loading, login, register, logout, refresh }),
+    [user, loading, login, register, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

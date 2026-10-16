@@ -94,6 +94,7 @@ export function PostJobScreen() {
   const routeRef = useRef(routeInfo);
   routeRef.current = routeInfo;
   const [routeFailed, setRouteFailed] = useState(false);
+  const [loadTooLarge, setLoadTooLarge] = useState(false);
   const [routeRetryTick, setRouteRetryTick] = useState(0);
 
   const [weightKg, setWeightKg] = useState("");
@@ -204,6 +205,7 @@ export function PostJobScreen() {
     };
     const onOk = (q: QuoteEstimate) => {
       setQuote(q);
+      setLoadTooLarge(false);
       if (q?.distance_miles != null && q?.duration_minutes != null) {
         setRouteInfo({ distance_miles: q.distance_miles, duration_minutes: q.duration_minutes });
         setRouteFailed(false);
@@ -213,17 +215,20 @@ export function PostJobScreen() {
       try {
         const q = await SharedAPI.quoteEstimate(params);
         if (!cancelled) onOk(q);
-      } catch {
+      } catch (e: any) {
         if (cancelled) return;
         setQuote(null);
+        setLoadTooLarge(OVER_LIMIT_CODES.has(e?.code));
         if (routeRef.current) return;
         // No previous distance/time: one retry of the same request after ~2 s.
         retryTimer = setTimeout(async () => {
           try {
             const q = await SharedAPI.quoteEstimate(params);
             if (!cancelled) onOk(q);
-          } catch {
-            if (!cancelled && !routeRef.current) setRouteFailed(true);
+          } catch (e: any) {
+            if (cancelled) return;
+            setLoadTooLarge(OVER_LIMIT_CODES.has(e?.code));
+            if (!routeRef.current) setRouteFailed(true);
           }
         }, 2000);
       }
@@ -531,6 +536,7 @@ export function PostJobScreen() {
                   />
                 </View>
               </View>
+              {loadTooLarge ? <LoadTooLargeNote testID="postjob-load-too-large-step3" /> : null}
             </View>
           )}
 
@@ -605,6 +611,7 @@ export function PostJobScreen() {
                   <SummaryRow label="Distance" value={routeInfo ? `${routeInfo.distance_miles} miles` : "—"} />
                   <SummaryRow label="Journey time" value={routeInfo ? fmtDur(routeInfo.duration_minutes) : "—"} />
                   {routeFailed && !routeInfo ? <RouteRetry onPress={retryRoute} /> : null}
+                  {loadTooLarge ? <LoadTooLargeNote testID="postjob-load-too-large" /> : null}
                   <View style={styles.divider} />
                   <SummaryRow label="Driver charge" value={previewCharge ? `£${previewCharge.toFixed(2)}` : "—"} emphasise />
                   <SummaryRow
@@ -654,6 +661,22 @@ export function PostJobScreen() {
 }
 
 /* ---------------- leaf components ---------------- */
+
+// Over-limit PricingError codes from /quote/estimate (display only).
+const OVER_LIMIT_CODES = new Set(["vehicle_capacity_exceeded", "weight_too_large", "volume_too_large", "too_many_items"]);
+
+function LoadTooLargeNote({ testID }: { testID: string }) {
+  return (
+    <View
+      testID={testID}
+      style={{ marginTop: 8, padding: 10, borderRadius: radius.base, borderWidth: 1, borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }}
+    >
+      <Text style={{ color: "#B91C1C", fontSize: 13, lineHeight: 18 }}>
+        This load is too large for our vehicles. Check your dimensions are in metres (e.g. 1.2 × 1.0 × 1.0).
+      </Text>
+    </View>
+  );
+}
 
 function RouteRetry({ onPress }: { onPress: () => void }) {
   return (

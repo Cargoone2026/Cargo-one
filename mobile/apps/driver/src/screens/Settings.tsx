@@ -102,15 +102,25 @@ export default function SettingsScreen({ navigation }: P) {
             onPress={confirmLogout}
           />
         </Card>
+
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <MenuRow
+            label="Delete account"
+            testID="settings-delete-account"
+            leftGlyph={<Glyph name="trash-2" color={colors.errorInk} />}
+            onPress={() => navigation.navigate("DeleteAccount")}
+            danger
+          />
+        </Card>
       </Section>
     </Page>
   );
 }
 
-function Glyph({ name }: { name: React.ComponentProps<typeof Icon>["name"] }) {
+function Glyph({ name, color = colors.ink }: { name: React.ComponentProps<typeof Icon>["name"]; color?: string }) {
   return (
     <View style={styles.rowGlyph}>
-      <Icon name={name} size={18} color={colors.ink} />
+      <Icon name={name} size={18} color={color} />
     </View>
   );
 }

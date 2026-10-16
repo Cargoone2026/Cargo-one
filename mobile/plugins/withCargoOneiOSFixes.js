@@ -33,7 +33,9 @@
  *      developers to abort otherwise-successful `pod install` runs
  *      thinking the build had failed — hence the durable fix.
  *
- *   1. Sets ios.deploymentTarget = "15.0" in ios/Podfile.properties.json.
+ *   1. Sets ios.deploymentTarget (default "15.1"; override via the plugin's
+ *      `deploymentTarget` option in app.json) in ios/Podfile.properties.json
+ *      and IPHONEOS_DEPLOYMENT_TARGET on the app target build settings.
  *      Required because:
  *        - react-native-passkey podspec declares s.platforms = { :ios => "15.0" }
  *        - @stripe/stripe-react-native 0.38 requires iOS 15+
@@ -127,14 +129,25 @@ const JSON_SHIM_MARKER_BEGIN = '# BEGIN CargoOne json 2.8 compat shim';
 const JSON_SHIM_MARKER_END = '# END CargoOne json 2.8 compat shim';
 const LEGACY_JSON_SHIM_PATTERN = /^# BEGIN CargoOne json 2\.8[\s\S]*?^# END CargoOne json 2\.8[^\n]*\n?/m;
 
-function ensureDeploymentTarget(iosDir) {
+const DEFAULT_DEPLOYMENT_TARGET = '15.1';
+
+function setXcodeDeploymentTarget(project, target) {
+  const configs = project.pbxXCBuildConfigurationSection();
+  for (const key of Object.keys(configs)) {
+    const bs = configs[key] && configs[key].buildSettings;
+    if (bs && bs.IPHONEOS_DEPLOYMENT_TARGET !== undefined) bs.IPHONEOS_DEPLOYMENT_TARGET = target;
+  }
+  return project;
+}
+
+function ensureDeploymentTarget(iosDir, target = DEFAULT_DEPLOYMENT_TARGET) {
   const propsPath = path.join(iosDir, 'Podfile.properties.json');
   const props = fs.existsSync(propsPath)
     ? JSON.parse(fs.readFileSync(propsPath, 'utf8'))
     : {};
   let mutated = false;
-  if (props['ios.deploymentTarget'] !== '15.0') {
-    props['ios.deploymentTarget'] = '15.0';
+  if (props['ios.deploymentTarget'] !== target) {
+    props['ios.deploymentTarget'] = target;
     mutated = true;
   }
   // Force Old Architecture. app.json also declares `"newArchEnabled": false`
@@ -250,7 +263,8 @@ function ensurePodfileBitcodeStrip(iosDir) {
   fs.writeFileSync(podfilePath, contents);
 }
 
-module.exports = function withCargoOneiOSFixes(config) {
+module.exports = function withCargoOneiOSFixes(config, options = {}) {
+  const deploymentTarget = (options && options.deploymentTarget) || DEFAULT_DEPLOYMENT_TARGET;
   // 1) Xcode project mod: strip dangling PBXResourcesBuildPhase entries
   //    that `@expo/config-plugins`' withSwiftBridgingHeader introduces.
   //    Must run AFTER Expo's own xcodeproj mods (Expo registers those
@@ -259,7 +273,7 @@ module.exports = function withCargoOneiOSFixes(config) {
   //    apps/driver/app.json so its callback executes last for the
   //    xcodeproj mod). Idempotent — a no-op once clean.
   config = withXcodeProject(config, (cfg) => {
-    cfg.modResults = stripDanglingResources(cfg.modResults);
+    cfg.modResults = setXcodeDeploymentTarget(stripDanglingResources(cfg.modResults), deploymentTarget);
     return cfg;
   });
 
@@ -305,7 +319,7 @@ module.exports = function withCargoOneiOSFixes(config) {
     'ios',
     async (cfg) => {
       const iosDir = cfg.modRequest.platformProjectRoot;
-      ensureDeploymentTarget(iosDir);
+      ensureDeploymentTarget(iosDir, deploymentTarget);
       // Order matters — each ensure* prepends its snippet to the top of
       // the Podfile, so the LAST call ends up at the very top. The JSON
       // shim MUST be evaluated before any other Podfile line so it

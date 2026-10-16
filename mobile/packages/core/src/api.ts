@@ -131,12 +131,15 @@ export async function api<T = any>(
     parsed = text;
   }
   if (!res.ok) {
-    const detail =
+    const raw =
       (parsed && (parsed.detail || parsed.message)) ||
       (typeof parsed === "string" ? parsed : "Request failed");
+    // Structured details ({code, message}, e.g. PricingError 422) keep their code.
+    const detail = raw && typeof raw === "object" ? raw.message || "Request failed" : raw;
+    const code = raw && typeof raw === "object" && typeof raw.code === "string" ? raw.code : undefined;
     // eslint-disable-next-line no-console
     console.warn(`[api] ${method} ${path} → ${res.status}`);
-    throw new ApiError(String(detail), res.status);
+    throw new ApiError(String(detail), res.status, code);
   }
   return parsed as T;
 }

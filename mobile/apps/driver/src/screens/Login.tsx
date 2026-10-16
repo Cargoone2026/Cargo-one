@@ -5,6 +5,8 @@
  * styled with the CargoOne mobile design system (Customer-parity).
  */
 import React, { useState } from "react";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../App";
 import {
   Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View,
 } from "react-native";
@@ -14,7 +16,9 @@ import {
 } from "../ui";
 import { useAuth } from "../AuthContext";
 
-export default function LoginScreen() {
+type P = NativeStackScreenProps<RootStackParamList, "Login">;
+
+export default function LoginScreen({ navigation }: P) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -100,12 +104,7 @@ export default function LoginScreen() {
           />
 
           <Pressable
-            onPress={() =>
-              Alert.alert(
-                "Reset your password",
-                "For now, please reset your password on cargoone.co.uk/auth/forgot-password.",
-              )
-            }
+            onPress={() => navigation.navigate("ForgotPassword")}
             style={{ marginTop: space[5], alignSelf: "center" }}
             testID="forgot-password-link"
           >
@@ -113,12 +112,7 @@ export default function LoginScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() =>
-              Alert.alert(
-                "Create a driver account",
-                "New driver registration ships in the next Driver release.",
-              )
-            }
+            onPress={() => navigation.navigate("Register")}
             style={{ marginTop: space[2], alignSelf: "center" }}
             testID="go-register-button"
           >

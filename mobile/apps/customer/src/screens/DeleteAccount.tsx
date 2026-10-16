@@ -29,7 +29,10 @@ export function DeleteAccountScreen({ navigation }: P) {
         { text: "OK", onPress: () => logout() },
       ]);
     } catch (e: any) {
-      Alert.alert("Delete failed", e?.message || "Something went wrong. Contact support@cargoone.co.uk.");
+      Alert.alert(
+        e?.status === 409 ? "Can't delete yet" : "Delete failed",
+        e?.message || "Something went wrong. Contact support@cargoone.co.uk.",
+      );
     } finally {
       setBusy(false);
     }

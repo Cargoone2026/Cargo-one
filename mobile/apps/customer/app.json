@@ -32,12 +32,15 @@
       "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "plugins": [
-      "../../plugins/withCargoOneiOSFixes",
+      ["../../plugins/withCargoOneiOSFixes", { "deploymentTarget": "15.1" }],
       ["@rnmapbox/maps", {}],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Show pickup and track your driver in real time."
+          "locationWhenInUsePermission": "Show pickup and track your driver in real time.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "isIosBackgroundLocationEnabled": false
         }
       ],
       ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.co.uk.cargoone" }]
