@@ -22,7 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "Show your pickup on the map and track your driver in real time.",
         "LSApplicationQueriesSchemes": ["maps", "comgooglemaps", "http", "https"],
         "NSCameraUsageDescription": "Take photos of your items so drivers know what to expect.",
-        "NSPhotoLibraryUsageDescription": "Attach photos of your items and your profile picture."
+        "NSPhotoLibraryUsageDescription": "Attach photos of your items and set your profile picture."
       }
     },
     "android": {
@@ -40,7 +40,8 @@
         "expo-image-picker",
         {
           "cameraPermission": "Take photos of your items so drivers know what to expect.",
-          "photosPermission": "Attach photos of your items and your profile picture."
+          "photosPermission": "Attach photos of your items and set your profile picture.",
+          "microphonePermission": false
         }
       ],
       [
