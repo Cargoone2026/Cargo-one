@@ -6,7 +6,7 @@ import { DriverAPI } from "@cargoone/core";
 import type { RootStackParamList } from "./App";
 
 // App-level ASAP tracking: posts foreground location to /tracking/{booking_id}
-// for the driver's active paid ASAP booking, whichever screen is open.
+// for the driver's active paid ASAP booking (fallback: in-progress scheduled booking), whichever screen is open.
 const ACTIVE_STATUSES = new Set(["confirmed", "deposit_paid", "travelling", "arrived", "collected", "on_route"]);
 const MIN_DISTANCE_METERS = 30;
 const MIN_INTERVAL_MS = 45_000;
@@ -19,6 +19,19 @@ function pickActiveAsap(rows: any[] | null | undefined): string | null {
       x?.payment_status === "paid" &&
       (x.service_timing || x.job?.service_timing) === "asap" &&
       ACTIVE_STATUSES.has(x.status) &&
+      !x.cancelled_at,
+  );
+  return b?.id ?? null;
+}
+
+const SCHEDULED_ACTIVE_STATUSES = new Set(["travelling", "arrived", "collected", "on_route"]);
+
+function pickActiveScheduled(rows: any[] | null | undefined): string | null {
+  const b = (rows || []).find(
+    (x) =>
+      x?.payment_status === "paid" &&
+      (x.service_timing || x.job?.service_timing) !== "asap" &&
+      SCHEDULED_ACTIVE_STATUSES.has(x.status) &&
       !x.cancelled_at,
   );
   return b?.id ?? null;
@@ -37,7 +50,8 @@ export function AsapTrackingBridge({
   const check = useCallback(async () => {
     lastCheckRef.current = Date.now();
     try {
-      setBookingId(pickActiveAsap(await DriverAPI.myBookings()));
+      const rows = await DriverAPI.myBookings();
+      setBookingId(pickActiveAsap(rows) ?? pickActiveScheduled(rows));
     } catch {
       /* keep previous value; next trigger retries */
     }
@@ -59,7 +73,7 @@ export function AsapTrackingBridge({
     };
   }, [check, navigationRef]);
 
-  // 30 s re-check only while an active ASAP booking exists and the app is foregrounded.
+  // 30 s re-check only while a tracked (ASAP or scheduled) booking exists and the app is foregrounded.
   useEffect(() => {
     if (!bookingId || !foreground) return;
     const iv = setInterval(check, ACTIVE_RECHECK_MS);

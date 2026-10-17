@@ -7,6 +7,7 @@ import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Bid, CustomerAPI, DriverProfile, money, Review } from "@cargoone/core";
 import { Star, X } from "lucide-react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { EmptyState, Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
@@ -104,6 +105,7 @@ export function BidsScreen({ route, navigation }: P) {
       </ScrollView>
 
       <Modal visible={!!inspecting} animationType="slide" onRequestClose={() => setInspecting(null)}>
+        <SafeAreaProvider>
         <Page testID="reviews-modal" scroll={false}>
           <ScrollView>
             <PageHeader
@@ -142,6 +144,7 @@ export function BidsScreen({ route, navigation }: P) {
             </View>
           </ScrollView>
         </Page>
+        </SafeAreaProvider>
       </Modal>
     </Page>
   );

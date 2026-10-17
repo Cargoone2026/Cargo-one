@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "CargoOne Customer",
-    "slug": "cargoone-customer",
+    "owner": "cargo-one-uk",
+    "slug": "cargo-one-customer",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "cargoonecustomer",
@@ -56,7 +57,7 @@
       ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.co.uk.cargoone" }]
     ],
     "extra": {
-      "eas": { "projectId": "REPLACE_ME_ON_EAS_INIT" }
+      "eas": { "projectId": "ad75bd3e-e249-4feb-a90e-2f60884f4de9" }
     }
   }
 }

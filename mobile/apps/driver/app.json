@@ -21,8 +21,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Share your location so you can go online and receive nearby ASAP jobs.",
         "NSFaceIDUsageDescription": "Unlock the Cargo One Driver app with Face ID",
-        "NSCameraUsageDescription": "Capture delivery photos to prove the cargo was delivered.",
-        "NSPhotoLibraryUsageDescription": "Attach existing photos as proof of delivery."
+        "NSCameraUsageDescription": "Take photos of your documents for verification and capture proof-of-delivery photos.",
+        "NSPhotoLibraryUsageDescription": "Choose photos of your documents for verification and attach proof-of-delivery photos."
       }
     },
     "android": {
@@ -48,8 +48,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Capture delivery photos to prove the cargo was delivered.",
-          "photosPermission": "Attach existing photos as proof of delivery."
+          "cameraPermission": "Take photos of your documents for verification and capture proof-of-delivery photos.",
+          "photosPermission": "Choose photos of your documents for verification and attach proof-of-delivery photos."
         }
       ]
     ],

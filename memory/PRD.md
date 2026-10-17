@@ -564,3 +564,4 @@ Each future phase must start from the locked baseline.
 - Open: emergent-main.js (preview console/network logger) still in index.html; Cloudflare Insights beacon injected at edge (not in repo).
 - Added Cloudflare cookie-free visit statistics sentence to Privacy (s.7) and Cookie Policy. emergent-main.js kept by user decision.
 - Driver app Documents.tsx: in-app photo upload (camera/library, q0.5, data:image/jpeg prefix) via DriverAPI.submitDoc; Upload/Replace/Resubmit labels; per-doc uploading/success/error; Submit for review (resubmitVerification) when status=changes_requested. Typecheck clean.
+- Customer app.json owner/slug/EAS projectId set for push; Driver AsapTrackingBridge scheduled-booking fallback (travelling/arrived/collected/on_route, ASAP priority); Bids reviews modal SafeAreaProvider; Driver camera/photos permission wording updated.
