@@ -8,10 +8,10 @@ import React, { useState } from "react";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import {
-  Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View,
+  KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View,
 } from "react-native";
 import {
-  Page, PageHeader, Section, Input, Label, PrimaryButton, SecondaryButton,
+  Page, PageHeader, Section, Input, Label, PrimaryButton,
   Caption, colors, space,
 } from "../ui";
 import { useAuth } from "../AuthContext";
@@ -89,20 +89,6 @@ export default function LoginScreen({ navigation }: P) {
             testID="login-submit-button"
           />
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <SecondaryButton
-            title="Sign in with Passkey"
-            onPress={() =>
-              Alert.alert("Coming soon", "Passkey sign-in arrives in the next Driver release.")
-            }
-            testID="login-passkey-button"
-          />
-
           <Pressable
             onPress={() => navigation.navigate("ForgotPassword")}
             style={{ marginTop: space[5], alignSelf: "center" }}
@@ -135,14 +121,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-  dividerRow: {
-    marginTop: space[4],
-    marginBottom: space[3],
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space[3],
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { fontSize: 11, fontWeight: "700", letterSpacing: 1, color: colors.inkFaint },
   link: { fontSize: 14, fontWeight: "700", color: colors.brand },
 });

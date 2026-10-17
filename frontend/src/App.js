@@ -15,6 +15,7 @@ import FAQ from "@/pages/marketing/FAQ";
 import Contact from "@/pages/marketing/Contact";
 import TrustSafety from "@/pages/marketing/TrustSafety";
 import About from "@/pages/marketing/About";
+import Legal from "@/pages/marketing/Legal";
 
 // Public app pages (no chrome)
 import Settings from "@/pages/Settings";
@@ -124,6 +125,9 @@ export default function App() {
             <Route path="/contact" element={<Marketing Page={Contact} />} />
             <Route path="/trust-safety" element={<Marketing Page={TrustSafety} />} />
             <Route path="/about" element={<Marketing Page={About} />} />
+            <Route path="/terms" element={<Marketing Page={() => <Legal slug="terms" />} />} />
+            <Route path="/privacy" element={<Marketing Page={() => <Legal slug="privacy" />} />} />
+            <Route path="/cookies" element={<Marketing Page={() => <Legal slug="cookies" />} />} />
 
             {/* Auth */}
             <Route path="/auth/welcome" element={<Welcome />} />

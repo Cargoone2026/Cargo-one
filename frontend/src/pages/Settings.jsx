@@ -25,7 +25,7 @@ import { Button } from "@/components/ui-portal/Button";
  * web migration; restored in Phase 2D. Delete-account uses the
  * pre-existing `POST /api/auth/me/delete` backend contract.
  */
-const CONTENT = {
+export const LEGAL_CONTENT = {
   terms: {
     title: "Terms & Conditions",
     body: `Welcome to Cargo One. By using our platform you agree to the following terms.
@@ -205,7 +205,7 @@ export default function Settings() {
     );
   }
 
-  const content = slug ? CONTENT[slug] : null;
+  const content = slug ? LEGAL_CONTENT[slug] : null;
   if (content) {
     return (
       <ShellPage title={content.title} onBack={() => navigate(-1)} testID={`settings-${slug}-page`}>

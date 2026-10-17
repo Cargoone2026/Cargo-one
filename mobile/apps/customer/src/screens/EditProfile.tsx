@@ -142,7 +142,7 @@ export function EditProfileScreen({ navigation }: P) {
               <Text style={styles.lockPill}>LOCKED</Text>
             </View>
             <Text style={[typography.small, { marginTop: 4 }]}>
-              Email changes require a verified email-change flow (coming soon).
+              To change your email address, contact support@cargoone.co.uk.
             </Text>
           </View>
 

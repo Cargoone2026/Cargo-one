@@ -307,7 +307,7 @@ export default function DriverProfile() {
                 </span>
               </div>
               <p className="mt-1 text-[12px] text-[#6B7280]">
-                Email changes require a verified email-change flow (coming soon).
+                To change your email address, contact support@cargoone.co.uk.
               </p>
             </div>
 

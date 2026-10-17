@@ -20,7 +20,9 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "Sign in to CargoOne with Face ID.",
         "NSLocationWhenInUseUsageDescription": "Show your pickup on the map and track your driver in real time.",
-        "LSApplicationQueriesSchemes": ["maps", "comgooglemaps", "http", "https"]
+        "LSApplicationQueriesSchemes": ["maps", "comgooglemaps", "http", "https"],
+        "NSCameraUsageDescription": "Take photos of your items so drivers know what to expect.",
+        "NSPhotoLibraryUsageDescription": "Attach photos of your items and your profile picture."
       }
     },
     "android": {
@@ -34,6 +36,13 @@
     "plugins": [
       ["../../plugins/withCargoOneiOSFixes", { "deploymentTarget": "15.1" }],
       ["@rnmapbox/maps", {}],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Take photos of your items so drivers know what to expect.",
+          "photosPermission": "Attach photos of your items and your profile picture."
+        }
+      ],
       [
         "expo-location",
         {

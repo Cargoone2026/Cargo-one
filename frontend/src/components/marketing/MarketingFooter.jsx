@@ -34,9 +34,9 @@ const COLUMNS = [
   {
     heading: "Legal",
     links: [
-      { label: "Privacy Policy", href: "/settings/privacy" },
-      { label: "Terms of Service", href: "/settings/terms" },
-      { label: "Cookie Policy", href: "/settings/cookies" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Cookie Policy", href: "/cookies" },
       { label: "FAQ", href: "/faq" },
     ],
   },
@@ -203,19 +203,19 @@ export function MarketingFooter() {
             &amp; Wales.
           </p>
           <div className="flex items-center gap-2 text-[12px]">
-            <Link to="/settings/terms" className="text-white/65 hover:text-white">
+            <Link to="/terms" className="text-white/65 hover:text-white">
               Terms
             </Link>
             <span className="text-white/30">•</span>
             <Link
-              to="/settings/privacy"
+              to="/privacy"
               className="text-white/65 hover:text-white"
             >
               Privacy
             </Link>
             <span className="text-white/30">•</span>
             <Link
-              to="/settings/cookies"
+              to="/cookies"
               className="text-white/65 hover:text-white"
             >
               Cookies
