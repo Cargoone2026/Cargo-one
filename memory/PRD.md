@@ -555,3 +555,10 @@ Each future phase must start from the locked baseline.
 - Admin "Delete user" (2026-06): `DELETE /admin/users/{id}` (admin only; 403 admin/self; 409 via `_active_booking_for` = unfinished booking either side excluding cancelled_at/deleted_at, or assigned accepted/confirmed job). Reuses `_anonymise_user` (extracted verbatim from `/auth/me/delete`, which now has the same 409 guard). Soft-deletes customer's posted/accepted jobs without booking; pending bids → withdrawn. Users list `include_deleted`; missing-phone list/nudge + admin stats user counts exclude deleted; approve/request-changes 409 on deleted. Web Users.jsx: Delete user + Show deleted.
 - One-off prod test clean-up (abdulbasit2016diesel@gmail.com: 2 bookings + 2 jobs) ran and account deleted; temporary route + button removed. Audit record kept in `admin_oneoff_runs` (`test_cleanup_abdulbasit_2026_08_02`).
 - App builds (Customer 4 / Driver 3), code only: Driver Register (role driver, phone required, same validator as backend, T&C/Privacy links, lands on Home pending-approval) + ForgotPassword (core requestPasswordReset); Driver DeleteAccount; core api.ts keeps `{code,message}` 422 details as ApiError.code/message; PostJob "load too large" note for vehicle_capacity_exceeded/weight_too_large/volume_too_large/too_many_items; app.json withCargoOneiOSFixes `deploymentTarget: "15.1"` (plugin now sets Podfile.properties + pbxproj IPHONEOS_DEPLOYMENT_TARGET on prebuild); customer expo-location Always keys disabled (false) + no background mode.
+
+## Oct 2026 — Analytics removal
+- Removed PostHog from frontend/public/index.html (no analytics/session recording).
+- Cookie & Privacy policies (Settings.jsx LEGAL, used by /cookies /privacy) now state essential cookies only.
+- Terms: "We keep a cancellation fee (currently 20% of the booking fee, ...)" (admin setting).
+- CookieBanner is now a simple essential-only notice (Got it + Cookie Policy link, key cargoone.cookie_notice.v2).
+- Open: emergent-main.js (preview console/network logger) still in index.html; Cloudflare Insights beacon injected at edge (not in repo).

@@ -52,7 +52,7 @@ Cargo One is an online marketplace. We connect customers who need items moved ("
 
 5. CANCELLATIONS AND REFUNDS (CUSTOMERS)
 - Before a driver has accepted your job, you can cancel free of charge and any booking fee you paid is refunded in full.
-- After a driver has accepted, you can still cancel in the app up until delivery. A cancellation fee is kept from the booking fee you paid (currently 20% of that amount, never more than the amount paid) and the rest is refunded to your card. The app shows the exact fee and refund before you confirm.
+- After a driver has accepted, you can still cancel in the app up until delivery. We keep a cancellation fee (currently 20% of the booking fee, never more than the amount paid) and the rest is refunded to your card. The app shows the exact fee and refund before you confirm.
 - Refunds go back to the original card through Stripe and normally arrive within 5 to 10 working days, depending on your bank.
 - Once a job has been delivered it can no longer be cancelled or refunded in the app. If something went wrong, contact support@cargoone.co.uk.
 
@@ -111,14 +111,13 @@ Cargo One (cargoone.co.uk) is the data controller for the personal data describe
 - Messages between customer and driver, and ratings and reviews.
 - Payment information: payments are processed by Stripe. We receive payment confirmations, amounts and refund status, but we never see or store your full card number.
 - Device push tokens, so we can send booking and job notifications.
-- Technical data: basic server logs (for example IP address, device and browser type, and error details) used for security and troubleshooting. On the website we also collect usage analytics (see section 7).
+- Technical data: basic server logs (for example IP address, device and browser type, and error details) used for security and troubleshooting.
 
 3. WHY WE USE IT AND OUR LAWFUL BASES (UK GDPR)
 - To create your account, take bookings, match customers with drivers, show tracking, handle payments and refunds, and provide support. Lawful basis: performance of our contract with you.
 - To verify drivers, keep the platform safe and prevent fraud and misuse. Lawful basis: our legitimate interests in running a safe marketplace, and legal obligations where they apply.
 - To keep financial and tax records. Lawful basis: legal obligation.
 - To send service messages (booking updates, receipts, password resets) by email and push notification. Lawful basis: performance of our contract.
-- To understand how the website is used and improve it. Lawful basis: legitimate interests (and consent where required for cookies).
 - Location sharing in the apps uses your device permission, which you can turn off at any time in your phone's settings.
 
 4. WHO WE SHARE IT WITH
@@ -129,7 +128,6 @@ Cargo One (cargoone.co.uk) is the data controller for the personal data describe
 - Our email provider, for transactional emails such as receipts and password resets.
 - Expo and Apple push notification services, to deliver app notifications.
 - Our hosting and infrastructure providers, who store and run the service on our behalf.
-- Our website analytics provider (see section 7).
 - The police or other authorities where the law requires it.
 We do not sell your personal data, and we do not share it with advertisers.
 
@@ -142,8 +140,8 @@ We do not sell your personal data, and we do not share it with advertisers.
 6. DELETING YOUR ACCOUNT
 You can delete your account in the app (Settings → Delete account) or on the website (Settings → Delete account), as long as you do not have an active booking. When you delete your account we remove your documents and notifications and anonymise your personal details (your name, email address, phone number and profile photo are removed, and your name is replaced with "Deleted user" on past bookings, messages and reviews). Booking and payment records are kept in anonymised form where the law requires us to keep financial records. You will no longer be able to sign in.
 
-7. COOKIES AND ANALYTICS
-We use essential cookies and browser storage to keep you signed in and secure. On the website we also use PostHog analytics, which may set cookies and record how pages are used (including session recordings), to help us improve the site. See our Cookie Policy at cargoone.co.uk/cookies. The apps do not use advertising trackers.
+7. COOKIES
+We only use essential cookies and browser storage to keep you signed in and secure. We do not use analytics or advertising cookies, and the apps do not use advertising trackers. See our Cookie Policy at cargoone.co.uk/cookies.
 
 8. YOUR RIGHTS
 Under UK GDPR you have the right to access your data, correct it, have it erased, restrict or object to how we use it, and receive a copy in a portable format. To use any of these rights, email support@cargoone.co.uk. We will reply within one month. If you are unhappy with how we handle your data you can complain to the Information Commissioner's Office (ico.org.uk).
@@ -152,7 +150,7 @@ Under UK GDPR you have the right to access your data, correct it, have it erased
 Cargo One is not intended for anyone under 18, and we do not knowingly collect data from children.
 
 10. INTERNATIONAL TRANSFERS
-Some of our providers (for example Stripe, Google, Mapbox and our hosting and analytics providers) may process data outside the UK. Where that happens we rely on appropriate safeguards such as the UK International Data Transfer Agreement, the UK Addendum to the EU Standard Contractual Clauses, or UK adequacy regulations.
+Some of our providers (for example Stripe, Google, Mapbox and our hosting providers) may process data outside the UK. Where that happens we rely on appropriate safeguards such as the UK International Data Transfer Agreement, the UK Addendum to the EU Standard Contractual Clauses, or UK adequacy regulations.
 
 11. CHANGES TO THIS POLICY
 We may update this policy. If we make important changes we will tell you in the app or by email. The "Last updated" date shows the current version.
@@ -165,13 +163,10 @@ Cargo One — cargoone.co.uk — support@cargoone.co.uk`,
     body: `Last updated: 17 October 2026
 
 ESSENTIAL
-Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember your cookie choice. The site cannot work without these.
+Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember that you have seen our cookie notice. The site cannot work without these, so they do not need your consent.
 
-ANALYTICS
-On the website we use PostHog analytics to understand how pages are used, which may set cookies and record page interactions (session recordings). This helps us fix problems and improve the site.
-
-ADVERTISING
-We do not use advertising cookies, and the apps do not use advertising trackers.
+ANALYTICS AND ADVERTISING
+We do not use analytics, tracking or advertising cookies on the website, and the apps do not use advertising trackers.
 
 QUESTIONS
 Contact support@cargoone.co.uk. See also our Privacy Policy at cargoone.co.uk/privacy.`,
