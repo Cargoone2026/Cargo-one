@@ -48,17 +48,17 @@ export default function RegisterScreen({ navigation }: P) {
   }
 
   return (
-    <Page testID="register-screen">
-      <PageHeader
-        title="Create driver account"
-        subtitle="Join Cargo One and start earning."
-        onBack={() => navigation.goBack()}
-        large
-      />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Page testID="register-screen">
+        <PageHeader
+          title="Create driver account"
+          subtitle="Join Cargo One and start earning."
+          onBack={() => navigation.goBack()}
+          large
+        />
         <Section gap={0} style={{ marginTop: space[2] }}>
           <Label>Full name</Label>
-          <Input value={name} onChangeText={setName} autoComplete="name" textContentType="name" editable={!submitting} testID="register-name" />
+          <Input value={name} onChangeText={setName} editable={!submitting} testID="register-name" />
           <Label>Email</Label>
           <Input
             value={email}
@@ -66,8 +66,6 @@ export default function RegisterScreen({ navigation }: P) {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="email"
-            textContentType="username"
             placeholder="you@example.com"
             editable={!submitting}
             testID="register-email"
@@ -77,8 +75,6 @@ export default function RegisterScreen({ navigation }: P) {
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
-            autoComplete="tel"
-            textContentType="telephoneNumber"
             placeholder="07700 900 123"
             editable={!submitting}
             testID="register-phone"
@@ -90,8 +86,6 @@ export default function RegisterScreen({ navigation }: P) {
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
-            autoComplete="new-password"
-            textContentType="newPassword"
             editable={!submitting}
             testID="register-password"
           />
@@ -125,8 +119,8 @@ export default function RegisterScreen({ navigation }: P) {
             </Caption>
           </Pressable>
         </Section>
-      </KeyboardAvoidingView>
-    </Page>
+      </Page>
+    </KeyboardAvoidingView>
   );
 }
 
