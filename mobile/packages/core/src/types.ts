@@ -149,6 +149,7 @@ export interface Bid {
   eta_hours?: number;
   verified_driver?: boolean;
   total_jobs?: number;
+  driver_photo?: string | null;
   status: string;
   created_at: string;
 }

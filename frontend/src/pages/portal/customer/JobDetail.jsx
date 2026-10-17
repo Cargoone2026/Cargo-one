@@ -229,15 +229,19 @@ export default function CustomerJobDetail() {
                       <Link
                         to={`/driver-profile/${b.driver_id}`}
                         data-testid={`bid-driver-link-${b.id}`}
-                        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white hover:opacity-90"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#111111] text-[16px] font-bold text-white hover:opacity-90"
                         aria-label="View driver profile"
                       >
-                        {(b.driver_name || "D")[0]?.toUpperCase()}
+                        {b.driver_photo ? (
+                          <img src={b.driver_photo} alt="" className="h-full w-full object-cover" data-testid={`bid-driver-photo-${b.id}`} />
+                        ) : (
+                          (b.driver_name || "D")[0]?.toUpperCase()
+                        )}
                       </Link>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <p className="text-[14px] font-semibold text-[#111111]">
-                            Driver #{(b.driver_id || "").slice(0, 6)}
+                            {b.driver_name || "Driver"}
                           </p>
                           {b.verified_driver && (
                             <span

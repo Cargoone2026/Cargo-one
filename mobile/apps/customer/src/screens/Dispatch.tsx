@@ -41,6 +41,7 @@ import {
 import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
+import { DriverCard } from "../components/DriverCard";
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || "");
 
@@ -294,6 +295,9 @@ export function DispatchScreen({ route, navigation }: P) {
     }
   }, [bookingId, cancelBusy, navigation]);
 
+  const collected = ["collected", "on_route"].includes(String(furthestStatus(booking?.status, dispatch?.status) || ""));
+  const driverParty = (s.variant === "accepted" || active) ? booking?.other_party : null;
+
   const distanceMiles = booking?.job?.distance_miles ?? null;
   const searchRadius = dispatch?.current_search_radius_miles ?? null;
   const eta = tracking?.eta_minutes ?? null;
@@ -427,6 +431,15 @@ export function DispatchScreen({ route, navigation }: P) {
             ) : null}
           </View>
 
+          {driverParty ? (
+            <DriverCard
+              name={driverParty.name || booking?.assigned_driver_name || "Driver"}
+              photo={driverParty.profile_photo}
+              rating={driverParty.rating ?? booking?.assigned_driver_rating ?? null}
+              jobs={driverParty.total_jobs ?? 0}
+              phone={driverParty.phone}
+            />
+          ) : null}
           {s.variant === "payment_required" && bookingId ? (
             <PrimaryButton
               title={`Retry payment${price != null ? ` · ${money(Number(price))}` : ""}`}
@@ -440,6 +453,11 @@ export function DispatchScreen({ route, navigation }: P) {
               onPress={() => navigation.navigate("BookingDetail", { bookingId, initialTab: "chat" })}
               testID="asap-message-driver"
             />
+          ) : null}
+          {collected && s.variant === "active" ? (
+            <Text style={{ color: colors.inkMuted, fontSize: 12, textAlign: "center", marginTop: 8 }} testID="asap-cancel-unavailable-note">
+              Items collected – cancellation is no longer available. Contact support if there's a problem.
+            </Text>
           ) : null}
           {cancelable ? (
             <View style={{ marginTop: 8, gap: 6 }}>

@@ -42,7 +42,7 @@ function Row({ label, value, testId, Icon }) {
   );
 }
 
-export function AcceptanceInfo({ job, dense = false, testIdPrefix = "acceptance" }) {
+export function AcceptanceInfo({ job, dense = false, testIdPrefix = "acceptance", title = "Before you accept" }) {
   if (!job || typeof job !== "object") return null;
 
   const isRecovery = (
@@ -80,7 +80,7 @@ export function AcceptanceInfo({ job, dense = false, testIdPrefix = "acceptance"
       {!dense && (
         <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.6px] text-[#6B7280]">
           <Info className="h-3.5 w-3.5 text-[#6B7280]" />
-          Before you accept
+          {title}
         </div>
       )}
 

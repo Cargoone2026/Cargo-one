@@ -1473,7 +1473,7 @@ async def public_profile(user_id: str, requester: dict = Depends(get_current_use
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Not found")
-    pub = user_to_public(u)
+    pub = _apply_finished_count(user_to_public(u), await _finished_job_counts([user_id]))
     # R37 / R69 — This endpoint is now called by customers pre-acceptance
     # (DriverReviewsSheet). Redact private contact + home-address fields
     # unless the caller is the profile owner or an admin. Rating,
@@ -2741,6 +2741,28 @@ def _driver_is_capable(driver: dict, job: dict) -> bool:
 
 # Delivered/finished bookings: customer cancel & refund is refused (409).
 DELIVERED_BOOKING_STATUSES = ("pod_uploaded", "delivered", "completed")
+COLLECTED_BOOKING_STATUSES = ("collected", "on_route")
+COLLECTED_NO_CANCEL_MSG = "Your items have been collected, so this booking can no longer be cancelled. Please contact support@cargoone.co.uk."
+
+
+async def _finished_job_counts(driver_ids: list) -> dict:
+    ids = [i for i in set(driver_ids) if i]
+    if not ids:
+        return {}
+    rows = await db.bookings.aggregate([
+        {"$match": {"driver_id": {"$in": ids}, "status": {"$in": list(DELIVERED_BOOKING_STATUSES)}}},
+        {"$group": {"_id": "$driver_id", "n": {"$sum": 1}}},
+    ]).to_list(len(ids))
+    return {r["_id"]: r["n"] for r in rows}
+
+
+def _apply_finished_count(pub: Optional[dict], counts: dict) -> Optional[dict]:
+    # Customer-facing jobs count + Verified badge use finished bookings, computed on read.
+    if pub and pub.get("role") == "driver":
+        n = counts.get(pub["id"], 0)
+        pub["total_jobs"] = n
+        pub["verified_driver"] = bool(pub.get("documents_verified") and pub.get("status") == "active" and n >= 1)
+    return pub
 
 # ---------------------------------------------------------------------------
 # ASAP job offer alerts — push-only (no inbox record) to online drivers inside
@@ -3391,11 +3413,13 @@ async def list_bids(job_id: str, user: dict = Depends(get_current_user)):
     drivers = await db.users.find(
         {"id": {"$in": driver_ids}}, {"_id": 0, "password_hash": 0},
     ).to_list(len(driver_ids) or 1) if driver_ids else []
-    dmap = {d["id"]: user_to_public(d) for d in drivers}
+    counts = await _finished_job_counts(driver_ids)
+    dmap = {d["id"]: _apply_finished_count(user_to_public(d), counts) for d in drivers}
     for b in bids:
         d = dmap.get(b["driver_id"])
         b["verified_driver"] = bool(d and d.get("verified_driver"))
         b["total_jobs"] = d.get("total_jobs", 0) if d else 0
+        b["driver_photo"] = d.get("profile_photo") if d else None
         # R69 — expose the driver's aggregate review count so the customer
         # can see it BEFORE accepting a bid. Individual review comments
         # remain fetchable via GET /api/users/{driver_id}/profile.
@@ -4069,6 +4093,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         {"id": {"$in": other_ids}}, {"_id": 0, "password_hash": 0}
     ).to_list(len(other_ids) or 1) if other_ids else []
     users_map = {u["id"]: u for u in users}
+    counts = await _finished_job_counts(list(users_map)) if user["role"] == "customer" else {}
     for b in bookings:
         include_private = b.get("payment_status") == "paid"
         job = jobs_map.get(b["job_id"])
@@ -4082,7 +4107,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         if include_private:
             other_id = b.get("driver_id") if user["role"] == "customer" else b.get("customer_id")
             other = users_map.get(other_id)
-            b["other_party"] = user_to_public(other) if other else None
+            b["other_party"] = _apply_finished_count(user_to_public(other), counts) if other else None
     return bookings
 
 
@@ -4111,7 +4136,8 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
     if include_private and driver_accepted:
         other_id = b.get("driver_id") if user["id"] == b.get("customer_id") else b.get("customer_id")
         other = await db.users.find_one({"id": other_id}, {"_id": 0, "password_hash": 0}) if other_id else None
-        b["other_party"] = user_to_public(other) if other else None
+        counts = await _finished_job_counts([other_id]) if other and other.get("role") == "driver" else {}
+        b["other_party"] = _apply_finished_count(user_to_public(other), counts) if other else None
     else:
         # Explicit null — the front-end knows to hide the "Contact driver" UI.
         b["other_party"] = None
@@ -5688,6 +5714,8 @@ async def customer_cancel_booking(
             raise HTTPException(status_code=403, detail="Not your booking")
         if b.get("status") in DELIVERED_BOOKING_STATUSES:
             raise HTTPException(status_code=409, detail="This booking has been delivered and can no longer be cancelled or refunded")
+        if b.get("status") in COLLECTED_BOOKING_STATUSES:
+            raise HTTPException(status_code=409, detail=COLLECTED_NO_CANCEL_MSG)
         if b.get("payment_status") == "paid":
             # Reuse the full-fat refund path.
             return await customer_cancel_and_refund(booking_id, {}, user)  # type: ignore
@@ -5867,6 +5895,8 @@ async def _customer_cancel_and_refund_impl(
         raise HTTPException(status_code=404, detail="Booking not found")
     if b.get("customer_id") != user["id"]:
         raise HTTPException(status_code=403, detail="Not your booking")
+    if b.get("status") in COLLECTED_BOOKING_STATUSES:
+        raise HTTPException(status_code=409, detail=COLLECTED_NO_CANCEL_MSG)
 
     job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
     if not job:
@@ -7597,7 +7627,7 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
     for b in bookings:
         b.pop("_id", None)
         st = b.get("status")
-        if st == "completed":
+        if st in DELIVERED_BOOKING_STATUSES:
             completed.append(b)
         elif st in ("cancelled",) or b.get("cancelled_at") or b.get("deleted_at"):
             pass
@@ -7615,7 +7645,7 @@ async def driver_dashboard(user: dict = Depends(require_role("driver"))):
     def _completed_since(cutoff: datetime) -> list[dict]:
         out = []
         for b in completed:
-            ts = b.get("completed_at") or b.get("updated_at") or b.get("created_at")
+            ts = b.get("completed_at") or b.get("delivered_at") or b.get("created_at")
             if not ts:
                 continue
             try:

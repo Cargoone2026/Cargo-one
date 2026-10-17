@@ -11,12 +11,11 @@
  * order verbatim while keeping the existing working ActiveJobMap.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   MapPin,
-  Phone,
   Sparkles,
   UserCheck,
   Receipt,
@@ -27,7 +26,6 @@ import {
   Scale,
   Package as PackageIcon,
   Ruler,
-  Star,
   RotateCcw,
 } from "lucide-react-native";
 import {
@@ -46,13 +44,15 @@ import { ActiveJobMap } from "../ActiveJobMap";
 import { RouteMap } from "../components/RouteMap";
 import { BookingChatTab } from "../components/BookingChatTab";
 import { BookingPodTab } from "../components/BookingPodTab";
+import { DriverCard } from "../components/DriverCard";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 
 type Tab = "overview" | "chat" | "pod";
 
-const CANCELLATION_STATUSES = new Set(["accepted", "deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route"]);
+const CANCELLATION_STATUSES = new Set(["accepted", "deposit_paid", "confirmed", "travelling", "arrived"]);
+const COLLECTED_STATUSES = new Set(["collected", "on_route"]);
 
 export function BookingDetailScreen({ route, navigation }: P) {
   const { bookingId, initialTab } = route.params;
@@ -275,12 +275,12 @@ export function BookingDetailScreen({ route, navigation }: P) {
                 </View>
               </View>
 
-              {/* Before you accept */}
+              {/* Vehicle */}
               {vehicleName ? (
-                <View style={styles.card} testID="before-you-accept-card">
+                <View style={styles.card} testID="vehicle-card">
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Info size={16} color={colors.inkMuted} />
-                    <Text style={typography.micro}>BEFORE YOU ACCEPT</Text>
+                    <Text style={typography.micro}>VEHICLE</Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 }}>
                     <View style={styles.vehIconBadge}><Truck size={20} color={colors.brand} /></View>
@@ -330,37 +330,7 @@ export function BookingDetailScreen({ route, navigation }: P) {
 
               {/* Driver card */}
               {contactVisible(b) && driver ? (
-                <View style={styles.card} testID="driver-card">
-                  <Text style={typography.micro}>YOUR DRIVER</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-                    <View style={styles.driverAvatar}>
-                      <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
-                        {driverName.slice(0, 1).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={typography.cardTitle}>{driverName}</Text>
-                      {driverRating != null ? (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
-                          <Star size={12} color={colors.accent} fill={colors.accent} />
-                          <Text style={typography.small}>
-                            {Number(driverRating).toFixed(1)} · {driverJobs} jobs
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {driverPhone ? (
-                      <Pressable
-                        onPress={() => Linking.openURL(`tel:${driverPhone}`)}
-                        testID="driver-call"
-                        hitSlop={8}
-                        style={styles.callBtn}
-                      >
-                        <Phone size={20} color="#FFFFFF" />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
+                <DriverCard name={driverName} photo={driver.profile_photo} rating={driverRating} jobs={driverJobs} phone={driverPhone} />
               ) : null}
 
               {/* Pricing */}
@@ -408,6 +378,15 @@ export function BookingDetailScreen({ route, navigation }: P) {
                 {(() => {
                   const isTerminal = isDelivered || b.status === "cancelled" || !!b.cancelled_at;
                   if (isTerminal) return null;
+                  if (COLLECTED_STATUSES.has(b.status)) {
+                    return (
+                      <View style={styles.infoNote} testID="cancel-unavailable-note">
+                        <Text style={{ fontSize: 13, color: colors.inkMuted }}>
+                          Items collected – cancellation is no longer available. Contact support if there's a problem.
+                        </Text>
+                      </View>
+                    );
+                  }
                   const driverAccepted = !!(b.assigned_driver_id || job?.assigned_driver_id);
                   const timing = b.service_timing || job?.service_timing;
                   const isAsap = timing === "asap";
@@ -574,13 +553,12 @@ const styles = StyleSheet.create({
   },
   chipWarnText: { fontSize: 13, fontWeight: "500", color: "#92400E" },
   photo: { width: 120, height: 120, borderRadius: radius.base, backgroundColor: colors.bgSecondary },
-  driverAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.brand, alignItems: "center", justifyContent: "center",
-  },
-  callBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.success, alignItems: "center", justifyContent: "center",
+  infoNote: {
+    padding: 12,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
   },
   divider: { height: 1, backgroundColor: colors.hairline, marginVertical: 6 },
 });

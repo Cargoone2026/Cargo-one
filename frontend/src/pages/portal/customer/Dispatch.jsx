@@ -350,6 +350,11 @@ function TrackingBody({ booking, tracking, dispatch, phase, onOpenCancel }) {
           </button>
         ) : null}
       </div>
+      {phase === "on_route" || phase === "collected" ? (
+        <p className="text-center text-[12px] text-neutral-500" data-testid="dispatch-cancel-unavailable-note">
+          Items collected – cancellation is no longer available. Contact support if there's a problem.
+        </p>
+      ) : null}
     </div>
   );
 }

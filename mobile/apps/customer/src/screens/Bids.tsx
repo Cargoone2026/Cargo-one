@@ -9,6 +9,7 @@ import { Bid, CustomerAPI, DriverProfile, money, Review } from "@cargoone/core";
 import { Star, X } from "lucide-react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../App";
+import { DriverAvatar } from "../components/DriverCard";
 import { colors, radius, typography } from "../theme";
 import { EmptyState, Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 
@@ -68,7 +69,8 @@ export function BidsScreen({ route, navigation }: P) {
           ) : (
             bids.map((item) => (
               <View key={item.id} style={styles.card} testID={`bid-card-${item.id}`}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <DriverAvatar name={item.driver_name || "Driver"} photo={item.driver_photo} />
                   <View style={{ flex: 1 }}>
                     <Text style={typography.cardTitle}>{item.driver_name || "Driver"}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>

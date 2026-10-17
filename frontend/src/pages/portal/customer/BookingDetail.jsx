@@ -452,7 +452,14 @@ export default function CustomerBookingDetail() {
       {/* R35 — Cancellation policy banner. Shown on any paid, non-cancelled
           booking regardless of job type (ASAP / scheduled / fixed / bidding).
           Wording depends on whether a driver has accepted yet. */}
-      {b.payment_status === "paid" && !b.cancelled_at && !["completed", "pod_uploaded", "delivered"].includes(b.status) ? (
+      {["collected", "on_route"].includes(b.status) && !b.cancelled_at ? (
+        <div
+          className="mx-4 mt-3 rounded-[10px] bg-[#F1F5F9] px-3 py-2 text-[12px] leading-snug text-[#334155] md:mx-8"
+          data-testid="cancel-unavailable-note"
+        >
+          Items collected – cancellation is no longer available. Contact support if there's a problem.
+        </div>
+      ) : b.payment_status === "paid" && !b.cancelled_at && !["completed", "pod_uploaded", "delivered"].includes(b.status) ? (
         <div
           className={`mx-4 mt-3 rounded-[10px] px-3 py-2 md:mx-8 ${
             b.assigned_driver_id
@@ -634,7 +641,7 @@ export default function CustomerBookingDetail() {
               />
             </div>
 
-            <AcceptanceInfo job={job} testIdPrefix="customer-booking-accept" />
+            <AcceptanceInfo job={job} testIdPrefix="customer-booking-accept" title="Vehicle" />
 
             <JobExtras job={job} />
 
@@ -652,8 +659,12 @@ export default function CustomerBookingDetail() {
                 className="flex items-center gap-3 rounded-[12px] border border-[#E5E7EB] p-3"
                 data-testid="party-card"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white">
-                  {(b.other_party.name || "?")[0]?.toUpperCase()}
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#111111] text-[16px] font-bold text-white">
+                  {b.other_party.profile_photo ? (
+                    <img src={b.other_party.profile_photo} alt="" className="h-full w-full object-cover" data-testid="party-card-photo" />
+                  ) : (
+                    (b.other_party.name || "?")[0]?.toUpperCase()
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
