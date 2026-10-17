@@ -141,7 +141,7 @@ We do not sell your personal data, and we do not share it with advertisers.
 You can delete your account in the app (Settings → Delete account) or on the website (Settings → Delete account), as long as you do not have an active booking. When you delete your account we remove your documents and notifications and anonymise your personal details (your name, email address, phone number and profile photo are removed, and your name is replaced with "Deleted user" on past bookings, messages and reviews). Booking and payment records are kept in anonymised form where the law requires us to keep financial records. You will no longer be able to sign in.
 
 7. COOKIES
-We only use essential cookies and browser storage to keep you signed in and secure. We do not use analytics or advertising cookies, and the apps do not use advertising trackers. See our Cookie Policy at cargoone.co.uk/cookies.
+We only use essential cookies and browser storage to keep you signed in and secure. We do not use analytics or advertising cookies, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you. See our Cookie Policy at cargoone.co.uk/cookies.
 
 8. YOUR RIGHTS
 Under UK GDPR you have the right to access your data, correct it, have it erased, restrict or object to how we use it, and receive a copy in a portable format. To use any of these rights, email support@cargoone.co.uk. We will reply within one month. If you are unhappy with how we handle your data you can complain to the Information Commissioner's Office (ico.org.uk).
@@ -166,7 +166,7 @@ ESSENTIAL
 Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember that you have seen our cookie notice. The site cannot work without these, so they do not need your consent.
 
 ANALYTICS AND ADVERTISING
-We do not use analytics, tracking or advertising cookies on the website, and the apps do not use advertising trackers.
+We do not use analytics, tracking or advertising cookies on the website, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you.
 
 QUESTIONS
 Contact support@cargoone.co.uk. See also our Privacy Policy at cargoone.co.uk/privacy.`,
