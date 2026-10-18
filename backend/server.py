@@ -3471,7 +3471,12 @@ async def accept_bid(bid_id: str, user: dict = Depends(require_role("customer"))
         raise HTTPException(status_code=403, detail="Not your job")
     if job["status"] != "posted":
         raise HTTPException(status_code=400, detail="Job already assigned")
-    if bid.get("status") != "pending" or bid["driver_id"] in (job.get("blocked_driver_ids") or []):
+    bid_driver = await db.users.find_one({"id": bid["driver_id"]}, {"_id": 0, "status": 1, "deleted_at": 1})
+    if (
+        bid.get("status") != "pending"
+        or bid["driver_id"] in (job.get("blocked_driver_ids") or [])
+        or not bid_driver or bid_driver.get("deleted_at") or bid_driver.get("status") != "active"
+    ):
         raise HTTPException(status_code=409, detail="This bid is no longer available. Please choose another bid.")
 
     await db.jobs.update_one(
@@ -6589,11 +6594,16 @@ async def driver_release_job(job_id: str, user: dict = Depends(require_role("dri
         {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "driver_released"}},
     )
     if job.get("pricing_type") == "bidding":
-        blocked = list(set(job.get("blocked_driver_ids") or []) | {user["id"]})
-        await db.bids.update_many(
-            {"job_id": job_id, "driver_id": {"$nin": blocked}, "status": "rejected"},
-            {"$set": {"status": "pending"}},
+        blocked = set(job.get("blocked_driver_ids") or []) | {user["id"]}
+        rejected_ids = await db.bids.distinct("driver_id", {"job_id": job_id, "status": "rejected"})
+        eligible = await db.users.distinct(
+            "id", {"id": {"$in": [d for d in rejected_ids if d not in blocked]}, "status": "active", "deleted_at": None},
         )
+        if eligible:
+            await db.bids.update_many(
+                {"job_id": job_id, "driver_id": {"$in": eligible}, "status": "rejected"},
+                {"$set": {"status": "pending"}},
+            )
     try:
         await push_notification(
             job["customer_id"],
