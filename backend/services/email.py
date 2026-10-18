@@ -1666,3 +1666,24 @@ async def send_cash_on_delivery_reminder(
         booking_id=booking.get("id"),
         user_id=user.get("id"),
     )
+
+
+async def send_driver_problem_report(db, *, booking: dict, issue: dict) -> dict:
+    from html import escape as html_escape
+    to = "support@cargoone.co.uk"
+    ref = booking.get("id") or ""
+    loc = f"{issue.get('lat')}, {issue.get('lng')}" if issue.get("lat") is not None else "Unknown"
+    rows = [
+        ("Booking", ref), ("Driver", issue.get("driver_name") or issue.get("driver_id")),
+        ("Reason", issue.get("reason_label")), ("Note", issue.get("note")),
+        ("Booking status", issue.get("booking_status")),
+        ("Driver last location", loc), ("Location time", issue.get("location_at") or "—"),
+        ("Reported at", issue.get("created_at")),
+    ]
+    subject = f"Needs attention: driver reported a problem on booking {ref[:8]}"
+    html = "<h2>Driver reported a problem</h2><table>" + "".join(
+        f"<tr><td><b>{html_escape(str(k))}</b></td><td>{html_escape(str(v))}</td></tr>" for k, v in rows
+    ) + "</table>"
+    text = "\n".join(f"{k}: {v}" for k, v in rows)
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="driver_problem_report", booking_id=ref)

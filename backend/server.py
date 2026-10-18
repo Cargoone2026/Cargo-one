@@ -387,6 +387,22 @@ class DriverCancelBody(BaseModel):
     explanation: Optional[str] = None
 
 
+DRIVER_PROBLEM_REASONS = {
+    "vehicle_breakdown": "Vehicle breakdown",
+    "accident": "Accident",
+    "cannot_reach_dropoff": "Can't reach drop-off",
+    "recipient_unavailable": "Recipient unavailable",
+    "goods_damaged": "Goods damaged",
+    "personal_emergency": "Personal emergency",
+    "other": "Other",
+}
+
+
+class DriverProblemBody(BaseModel):
+    reason: str
+    note: str = Field(min_length=1, max_length=1000)
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -1307,7 +1323,7 @@ async def _active_booking_for(user_id: str) -> bool:
     return bool(j)
 
 
-async def _anonymise_user(user: dict) -> None:
+async def _anonymise_user(user: dict, deleted_by: str = "self") -> None:
     """Soft-delete: anonymise personal data, suspend account. Booking records retained.
     GDPR data scrubbing: also anonymises the user's display name across historical
     bookings, jobs, bids, reviews and messages so PII is not visible to other parties."""
@@ -1320,8 +1336,26 @@ async def _anonymise_user(user: dict) -> None:
         "profile_photo": None,
         "status": "suspended",
         "deleted_at": now_iso(),
+        "deleted_by": deleted_by,
+        "live_online": False,
+        "push_tokens": [],
     }
     await db.users.update_one({"id": user["id"]}, {"$set": patch})
+    now = patch["deleted_at"]
+    open_jobs = await db.jobs.find(
+        {"customer_id": user["id"], "status": {"$in": ["posted", "accepted"]}, "deleted_at": None},
+        {"_id": 0, "id": 1},
+    ).to_list(1000)
+    for j in open_jobs:
+        if not await db.bookings.find_one({"job_id": j["id"], "payment_status": "paid"}, {"_id": 0, "id": 1}):
+            await db.jobs.update_one(
+                {"id": j["id"]},
+                {"$set": {"status": "cancelled", "cancelled_at": now, "cancel_reason": "account_deleted"}},
+            )
+    await db.bids.update_many(
+        {"driver_id": user["id"], "status": "pending"},
+        {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "account_deleted"}},
+    )
     await db.documents.delete_many({"user_id": user["id"]})
     await db.notifications.delete_many({"user_id": user["id"]})
     # Anonymise denormalised name fields across the platform
@@ -3437,6 +3471,8 @@ async def accept_bid(bid_id: str, user: dict = Depends(require_role("customer"))
         raise HTTPException(status_code=403, detail="Not your job")
     if job["status"] != "posted":
         raise HTTPException(status_code=400, detail="Job already assigned")
+    if bid.get("status") != "pending" or bid["driver_id"] in (job.get("blocked_driver_ids") or []):
+        raise HTTPException(status_code=409, detail="This bid is no longer available. Please choose another bid.")
 
     await db.jobs.update_one(
         {"id": bid["job_id"]},
@@ -3488,7 +3524,7 @@ async def create_booking(body: dict, user: dict = Depends(require_role("customer
         if job["status"] != "accepted" or not job.get("assigned_driver_id"):
             raise HTTPException(status_code=400, detail="Job not ready for booking")
 
-    existing = await db.bookings.find_one({"job_id": job_id})
+    existing = await db.bookings.find_one({"job_id": job_id, "cancelled_at": None})
     if existing:
         return {k: v for k, v in existing.items() if k != "_id"}
 
@@ -4108,6 +4144,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
             other_id = b.get("driver_id") if user["role"] == "customer" else b.get("customer_id")
             other = users_map.get(other_id)
             b["other_party"] = _apply_finished_count(user_to_public(other), counts) if other else None
+        _view_status(b)
     return bookings
 
 
@@ -4152,6 +4189,14 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
             b["stripe_payment_intent_id"] = txn.get("payment_intent_id")
             b["stripe_amount_total"] = txn.get("amount_total")
             b["refunds"] = txn.get("refunds") or []
+    return _view_status(b)
+
+
+def _view_status(b: dict) -> dict:
+    # API-only: customer-cancelled bookings read as "cancelled" (stored status untouched).
+    if b.get("cancelled_at") and b.get("status") not in ("cancelled", "cancelled_by_driver"):
+        b["status_before_cancel"] = b.get("status")
+        b["status"] = "cancelled"
     return b
 
 
@@ -5102,8 +5147,7 @@ async def admin_delete_user(user_id: str, actor: dict = Depends(require_role("ad
         {"driver_id": user_id, "status": "pending"},
         {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "account_deleted"}},
     )
-    await _anonymise_user(target)
-    await db.users.update_one({"id": user_id}, {"$set": {"deleted_by": actor["id"]}})
+    await _anonymise_user(target, deleted_by=actor["id"])
     return {"ok": True, "user_id": user_id}
 
 
@@ -5532,7 +5576,7 @@ async def admin_job_detail(job_id: str,
 @api.get("/admin/bookings")
 async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
     bookings = await db.bookings.find({"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return bookings
+    return [_view_status(b) for b in bookings]
 
 
 @api.get("/admin/dispatch/active")
@@ -6353,6 +6397,8 @@ async def driver_cancel_booking(
         raise HTTPException(status_code=409, detail="This booking can no longer be cancelled")
     if b.get("status") == "delivered":
         raise HTTPException(status_code=409, detail="Delivery already completed — cancel not allowed")
+    if b.get("status") in COLLECTED_BOOKING_STATUSES:
+        raise HTTPException(status_code=409, detail="Items are on board – use Report a problem so support can arrange the handover.")
 
     job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
     if not job:
@@ -6415,6 +6461,10 @@ async def driver_cancel_booking(
     )
     if is_asap:
         _start_asap_offer_alerts(job["id"], now)
+    await db.bids.update_many(
+        {"job_id": job["id"], "driver_id": user["id"], "status": {"$in": ["pending", "accepted"]}},
+        {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "driver_cancelled"}},
+    )
 
     # ---- AUDIT LOG -----------------------------------------------------
     audit_doc = {
@@ -6493,6 +6543,114 @@ async def driver_my_cancellations(user: dict = Depends(require_role("driver"))):
 async def driver_cancel_reasons(_user: dict = Depends(require_role("driver"))):
     """Expose the fixed reason list so the driver UI never hardcodes it."""
     return {"reasons": [{"key": k, "label": v} for k, v in DRIVER_CANCEL_REASONS.items()]}
+
+
+@api.post("/driver/jobs/{job_id}/release")
+async def driver_release_job(job_id: str, user: dict = Depends(require_role("driver"))):
+    """Assigned driver hands back an accepted job before the customer has paid."""
+    job = await db.jobs.find_one({"id": job_id, "deleted_at": None})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("assigned_driver_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned driver on this job")
+    if job.get("status") != "accepted":
+        raise HTTPException(status_code=409, detail="This job can no longer be released")
+    bookings = await db.bookings.find(
+        {"job_id": job_id, "cancelled_at": None, "status": {"$nin": ["cancelled", "cancelled_by_driver"]}},
+        {"_id": 0},
+    ).to_list(20)
+    if any(b.get("payment_status") == "paid" for b in bookings):
+        raise HTTPException(status_code=409, detail="The customer has already paid – use Cancel instead")
+    # Covers both web Checkout sessions and in-app PaymentIntents (both write payment_transactions).
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+    if bookings and await db.payment_transactions.find_one(
+        {"booking_id": {"$in": [b["id"] for b in bookings]}, "created_at": {"$gte": cutoff}},
+        {"_id": 0, "id": 1},
+    ):
+        raise HTTPException(status_code=409, detail="The customer is paying right now – try again in a few minutes")
+    now = now_iso()
+    claim = await db.jobs.update_one(
+        {"id": job_id, "status": "accepted", "assigned_driver_id": user["id"]},
+        {"$set": {"status": "posted", "assigned_driver_id": None, "assigned_driver_name": None,
+                  "assigned_driver_rating": None, "accepted_at": None, "accepted_price": None,
+                  "released_at": now},
+         "$addToSet": {"blocked_driver_ids": user["id"]}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Job state changed – please refresh")
+    if bookings:
+        await db.bookings.update_many(
+            {"id": {"$in": [b["id"] for b in bookings]}, "payment_status": {"$ne": "paid"}},
+            {"$set": {"status": "cancelled", "cancelled_at": now, "cancel_reason": "driver_released",
+                      "released_by_driver_id": user["id"]}},
+        )
+    await db.bids.update_many(
+        {"job_id": job_id, "driver_id": user["id"], "status": {"$in": ["pending", "accepted"]}},
+        {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "driver_released"}},
+    )
+    if job.get("pricing_type") == "bidding":
+        blocked = list(set(job.get("blocked_driver_ids") or []) | {user["id"]})
+        await db.bids.update_many(
+            {"job_id": job_id, "driver_id": {"$nin": blocked}, "status": "rejected"},
+            {"$set": {"status": "pending"}},
+        )
+    try:
+        await push_notification(
+            job["customer_id"],
+            "Your driver released the job",
+            "Your driver released the job – it's back on the marketplace.",
+            {"job_id": job_id, "kind": "driver_released"},
+        )
+    except Exception:
+        logger.exception("driver-release notification failed; continuing")
+    return {"ok": True, "job_id": job_id}
+
+
+@api.get("/driver/problem-reasons")
+async def driver_problem_reasons(_user: dict = Depends(require_role("driver"))):
+    return {"reasons": [{"key": k, "label": v} for k, v in DRIVER_PROBLEM_REASONS.items()]}
+
+
+@api.post("/driver/bookings/{booking_id}/report-problem")
+async def driver_report_problem(booking_id: str, payload: DriverProblemBody,
+                                user: dict = Depends(require_role("driver"))):
+    reason_key = (payload.reason or "").strip().lower()
+    if reason_key not in DRIVER_PROBLEM_REASONS:
+        raise HTTPException(status_code=400, detail="Please choose a reason")
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("driver_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="You are not the assigned driver on this booking")
+    me = await db.users.find_one({"id": user["id"]}, {"_id": 0, "live_lat": 1, "live_lng": 1, "live_updated_at": 1})
+    issue = {
+        "reason": reason_key,
+        "reason_label": DRIVER_PROBLEM_REASONS[reason_key],
+        "note": payload.note.strip(),
+        "driver_id": user["id"],
+        "driver_name": user.get("name"),
+        "lat": (me or {}).get("live_lat"),
+        "lng": (me or {}).get("live_lng"),
+        "location_at": (me or {}).get("live_updated_at"),
+        "booking_status": b.get("status"),
+        "created_at": now_iso(),
+    }
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"support_issue": issue}})
+    try:
+        from services.email import send_driver_problem_report
+        await send_driver_problem_report(db, booking=b, issue=issue)
+    except Exception:
+        logger.exception("report-problem admin email failed; continuing")
+    try:
+        await push_notification(
+            b.get("customer_id"),
+            "There's an issue with your delivery",
+            "There's an issue with your delivery – our support team is on it and will contact you.",
+            {"booking_id": booking_id, "kind": "support_issue"},
+        )
+    except Exception:
+        logger.exception("report-problem customer notification failed; continuing")
+    return {"ok": True, "support_issue": issue}
 
 
 @api.get("/admin/driver-cancellations")

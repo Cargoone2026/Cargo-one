@@ -72,6 +72,20 @@ export default function DriverJobDetail() {
     }
   };
 
+  const release = async () => {
+    if (!window.confirm("Release this job? The customer hasn't paid yet. The job goes back on the marketplace and you won't be able to take it again.")) return;
+    setErr(null);
+    setSubmitting(true);
+    try {
+      await api(`/driver/jobs/${id}/release`, { method: "POST" });
+      navigate("/driver/my-jobs", { replace: true });
+    } catch (e) {
+      setErr(e?.message || "Could not release this job");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submitBid = async () => {
     setErr(null);
     if (!bidAmount) return;
@@ -272,6 +286,25 @@ export default function DriverJobDetail() {
               onClick={submitBid}
               testID="driver-bid-submit"
             />
+          </div>
+        )}
+
+        {job.status === "accepted" && user?.id && job.assigned_driver_id === user.id && (
+          <div className="space-y-3" data-testid="driver-awaiting-deposit-box">
+            <div className="rounded-[12px] bg-[#F9FAFB] p-4 text-[13px] text-[#374151]">
+              <p className="font-semibold text-[#111111]">Waiting for the customer&apos;s deposit</p>
+              <p className="mt-1">You&apos;ll get contact details once they pay. If you can&apos;t do this job, release it now.</p>
+            </div>
+            {err ? <p className="text-[13px] text-[#DC2626]" data-testid="release-error">{err}</p> : null}
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={release}
+              data-testid="driver-release-job"
+              className="w-full rounded-[12px] border border-[#E5E7EB] py-3 text-[13px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2] disabled:opacity-60"
+            >
+              {submitting ? "Releasing…" : "Release job"}
+            </button>
           </div>
         )}
 

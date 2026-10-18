@@ -27,6 +27,7 @@ import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 import { RecentActivity } from "@/components/ui-portal/RecentActivity";
 import { AsapDispatchPanel } from "@/components/ui-portal/AsapDispatchPanel";
+import { CancelBookingDialog } from "@/components/customer/CancelBookingDialog";
 
 const ACTIVE_STATUSES = new Set([
   "deposit_paid",
@@ -60,6 +61,7 @@ export default function CustomerBookingDetail() {
   const [loading, setLoading] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
   const [tab, setTab] = useState("overview");
+  const [showCancel, setShowCancel] = useState(false);
   const [showReview, setShowReview] = useState(false);
   // R23 — my submitted review + counterparty's review of me (for reply UI).
   const [myReview, setMyReview] = useState(null);
@@ -430,7 +432,9 @@ export default function CustomerBookingDetail() {
           data-testid="rebook-banner"
         >
           <p className="text-[13px] font-semibold text-[#991B1B]">
-            This booking was cancelled and your deposit was refunded.
+            {b.payment_status === "paid"
+              ? "This booking was cancelled and your deposit was refunded."
+              : "This booking was cancelled."}
           </p>
           <p className="mt-1 text-[12px] leading-snug text-[#7F1D1D]">
             Need this job done? Re-post it as a fresh booking and pay a new
@@ -486,6 +490,28 @@ export default function CustomerBookingDetail() {
         </div>
       ) : null}
 
+      {b.service_timing !== "asap" && !b.cancelled_at
+        && !["cancelled", "cancelled_by_driver", "delivered", "pod_uploaded", "completed", "collected", "on_route"].includes(b.status) ? (
+        <div className="mx-4 mt-3 md:mx-8">
+          <button
+            type="button"
+            onClick={() => setShowCancel(true)}
+            data-testid="customer-cancel-booking-btn"
+            className="w-full rounded-[12px] border border-[#E5E7EB] py-2.5 text-[13px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2]"
+          >
+            Cancel booking
+          </button>
+        </div>
+      ) : null}
+      <CancelBookingDialog
+        open={showCancel}
+        booking={b}
+        onClose={() => setShowCancel(false)}
+        onCancelled={async () => {
+          setShowCancel(false);
+          await load();
+        }}
+      />
 
       {b.service_timing === "asap" && b.payment_status === "paid" && !b.assigned_driver_id && !b.cancelled_at ? (
         <div className="mx-4 mt-4 md:mx-8" data-testid="asap-dispatch-inline">

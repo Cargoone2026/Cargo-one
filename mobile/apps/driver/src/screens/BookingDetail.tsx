@@ -31,7 +31,7 @@ import {
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
-  DriverAPI, type Booking, type DriverCancelReason, type DriverMessage, type POD,
+  DriverAPI, SharedAPI, type Booking, type DriverMessage, type POD,
 } from "@cargoone/core";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -43,6 +43,7 @@ import {
 } from "../ui";
 import { RouteMap, MapFallback } from "../components/RouteMap";
 import { SignaturePad } from "../components/SignaturePad";
+import { ReasonSheet } from "../components/ReasonSheet";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 type Tab = "overview" | "messages" | "pod";
@@ -69,9 +70,8 @@ const PROGRESSION: Array<{ from: string; to: string; label: string; icon: React.
 
 const TERMINAL_STATUSES = new Set(["cancelled", "cancelled_by_driver", "completed", "pod_uploaded", "delivered"]);
 
-const CANCELLABLE = new Set([
-  "accepted", "deposit_paid", "confirmed", "travelling", "arrived", "collected", "on_route",
-]);
+const CANCELLABLE = new Set(["accepted", "deposit_paid", "confirmed", "travelling", "arrived"]);
+const ON_BOARD = new Set(["collected", "on_route"]);
 
 
 export default function BookingDetailScreen({ route, navigation }: P) {
@@ -83,6 +83,17 @@ export default function BookingDetailScreen({ route, navigation }: P) {
   const [messages, setMessages] = useState<DriverMessage[]>([]);
   const [pod, setPod] = useState<POD | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [sheet, setSheet] = useState<"cancel" | "problem" | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [vehicleNames, setVehicleNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    SharedAPI.vehicles().then((rows) => {
+      const m: Record<string, string> = {};
+      (rows || []).forEach((v: any) => { if (v?.key) m[v.key] = v.name || v.key; });
+      setVehicleNames(m);
+    });
+  }, []);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -146,7 +157,13 @@ export default function BookingDetailScreen({ route, navigation }: P) {
 
   const job = b.job;
   const nextStep = PROGRESSION.find((p) => p.from === b.status);
-  const canCancel = CANCELLABLE.has(b.status) && !b.cancelled_at;
+  const paid = (b as any).payment_status === "paid";
+  const canCancel = paid && CANCELLABLE.has(b.status) && !b.cancelled_at;
+  const canRelease = !paid && b.status === "accepted" && !b.cancelled_at && !!b.job_id;
+  const canReport = ON_BOARD.has(b.status) && !b.cancelled_at;
+  const supportIssue = (b as any).support_issue as { reason_label?: string; created_at?: string } | undefined;
+  const vehicleKey = job?.vehicle_required || (job as any)?.recommended_vehicle;
+  const vehicleLabel = job?.requested_vehicle_name || (vehicleKey ? vehicleNames[vehicleKey] || humanizeKey(vehicleKey) : null);
   const driverCharge = Number(b.driver_charge ?? job?.accepted_price ?? job?.fixed_price ?? 0);
   const bookingFee = Number(b.booking_fee ?? b.deposit_amount ?? 0);
   const total = Number(b.total_price ?? b.customer_total ?? driverCharge + bookingFee);
@@ -169,26 +186,44 @@ export default function BookingDetailScreen({ route, navigation }: P) {
     }
   };
 
-  const confirmCancel = async () => {
-    try {
-      const reasons = await DriverAPI.cancelReasons();
-      if (reasons.length === 0) {
-        Alert.alert("Unavailable", "Cancel reasons are not available right now.");
-        return;
-      }
-      showReasonPicker(reasons, async (reason) => {
-        try {
-          await DriverAPI.cancelBooking(bookingId, reason.key);
-          await load();
-          Alert.alert("Booking cancelled", "The booking has been cancelled.");
-        } catch (e: any) {
-          Alert.alert("Could not cancel", e?.message || "Please try again.");
-        }
-      });
-    } catch (e: any) {
-      Alert.alert("Error", e?.message || "Could not load cancel reasons.");
-    }
+  const submitCancel = async (reason: string, note: string) => {
+    await DriverAPI.cancelBooking(bookingId, reason, note);
+    setSheet(null);
+    Alert.alert("Booking cancelled", "The booking has been cancelled.", [
+      { text: "OK", onPress: () => navigation.navigate("MyJobs") },
+    ]);
   };
+
+  const submitProblem = async (reason: string, note: string) => {
+    await DriverAPI.reportProblem(bookingId, reason, note);
+    setSheet(null);
+    await load();
+    Alert.alert("Reported", "Our support team has been alerted and will contact you shortly.");
+  };
+
+  const releaseJob = () =>
+    Alert.alert(
+      "Release this job?",
+      "The customer hasn't paid yet. The job goes back on the marketplace and you won't be able to take it again.",
+      [
+        { text: "Keep job", style: "cancel" },
+        {
+          text: "Release job", style: "destructive", onPress: async () => {
+            setReleasing(true);
+            try {
+              await DriverAPI.releaseJob(b.job_id!);
+              Alert.alert("Job released", "The job is back on the marketplace.", [
+                { text: "OK", onPress: () => navigation.navigate("MyJobs") },
+              ]);
+            } catch (e: any) {
+              Alert.alert("Could not release", e?.message || "Please try again.");
+            } finally {
+              setReleasing(false);
+            }
+          },
+        },
+      ],
+    );
 
   return (
     <Page testID="booking-detail-screen" scroll={false}>
@@ -317,11 +352,15 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                 <Card testID="booking-customer-card">
                   <Text style={typography.micro}>CUSTOMER</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-                    <View style={styles.customerAvatar}>
-                      <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
-                        {customerName.slice(0, 1).toUpperCase()}
-                      </Text>
-                    </View>
+                    {customer.profile_photo ? (
+                      <Image source={{ uri: customer.profile_photo }} style={styles.customerAvatar} testID="booking-customer-photo" />
+                    ) : (
+                      <View style={styles.customerAvatar}>
+                        <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
+                          {customerName.slice(0, 1).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
                     <View style={{ flex: 1 }}>
                       <Text style={typography.cardTitle}>{customerName}</Text>
                       {customer.rating != null ? (
@@ -354,9 +393,7 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                     {(job!.dimensions_l_m || job!.dimensions || job!.dimensions_w_m || job!.dimensions_h_m) ? (
                       <Chip icon="maximize" label={`${job!.dimensions || `${job!.dimensions_l_m}×${job!.dimensions_w_m}×${job!.dimensions_h_m}m`} L·W·H`} />
                     ) : null}
-                    {(job!.requested_vehicle_name || job!.vehicle_required) ? (
-                      <Chip icon="truck" label={job!.requested_vehicle_name || job!.vehicle_required!} />
-                    ) : null}
+                    {vehicleLabel ? <Chip icon="truck" label={vehicleLabel} /> : null}
                     {job!.needs_forklift ? <Chip icon="tool" label="Forklift required" warn /> : null}
                     {job!.needs_loading_help ? <Chip icon="users" label="Loading help" warn /> : null}
                   </View>
@@ -374,22 +411,24 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                 </View>
               </Card>
 
-              {/* Cancel action */}
+              {/* Cancel / release / report actions */}
               {canCancel ? (
-                <SecondaryButton
-                  title="Cancel booking"
-                  onPress={() =>
-                    Alert.alert(
-                      "Cancel this booking?",
-                      "A cancellation reason is required. This may affect your driver account.",
-                      [
-                        { text: "Keep", style: "cancel" },
-                        { text: "Continue", style: "destructive", onPress: confirmCancel },
-                      ],
-                    )
-                  }
-                  testID="booking-cancel"
-                />
+                <SecondaryButton title="Cancel booking" onPress={() => setSheet("cancel")} testID="booking-cancel" />
+              ) : null}
+              {canRelease ? (
+                <SecondaryButton title="Release job" onPress={releaseJob} loading={releasing} testID="booking-release" />
+              ) : null}
+              {canReport ? (
+                supportIssue ? (
+                  <Card testID="booking-problem-reported">
+                    <Text style={typography.strong}>Problem reported</Text>
+                    <Text style={[typography.small, { marginTop: 4 }]}>
+                      {supportIssue.reason_label || "Issue"} – our support team will contact you.
+                    </Text>
+                  </Card>
+                ) : (
+                  <SecondaryButton title="Report a problem" onPress={() => setSheet("problem")} testID="booking-report-problem" />
+                )
               ) : null}
             </>
           ) : (
@@ -404,23 +443,36 @@ export default function BookingDetailScreen({ route, navigation }: P) {
           )}
         </ScrollView>
       )}
+      <ReasonSheet
+        visible={sheet === "cancel"}
+        title="Cancel this job"
+        subtitle="Choose a reason. Cancelling may affect your driver account."
+        confirmLabel="Cancel job"
+        loadReasons={DriverAPI.cancelReasons}
+        noteMode="other"
+        notePlaceholder="Tell us briefly what happened (required for Other)"
+        onSubmit={submitCancel}
+        onClose={() => setSheet(null)}
+        testID="driver-cancel-sheet"
+      />
+      <ReasonSheet
+        visible={sheet === "problem"}
+        title="Report a problem"
+        subtitle="Items are on board. Tell support what's wrong and they'll arrange the next steps."
+        confirmLabel="Send to support"
+        loadReasons={DriverAPI.problemReasons}
+        noteMode="always"
+        notePlaceholder="Short note for support (required)"
+        onSubmit={submitProblem}
+        onClose={() => setSheet(null)}
+        testID="driver-problem-sheet"
+      />
     </Page>
   );
 }
 
-function showReasonPicker(
-  reasons: DriverCancelReason[],
-  onPick: (r: DriverCancelReason) => void,
-) {
-  Alert.alert(
-    "Select a reason",
-    "Why are you cancelling?",
-    [
-      ...reasons.slice(0, 5).map((r) => ({ text: r.label, onPress: () => onPick(r) })),
-      { text: "Back", style: "cancel" as const },
-    ],
-    { cancelable: true },
-  );
+function humanizeKey(k: string): string {
+  return k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function hasCargoDetails(job: any): job is NonNullable<Booking["job"]> {

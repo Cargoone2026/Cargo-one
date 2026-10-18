@@ -115,7 +115,7 @@ export default function MyJobsScreen() {
       status: bd.job?.status || "posted",
       earning: Number(bd.amount || 0),
       priceLabel: "Your bid",
-      terminal: isTerminal(bd.job),
+      terminal: isTerminal(bd.job) || bd.status === "withdrawn" || bd.status === "rejected",
       bid_status: bd.status,
       is_winning: bd.is_winning,
       ts: bd.created_at || "",
@@ -253,6 +253,7 @@ function BidPill({ status }: { status?: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
     accepted: { bg: "#DCFCE7", fg: "#166534", label: "Bid accepted" },
     rejected: { bg: "#F4F4F4", fg: "#6B7280", label: "Bid not chosen" },
+    withdrawn: { bg: "#F4F4F4", fg: "#6B7280", label: "Withdrawn by you" },
   };
   const s = status && map[status] ? map[status] : { bg: colors.warningBg, fg: colors.warningInk, label: "Bid pending" };
   return (

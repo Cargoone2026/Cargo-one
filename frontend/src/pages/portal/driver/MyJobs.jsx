@@ -62,7 +62,7 @@ export default function DriverMyJobs() {
         title: bd.job?.title || "Job",
         pickup_town: bd.job?.pickup_town,
         dropoff_town: bd.job?.dropoff_town,
-        status: bd.job?.status || "posted",
+        status: bd.status === "withdrawn" ? "cancelled" : bd.job?.status || "posted",
         earning: Number(bd.amount || 0),
         // Deep-link to the job so the driver can re-open their bid.
         link: `/driver/job/${bd.job_id}`,
@@ -158,7 +158,7 @@ export default function DriverMyJobs() {
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                       c.bid_status === "accepted"
                         ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                        : c.bid_status === "rejected"
+                        : c.bid_status === "rejected" || c.bid_status === "withdrawn"
                         ? "bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200"
                         : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
                     }`}>
@@ -166,6 +166,8 @@ export default function DriverMyJobs() {
                         ? "Bid accepted"
                         : c.bid_status === "rejected"
                         ? "Bid not chosen"
+                        : c.bid_status === "withdrawn"
+                        ? "Withdrawn by you"
                         : "Bid pending"}
                     </span>
                     {c.status === "accepted" && !c.is_winning ? (

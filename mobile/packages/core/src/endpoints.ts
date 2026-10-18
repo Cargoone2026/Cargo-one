@@ -474,6 +474,17 @@ export const DriverAPI = {
       method: "POST",
       body: { reason, explanation: explanation?.trim() || null },
     }),
+  releaseJob: (jobId: string) =>
+    api<{ ok: boolean }>(`/driver/jobs/${jobId}/release`, { method: "POST" }),
+  problemReasons: () =>
+    api<{ reasons: DriverCancelReason[] }>("/driver/problem-reasons")
+      .then((r) => r?.reasons ?? [])
+      .catch(() => [] as DriverCancelReason[]),
+  reportProblem: (bookingId: string, reason: string, note: string) =>
+    api<{ ok: boolean }>(`/driver/bookings/${bookingId}/report-problem`, {
+      method: "POST",
+      body: { reason, note: note.trim() },
+    }),
 
   // ── Reviews ─────────────────────────────────────────────────────────
   myReviews: (userId: string) =>

@@ -19,6 +19,7 @@ export const STATUS_LABELS = {
   confirmed: "Confirmed", travelling: "Driver Travelling", arrived: "Arrived at Pickup",
   collected: "Collected", on_route: "On Route", delivered: "Delivered",
   pod_uploaded: "POD Uploaded", completed: "Completed", cancelled: "Cancelled",
+  cancelled_by_driver: "Finding a new driver",
 };
 
 export const STATUS_COLOR = {
@@ -34,6 +35,7 @@ export const STATUS_COLOR = {
   pod_uploaded: { bg: "#DCFCE7", fg: "#166534" },
   completed: { bg: "#E5E7EB", fg: "#111111" },
   cancelled: { bg: "#FEE2E2", fg: "#B91C1C" },
+  cancelled_by_driver: { bg: "#FEF3C7", fg: "#92400E" },
 };
 
 // Supported markets — mirrors backend/markets.py for AddressAutocomplete web fallback

@@ -105,6 +105,7 @@ export const STATUS_LABELS: Record<string, string> = {
   pod_uploaded: "Delivered",
   completed: "Completed",
   cancelled: "Cancelled",
+  cancelled_by_driver: "Finding a new driver",
   refunded: "Refunded",
 };
 
@@ -121,6 +122,7 @@ export const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
   pod_uploaded: { bg: "#DCFCE7", fg: "#166534" },
   completed: { bg: "#E5E7EB", fg: "#111111" },
   cancelled: { bg: "#FEE2E2", fg: "#B91C1C" },
+  cancelled_by_driver: { bg: "#FEF3C7", fg: "#92400E" },
   refunded: { bg: "#F4F4F4", fg: "#6B7280" },
 };
 

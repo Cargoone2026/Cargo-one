@@ -265,6 +265,13 @@ export default function AdminUsers() {
                     {u.deleted_at ? <DeletedBadge testId={`admin-user-deleted-${u.id}`} /> : null}
                   </div>
                   <p className="truncate text-[12px] text-[#6B7280]">{u.email}</p>
+                  {u.deleted_at ? (
+                    <p className="text-[12px] text-[#B91C1C]" data-testid={`admin-user-deleted-info-${u.id}`}>
+                      Deleted on {new Date(u.deleted_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      {" · "}
+                      {!u.deleted_by || u.deleted_by === "self" || u.deleted_by === u.id ? "by the user" : "by admin"}
+                    </p>
+                  ) : null}
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6B7280]">
                     <span>
                       {u.role === "driver"

@@ -143,9 +143,25 @@ export default function AdminBookings() {
                         Recovery
                       </span>
                     )}
+                    {b.support_issue && (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-[0.5px] bg-red-100 text-red-700 rounded-full px-2 py-0.5"
+                        title={`${b.support_issue.reason_label}: ${b.support_issue.note}`}
+                        data-testid={`admin-booking-needs-attention-${b.id}`}
+                      >
+                        Needs attention
+                      </span>
+                    )}
                   </div>
                   <StatusPill status={b.status} />
                 </div>
+                {b.support_issue && (
+                  <p className="mt-2 rounded-[8px] bg-red-50 px-2 py-1.5 text-[12px] text-red-800" data-testid={`admin-booking-issue-${b.id}`}>
+                    <b>{b.support_issue.reason_label}</b> — {b.support_issue.note}
+                    {b.support_issue.lat != null ? ` · Driver at ${Number(b.support_issue.lat).toFixed(5)}, ${Number(b.support_issue.lng).toFixed(5)}` : ""}
+                    {" · "}{new Date(b.support_issue.created_at).toLocaleString("en-GB")}
+                  </p>
+                )}
                 <div className="mt-2 flex items-center gap-1 text-[13px] text-[#6B7280]">
                   <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
                   <span className="truncate">

@@ -56,6 +56,18 @@ export default function CustomerJobDetail() {
     load();
   }, [load]);
 
+  async function cancelJob() {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm("Cancel this job? It will be removed from the marketplace. No deposit has been taken.")) return;
+    try {
+      await api(`/customer/jobs/${id}/cancel`, { method: "POST", body: {} });
+      navigate("/customer/bookings", { replace: true });
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert(e?.message || "Could not cancel this job");
+    }
+  }
+
   async function acceptBid(bidId) {
     setAccepting(bidId);
     try {
@@ -363,6 +375,19 @@ export default function CustomerJobDetail() {
           </div>
         )}
       </div>
+
+      {job.status === "posted" && !job.assigned_driver_id && job.service_timing !== "asap" && (
+        <div className="mx-4 md:mx-8">
+          <button
+            type="button"
+            onClick={cancelJob}
+            data-testid="customer-cancel-job-btn"
+            className="w-full rounded-[12px] border border-[#E5E7EB] py-3 text-[13px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2]"
+          >
+            Cancel job
+          </button>
+        </div>
+      )}
 
       {/* R69 — Driver reviews inspector (bidding + fixed-price accepted). */}
       <DriverReviewsSheet

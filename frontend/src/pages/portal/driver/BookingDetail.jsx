@@ -29,6 +29,7 @@ import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { PhotoGallery } from "@/components/ui-portal/PhotoUpload";
 import { SignaturePad } from "@/components/ui-portal/SignaturePad";
 import { DriverCancelModal } from "@/components/ui-portal/DriverCancelModal";
+import { DriverReportProblemModal } from "@/components/ui-portal/DriverReportProblemModal";
 import { ReviewModal } from "@/components/ui-portal/ReviewModal";
 
 const STATUS_FLOW = [
@@ -87,6 +88,9 @@ export default function DriverBookingDetail() {
 
   // R23 — driver cancellation modal
   const [showCancel, setShowCancel] = useState(false);
+  const [showProblem, setShowProblem] = useState(false);
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  const [releaseErr, setReleaseErr] = useState(null);
   // R23 — driver review flow (leave for customer + view customer review of me)
   const [showReview, setShowReview] = useState(false);
   const [myReview, setMyReview] = useState(null);
@@ -752,7 +756,51 @@ export default function DriverBookingDetail() {
             {/* R23 — Driver cancellation. Available on any accepted booking
                 that hasn't yet been delivered or completed. Deliberately
                 de-emphasised style so drivers don't tap it by mistake. */}
-            {paid && !["delivered", "pod_uploaded", "completed", "cancelled", "cancelled_by_driver"].includes(b.status) && (
+            {!paid && b.status === "accepted" && !b.cancelled_at && b.job_id && (
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  disabled={releaseBusy}
+                  onClick={async () => {
+                    if (!window.confirm("Release this job? The customer hasn't paid yet. The job goes back on the marketplace and you won't be able to take it again.")) return;
+                    setReleaseBusy(true);
+                    setReleaseErr(null);
+                    try {
+                      await api(`/driver/jobs/${b.job_id}/release`, { method: "POST" });
+                      navigate("/driver/my-jobs", { replace: true });
+                    } catch (e) {
+                      setReleaseErr(e?.message || "Could not release this job.");
+                    } finally {
+                      setReleaseBusy(false);
+                    }
+                  }}
+                  data-testid="driver-release-job"
+                  className="mt-1 w-full rounded-[12px] border border-[#E5E7EB] py-3 text-[13px] font-semibold text-[#DC2626] hover:bg-[#FEF2F2] disabled:opacity-60"
+                >
+                  {releaseBusy ? "Releasing…" : "Release job"}
+                </button>
+                {releaseErr ? <p className="text-[12px] text-[#DC2626]" data-testid="driver-release-error">{releaseErr}</p> : null}
+              </div>
+            )}
+
+            {["collected", "on_route"].includes(b.status) && !b.cancelled_at && (
+              b.support_issue ? (
+                <div className="rounded-[12px] border border-[#FDE68A] bg-[#FFFBEB] p-3 text-[13px] text-[#92400E]" data-testid="driver-problem-reported">
+                  Problem reported ({b.support_issue.reason_label}) – our support team will contact you.
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowProblem(true)}
+                  data-testid="driver-open-problem-modal"
+                  className="mt-1 w-full rounded-[12px] border border-[#E5E7EB] py-3 text-[13px] font-semibold text-[#111111] hover:bg-[#F3F4F6]"
+                >
+                  Report a problem
+                </button>
+              )
+            )}
+
+            {paid && !["delivered", "pod_uploaded", "completed", "cancelled", "cancelled_by_driver", "collected", "on_route"].includes(b.status) && (
               <button
                 type="button"
                 onClick={() => setShowCancel(true)}
@@ -1049,6 +1097,15 @@ export default function DriverBookingDetail() {
           </div>
         )}
       </div>
+      <DriverReportProblemModal
+        open={showProblem}
+        onClose={() => setShowProblem(false)}
+        bookingId={id}
+        onReported={async () => {
+          setShowProblem(false);
+          await load();
+        }}
+      />
       <DriverCancelModal
         open={showCancel}
         onClose={() => setShowCancel(false)}

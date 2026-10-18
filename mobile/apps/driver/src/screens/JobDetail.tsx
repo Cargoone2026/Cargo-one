@@ -26,6 +26,7 @@ import {
 } from "../ui";
 import { RouteMap, MapFallback } from "../components/RouteMap";
 import type { RootStackParamList } from "../App";
+import { useAuth } from "../AuthContext";
 
 type Route = RouteProp<RootStackParamList, "JobDetail">;
 
@@ -42,6 +43,7 @@ export default function JobDetailScreen() {
   const [bidAmount, setBidAmount] = useState("");
   const [bidMessage, setBidMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuth();
 
   const load = useCallback(async () => {
     setError(null);
@@ -72,6 +74,32 @@ export default function JobDetailScreen() {
     } finally {
       setSubmitting(false);
     }
+  }, [job, nav]);
+
+  const onRelease = useCallback(() => {
+    if (!job) return;
+    Alert.alert(
+      "Release this job?",
+      "The customer hasn't paid yet. The job goes back on the marketplace and you won't be able to take it again.",
+      [
+        { text: "Keep job", style: "cancel" },
+        {
+          text: "Release job", style: "destructive", onPress: async () => {
+            setSubmitting(true);
+            try {
+              await DriverAPI.releaseJob(job.id!);
+              Alert.alert("Job released", "The job is back on the marketplace.", [
+                { text: "OK", onPress: () => nav.navigate("MyJobs") },
+              ]);
+            } catch (e: any) {
+              Alert.alert("Could not release", e?.message || "Please try again.");
+            } finally {
+              setSubmitting(false);
+            }
+          },
+        },
+      ],
+    );
   }, [job, nav]);
 
   const onSubmitBid = useCallback(async () => {
@@ -305,7 +333,17 @@ export default function JobDetailScreen() {
         </Card>
 
         {/* Actions */}
-        {!bidOpen ? (
+        {job.status === "accepted" && !!user?.id && (job as any).assigned_driver_id === user.id ? (
+          <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
+            <Card testID="driver-job-awaiting-deposit">
+              <Text style={typography.strong}>Waiting for the customer's deposit</Text>
+              <Caption style={{ marginTop: 4 }}>
+                You'll get contact details once they pay. If you can't do this job, release it now.
+              </Caption>
+            </Card>
+            <SecondaryButton title="Release job" onPress={onRelease} loading={submitting} testID="driver-job-release" />
+          </View>
+        ) : !bidOpen ? (
           <View style={{ paddingHorizontal: space[4], gap: space[3] }}>
             {isFixed ? (
               <PrimaryButton
