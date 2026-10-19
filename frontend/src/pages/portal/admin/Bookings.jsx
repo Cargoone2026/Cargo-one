@@ -22,6 +22,7 @@ export default function AdminBookings() {
   const [issueOpenId, setIssueOpenId] = useState(params.get("issue"));
   const [issues, setIssues] = useState({});
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [retryTarget, setRetryTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -275,7 +276,17 @@ export default function AdminBookings() {
                         Cancel booking (admin)
                       </button>
                     )}
-                    {isPaid && !refunded && !refundBusyState && (
+                    {isPaid && b.refund_status === "failed" && (b.cancelled_at || b.status === "cancelled") && (
+                      <button
+                        type="button"
+                        onClick={() => setRetryTarget(b)}
+                        className="inline-flex items-center gap-1 rounded-full bg-[#111111] px-3 py-1 text-[12px] font-semibold text-white hover:bg-black"
+                        data-testid={`admin-booking-retry-refund-${b.id}`}
+                      >
+                        Retry refund
+                      </button>
+                    )}
+                    {isPaid && !refunded && !refundBusyState && !(b.refund_status === "failed" && (b.cancelled_at || b.status === "cancelled")) && (
                       <button
                         type="button"
                         onClick={() => setRefundTarget(b)}
@@ -294,6 +305,18 @@ export default function AdminBookings() {
         )}
       </ul>
 
+      {retryTarget ? (
+        <AdminCancelDialog
+          retry
+          booking={retryTarget}
+          onClose={() => setRetryTarget(null)}
+          onDone={(r) => {
+            setRetryTarget(null);
+            setRefundMsg(`Refund ${r?.refund_state || "sent"}.`);
+            load();
+          }}
+        />
+      ) : null}
       {cancelTarget ? (
         <AdminCancelDialog
           booking={cancelTarget}

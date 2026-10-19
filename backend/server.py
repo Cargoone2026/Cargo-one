@@ -6930,10 +6930,11 @@ async def _reconcile_refund_in_progress(b: dict) -> Optional[str]:
         txn = None
         if b.get("stripe_session_id"):
             txn = await db.payment_transactions.find_one({"session_id": b["stripe_session_id"]})
-        if not (txn or {}).get("payment_intent_id"):
+        pi_id = (txn or {}).get("payment_intent_id") or b.get("stripe_payment_intent_id")
+        if not pi_id:
             txn = await db.payment_transactions.find_one(
                 {"booking_id": b["id"], "payment_intent_id": {"$ne": None}}, sort=[("created_at", -1)])
-        pi_id = (txn or {}).get("payment_intent_id") or b.get("stripe_payment_intent_id")
+            pi_id = (txn or {}).get("payment_intent_id")
         if pi_id:
             refunds = list(_stripe.Refund.list(payment_intent=pi_id, limit=10).auto_paging_iter())
     g = lambda r, k: r.get(k) if isinstance(r, dict) else getattr(r, k, None)
@@ -6953,15 +6954,19 @@ async def _reconcile_refund_in_progress(b: dict) -> Optional[str]:
     return "failed"
 
 
+async def _admin_fee_breakdown(b: dict) -> dict:
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0, "assigned_driver_id": 1}) if b.get("job_id") else None
+    driver_accepted = bool(b.get("driver_id") or b.get("previous_driver_id") or (job or {}).get("assigned_driver_id"))
+    policy = await _get_cancellation_policy()
+    return _compute_cancellation_fee(float(b.get("deposit_amount") or 0.0), policy, driver_accepted)
+
+
 @api.get("/admin/bookings/{booking_id}/cancel-preview")
 async def admin_cancel_preview(booking_id: str, user: dict = Depends(require_role("admin"))):
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(status_code=404, detail="Booking not found")
-    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0, "assigned_driver_id": 1}) if b.get("job_id") else None
-    driver_accepted = bool(b.get("driver_id") or (job or {}).get("assigned_driver_id"))
-    policy = await _get_cancellation_policy()
-    br = _compute_cancellation_fee(float(b.get("deposit_amount") or 0.0), policy, driver_accepted)
+    br = await _admin_fee_breakdown(b)
     return {"booking_id": booking_id, "payment_status": b.get("payment_status"),
             "refund_status": b.get("refund_status"), "deposit_paid": br["deposit_paid"],
             "cancellation_fee": br["cancellation_fee"], "refund_minus_fee": br["refund_amount"]}
@@ -7037,6 +7042,34 @@ async def admin_cancel_booking(booking_id: str, body: AdminCancelBody, user: dic
     return {"ok": True, "booking_id": booking_id, "refund_before": refund_before,
             "refund": (refund_result or {}).get("refund_state") or ("already_refunded" if already_refunded else "none"),
             "refund_amount": refund_amount, "refund_error": refund_error}
+
+
+class AdminRetryRefundBody(BaseModel):
+    refund: str  # full | minus_fee
+
+
+@api.post("/admin/bookings/{booking_id}/retry-refund")
+async def admin_retry_refund(booking_id: str, body: AdminRetryRefundBody, user: dict = Depends(require_role("admin"))):
+    """Re-run only the refund for a cancelled booking whose refund failed (no re-cancel, no cancel notices)."""
+    if body.refund not in ("full", "minus_fee"):
+        raise HTTPException(status_code=400, detail="Choose a refund option")
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if not (b.get("cancelled_at") or b.get("status") == "cancelled") or b.get("refund_status") != "failed":
+        raise HTTPException(status_code=409, detail="Retry is only available for cancelled bookings whose refund failed")
+    amount = None
+    if body.refund == "minus_fee":
+        amount = (await _admin_fee_breakdown(b))["refund_amount"]
+        if amount <= 0:
+            raise HTTPException(status_code=409, detail="Nothing to refund after the cancellation fee")
+    result = await _admin_refund(booking_id, {"reason": f"admin_retry_{body.refund}"}, user, amount_gbp=amount)
+    await db.admin_booking_actions.insert_one({
+        "id": new_id(), "action": "retry_refund", "booking_id": booking_id, "admin_id": user["id"],
+        "admin_name": user.get("name"), "refund_choice": body.refund, "refund_amount": amount,
+        "refund_result": result.get("refund_state"), "created_at": now_iso(),
+    })
+    return result
 
 
 class SupportIssueResolveBody(BaseModel):
@@ -7160,6 +7193,14 @@ async def _admin_refund(booking_id: str, payload: dict, user: dict,
     session_id = b.get("stripe_session_id")
     txn = await db.payment_transactions.find_one({"session_id": session_id}) if session_id else None
     pi_id = (txn or {}).get("payment_intent_id")
+    # Native PaymentSheet bookings: no Checkout session, PI stored on the booking
+    # (same fallback as _customer_cancel_and_refund_impl).
+    if not pi_id:
+        pi_id = b.get("stripe_payment_intent_id")
+        if pi_id and not txn:
+            txn = await db.payment_transactions.find_one({"payment_intent_id": pi_id})
+            if txn:
+                session_id = txn.get("session_id")
 
     # Idempotency guard — flip refund_status conditionally.
     claim = await db.bookings.update_one(
@@ -7237,8 +7278,9 @@ async def _admin_refund(booking_id: str, payload: dict, user: dict,
         "error": stripe_err,
     }
     if txn:
+        # Key by the txn's own _id (native PI txns may have session_id None).
         await db.payment_transactions.update_one(
-            {"session_id": session_id},
+            {"_id": txn["_id"]},
             {"$push": {"refunds": audit_entry}, "$set": {"updated_at": now_iso()}},
         )
     await db.bookings.update_one(
@@ -7268,6 +7310,19 @@ async def _admin_refund(booking_id: str, payload: dict, user: dict,
             )
     except Exception:
         logger.exception("refund-confirmation email failed; continuing")
+    try:
+        job_title = None
+        if b.get("job_id"):
+            jt = await db.jobs.find_one({"id": b["job_id"]}, {"_id": 0, "title": 1})
+            job_title = (jt or {}).get("title")
+        await push_notification(
+            b["customer_id"], "Refund on its way",
+            f"A refund of £{float(audit_entry['amount'] or 0):.2f} for {job_title or 'your booking'} is on its way "
+            "to your card (usually 5–10 working days).",
+            {"booking_id": booking_id, "kind": "refund_issued"},
+        )
+    except Exception:
+        logger.exception("refund push failed; continuing")
     return {
         "ok": True,
         "booking_id": booking_id,
