@@ -347,6 +347,38 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                 />
               ) : null}
 
+              {/* Handover card */}
+              {(b as any).handover ? (
+                <Card testID="booking-handover-card" style={{ backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }}>
+                  <Text style={typography.micro}>HANDOVER COLLECTION</Text>
+                  <Text style={[typography.small, { marginTop: 4 }]}>
+                    Collect the items from the previous driver at:
+                  </Text>
+                  <Text style={[typography.strong, { marginTop: 2 }]}>{(b as any).handover.location?.address || "—"}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={typography.caption}>Previous driver</Text>
+                      <Text style={typography.strong}>{(b as any).handover.from_driver_name || "Driver"}</Text>
+                    </View>
+                    {(b as any).handover.from_driver_phone ? (
+                      <Pressable
+                        onPress={() => Linking.openURL(`tel:${(b as any).handover.from_driver_phone}`)}
+                        style={styles.callBtn}
+                        testID="booking-handover-call"
+                        hitSlop={8}
+                      >
+                        <Icon name="phone" size={18} color="#FFFFFF" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  {(b as any).handover.note ? (
+                    <Text style={[typography.small, { marginTop: 8 }]} testID="booking-handover-note">
+                      Note from CargoOne: {(b as any).handover.note}
+                    </Text>
+                  ) : null}
+                </Card>
+              ) : null}
+
               {/* Customer card */}
               {customer ? (
                 <Card testID="booking-customer-card">

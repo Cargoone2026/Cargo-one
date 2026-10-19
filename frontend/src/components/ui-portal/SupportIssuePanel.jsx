@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, ExternalLink, Mail, MapPin, Phone } from "lucide-react";
 import { api } from "@/lib/api";
+import { HandoverDialog } from "@/components/ui-portal/HandoverDialog";
+import { AdminCancelDialog } from "@/components/ui-portal/AdminCancelDialog";
+
+const LIVE_STATUSES = ["deposit_paid", "confirmed", "accepted", "travelling", "arrived", "collected", "on_route"];
+const STATE_LABEL = { handover_reposted: "Re-posted for handover", handover_assigned: "Assigned to a new driver" };
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
 const money = (v) => (v == null ? "—" : `£${Number(v).toFixed(2)}`);
@@ -38,7 +43,10 @@ function Contact({ who, person, testId }) {
 }
 
 // Full "Needs attention" panel for a driver-reported problem, with Mark resolved.
-export function SupportIssuePanel({ details, onResolved }) {
+export function SupportIssuePanel({ details, onResolved, onChanged }) {
+  const [handoverMode, setHandoverMode] = useState(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [actionMsg, setActionMsg] = useState(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -48,6 +56,8 @@ export function SupportIssuePanel({ details, onResolved }) {
   const resolved = !!issue.resolved_at;
   const loc = d.driver_location || {};
   const pay = d.payment || {};
+  const canHandover = !resolved && pay.payment_status === "paid" && LIVE_STATUSES.includes(d.status);
+  const canCancel = !["cancelled", "delivered", "pod_uploaded", "completed"].includes(d.status);
 
   const copyRef = async () => {
     try {
@@ -130,6 +140,53 @@ export function SupportIssuePanel({ details, onResolved }) {
           <Contact who="customer" person={d.customer} testId="support-issue-customer" />
         </Section>
       </div>
+
+      {issue.state ? (
+        <p className="rounded-[8px] bg-amber-50 px-2 py-1 text-[12px] font-semibold text-amber-900" data-testid="support-issue-state">
+          {STATE_LABEL[issue.state] || issue.state}
+        </p>
+      ) : null}
+      {actionMsg ? <p className="text-[12px] text-[#16A34A]" data-testid="support-issue-action-msg">{actionMsg}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        {canHandover ? (
+          <>
+            <button type="button" onClick={() => setHandoverMode("repost")} data-testid="support-issue-repost-btn"
+              className="rounded-[10px] border border-[#111111] bg-white px-3 py-2 text-[13px] font-semibold text-[#111111] hover:bg-[#F3F4F6]">
+              Re-post for handover
+            </button>
+            <button type="button" onClick={() => setHandoverMode("assign")} data-testid="support-issue-assign-btn"
+              className="rounded-[10px] border border-[#111111] bg-white px-3 py-2 text-[13px] font-semibold text-[#111111] hover:bg-[#F3F4F6]">
+              Assign to driver
+            </button>
+          </>
+        ) : null}
+        {canCancel ? (
+          <button type="button" onClick={() => setCancelOpen(true)} data-testid="support-issue-admin-cancel-btn"
+            className="rounded-[10px] border border-[#FCA5A5] bg-white px-3 py-2 text-[13px] font-semibold text-[#B91C1C] hover:bg-[#FEF2F2]">
+            Cancel booking (admin)
+          </button>
+        ) : null}
+      </div>
+      <HandoverDialog
+        mode={handoverMode}
+        details={d}
+        onClose={() => setHandoverMode(null)}
+        onDone={() => {
+          setActionMsg(handoverMode === "repost" ? "Job re-posted for handover." : "Driver assigned for handover.");
+          setHandoverMode(null);
+          onChanged?.();
+        }}
+      />
+      {cancelOpen ? (
+        <AdminCancelDialog
+          booking={{ id: d.booking_id }}
+          onClose={() => setCancelOpen(false)}
+          onDone={() => {
+            setCancelOpen(false);
+            onChanged?.();
+          }}
+        />
+      ) : null}
 
       {resolved ? (
         <Section title="Resolved">

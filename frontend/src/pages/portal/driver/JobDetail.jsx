@@ -163,6 +163,13 @@ export default function DriverJobDetail() {
           }}
         />
 
+        {job.handover ? (
+        <div className="rounded-[12px] border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900" data-testid="driver-job-handover-banner">
+          <p className="font-semibold">Handover collection – collect items from the previous driver at this location</p>
+          {job.handover.location?.address ? <p className="mt-0.5">{job.handover.location.address}</p> : null}
+        </div>
+        ) : null}
+
         <div className="space-y-3 rounded-[12px] bg-[#F9FAFB] p-4">
           <RouteRow color="#16A34A" label="Pickup town" value={job.pickup_town} />
           <RouteRow color="#D62828" label="Dropoff town" value={job.dropoff_town} />

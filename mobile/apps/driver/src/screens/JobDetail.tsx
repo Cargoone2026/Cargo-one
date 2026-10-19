@@ -237,6 +237,15 @@ export default function JobDetailScreen() {
           />
         )}
 
+        {(job as any).handover ? (
+          <Card testID="driver-job-handover-banner" style={{ backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }}>
+            <Text style={[typography.strong, { color: "#92400E" }]}>Handover collection – collect items from the previous driver at this location</Text>
+            {(job as any).handover.location?.address ? (
+              <Caption style={{ marginTop: 4 }}>{(job as any).handover.location.address}</Caption>
+            ) : null}
+          </Card>
+        ) : null}
+
         {/* Route */}
         <Card>
           <View style={styles.routeRow}>

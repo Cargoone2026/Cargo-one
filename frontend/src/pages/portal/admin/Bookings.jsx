@@ -5,6 +5,7 @@ import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import { SupportIssuePanel } from "@/components/ui-portal/SupportIssuePanel";
+import { AdminCancelDialog } from "@/components/ui-portal/AdminCancelDialog";
 import { useSearchParams } from "react-router-dom";
 
 export default function AdminBookings() {
@@ -20,6 +21,7 @@ export default function AdminBookings() {
   const [attentionOnly, setAttentionOnly] = useState(params.get("filter") === "attention");
   const [issueOpenId, setIssueOpenId] = useState(params.get("issue"));
   const [issues, setIssues] = useState({});
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,7 +158,9 @@ export default function AdminBookings() {
           filtered.map((b) => {
             const isRecovery = b.service_type === "breakdown_recovery";
             const isPaid = b.payment_status === "paid";
-            const refunded = b.refund_status === "refunded";
+            const refunded = ["refunded", "succeeded"].includes(b.refund_status);
+            const refundBusyState = ["in_progress", "pending"].includes(b.refund_status);
+            const live = !b.cancelled_at && !["cancelled", "delivered", "pod_uploaded", "completed"].includes(b.status);
             return (
               <li
                 key={b.id}
@@ -166,8 +170,14 @@ export default function AdminBookings() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <p className="min-w-0 truncate text-[16px] font-semibold text-[#111111]">
-                      {b.job?.title || "Booking"}
+                      {b.job_title || b.job?.title || "Booking"}
                     </p>
+                    <span className="shrink-0 font-mono text-[11px] text-[#6B7280]" data-testid={`admin-booking-ref-${b.id}`}>#{b.short_ref}</span>
+                    {b.service_timing ? (
+                      <span className="shrink-0 rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#374151]">
+                        {b.service_timing === "asap" ? "ASAP" : "Scheduled"}
+                      </span>
+                    ) : null}
                     {isRecovery && (
                       <span
                         className="text-[10px] font-bold uppercase tracking-[0.5px] bg-amber-100 text-amber-800 rounded-full px-2 py-0.5"
@@ -194,6 +204,7 @@ export default function AdminBookings() {
                 {b.support_issue && issueOpenId === b.id && issues[b.id] ? (
                   <SupportIssuePanel
                     details={issues[b.id]}
+                    onChanged={load}
                     onResolved={(next) => {
                       setIssues((m) => ({ ...m, [b.id]: next }));
                       setBookings((list) => list.map((x) => (x.id === b.id ? { ...x, support_issue: next.issue } : x)));
@@ -203,7 +214,7 @@ export default function AdminBookings() {
                 <div className="mt-2 flex items-center gap-1 text-[13px] text-[#6B7280]">
                   <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
                   <span className="truncate">
-                    {b.job?.pickup_town} → {b.job?.dropoff_town}
+                    {b.pickup_town || b.job?.pickup_town || "—"} → {b.dropoff_town || b.job?.dropoff_town || "—"}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#F3F4F6] pt-2">
@@ -219,19 +230,33 @@ export default function AdminBookings() {
                       {b.payment_status || "unpaid"}
                     </span>
                     {refunded && (
-                      <span className="rounded-full bg-[#FEE2E2] text-[#B91C1C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]">
-                        Refunded
+                      <span className="rounded-full bg-[#FEE2E2] text-[#B91C1C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]" data-testid={`admin-booking-refund-state-${b.id}`}>
+                        Refunded{b.refund_amount != null ? ` £${Number(b.refund_amount).toFixed(2)}` : ""}
+                        {b.refunded_at ? ` on ${new Date(b.refunded_at).toLocaleDateString("en-GB")}` : ""}
                       </span>
                     )}
+                    {refundBusyState && (
+                      <span className="rounded-full bg-[#FEF3C7] text-[#B45309] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]" data-testid={`admin-booking-refund-state-${b.id}`}>
+                        Refund in progress
+                      </span>
+                    )}
+                    {b.refund_status === "failed" && (
+                      <span className="rounded-full bg-[#FEE2E2] text-[#991B1B] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px]" data-testid={`admin-booking-refund-state-${b.id}`}>
+                        Refund failed
+                      </span>
+                    )}
+                    {b.deposit_amount != null ? (
+                      <span className="text-[12px] text-[#6B7280]">Deposit £{Number(b.deposit_amount).toFixed(2)}</span>
+                    ) : null}
                     <span className="text-[16px] font-bold text-[#111111]">
                       £{Number(b.total_price || 0).toFixed(0)}
                     </span>
                   </div>
                 </div>
 
-                {isPaid && (
+                {(isPaid || live) && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
+                    {isPaid && <button
                       type="button"
                       onClick={() => openPayment(b)}
                       className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] px-3 py-1 text-[12px] font-medium hover:bg-[#F9FAFB]"
@@ -239,8 +264,18 @@ export default function AdminBookings() {
                     >
                       <CreditCard className="h-3.5 w-3.5" />
                       View payment
-                    </button>
-                    {!refunded && (
+                    </button>}
+                    {live && (
+                      <button
+                        type="button"
+                        onClick={() => setCancelTarget(b)}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#FCA5A5] px-3 py-1 text-[12px] font-medium text-[#B91C1C] hover:bg-[#FEF2F2]"
+                        data-testid={`admin-booking-admin-cancel-${b.id}`}
+                      >
+                        Cancel booking (admin)
+                      </button>
+                    )}
+                    {isPaid && !refunded && !refundBusyState && (
                       <button
                         type="button"
                         onClick={() => setRefundTarget(b)}
@@ -258,6 +293,18 @@ export default function AdminBookings() {
           })
         )}
       </ul>
+
+      {cancelTarget ? (
+        <AdminCancelDialog
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onDone={(r) => {
+            setCancelTarget(null);
+            setRefundMsg(`Booking cancelled. Refund: ${r?.refund || "none"}${r?.refund_error ? ` (${r.refund_error})` : ""}.`);
+            load();
+          }}
+        />
+      ) : null}
 
       {/* Refund confirmation dialog */}
       {refundTarget && (

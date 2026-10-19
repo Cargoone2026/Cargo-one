@@ -89,6 +89,13 @@ function formatSession(secs: number) {
 }
 
 /** Live Mode's offer card — mirrors the web OfferCard. */
+function offersReasonText(reason: string): string {
+  if (reason === "busy_on_asap") return "You're on an active ASAP job. New ASAP jobs will appear once it's completed.";
+  if (reason === "no_location") return "We can\'t get your location. Check location permission is set to \'While Using\' and you have signal.";
+  if (reason === "offline") return "You're offline. Go online to receive ASAP jobs.";
+  return "New jobs are paused for a moment. We'll keep checking.";
+}
+
 function OfferCard({
   offer,
   claiming,
@@ -146,6 +153,12 @@ function OfferCard({
         </View>
       </View>
 
+      {(offer as any).handover ? (
+        <View style={styles.handoverBanner} testID={`driver-live-offer-handover-${offer.job_id}`}>
+          <Icon name="repeat" size={14} color="#92400E" />
+          <Text style={styles.handoverText}>Handover collection – collect items from the previous driver at this location</Text>
+        </View>
+      ) : null}
       <View style={styles.offerRow}>
         <View style={styles.dotPickup} />
         <Text style={styles.offerRowText} numberOfLines={1}>
@@ -204,6 +217,18 @@ export default function LiveModeScreen() {
 
   const [offers, setOffers] = useState<AsapOffer[]>([]);
   const [offersReason, setOffersReason] = useState<string | null>(null);
+  const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const openBusyJob = async () => {
+    if (!busyJobId) return;
+    try {
+      const rows = await DriverAPI.myBookings();
+      const match = (rows || []).find((x: any) => x?.job_id === busyJobId && !x?.cancelled_at);
+      if (match) nav.navigate("BookingDetail", { bookingId: match.id });
+      else nav.navigate("JobDetail", { jobId: busyJobId });
+    } catch {
+      nav.navigate("JobDetail", { jobId: busyJobId });
+    }
+  };
   const [claiming, setClaiming] = useState<string | null>(null);
   const [missedToast, setMissedToast] = useState<number | null>(null);
 
@@ -407,10 +432,12 @@ export default function LiveModeScreen() {
         const r = (await DriverAPI.asapOffers()) as unknown as {
           offers?: AsapOffer[];
           reason?: string | null;
+          busy_job_id?: string | null;
         };
         if (!alive) return;
         setOffers(Array.isArray(r?.offers) ? r.offers : []);
         setOffersReason(r?.reason || null);
+        setBusyJobId(r?.busy_job_id || null);
       } catch {
         /* silent */
       } finally {
@@ -684,10 +711,19 @@ export default function LiveModeScreen() {
             </View>
           ) : offers.length === 0 ? (
             <View style={{ gap: space[3] }}>
-              <View style={styles.idleRow}>
-                <ActivityIndicator color={colors.brand} />
-                <Text style={typography.body}>Looking for nearby jobs…</Text>
-              </View>
+              {offersReason && offersReason !== "stale_location" ? (
+                <View style={styles.reasonBox} testID={`driver-live-reason-${offersReason}`}>
+                  <Text style={typography.body}>{offersReasonText(offersReason)}</Text>
+                  {offersReason === "busy_on_asap" && busyJobId ? (
+                    <SecondaryButton title="Open active job" onPress={openBusyJob} testID="driver-live-open-active-job" />
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.idleRow}>
+                  <ActivityIndicator color={colors.brand} />
+                  <Text style={typography.body}>Looking for nearby jobs…</Text>
+                </View>
+              )}
               <View style={styles.statsRow}>
                 <View style={styles.statTile}>
                   <Text style={typography.micro}>Today</Text>
@@ -736,6 +772,15 @@ export default function LiveModeScreen() {
 }
 
 const styles = StyleSheet.create({
+  reasonBox: {
+    gap: 10, padding: 14, borderRadius: 12,
+    borderWidth: 1, borderColor: "#FDE68A", backgroundColor: "#FFFBEB",
+  },
+  handoverBanner: {
+    flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8,
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "#FEF3C7",
+  },
+  handoverText: { flex: 1, fontSize: 12, fontWeight: "600", color: "#92400E" },
   root: { flex: 1, backgroundColor: colors.bg },
   canvas: { flex: 1, position: "relative", overflow: "hidden" },
 

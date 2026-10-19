@@ -576,6 +576,30 @@ export default function DriverBookingDetail() {
               />
             </div>
 
+            {b.handover && (
+              <div className="rounded-[12px] border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-900" data-testid="driver-booking-handover-card">
+                <p className="text-[11px] font-bold uppercase tracking-[0.6px]">Handover collection</p>
+                <p className="mt-1">Collect the items from the previous driver at:</p>
+                <p className="font-semibold">{b.handover.location?.address || "—"}</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] text-amber-800">Previous driver</p>
+                    <p className="font-semibold">{b.handover.from_driver_name || "Driver"}</p>
+                  </div>
+                  {b.handover.from_driver_phone ? (
+                    <a
+                      href={`tel:${b.handover.from_driver_phone}`}
+                      data-testid="driver-booking-handover-call"
+                      className="rounded-full bg-[#16A34A] px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90"
+                    >
+                      Call {b.handover.from_driver_phone}
+                    </a>
+                  ) : null}
+                </div>
+                {b.handover.note ? <p className="mt-2" data-testid="driver-booking-handover-note">Note from CargoOne: {b.handover.note}</p> : null}
+              </div>
+            )}
+
             {b.other_party && (
               <div
                 className="flex items-center gap-3 rounded-[12px] border border-[#E5E7EB] p-3"

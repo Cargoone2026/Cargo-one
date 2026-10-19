@@ -545,6 +545,13 @@ def is_valid_phone(raw) -> bool:
     return bool(_PHONE_UK_RE.match(digits))
 
 
+def _handover_public(h: Optional[dict]) -> Optional[dict]:
+    # Handover info without the previous driver's phone.
+    if not h:
+        return h
+    return {k: v for k, v in h.items() if k != "from_driver_phone"}
+
+
 def public_job(job: dict, include_private: bool = False) -> dict:
     """Return job dict; hides exact addresses/contact until deposit paid."""
     out = {k: v for k, v in job.items() if k not in ("_id",)}
@@ -558,6 +565,8 @@ def public_job(job: dict, include_private: bool = False) -> dict:
     # scheduled, marketplace — displays a vehicle to the driver.
     if not out.get("recommended_vehicle"):
         out["recommended_vehicle"] = _derive_suitable_vehicle(job)
+    if out.get("handover"):
+        out["handover"] = _handover_public(out["handover"])
     # R44 — Always surface distance_miles + duration_minutes on the customer
     # + driver booking detail UIs. Historic jobs (pre-R25 pricing engine),
     # non-domestic-UK routes (which skipped resolve_route), and jobs where
@@ -3100,7 +3109,7 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
             job_id=busy.get("id"), driver_id=user["id"], distance_miles=None,
             radius_used=0.0, outcome="busy",
         )
-        return {"offers": [], "reason": "busy_on_asap"}
+        return {"offers": [], "reason": "busy_on_asap", "busy_job_id": busy.get("id")}
 
     # Candidate query — index-friendly (service_timing + status + assigned_driver_id).
     # R23: exclude jobs where this driver is on the blocked list (they cancelled it earlier).
@@ -3178,6 +3187,7 @@ async def driver_live_offers(user: dict = Depends(require_role("driver")),
                 or _derive_suitable_vehicle(job)
             ),
             "photos": job.get("photos") or [],
+            "handover": _handover_public(job.get("handover")),
             "dispatch_ready_at": job.get("dispatch_ready_at"),
             "current_search_radius_miles": job_radius,
             "waiting_seconds": int(
@@ -4212,6 +4222,12 @@ async def get_booking(booking_id: str, user: dict = Depends(get_current_user)):
             b["stripe_payment_intent_id"] = txn.get("payment_intent_id")
             b["stripe_amount_total"] = txn.get("amount_total")
             b["refunds"] = txn.get("refunds") or []
+    if b.get("handover"):
+        full = user["role"] == "admin" or (
+            user["id"] == b.get("driver_id") and b.get("payment_status") == "paid"
+        )
+        if not full:
+            b["handover"] = _handover_public(b["handover"])
     return _view_status(b)
 
 
@@ -5605,7 +5621,26 @@ async def admin_job_detail(job_id: str,
 @api.get("/admin/bookings")
 async def admin_list_bookings(user: dict = Depends(require_role("admin"))):
     bookings = await db.bookings.find({"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [_view_status(b) for b in bookings]
+    job_ids = list({b.get("job_id") for b in bookings if b.get("job_id")})
+    jobs = await db.jobs.find(
+        {"id": {"$in": job_ids}},
+        {"_id": 0, "id": 1, "title": 1, "pickup_town": 1, "dropoff_town": 1, "service_timing": 1},
+    ).to_list(len(job_ids) or 1)
+    jmap = {j["id"]: j for j in jobs}
+    uids = list({u for b in bookings for u in (b.get("customer_id"), b.get("driver_id") or b.get("previous_driver_id")) if u})
+    users = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1}).to_list(len(uids) or 1)
+    umap = {u["id"]: u.get("name") for u in users}
+    for b in bookings:
+        j = jmap.get(b.get("job_id")) or {}
+        b["job_title"] = j.get("title")
+        b["pickup_town"] = j.get("pickup_town")
+        b["dropoff_town"] = j.get("dropoff_town")
+        b["service_timing"] = b.get("service_timing") or j.get("service_timing")
+        b["customer_name"] = umap.get(b.get("customer_id"))
+        b["driver_name"] = umap.get(b.get("driver_id") or b.get("previous_driver_id"))
+        b["short_ref"] = (b.get("id") or "")[:8].upper()
+        _view_status(b)
+    return bookings
 
 
 @api.get("/admin/dispatch/active")
@@ -5787,7 +5822,7 @@ async def customer_cancel_booking(
             raise HTTPException(status_code=403, detail="Not your booking")
         if b.get("status") in DELIVERED_BOOKING_STATUSES:
             raise HTTPException(status_code=409, detail="This booking has been delivered and can no longer be cancelled or refunded")
-        if b.get("status") in COLLECTED_BOOKING_STATUSES:
+        if b.get("status") in COLLECTED_BOOKING_STATUSES or b.get("handover"):
             raise HTTPException(status_code=409, detail=COLLECTED_NO_CANCEL_MSG)
         if b.get("payment_status") == "paid":
             # Reuse the full-fat refund path.
@@ -5968,7 +6003,7 @@ async def _customer_cancel_and_refund_impl(
         raise HTTPException(status_code=404, detail="Booking not found")
     if b.get("customer_id") != user["id"]:
         raise HTTPException(status_code=403, detail="Not your booking")
-    if b.get("status") in COLLECTED_BOOKING_STATUSES:
+    if b.get("status") in COLLECTED_BOOKING_STATUSES or b.get("handover"):
         raise HTTPException(status_code=409, detail=COLLECTED_NO_CANCEL_MSG)
 
     job = await db.jobs.find_one({"id": b.get("job_id")}) if b.get("job_id") else None
@@ -6701,6 +6736,309 @@ async def admin_support_issues_count(user: dict = Depends(require_role("admin"))
     return {"open": n}
 
 
+class HandoverBody(BaseModel):
+    address: str = Field(min_length=1, max_length=300)
+    lat: float
+    lng: float
+    note: Optional[str] = Field(default=None, max_length=1000)
+    driver_id: Optional[str] = None
+
+
+HANDOVER_CUSTOMER_MSG = "We're arranging a new driver to complete your delivery."
+HANDOVER_LIVE_STATUSES = ("deposit_paid", "confirmed", "accepted", "travelling", "arrived", "collected", "on_route")
+
+
+async def _handover_load(booking_id: str) -> tuple:
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("payment_status") != "paid" or b.get("cancelled_at") or b.get("status") not in HANDOVER_LIVE_STATUSES:
+        raise HTTPException(status_code=409, detail="Handover is only possible on a paid, active booking")
+    if not b.get("driver_id"):
+        raise HTTPException(status_code=409, detail="This booking has no driver to hand over from")
+    job = await db.jobs.find_one({"id": b.get("job_id"), "deleted_at": None}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return b, job
+
+
+async def _handover_prepare(b: dict, job: dict, admin: dict, body: HandoverBody, mode: str) -> dict:
+    """Shared handover bookkeeping: pickup move, handover info, block old driver, audit, customer notice."""
+    now = now_iso()
+    old = await db.users.find_one({"id": b["driver_id"]}, {"_id": 0, "id": 1, "name": 1, "phone": 1}) or {}
+    handover = {
+        "from_driver_id": old.get("id") or b["driver_id"],
+        "from_driver_name": old.get("name"),
+        "from_driver_phone": old.get("phone"),
+        "location": {"address": body.address.strip(), "lat": body.lat, "lng": body.lng},
+        "note": (body.note or "").strip() or None,
+        "mode": mode,
+        "by_admin_id": admin["id"],
+        "created_at": now,
+    }
+    job_set = {"handover": handover, "pickup_address": handover["location"]["address"],
+               "pickup_lat": body.lat, "pickup_lng": body.lng,
+               "pickup_postcode": None, "pickup_place_id": None}
+    if not job.get("original_pickup_address"):
+        job_set.update({f"original_{k}": job.get(k) for k in (
+            "pickup_address", "pickup_lat", "pickup_lng", "pickup_postcode", "pickup_town", "pickup_place_id")})
+    await db.jobs.update_one({"id": job["id"]}, {"$set": job_set,
+                                                 "$addToSet": {"blocked_driver_ids": handover["from_driver_id"]}})
+    await db.bids.update_many(
+        {"job_id": job["id"], "driver_id": handover["from_driver_id"], "status": {"$in": ["pending", "accepted"]}},
+        {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "handover"}},
+    )
+    if b.get("support_issue") and not (b["support_issue"] or {}).get("resolved_at"):
+        await db.bookings.update_one({"id": b["id"]}, {"$set": {
+            "support_issue.state": f"handover_{'reposted' if mode == 'repost' else 'assigned'}",
+            "support_issue.handover_at": now}})
+    await db.admin_handover_log.insert_one({
+        "id": new_id(), "booking_id": b["id"], "job_id": job["id"], "mode": mode,
+        "admin_id": admin["id"], "admin_name": admin.get("name"),
+        "from_driver_id": handover["from_driver_id"], "from_driver_name": handover["from_driver_name"],
+        "to_driver_id": body.driver_id if mode == "assign" else None,
+        "location": handover["location"], "note": handover["note"],
+        "booking_status_before": b.get("status"), "created_at": now,
+    })
+    try:
+        await push_notification(b["customer_id"], "Arranging a new driver", HANDOVER_CUSTOMER_MSG,
+                                {"booking_id": b["id"], "job_id": job["id"], "kind": "handover"})
+    except Exception:
+        logger.exception("handover customer notice failed; continuing")
+    return handover
+
+
+@api.post("/admin/bookings/{booking_id}/handover/repost")
+async def admin_handover_repost(booking_id: str, body: HandoverBody, user: dict = Depends(require_role("admin"))):
+    b, job = await _handover_load(booking_id)
+    is_asap = (job.get("service_timing") or "").lower() == "asap"
+    now = now_iso()
+    # Booking parked exactly like a paid driver cancel so _reassign_cancelled_booking hands it on.
+    claim = await db.bookings.update_one(
+        {"id": booking_id, "driver_id": b["driver_id"], "cancelled_at": None},
+        {"$set": {"status": "cancelled_by_driver", "previous_driver_id": b["driver_id"], "driver_id": None,
+                  "handover_reposted_at": now}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Booking changed – please refresh")
+    handover = await _handover_prepare(b, job, user, body, "repost")
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"handover": handover}})
+    job_update = {"assigned_driver_id": None, "assigned_driver_name": None, "assigned_driver_rating": None,
+                  "accepted_at": None}
+    if is_asap:
+        job_update.update({"status": "dispatch_ready", "dispatch_claimed_at": None, "dispatch_ready_at": now})
+    else:
+        job_update["status"] = "posted"
+        if job.get("pricing_type") == "bidding" and job.get("accepted_price"):
+            job_update.update({"pricing_type": "fixed", "fixed_price": job["accepted_price"],
+                               "original_pricing_type": "bidding"})
+    await db.jobs.update_one({"id": job["id"]}, {"$set": job_update})
+    if is_asap:
+        _start_asap_offer_alerts(job["id"], now)
+    return {"ok": True, "booking_id": booking_id, "job_id": job["id"], "handover": handover}
+
+
+@api.get("/admin/bookings/{booking_id}/handover/candidates")
+async def admin_handover_candidates(booking_id: str, q: str = "", user: dict = Depends(require_role("admin"))):
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0}) or {}
+    issue = b.get("support_issue") or {}
+    ref_lat = issue.get("lat") if issue.get("lat") is not None else job.get("pickup_lat")
+    ref_lng = issue.get("lng") if issue.get("lng") is not None else job.get("pickup_lng")
+    exclude = set(job.get("blocked_driver_ids") or []) | {b.get("driver_id"), b.get("previous_driver_id")}
+    query: dict = {"role": "driver", "status": "active", "documents_verified": True, "deleted_at": None}
+    if q.strip():
+        rx = {"$regex": re.escape(q.strip()), "$options": "i"}
+        query["$or"] = [{"name": rx}, {"email": rx}, {"phone": rx}]
+    rows = await db.users.find(query, {"_id": 0, "password_hash": 0}).to_list(500)
+    out = []
+    for d in rows:
+        if d["id"] in exclude or not _driver_is_capable(d, job):
+            continue
+        dist = None
+        if ref_lat is not None and d.get("live_lat") and d.get("live_lng"):
+            dist = round(haversine_miles(float(ref_lat), float(ref_lng), float(d["live_lat"]), float(d["live_lng"])), 1)
+        out.append({"id": d["id"], "name": d.get("name"), "phone": d.get("phone"), "email": d.get("email"),
+                    "rating": d.get("rating"), "live_online": bool(d.get("live_online")),
+                    "distance_miles": dist})
+    out.sort(key=lambda x: (x["distance_miles"] is None, x["distance_miles"] or 0))
+    return out[:50]
+
+
+@api.post("/admin/bookings/{booking_id}/handover/assign")
+async def admin_handover_assign(booking_id: str, body: HandoverBody, user: dict = Depends(require_role("admin"))):
+    if not body.driver_id:
+        raise HTTPException(status_code=400, detail="Choose a driver")
+    b, job = await _handover_load(booking_id)
+    new = await db.users.find_one({"id": body.driver_id}, {"_id": 0, "password_hash": 0})
+    if (not new or new.get("role") != "driver" or new.get("status") != "active" or new.get("deleted_at")
+            or not new.get("documents_verified")):
+        raise HTTPException(status_code=409, detail="That driver isn't active and approved")
+    if new["id"] in (job.get("blocked_driver_ids") or []) or new["id"] == b["driver_id"]:
+        raise HTTPException(status_code=409, detail="That driver can't take this job")
+    if not _driver_is_capable(new, job):
+        raise HTTPException(status_code=409, detail="That driver's vehicle isn't suitable for this job")
+    now = now_iso()
+    is_asap = (job.get("service_timing") or "").lower() == "asap"
+    claim = await db.bookings.update_one(
+        {"id": booking_id, "driver_id": b["driver_id"], "cancelled_at": None},
+        {"$set": {"status": "deposit_paid", "previous_driver_id": b["driver_id"], "driver_id": new["id"],
+                  "reassigned_at": now},
+         "$push": {"reassign_history": {"driver_id": new["id"], "driver_name": new.get("name"),
+                                        "previous_driver_id": b["driver_id"], "status_restored": "deposit_paid",
+                                        "by_admin_id": user["id"], "at": now}}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Booking changed – please refresh")
+    handover = await _handover_prepare(b, job, user, body, "assign")
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"handover": handover}})
+    await db.jobs.update_one({"id": job["id"]}, {"$set": {
+        "status": "accepted" if is_asap else "confirmed",
+        "assigned_driver_id": new["id"], "assigned_driver_name": new.get("name"),
+        "assigned_driver_rating": new.get("rating", 5.0), "accepted_at": now,
+        **({"dispatch_claimed_at": now} if is_asap else {}),
+    }})
+    try:
+        await push_notification(
+            new["id"], "You've been assigned a handover job",
+            f"{job.get('title') or 'Job'}: collect the items from {handover['from_driver_name'] or 'the previous driver'} "
+            f"at {handover['location']['address']}.",
+            {"booking_id": booking_id, "job_id": job["id"], "kind": "handover_assigned"},
+        )
+    except Exception:
+        logger.exception("handover driver push failed; continuing")
+    return {"ok": True, "booking_id": booking_id, "job_id": job["id"], "driver_id": new["id"], "handover": handover}
+
+
+class AdminCancelBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    refund: str  # full | minus_fee | none
+
+
+async def _reconcile_refund_in_progress(b: dict) -> Optional[str]:
+    """For a refund stuck in progress, read the real Stripe state and record it. Returns the new state."""
+    if b.get("refund_status") not in ("in_progress", "pending"):
+        return b.get("refund_status")
+    import stripe as _stripe
+    _stripe.api_key = STRIPE_API_KEY
+    refunds = []
+    if b.get("stripe_refund_id"):
+        refunds = [_stripe.Refund.retrieve(b["stripe_refund_id"])]
+    else:
+        txn = None
+        if b.get("stripe_session_id"):
+            txn = await db.payment_transactions.find_one({"session_id": b["stripe_session_id"]})
+        if not (txn or {}).get("payment_intent_id"):
+            txn = await db.payment_transactions.find_one(
+                {"booking_id": b["id"], "payment_intent_id": {"$ne": None}}, sort=[("created_at", -1)])
+        pi_id = (txn or {}).get("payment_intent_id") or b.get("stripe_payment_intent_id")
+        if pi_id:
+            refunds = list(_stripe.Refund.list(payment_intent=pi_id, limit=10).auto_paging_iter())
+    g = lambda r, k: r.get(k) if isinstance(r, dict) else getattr(r, k, None)
+    live = [r for r in refunds if g(r, "status") in ("succeeded", "pending", "requires_action")]
+    if live:
+        ok = [r for r in live if g(r, "status") == "succeeded"]
+        r = (ok or live)[0]
+        state = "succeeded" if ok else "pending"
+        await db.bookings.update_one({"id": b["id"]}, {"$set": {
+            "refund_status": state, "stripe_refund_id": g(r, "id"),
+            "refund_amount": round(sum(g(x, "amount") or 0 for x in ok) / 100, 2) if ok else None,
+            "refunded_at": now_iso() if ok else None, "refund_reconciled_at": now_iso()}})
+        return state
+    await db.bookings.update_one({"id": b["id"]}, {"$set": {
+        "refund_status": "failed", "refund_error": "No Stripe refund found (reconciled)",
+        "refund_reconciled_at": now_iso()}})
+    return "failed"
+
+
+@api.get("/admin/bookings/{booking_id}/cancel-preview")
+async def admin_cancel_preview(booking_id: str, user: dict = Depends(require_role("admin"))):
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0, "assigned_driver_id": 1}) if b.get("job_id") else None
+    driver_accepted = bool(b.get("driver_id") or (job or {}).get("assigned_driver_id"))
+    policy = await _get_cancellation_policy()
+    br = _compute_cancellation_fee(float(b.get("deposit_amount") or 0.0), policy, driver_accepted)
+    return {"booking_id": booking_id, "payment_status": b.get("payment_status"),
+            "refund_status": b.get("refund_status"), "deposit_paid": br["deposit_paid"],
+            "cancellation_fee": br["cancellation_fee"], "refund_minus_fee": br["refund_amount"]}
+
+
+@api.post("/admin/bookings/{booking_id}/cancel")
+async def admin_cancel_booking(booking_id: str, body: AdminCancelBody, user: dict = Depends(require_role("admin"))):
+    if body.refund not in ("full", "minus_fee", "none"):
+        raise HTTPException(status_code=400, detail="Choose a refund option")
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if b.get("cancelled_at") or b.get("status") == "cancelled" or b.get("status") in DELIVERED_BOOKING_STATUSES:
+        raise HTTPException(status_code=409, detail="This booking is already cancelled or delivered")
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0}) if b.get("job_id") else None
+    refund_before = b.get("refund_status")
+    try:
+        refund_before = await _reconcile_refund_in_progress(b)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not check the Stripe refund status: {str(e)[:200]}")
+    already_refunded = refund_before in ("succeeded", "refunded", "pending")
+    now = now_iso()
+    driver_id = b.get("driver_id") or (job or {}).get("assigned_driver_id")
+    claim = await db.bookings.update_one(
+        {"id": booking_id, "cancelled_at": None},
+        {"$set": {"status": "cancelled", "cancelled_at": now, "cancelled_by": "admin",
+                  "cancelled_by_admin_id": user["id"], "cancel_reason": body.reason.strip(),
+                  "status_before_cancel": b.get("status"), "driver_id": None,
+                  **({"previous_driver_id": driver_id} if driver_id else {})}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Booking changed – please refresh")
+    if job:
+        await db.jobs.update_one({"id": job["id"]}, {"$set": {
+            "status": "cancelled", "cancelled_at": now, "cancelled_by": "admin", "cancel_reason": body.reason.strip(),
+            "assigned_driver_id": None}})
+        await db.bids.update_many({"job_id": job["id"], "status": {"$in": ["pending", "accepted"]}},
+                                  {"$set": {"status": "withdrawn", "withdrawn_at": now, "withdrawn_reason": "admin_cancelled"}})
+    if b.get("support_issue") and not (b["support_issue"] or {}).get("resolved_at"):
+        await db.bookings.update_one({"id": booking_id}, {"$set": {
+            "support_issue.resolved_at": now, "support_issue.resolved_by": user["id"],
+            "support_issue.resolved_by_name": user.get("name"), "support_issue.resolution_note": "Cancelled by admin"}})
+    refund_result, refund_error, refund_amount = None, None, None
+    if body.refund != "none" and not already_refunded and b.get("payment_status") == "paid":
+        if body.refund == "minus_fee":
+            policy = await _get_cancellation_policy()
+            breakdown = _compute_cancellation_fee(float(b.get("deposit_amount") or 0.0), policy, bool(driver_id))
+            refund_amount = breakdown["refund_amount"]
+        try:
+            if refund_amount == 0:
+                refund_result = {"refund_state": "skipped_zero"}
+            else:
+                refund_result = await _admin_refund(booking_id, {"reason": f"admin_cancel_{body.refund}"}, user,
+                                                    amount_gbp=refund_amount)
+        except HTTPException as e:
+            refund_error = e.detail
+    await db.admin_booking_actions.insert_one({
+        "id": new_id(), "action": "cancel", "booking_id": booking_id, "job_id": (job or {}).get("id"),
+        "admin_id": user["id"], "admin_name": user.get("name"), "reason": body.reason.strip(),
+        "refund_choice": body.refund, "refund_before": refund_before, "refund_amount": refund_amount,
+        "refund_result": (refund_result or {}).get("refund_state"), "refund_error": refund_error,
+        "driver_id": driver_id, "booking_status_before": b.get("status"), "created_at": now,
+    })
+    title = (job or {}).get("title") or "your booking"
+    for uid, msg in ((b.get("customer_id"), f"Your booking for {title} has been cancelled by CargoOne support."),
+                     (driver_id, f"The booking for {title} has been cancelled by CargoOne support.")):
+        if uid:
+            try:
+                await push_notification(uid, "Booking cancelled", msg,
+                                        {"booking_id": booking_id, "kind": "admin_cancelled"})
+            except Exception:
+                logger.exception("admin-cancel notification failed; continuing")
+    return {"ok": True, "booking_id": booking_id, "refund_before": refund_before,
+            "refund": (refund_result or {}).get("refund_state") or ("already_refunded" if already_refunded else "none"),
+            "refund_amount": refund_amount, "refund_error": refund_error}
+
+
 class SupportIssueResolveBody(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
 
@@ -6792,7 +7130,12 @@ async def admin_driver_cancellations(
 @api.post("/admin/bookings/{booking_id}/refund")
 async def admin_refund_booking(booking_id: str, payload: dict = Body(default={}),
                                 user: dict = Depends(require_role("admin"))):
-    """Record a full-refund intent for a paid booking.
+    return await _admin_refund(booking_id, payload, user)
+
+
+async def _admin_refund(booking_id: str, payload: dict, user: dict,
+                        amount_gbp: Optional[float] = None) -> dict:
+    """Admin refund. amount_gbp=None → full refund (unchanged); set only by admin cancel "minus fee".
 
     NOTE (Session B scaffolding): this endpoint currently records the refund
     intent, sets `refund_status` on the booking, appends a refund audit entry
@@ -6854,6 +7197,7 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
         if not pi_id:
             raise RuntimeError("No payment_intent recorded on this booking — cannot refund")
 
+        partial = {"amount": int(round(amount_gbp * 100))} if amount_gbp is not None else {}
         refund_obj = _stripe.Refund.create(
             payment_intent=pi_id,
             reason="requested_by_customer",
@@ -6862,6 +7206,7 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
                 "admin_id": user["id"],
                 "cargoone_reason": (payload or {}).get("reason") or "admin_full_refund",
             },
+            **partial,
         )
         refund_id = refund_obj.get("id") if isinstance(refund_obj, dict) else getattr(refund_obj, "id", None)
         stripe_status = refund_obj.get("status") if isinstance(refund_obj, dict) else getattr(refund_obj, "status", None)
@@ -6884,7 +7229,7 @@ async def admin_refund_booking(booking_id: str, payload: dict = Body(default={})
         "at": now_iso(),
         "admin_id": user["id"],
         "admin_name": user.get("name"),
-        "amount": b.get("deposit_amount") or (txn or {}).get("amount"),
+        "amount": amount_gbp if amount_gbp is not None else (b.get("deposit_amount") or (txn or {}).get("amount")),
         "reason": (payload or {}).get("reason") or "admin_full_refund",
         "state": refund_state,
         "stripe_refund_id": refund_id,

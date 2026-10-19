@@ -4,6 +4,7 @@ import {
   Clock, PoundSterling, Package, Bell, List, X, ChevronUp, LocateFixed,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui-portal/Button";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
 import {
@@ -96,6 +97,11 @@ function OfferCard({ offer, onAccept, onDecline, claiming }) {
           <div className="text-[22px] font-bold tracking-tight">£{offer.accepted_price}</div>
         </div>
       </div>
+      {offer.handover ? (
+        <p className="mb-2 rounded-[8px] bg-amber-50 px-2 py-1 text-[12px] font-semibold text-amber-900" data-testid={`driver-live-offer-handover-${offer.job_id}`}>
+          Handover collection – collect items from the previous driver at this location
+        </p>
+      ) : null}
       <p className="flex items-center gap-1 text-[13px] text-neutral-700">
         <MapPin className="h-3.5 w-3.5 text-emerald-600" />
         <span className="min-w-0 truncate">
@@ -159,7 +165,24 @@ function OfferCard({ offer, onAccept, onDecline, claiming }) {
 }
 
 /** Idle-when-online body: today's stats + reassurance. */
-function OnlineIdleBody({ town, sessionSecs, todayStats, offersReason }) {
+const OFFERS_REASON_TEXT = {
+  busy_on_asap: "You're on an active ASAP job. New ASAP jobs will appear once it's completed.",
+  no_location: "We can't get your location. Check location permission is set to 'While Using' and you have signal.",
+  offline: "You're offline. Go online to receive ASAP jobs.",
+};
+
+function OnlineIdleBody({ town, sessionSecs, todayStats, offersReason, busyJobId }) {
+  const navigate = useNavigate();
+  const openBusyJob = async () => {
+    try {
+      const rows = await api("/bookings/mine");
+      const match = (rows || []).find((x) => x.job_id === busyJobId && !x.cancelled_at);
+      navigate(match ? `/driver/booking/${match.id}` : `/driver/job/${busyJobId}`);
+    } catch {
+      navigate(`/driver/job/${busyJobId}`);
+    }
+  };
+  const blocking = offersReason && offersReason !== "stale_location";
   return (
     <div className="space-y-4 pt-2" data-testid="driver-live-idle-dashboard">
       <div className="flex items-center gap-2 text-[13px] text-neutral-700">
@@ -169,12 +192,30 @@ function OnlineIdleBody({ town, sessionSecs, todayStats, offersReason }) {
         </span>
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
-        <p className="text-[15px] font-semibold text-neutral-900">Looking for nearby ASAP jobs…</p>
-        <p className="mt-1 text-[13px] text-neutral-500">
-          We'll surface the freshest jobs in your area the instant they land.
-        </p>
-      </div>
+      {blocking ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4" data-testid={`driver-live-reason-${offersReason}`}>
+          <p className="text-[14px] font-semibold text-amber-900">
+            {OFFERS_REASON_TEXT[offersReason] || "New jobs are paused for a moment. We'll keep checking."}
+          </p>
+          {offersReason === "busy_on_asap" && busyJobId ? (
+            <button
+              type="button"
+              onClick={openBusyJob}
+              data-testid="driver-live-open-active-job"
+              className="mt-3 rounded-[10px] bg-neutral-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-black"
+            >
+              Open active job
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
+          <p className="text-[15px] font-semibold text-neutral-900">Looking for nearby ASAP jobs…</p>
+          <p className="mt-1 text-[13px] text-neutral-500">
+            We'll surface the freshest jobs in your area the instant they land.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-neutral-200 bg-white p-3" data-testid="driver-live-stat-time">
@@ -197,11 +238,6 @@ function OnlineIdleBody({ town, sessionSecs, todayStats, offersReason }) {
         </div>
       </div>
 
-      {offersReason === "busy_on_asap" ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
-          You're currently on an active ASAP job — new offers pause until it's completed.
-        </div>
-      ) : null}
       {offersReason === "stale_location" ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
           Waiting for a fresh GPS fix — new offers will resume once we have it.
@@ -253,6 +289,7 @@ export default function DriverLive() {
   const [status, setStatus] = useState(null);
   const [offers, setOffers] = useState([]);
   const [offersReason, setOffersReason] = useState(null);
+  const [busyJobId, setBusyJobId] = useState(null);
   const [locError, setLocError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -417,6 +454,7 @@ export default function DriverLive() {
         if (!alive) return;
         setOffers(r.offers || []);
         setOffersReason(r.reason || null);
+        setBusyJobId(r.busy_job_id || null);
       } catch { /* silent */ }
       finally {
         if (alive) offerTimer = setTimeout(offersOnce, OFFER_POLL_INTERVAL_MS);
@@ -687,6 +725,7 @@ export default function DriverLive() {
             sessionSecs={sessionSecs}
             todayStats={todayStats}
             offersReason={offersReason}
+            busyJobId={busyJobId}
           />
         ) : (
           <ul className="space-y-3 pt-2" data-testid="driver-live-offers-list">
