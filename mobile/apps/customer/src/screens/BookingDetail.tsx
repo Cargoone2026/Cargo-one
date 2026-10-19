@@ -45,6 +45,7 @@ import { RouteMap } from "../components/RouteMap";
 import { BookingChatTab } from "../components/BookingChatTab";
 import { BookingPodTab } from "../components/BookingPodTab";
 import { DriverCard } from "../components/DriverCard";
+import { confirmCancelBooking } from "../components/confirmCancelBooking";
 import type { RootStackParamList } from "../App";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
@@ -427,29 +428,21 @@ export function BookingDetailScreen({ route, navigation }: P) {
                   return (
                     <SecondaryButton
                       title="Cancel & request refund"
-                      onPress={() => {
-                        Alert.alert(
-                          "Cancel booking?",
-                          driverAccepted
-                            ? "A driver has accepted your booking. A cancellation fee may be deducted from your deposit per the policy shown above."
-                            : "Cancel this ASAP booking and request a refund of your deposit.",
-                          [
-                            { text: "Keep booking", style: "cancel" },
-                            {
-                              text: "Cancel",
-                              style: "destructive",
-                              onPress: async () => {
-                                try {
-                                  await CustomerAPI.cancelBooking(b.id);
-                                  load();
-                                } catch (e: any) {
-                                  Alert.alert("Error", e?.message || "Could not cancel");
-                                }
-                              },
-                            },
-                          ],
-                        );
-                      }}
+                      onPress={() =>
+                        confirmCancelBooking({
+                          bookingId: b.id,
+                          paid: b.payment_status === "paid",
+                          driverAccepted,
+                          onConfirm: async () => {
+                            try {
+                              await CustomerAPI.cancelBooking(b.id);
+                              load();
+                            } catch (e: any) {
+                              Alert.alert("Error", e?.message || "Could not cancel");
+                            }
+                          },
+                        })
+                      }
                       testID="cancel-booking"
                     />
                   );

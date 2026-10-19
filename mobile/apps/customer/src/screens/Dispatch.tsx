@@ -42,6 +42,7 @@ import type { RootStackParamList } from "../App";
 import { colors, radius, typography } from "../theme";
 import { Page, PageHeader, PrimaryButton, SecondaryButton } from "../ui";
 import { DriverCard } from "../components/DriverCard";
+import { confirmCancelBooking } from "../components/confirmCancelBooking";
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || "");
 
@@ -277,8 +278,26 @@ export function DispatchScreen({ route, navigation }: P) {
   const cancelable = !!bookingId && s.variant !== "cancelled" && s.variant !== "done" && !active;
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  // Ignore cancel taps for 2 s after the screen opens / regains focus / app returns
+  // to foreground (e.g. a tap carried over from the payment sheet).
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armCancel = useCallback(() => {
+    setCancelArmed(false);
+    if (armTimer.current) clearTimeout(armTimer.current);
+    armTimer.current = setTimeout(() => setCancelArmed(true), 2000);
+  }, []);
+  useEffect(() => {
+    armCancel();
+    const unsubFocus = navigation.addListener("focus", armCancel);
+    const sub = AppState.addEventListener("change", (st) => { if (st === "active") armCancel(); });
+    return () => { if (armTimer.current) clearTimeout(armTimer.current); unsubFocus(); sub.remove(); };
+  }, [navigation, armCancel]);
+  // Also re-arm when the dispatch phase changes (e.g. a driver accepts).
+  useEffect(() => { armCancel(); }, [s.variant, armCancel]);
 
-  const onCancel = useCallback(async () => {
+  const doCancel = useCallback(async () => {
     if (!bookingId || cancelBusy) return;
     setCancelBusy(true);
     setCancelError(null);
@@ -294,6 +313,21 @@ export function DispatchScreen({ route, navigation }: P) {
       setCancelBusy(false);
     }
   }, [bookingId, cancelBusy, navigation]);
+
+  const onCancel = useCallback(async () => {
+    if (!bookingId || cancelBusy || confirming || !cancelArmed) return;
+    setConfirming(true);
+    try {
+      await confirmCancelBooking({
+        bookingId,
+        paid: booking?.payment_status === "paid",
+        driverAccepted: !!(booking?.assigned_driver_id || dispatch?.assigned_driver_id),
+        onConfirm: doCancel,
+      });
+    } finally {
+      setConfirming(false);
+    }
+  }, [bookingId, cancelBusy, confirming, cancelArmed, booking, dispatch, doCancel]);
 
   const collected = ["collected", "on_route"].includes(String(furthestStatus(booking?.status, dispatch?.status) || ""));
   const driverParty = (s.variant === "accepted" || active) ? booking?.other_party : null;
@@ -431,27 +465,11 @@ export function DispatchScreen({ route, navigation }: P) {
             ) : null}
           </View>
 
-          {driverParty ? (
-            <DriverCard
-              name={driverParty.name || booking?.assigned_driver_name || "Driver"}
-              photo={driverParty.profile_photo}
-              rating={driverParty.rating ?? booking?.assigned_driver_rating ?? null}
-              jobs={driverParty.total_jobs ?? 0}
-              phone={driverParty.phone}
-            />
-          ) : null}
           {s.variant === "payment_required" && bookingId ? (
             <PrimaryButton
               title={`Retry payment${price != null ? ` · ${money(Number(price))}` : ""}`}
               onPress={() => navigation.replace("Payment", { bookingId })}
               testID="asap-retry-payment"
-            />
-          ) : null}
-          {(active || s.variant === "accepted") && bookingId && booking?.payment_status === "paid" ? (
-            <PrimaryButton
-              title="Message driver"
-              onPress={() => navigation.navigate("BookingDetail", { bookingId, initialTab: "chat" })}
-              testID="asap-message-driver"
             />
           ) : null}
           {collected && s.variant === "active" ? (
@@ -470,6 +488,8 @@ export function DispatchScreen({ route, navigation }: P) {
                       : "Cancel booking"
                 }
                 onPress={onCancel}
+                disabled={!cancelArmed || cancelBusy}
+                loading={confirming}
                 testID="asap-cancel"
               />
               {cancelError ? (
@@ -478,6 +498,23 @@ export function DispatchScreen({ route, navigation }: P) {
                 </Text>
               ) : null}
             </View>
+          ) : null}
+          {/* Driver-accepted items sit below Cancel so it never shifts under the user's finger. */}
+          {(active || s.variant === "accepted") && bookingId && booking?.payment_status === "paid" ? (
+            <PrimaryButton
+              title="Message driver"
+              onPress={() => navigation.navigate("BookingDetail", { bookingId, initialTab: "chat" })}
+              testID="asap-message-driver"
+            />
+          ) : null}
+          {driverParty ? (
+            <DriverCard
+              name={driverParty.name || booking?.assigned_driver_name || "Driver"}
+              photo={driverParty.profile_photo}
+              rating={driverParty.rating ?? booking?.assigned_driver_rating ?? null}
+              jobs={driverParty.total_jobs ?? 0}
+              phone={driverParty.phone}
+            />
           ) : null}
         </View>
       </View>
