@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
 import { AcceptanceInfo } from "@/components/ui-portal/AcceptanceInfo";
+import { SupportIssuePanel } from "@/components/ui-portal/SupportIssuePanel";
+import { useSearchParams } from "react-router-dom";
 
 export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
@@ -14,16 +16,33 @@ export default function AdminBookings() {
   const [refundMsg, setRefundMsg] = useState(null);
   const [detailBooking, setDetailBooking] = useState(null); // {id, stripe_session_id, stripe_payment_intent_id, ...}
   const [detailLoading, setDetailLoading] = useState(false);
+  const [params] = useSearchParams();
+  const [attentionOnly, setAttentionOnly] = useState(params.get("filter") === "attention");
+  const [issueOpenId, setIssueOpenId] = useState(params.get("issue"));
+  const [issues, setIssues] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api("/admin/bookings").catch(() => []);
+      const [list, iss] = await Promise.all([
+        api("/admin/bookings").catch(() => []),
+        api("/admin/support-issues?status=all").catch(() => []),
+      ]);
       setBookings(Array.isArray(list) ? list : []);
+      setIssues(Object.fromEntries((Array.isArray(iss) ? iss : []).map((d) => [d.booking_id, d])));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const id = params.get("issue");
+    if (id && issues[id]) {
+      document.querySelector(`[data-testid="admin-booking-${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [issues, params]);
+
+  const openIssueCount = useMemo(() => Object.values(issues).filter((d) => !d.issue?.resolved_at).length, [issues]);
   useEffect(() => {
     load();
   }, [load]);
@@ -67,13 +86,14 @@ export default function AdminBookings() {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return bookings;
-    return bookings.filter((b) =>
+    const base = attentionOnly ? bookings.filter((b) => b.support_issue && !b.support_issue.resolved_at) : bookings;
+    if (!term) return base;
+    return base.filter((b) =>
       `${b.job?.title || ""} ${b.status || ""} ${b.customer_name || ""} ${b.driver_name || ""} ${b.payment_status || ""} ${b.stripe_session_id || ""}`
         .toLowerCase()
         .includes(term),
     );
-  }, [bookings, q]);
+  }, [bookings, q, attentionOnly]);
 
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="admin-bookings">
@@ -98,6 +118,19 @@ export default function AdminBookings() {
             <XIcon className="h-4 w-4 text-[#9CA3AF]" />
           </button>
         )}
+      </div>
+
+      <div className="mx-4 mt-3 flex md:mx-8">
+        <button
+          type="button"
+          onClick={() => setAttentionOnly((v) => !v)}
+          data-testid="admin-bookings-attention-filter"
+          className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ring-1 ${
+            attentionOnly ? "bg-red-600 text-white ring-red-600" : "bg-white text-red-700 ring-red-200 hover:bg-red-50"
+          }`}
+        >
+          Needs attention ({openIssueCount})
+        </button>
       </div>
 
       {refundMsg && (
@@ -144,24 +177,29 @@ export default function AdminBookings() {
                       </span>
                     )}
                     {b.support_issue && (
-                      <span
-                        className="text-[10px] font-bold uppercase tracking-[0.5px] bg-red-100 text-red-700 rounded-full px-2 py-0.5"
-                        title={`${b.support_issue.reason_label}: ${b.support_issue.note}`}
+                      <button
+                        type="button"
+                        onClick={() => setIssueOpenId((cur) => (cur === b.id ? null : b.id))}
+                        className={`text-[10px] font-bold uppercase tracking-[0.5px] rounded-full px-2 py-0.5 ${
+                          b.support_issue.resolved_at ? "bg-[#E5E7EB] text-[#4B5563]" : "bg-red-100 text-red-700 hover:bg-red-200"
+                        }`}
                         data-testid={`admin-booking-needs-attention-${b.id}`}
                       >
-                        Needs attention
-                      </span>
+                        {b.support_issue.resolved_at ? "Resolved" : "Needs attention"} {issueOpenId === b.id ? "▴" : "▾"}
+                      </button>
                     )}
                   </div>
                   <StatusPill status={b.status} />
                 </div>
-                {b.support_issue && (
-                  <p className="mt-2 rounded-[8px] bg-red-50 px-2 py-1.5 text-[12px] text-red-800" data-testid={`admin-booking-issue-${b.id}`}>
-                    <b>{b.support_issue.reason_label}</b> — {b.support_issue.note}
-                    {b.support_issue.lat != null ? ` · Driver at ${Number(b.support_issue.lat).toFixed(5)}, ${Number(b.support_issue.lng).toFixed(5)}` : ""}
-                    {" · "}{new Date(b.support_issue.created_at).toLocaleString("en-GB")}
-                  </p>
-                )}
+                {b.support_issue && issueOpenId === b.id && issues[b.id] ? (
+                  <SupportIssuePanel
+                    details={issues[b.id]}
+                    onResolved={(next) => {
+                      setIssues((m) => ({ ...m, [b.id]: next }));
+                      setBookings((list) => list.map((x) => (x.id === b.id ? { ...x, support_issue: next.issue } : x)));
+                    }}
+                  />
+                ) : null}
                 <div className="mt-2 flex items-center gap-1 text-[13px] text-[#6B7280]">
                   <MapPin className="h-3.5 w-3.5 text-[#D62828]" />
                   <span className="truncate">

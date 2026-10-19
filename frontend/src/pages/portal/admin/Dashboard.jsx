@@ -28,12 +28,17 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [openIssues, setOpenIssues] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const s = await api("/admin/stats").catch(() => ({}));
+      const [s, ic] = await Promise.all([
+        api("/admin/stats").catch(() => ({})),
+        api("/admin/support-issues/count").catch(() => ({ open: 0 })),
+      ]);
       setStats(s || {});
+      setOpenIssues(Number(ic?.open || 0));
     } finally {
       setLoading(false);
     }
@@ -70,6 +75,18 @@ export default function AdminDashboard() {
       </header>
 
       <div className="mx-auto max-w-[1200px] space-y-3 px-4 pt-4 md:px-8">
+        {openIssues > 0 ? (
+          <Link
+            to="/admin/bookings?filter=attention"
+            data-testid="admin-dashboard-attention-card"
+            className="flex items-center justify-between rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] font-semibold text-red-800 hover:bg-red-100"
+          >
+            <span>
+              {openIssues} {openIssues === 1 ? "booking needs" : "bookings need"} attention
+            </span>
+            <span aria-hidden>→</span>
+          </Link>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <Metric label="Customers" value={stats.customers ?? 0} Icon={Users} color="#2563EB" />
           <Metric label="Drivers" value={stats.drivers ?? 0} Icon={Car} color="#FF6A00" />

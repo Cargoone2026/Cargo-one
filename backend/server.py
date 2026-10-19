@@ -24,7 +24,7 @@ from emergentintegrations.payments.stripe.checkout import (
     CheckoutSessionRequest,
     StripeCheckout,
 )
-from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
@@ -608,10 +608,21 @@ async def push_notification(user_id: str, title: str, body: str, data: Optional[
     # above is the source of truth so the in-app inbox still works if push
     # delivery fails.
     try:
-        asyncio.create_task(_deliver_expo_push(user_id, title, body, doc["data"]))
+        _spawn(_deliver_expo_push(user_id, title, body, doc["data"]))
     except Exception:  # pragma: no cover - never break the notification write
         logger.exception("expo push fan-out task creation failed")
     return doc
+
+
+# Strong refs for fire-and-forget tasks so they are not garbage-collected mid-flight.
+_bg_tasks: set = set()
+
+
+def _spawn(coro) -> "asyncio.Task":
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+    return task
 
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
@@ -652,6 +663,8 @@ async def _deliver_expo_push(user_id: str, title: str, body: str, data: dict):
     except Exception:
         logger.exception("expo push HTTP call failed")
         return
+    if r.status_code >= 400:
+        logger.warning("expo push HTTP %s user=%s body=%s", r.status_code, user_id, str(resp)[:500])
     # Expo returns {"data": [{"status": "ok"|"error", "message": "...",
     #   "details": {"error": "DeviceNotRegistered"|"MessageTooBig"|...}}]}
     results = resp.get("data") if isinstance(resp, dict) else None
@@ -659,6 +672,11 @@ async def _deliver_expo_push(user_id: str, title: str, body: str, data: dict):
         return
     for token, res in zip(tokens, results):
         details = (res or {}).get("details") or {}
+        if (res or {}).get("status") != "ok":
+            logger.warning(
+                "expo push not ok user=%s token=%s…%s message=%s error=%s",
+                user_id, token[:22], token[-4:], (res or {}).get("message"), details.get("error"),
+            )
         if (res or {}).get("status") == "error" and details.get("error") == "DeviceNotRegistered":
             await db.users.update_one(
                 {"id": user_id},
@@ -5513,6 +5531,12 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
 @api.get("/admin/jobs")
 async def admin_list_jobs(include_deleted: bool = False, user: dict = Depends(require_role("admin"))):
     jobs = await db.jobs.find({} if include_deleted else {"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    open_issue_jobs = set(await db.bookings.distinct(
+        "job_id", {"support_issue": {"$exists": True, "$ne": None}, "support_issue.resolved_at": None},
+    ))
+    for j in jobs:
+        if j.get("id") in open_issue_jobs:
+            j["support_issue_open"] = True
     return jobs
 
 
@@ -6616,6 +6640,88 @@ async def driver_release_job(job_id: str, user: dict = Depends(require_role("dri
     return {"ok": True, "job_id": job_id}
 
 
+async def _support_issue_details(b: dict) -> dict:
+    """Everything admin needs to act on a driver-reported problem (used by email + admin API)."""
+    issue = b.get("support_issue") or {}
+    job = await db.jobs.find_one({"id": b.get("job_id")}, {"_id": 0}) if b.get("job_id") else None
+    job = job or {}
+    proj = {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1}
+    driver = await db.users.find_one({"id": issue.get("driver_id") or b.get("driver_id")}, proj) or {}
+    customer = await db.users.find_one({"id": b.get("customer_id")}, proj) or {}
+    lat, lng = issue.get("lat"), issue.get("lng")
+    base = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/") or "https://cargoone.co.uk"
+    return {
+        "booking_id": b.get("id"),
+        "job_id": b.get("job_id"),
+        "job_title": job.get("title") or b.get("job_title"),
+        "job_type": job.get("service_timing") or b.get("service_timing"),
+        "pricing_type": job.get("pricing_type"),
+        "pickup_address": job.get("pickup_address") or job.get("pickup_town"),
+        "dropoff_address": job.get("dropoff_address") or job.get("dropoff_town"),
+        "status": b.get("status"),
+        "scheduled_at": job.get("scheduled_at") or job.get("pickup_date") or job.get("collection_date"),
+        "created_at": b.get("created_at"),
+        "driver": {"id": driver.get("id"), "name": driver.get("name") or issue.get("driver_name"),
+                   "phone": driver.get("phone"), "email": driver.get("email")},
+        "driver_location": {
+            "lat": lat, "lng": lng, "at": issue.get("location_at"),
+            "maps_url": f"https://www.google.com/maps?q={lat},{lng}" if lat is not None and lng is not None else None,
+        },
+        "customer": {"id": customer.get("id"), "name": customer.get("name"),
+                     "phone": customer.get("phone"), "email": customer.get("email")},
+        "issue": issue,
+        "payment": {
+            "payment_status": b.get("payment_status"),
+            "deposit_amount": b.get("deposit_amount"),
+            "driver_charge": b.get("driver_charge"),
+            "booking_fee": b.get("booking_fee"),
+            "total_price": b.get("total_price") or b.get("customer_total"),
+        },
+        "admin_url": f"{base}/admin/bookings?issue={b.get('id')}",
+    }
+
+
+@api.get("/admin/support-issues")
+async def admin_support_issues(issue_status: str = Query("open", alias="status"),
+                               user: dict = Depends(require_role("admin"))):
+    q: dict = {"support_issue": {"$exists": True, "$ne": None}, "deleted_at": None}
+    if issue_status == "open":
+        q["support_issue.resolved_at"] = None
+    elif issue_status == "resolved":
+        q["support_issue.resolved_at"] = {"$ne": None}
+    rows = await db.bookings.find(q, {"_id": 0}).sort("support_issue.created_at", -1).to_list(200)
+    return [await _support_issue_details(b) for b in rows]
+
+
+@api.get("/admin/support-issues/count")
+async def admin_support_issues_count(user: dict = Depends(require_role("admin"))):
+    n = await db.bookings.count_documents(
+        {"support_issue": {"$exists": True, "$ne": None}, "support_issue.resolved_at": None, "deleted_at": None}
+    )
+    return {"open": n}
+
+
+class SupportIssueResolveBody(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+@api.post("/admin/bookings/{booking_id}/support-issue/resolve")
+async def admin_resolve_support_issue(booking_id: str, payload: SupportIssueResolveBody,
+                                      user: dict = Depends(require_role("admin"))):
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0, "id": 1, "support_issue": 1})
+    if not b or not b.get("support_issue"):
+        raise HTTPException(status_code=404, detail="No reported problem on this booking")
+    patch = {
+        "support_issue.resolved_at": now_iso(),
+        "support_issue.resolved_by": user["id"],
+        "support_issue.resolved_by_name": user.get("name"),
+        "support_issue.resolution_note": (payload.note or "").strip() or None,
+    }
+    await db.bookings.update_one({"id": booking_id}, {"$set": patch})
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    return await _support_issue_details(b)
+
+
 @api.get("/driver/problem-reasons")
 async def driver_problem_reasons(_user: dict = Depends(require_role("driver"))):
     return {"reasons": [{"key": k, "label": v} for k, v in DRIVER_PROBLEM_REASONS.items()]}
@@ -6648,7 +6754,8 @@ async def driver_report_problem(booking_id: str, payload: DriverProblemBody,
     await db.bookings.update_one({"id": booking_id}, {"$set": {"support_issue": issue}})
     try:
         from services.email import send_driver_problem_report
-        await send_driver_problem_report(db, booking=b, issue=issue)
+        b["support_issue"] = issue
+        await send_driver_problem_report(db, details=await _support_issue_details(b))
     except Exception:
         logger.exception("report-problem admin email failed; continuing")
     try:

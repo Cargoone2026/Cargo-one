@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, X as XIcon, MapPin, Package, User, Truck, ExternalLink, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
@@ -9,7 +9,8 @@ export default function AdminJobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
-  const [openId, setOpenId] = useState(null);
+  const [params] = useSearchParams();
+  const [openId, setOpenId] = useState(params.get("job"));
   const [showDeleted, setShowDeleted] = useState(false);
 
   const load = useCallback(async () => {
@@ -99,6 +100,14 @@ export default function AdminJobs() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {j.support_issue_open ? (
+                      <span
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-red-700"
+                        data-testid={`admin-job-needs-attention-${j.id}`}
+                      >
+                        Needs attention
+                      </span>
+                    ) : null}
                     {j.deleted_at ? <DeletedBadge testId={`admin-job-deleted-${j.id}`} /> : null}
                     <StatusPill status={j.status} />
                   </div>

@@ -1668,22 +1668,55 @@ async def send_cash_on_delivery_reminder(
     )
 
 
-async def send_driver_problem_report(db, *, booking: dict, issue: dict) -> dict:
-    from html import escape as html_escape
-    to = "support@cargoone.co.uk"
-    ref = booking.get("id") or ""
-    loc = f"{issue.get('lat')}, {issue.get('lng')}" if issue.get("lat") is not None else "Unknown"
+def _admin_alert_recipients() -> list:
+    raw = os.environ.get("ADMIN_ALERT_EMAILS") or ""
+    emails = [e.strip() for e in raw.split(",") if e.strip()]
+    return emails or ["admin@cargoone.co.uk"]
+
+
+async def send_driver_problem_report(db, *, details: dict) -> list:
+    from html import escape as esc
+    issue = details.get("issue") or {}
+    d, c, loc, pay = details["driver"], details["customer"], details["driver_location"], details["payment"]
+    ref = details.get("booking_id") or ""
+    money = lambda v: f"£{float(v):.2f}" if v is not None else "—"
     rows = [
-        ("Booking", ref), ("Driver", issue.get("driver_name") or issue.get("driver_id")),
-        ("Reason", issue.get("reason_label")), ("Note", issue.get("note")),
-        ("Booking status", issue.get("booking_status")),
-        ("Driver last location", loc), ("Location time", issue.get("location_at") or "—"),
-        ("Reported at", issue.get("created_at")),
+        ("Job", details.get("job_title") or "—"),
+        ("Booking ref", ref),
+        ("Job type", " / ".join(x for x in [details.get("job_type"), details.get("pricing_type")] if x) or "—"),
+        ("Pickup", details.get("pickup_address") or "—"),
+        ("Drop-off", details.get("dropoff_address") or "—"),
+        ("Booking status", details.get("status") or "—"),
+        ("Scheduled", details.get("scheduled_at") or "—"),
+        ("Driver", d.get("name") or "—"),
+        ("Driver phone", d.get("phone") or "—"),
+        ("Driver email", d.get("email") or "—"),
+        ("Driver last location", f"{loc['lat']}, {loc['lng']}" if loc.get("maps_url") else "Unknown"),
+        ("Location time", loc.get("at") or "—"),
+        ("Customer", c.get("name") or "—"),
+        ("Customer phone", c.get("phone") or "No phone on file"),
+        ("Customer email", c.get("email") or "—"),
+        ("Reason", issue.get("reason_label") or "—"),
+        ("Note", issue.get("note") or "—"),
+        ("Reported at", issue.get("created_at") or "—"),
+        ("Payment", f"{pay.get('payment_status') or '—'} · deposit {money(pay.get('deposit_amount'))} · driver {money(pay.get('driver_charge'))}"),
     ]
-    subject = f"Needs attention: driver reported a problem on booking {ref[:8]}"
-    html = "<h2>Driver reported a problem</h2><table>" + "".join(
-        f"<tr><td><b>{html_escape(str(k))}</b></td><td>{html_escape(str(v))}</td></tr>" for k, v in rows
-    ) + "</table>"
+    links = []
+    if loc.get("maps_url"):
+        links.append(f'<a href="{esc(loc["maps_url"])}">Open driver location in Google Maps</a>')
+    links.append(f'<a href="{esc(details["admin_url"])}">Open in admin</a>')
+    html = (
+        "<h2>Needs attention: driver reported a problem</h2><table cellpadding='4'>"
+        + "".join(f"<tr><td><b>{esc(str(k))}</b></td><td>{esc(str(v))}</td></tr>" for k, v in rows)
+        + "</table><p>" + " &nbsp;|&nbsp; ".join(links) + "</p>"
+    )
     text = "\n".join(f"{k}: {v}" for k, v in rows)
-    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
-                                template="driver_problem_report", booking_id=ref)
+    if loc.get("maps_url"):
+        text += f"\nGoogle Maps: {loc['maps_url']}"
+    text += f"\nOpen in admin: {details['admin_url']}"
+    subject = f"Needs attention: {issue.get('reason_label') or 'problem'} on {details.get('job_title') or 'booking'} ({ref[:8]})"
+    results = []
+    for to in _admin_alert_recipients():
+        results.append(await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                           template="driver_problem_report", booking_id=ref))
+    return results
