@@ -76,7 +76,7 @@ export default function TrustSafety() {
             <p className="text-[20px] font-bold text-[#111111]">Safety incidents &amp; disputes</p>
             <p className="text-[14px] leading-relaxed text-[#111111]">
               For urgent safety concerns, contact our 24/7 line:{" "}
-              <span className="font-bold">+44 800 111 000</span>. For payment disputes or complaints, email{" "}
+              <span className="font-bold">07983 299049</span>. For payment disputes or complaints, email{" "}
               <span className="font-bold">trust@cargoone.co.uk</span>. We aim to respond within 2 hours for safety matters and 24 hours for all other queries.
             </p>
           </div>

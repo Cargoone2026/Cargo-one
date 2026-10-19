@@ -576,3 +576,4 @@ Each future phase must start from the locked baseline.
 - Commit 8d5201e on main, tagged v1.0.0-golden. All features tested and LOCKED.
 - NO code changes unless the user explicitly asks for a specific change.
 - Never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit user approval.
+- Contact numbers: placeholders replaced with 07983 299049 (Contact.jsx office+emergency, TrustSafety.jsx). ADMIN_ALERT_EMAILS=admin@cargoone.co.uk confirmed. Lock remains.

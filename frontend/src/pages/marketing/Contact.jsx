@@ -94,11 +94,11 @@ export default function Contact() {
               <div className="space-y-3">
                 {[
                   { icon: Mail, title: "Email", body: "hello@cargoone.co.uk", tag: "Reply within 24h", href: "mailto:hello@cargoone.co.uk", testId: "contact-channel-email" },
-                  { icon: Phone, title: "Office", body: "+44 800 111 000", tag: "Mon–Fri, 8am–8pm", href: "tel:+448001110000", testId: "contact-channel-phone-office" },
+                  { icon: Phone, title: "Office", body: "07983 299049", tag: "Mon–Fri, 8am–8pm", href: "tel:+447983299049", testId: "contact-channel-phone-office" },
                   { icon: Phone, title: "Mobile / Direct line", body: "07983 299049", tag: "Click to call — 24/7", href: "tel:+447983299049", testId: "contact-channel-phone-mobile" },
                   { icon: MessageCircle, title: "WhatsApp", body: "Chat with our team on WhatsApp", tag: "07983 299049 — usually replies within minutes", href: "https://wa.me/447983299049", target: "_blank", testId: "contact-channel-whatsapp" },
                   { icon: MapPin, title: "Head office", body: "Cargo One Ltd, 1 Fleet Street, London EC4A 1AA", tag: "By appointment", href: "https://www.google.com/maps?q=1+Fleet+Street+London+EC4A+1AA", target: "_blank", testId: "contact-channel-office" },
-                  { icon: Headphones, title: "Emergency line", body: "For safety incidents in progress", tag: "+44 800 111 999", href: "tel:+448001110999", testId: "contact-channel-emergency" },
+                  { icon: Headphones, title: "Emergency line", body: "For safety incidents in progress", tag: "07983 299049", href: "tel:+447983299049", testId: "contact-channel-emergency" },
                 ].map((c) => {
                   const isWhatsApp = c.title === "WhatsApp";
                   return (
