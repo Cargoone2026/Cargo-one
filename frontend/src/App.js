@@ -63,6 +63,7 @@ import AdminDrivers from "@/pages/portal/admin/Drivers";
 import AdminDriverDetail from "@/pages/portal/admin/DriverDetail";
 import AdminJobs from "@/pages/portal/admin/Jobs";
 import AdminBookings from "@/pages/portal/admin/Bookings";
+import AdminTestDataCleanup from "@/pages/portal/admin/TestDataCleanup";
 import AdminCatalog from "@/pages/portal/admin/Catalog";
 import AdminDepositBands from "@/pages/portal/admin/DepositBands";
 import AdminBookingFeeBands from "@/pages/portal/admin/BookingFeeBands";
@@ -210,6 +211,7 @@ export default function App() {
             <Route path="/admin/driver/:id" element={<Admin Page={AdminDriverDetail} />} />
             <Route path="/admin/jobs" element={<Admin Page={AdminJobs} />} />
             <Route path="/admin/bookings" element={<Admin Page={AdminBookings} />} />
+            <Route path="/admin/test-data-cleanup" element={<Admin Page={AdminTestDataCleanup} />} />
             <Route path="/admin/catalog" element={<Admin Page={AdminCatalog} />} />
             <Route path="/admin/deposit-bands" element={<Admin Page={AdminDepositBands} />} />
             <Route path="/admin/booking-fee-bands" element={<Admin Page={AdminBookingFeeBands} />} />

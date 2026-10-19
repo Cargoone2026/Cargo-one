@@ -578,3 +578,4 @@ Each future phase must start from the locked baseline.
 - Never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit user approval.
 - Contact numbers: placeholders replaced with 07983 299049 (Contact.jsx office+emergency, TrustSafety.jsx). ADMIN_ALERT_EMAILS=admin@cargoone.co.uk confirmed. Lock remains.
 - Security tidy-up: CORS default + .env = https://cargoone.co.uk,https://www.cargoone.co.uk; httpx/httpcore loggers WARNING; repo key scan clean. Lock remains.
+- TEMP test-data cleanup tool: services/test_data_cleanup.py + GET /admin/test-data-cleanup/dry-run, POST .../execute (confirm "ARCHIVE TEST DATA"), page /admin/test-data-cleanup. NOT executed. Remove after real run.
