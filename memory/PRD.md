@@ -577,3 +577,4 @@ Each future phase must start from the locked baseline.
 - NO code changes unless the user explicitly asks for a specific change.
 - Never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit user approval.
 - Contact numbers: placeholders replaced with 07983 299049 (Contact.jsx office+emergency, TrustSafety.jsx). ADMIN_ALERT_EMAILS=admin@cargoone.co.uk confirmed. Lock remains.
+- Security tidy-up: CORS default + .env = https://cargoone.co.uk,https://www.cargoone.co.uk; httpx/httpcore loggers WARNING; repo key scan clean. Lock remains.

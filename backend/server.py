@@ -156,6 +156,9 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cargoone")
+# httpx/httpcore log full request URLs at INFO (incl. Google API keys in the query string).
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # Safe runtime verification of the loaded Stripe key at startup.
 # Logs ONLY the 8-char prefix and length — never the secret itself.
@@ -9025,7 +9028,9 @@ async def shutdown():
 
 app.include_router(api)
 
-_cors_origins_raw = os.environ.get("CORS_ORIGINS", "*").strip()
+# Default is the production allow-list so a missing env can never re-open CORS.
+# Native apps send no Origin header, so CORS doesn't apply to them.
+_cors_origins_raw = (os.environ.get("CORS_ORIGINS") or "https://cargoone.co.uk,https://www.cargoone.co.uk").strip()
 _cors_origins = ["*"] if _cors_origins_raw == "*" else [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 
 app.add_middleware(
