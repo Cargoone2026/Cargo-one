@@ -571,3 +571,8 @@ Each future phase must start from the locked baseline.
 - Customer app cancel safety: confirmCancelBooking (preview figures, Keep booking default) on Dispatch + BookingDetail; Dispatch cancel disabled 2s after open/focus/foreground/phase change; driver card + Message driver moved below Cancel.
 - Admin handover: /admin/bookings/{id}/handover/{repost,assign,candidates} (reuses paid reassignment; admin_handover_log); customer cancel 409 while booking.handover set; driver app/web handover banners + BookingDetail handover card; admin cancel /admin/bookings/{id}/cancel (+cancel-preview, Stripe in_progress reconcile, minus_fee partial via _admin_refund amount; admin_booking_actions); admin bookings enrichment + refund state; Live Mode reason messages (busy_job_id).
 - Admin refund: native PI fallback (stripe_payment_intent_id) in _admin_refund + reconcile; txn audit keyed by _id; POST /admin/bookings/{id}/retry-refund (cancelled+failed only); customer refund push on success (email unchanged); Retry refund button.
+
+## LOCK — Golden pre-launch baseline
+- Commit 8d5201e on main, tagged v1.0.0-golden. All features tested and LOCKED.
+- NO code changes unless the user explicitly asks for a specific change.
+- Never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit user approval.
