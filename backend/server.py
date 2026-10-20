@@ -7075,21 +7075,6 @@ async def admin_retry_refund(booking_id: str, body: AdminRetryRefundBody, user: 
     return result
 
 
-# TEMPORARY pre-launch test-data cleanup (remove after the real run).
-@api.get("/admin/test-data-cleanup/dry-run")
-async def admin_test_data_dry_run(user: dict = Depends(require_role("admin"))):
-    from services.test_data_cleanup import dry_run
-    return await dry_run(db)
-
-
-@api.post("/admin/test-data-cleanup/execute")
-async def admin_test_data_execute(payload: dict = Body(default={}), user: dict = Depends(require_role("admin"))):
-    from services.test_data_cleanup import CONFIRM_PHRASE, execute
-    if (payload or {}).get("confirm") != CONFIRM_PHRASE:
-        raise HTTPException(status_code=400, detail=f'Type "{CONFIRM_PHRASE}" to confirm')
-    return await execute(db, user)
-
-
 class SupportIssueResolveBody(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
 
