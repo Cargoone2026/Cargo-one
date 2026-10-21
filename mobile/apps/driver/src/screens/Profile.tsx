@@ -9,8 +9,9 @@
  *   • Menu groups: Edit profile / Change password / Documents (view-only)
  *     · Account (Fleet, Notifications, Settings) · Legal · Danger (Logout).
  */
-import React, { useEffect, useState } from "react";
-import { Image, Text, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Image, Pressable, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { DriverAPI, type Review } from "@cargoone/core";
 import type { RootStackParamList } from "../App";
@@ -23,8 +24,42 @@ import {
 type P = NativeStackScreenProps<RootStackParamList, "Profile">;
 
 export default function ProfileScreen({ navigation }: P) {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const uploadingRef = useRef(false);
+
+  const pickPhoto = useCallback(async () => {
+    if (uploadingRef.current) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Photo permission needed", "Please allow photo library access to update your profile picture.");
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    uploadingRef.current = true;
+    setUploading(true);
+    try {
+      await DriverAPI.submitDoc({
+        doc_type: "profile_photo",
+        base64: `data:image/jpeg;base64,${res.assets[0].base64}`,
+        filename: `profile_photo_${Date.now()}.jpg`,
+      });
+      await refresh();
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message || "Could not upload photo. Please try a different image.");
+    } finally {
+      uploadingRef.current = false;
+      setUploading(false);
+    }
+  }, [refresh]);
 
   useEffect(() => {
     let alive = true;
@@ -80,6 +115,16 @@ export default function ProfileScreen({ navigation }: P) {
                 <Text style={styles.avatarInitial}>{initial}</Text>
               </View>
             )}
+            <Pressable
+              onPress={pickPhoto}
+              disabled={uploading}
+              style={[styles.cameraBtn, uploading && { opacity: 0.6 }]}
+              testID="driver-profile-photo-upload-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Upload profile photo"
+            >
+              <Icon name="camera" size={16} color="#FFFFFF" />
+            </Pressable>
           </View>
           <Text style={[typography.h2, { marginTop: space[3], textAlign: "center" }]} testID="driver-profile-name">
             {user.name || "Cargo One driver"}
@@ -265,6 +310,22 @@ const styles = {
   },
   avatarWrap: { position: "relative" as const, width: 88, height: 88 },
   avatar: { width: 88, height: 88, borderRadius: 44 },
+  cameraBtn: {
+    position: "absolute" as const,
+    right: -2,
+    bottom: -2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
   avatarFallback: {
     backgroundColor: colors.brand,
     alignItems: "center" as const,
