@@ -3775,7 +3775,9 @@ async def _do_create_deposit_intent(booking_id: str, user: dict):
         sort=[("created_at", -1)],
     )
 
-    stripe_customer_id = user.get("stripe_customer_id")
+    # Live and test Stripe customers are separate; keep one ID per mode.
+    customer_field = "stripe_customer_id_live" if (STRIPE_API_KEY or "").startswith("sk_live_") else "stripe_customer_id"
+    stripe_customer_id = user.get(customer_field)
     if not stripe_customer_id:
         c = await _stripe_post("/customers", {
             "email": user.get("email") or "",
@@ -3784,7 +3786,7 @@ async def _do_create_deposit_intent(booking_id: str, user: dict):
         })
         stripe_customer_id = c["id"]
         await db.users.update_one({"id": user["id"]},
-                                   {"$set": {"stripe_customer_id": stripe_customer_id}})
+                                   {"$set": {customer_field: stripe_customer_id}})
 
     # Mint a fresh ephemeral key on every call (short-lived, single-use).
     ek = await _stripe_post("/ephemeral_keys", {

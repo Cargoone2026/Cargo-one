@@ -581,3 +581,4 @@ Each future phase must start from the locked baseline.
 - TEMP test-data cleanup tool: services/test_data_cleanup.py + GET /admin/test-data-cleanup/dry-run, POST .../execute (confirm "ARCHIVE TEST DATA"), page /admin/test-data-cleanup. NOT executed. Remove after real run.
 - TEMP test-data cleanup tool REMOVED (routes, service, page, route). archive_* collections and admin_oneoff_runs left in DB. Lock remains.
 - Driver app Profile.tsx: profile photo upload (camera FAB -> image picker -> DriverAPI.submitDoc profile_photo -> refresh).
+- Native PaymentSheet: Stripe customer stored per mode (stripe_customer_id_live when sk_live_, else stripe_customer_id).
