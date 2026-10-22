@@ -586,3 +586,4 @@ Each future phase must start from the locked baseline.
 ## LOCK — v1.0.0-launch
 - Tag v1.0.0-launch at commit 5fb2e22 (Stripe LIVE, Customer iOS build 10, Driver iOS build 11).
 - Make NO code changes unless the user explicitly asks. Supersedes v1.0.0-golden lock (same rules still apply: never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit approval).
+- SEO service landing pages: data/seo.js (12 services), pages/marketing/ServiceLanding.jsx at /services/:slug (FAQPage+Breadcrumb JSON-LD), App.js route, sitemap +12 URLs, Services.jsx "Browse all services" list.

@@ -11,6 +11,7 @@ import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { useResponsive } from "@/hooks/useResponsive";
+import { SERVICE_PAGES } from "@/data/seo";
 
 const SERVICES = [
   { icon: Home, title: "House Removals", body: "Full or part-house moves, studio to 5-bed. 2-man crews, packing service and insured drivers.", tag: "Studio to 5-bed", image: CATEGORY_IMAGES.house_moves },
@@ -109,6 +110,19 @@ export default function Services() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section>
+        <SectionHeading eyebrow="BROWSE" title="Browse all services" />
+        <ul className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-4" data-testid="services-browse-all">
+          {SERVICE_PAGES.map((s) => (
+            <li key={s.slug}>
+              <Link to={`/services/${s.slug}`} className="text-[14px] font-semibold text-[#D62828] hover:underline">
+                {s.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </Section>
     </>
   );
