@@ -1,11 +1,25 @@
 import { useEffect } from "react";
+import { ORGANIZATION_JSONLD } from "@/data/seo";
 
 /**
  * Minimal, dependency-free document-head updater. Sets <title>, description,
  * theme-color and canonical/OG/Twitter meta on mount and cleans up on unmount.
  * Matches the shape of the Expo `<SEO />` component.
  */
-export function SEO({ title, description, image, path }) {
+export function SEO({ title, description, image, path, jsonLd }) {
+  const ldJson = JSON.stringify([ORGANIZATION_JSONLD, ...(jsonLd ? [].concat(jsonLd) : [])]);
+
+  useEffect(() => {
+    // Build-time prerendered tags are replaced by the live ones below.
+    document.head.querySelectorAll("[data-prerender]").forEach((el) => el.remove());
+    const ld = document.createElement("script");
+    ld.type = "application/ld+json";
+    ld.setAttribute("data-seo-jsonld", "");
+    ld.text = ldJson;
+    document.head.appendChild(ld);
+    return () => ld.remove();
+  }, [ldJson]);
+
   useEffect(() => {
     const previousTitle = document.title;
     if (title) document.title = title;

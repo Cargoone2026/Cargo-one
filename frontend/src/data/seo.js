@@ -73,13 +73,14 @@ export const SERVICE_PAGES = [
     name: "Car Transport",
     image: "vehicles",
     intro:
-      "Move a car without driving it: after buying one online, for a dealer transfer, or to get a non-runner home. Drivers use car transporters, recovery trucks or flatbeds suited to the vehicle.",
+      "Move a car without driving it: after buying one online, for a dealer transfer, or to get a non-runner home. Book 24/7, 365 days a year, as an ASAP job, an open bid or a fixed-price booking.",
+    recovery247: true,
     moves: ["Cars bought online or at auction", "Dealer-to-dealer transfers", "Classic and project cars", "Non-runners and SORN vehicles", "Cars going to or from storage", "Small vans and 4x4s"],
-    vehicles: ["Car Transporter", "Recovery Truck", "Flatbed Truck"],
+    vehicles: ["Car Transporter", "Enclosed Trailer Van", "Light Recovery Van", "Pickup Recovery", "3.5T Recovery Truck", "7.5T Recovery Truck", "10–18T Recovery", "Heavy Recovery / Lowloader"],
     related: ["vehicle-recovery", "motorbike-transport", "boat-transport"],
     faqs: [
       { q: "Does the car need to be driveable?", a: "No. Tell us if it's a non-runner, has flat tyres or no keys, so drivers bring the right equipment such as a winch." },
-      { q: "Is the car driven or carried?", a: "Cars are carried on a trailer, transporter or flatbed, not driven to the destination." },
+      { q: "Can I book car transport at night or at the weekend?", a: "Yes. You can book 24/7, every day of the year, and ASAP jobs go to drivers available around the clock near the pickup." },
       { q: "Can you collect from a dealer or auction house?", a: "Yes. Add the collection address and any release reference or paperwork the site needs to hand the car over." },
       { q: "What details do I need to give?", a: "The make and model, whether it runs, its rough size, and any access restrictions at pickup or drop-off." },
       { q: "Can I track the car?", a: "Yes. Once the driver sets off you can follow them on the map, and you'll get photo proof at delivery." },
@@ -90,12 +91,13 @@ export const SERVICE_PAGES = [
     name: "Vehicle Recovery",
     image: "vans",
     intro:
-      "Get a broken-down, damaged or non-running vehicle moved to a garage, your home or a scrapyard. Post an ASAP job for urgent recoveries or schedule a planned move.",
+      "Get a broken-down, damaged or non-running vehicle moved to a garage, your home or a scrapyard. Book 24/7, 365 days a year: post an ASAP job for an urgent recovery, or use a bid or fixed-price booking for a planned move.",
+    recovery247: true,
     moves: ["Breakdowns needing a tow to a garage", "Non-runners and project vehicles", "Accident-damaged cars", "Vans up to 3.5 tonnes", "Vehicles going for scrap or salvage", "Moves to and from MOT and repair shops"],
-    vehicles: ["Recovery Truck", "Flatbed Truck", "Car Transporter"],
+    vehicles: ["Light Recovery Van", "Pickup Recovery", "Motorcycle Recovery", "3.5T Recovery Truck", "7.5T Recovery Truck", "10–18T Recovery", "26T Recovery", "32T Recovery", "Heavy Recovery / Lowloader", "Heavy Articulated Recovery", "Heavy 6×4 / 8×4 Recovery", "Heavy Tractor Recovery", "Car Transporter"],
     related: ["car-transport", "motorbike-transport", "machinery-haulage"],
     faqs: [
-      { q: "Can I get a recovery right now?", a: "Choose ASAP and your job goes to nearby available recovery drivers straight away. You'll see their live location once one accepts." },
+      { q: "Can I get a recovery right now, day or night?", a: "Yes. Recovery can be booked 24/7, 365 days a year. Choose ASAP and your job goes to nearby recovery drivers who are online, and you can follow your driver live once one accepts." },
       { q: "Do I need to stay with the vehicle?", a: "If you can, yes. If you can't stay, add the location, how to access the vehicle and where the keys are." },
       { q: "Can you recover from a motorway?", a: "For safety, vehicles on a live motorway should first be moved by the official services. We can then collect from a safe place such as a recovery yard." },
       { q: "What if the wheels don't turn?", a: "Say so in the job. Drivers with winches or skates can then be matched to it." },
@@ -107,16 +109,17 @@ export const SERVICE_PAGES = [
     name: "Motorbike Transport",
     image: "motorcycles",
     intro:
-      "Move a motorbike, scooter or moped safely strapped down on a suitable trailer or van, whether you've bought it privately, need it at a workshop or are taking it to an event.",
+      "Move a motorbike, scooter or moped safely strapped down on a suitable trailer or van, whether you've bought it privately, broken down, need it at a workshop or are taking it to an event. Book 24/7, as ASAP, bid or fixed price.",
+    recovery247: true,
     moves: ["Road bikes and sports bikes", "Scooters and mopeds", "Off-road, trail and motocross bikes", "Classic and vintage motorcycles", "Non-running bikes", "Quad bikes"],
-    vehicles: ["Long Wheelbase Van", "Luton Van", "Recovery Truck"],
+    vehicles: ["Motorcycle Recovery", "Motorcycle Trailer", "Enclosed Trailer Van", "Light Recovery Van", "Pickup Recovery"],
     related: ["car-transport", "vehicle-recovery", "marketplace-collection"],
     faqs: [
       { q: "How is the bike secured?", a: "Drivers strap the bike down so it stays upright and stable for the journey. Mention anything unusual about the bike so they come prepared." },
       { q: "Can you move a bike that doesn't run?", a: "Yes. Mention it in the job so the driver knows to bring a ramp or a second person to help load it." },
       { q: "Can you collect from a private seller?", a: "Yes. Add the seller's address and phone number, and make sure the sale is agreed before the driver arrives." },
       { q: "Do I need to remove luggage or accessories?", a: "It's best to remove loose items like top boxes or panniers, or say if they're staying on." },
-      { q: "Can I book for a specific day?", a: "Yes. Choose scheduled and pick a date, or ASAP if you need it moved today." },
+      { q: "My bike has broken down. Can someone come now?", a: "You can book 24/7. Choose ASAP and the job goes to motorcycle recovery drivers available around the clock near you, or pick a date if it can wait." },
     ],
   },
   {
@@ -207,3 +210,68 @@ export const SERVICE_PAGES = [
 ];
 
 export const SERVICE_BY_SLUG = Object.fromEntries(SERVICE_PAGES.map((s) => [s.slug, s]));
+
+export const SITE_URL = "https://cargoone.co.uk";
+
+export const ORGANIZATION_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Cargo One",
+  url: SITE_URL,
+  logo: `${SITE_URL}/favicon-512.png`,
+  areaServed: { "@type": "Country", name: "United Kingdom" },
+};
+
+// Existing marketing pages (mirrors each page's <SEO> props) — used by the build-time prerender.
+export const MARKETING_ROUTES = [
+  { path: "/how-it-works", title: "How It Works | Cargo One", h1: "How it works", description: "Six simple steps to book a delivery on Cargo One. Post a job, compare quotes from vetted UK drivers, pay a small booking fee via Stripe, and track live to your doorstep." },
+  { path: "/services", title: "Delivery Services | Cargo One", h1: "Delivery services", description: "Everything Cargo One moves — parcels, pallets, house moves, vehicles, motorcycles, freight, and commercial logistics. Book a vetted UK driver in minutes." },
+  { path: "/business", title: "Business Accounts | Cargo One", h1: "Cargo One for Business", description: "Cargo One for Business — UK logistics on tap. Volume discounts, monthly invoicing, priority driver matching, API access and enterprise SLAs." },
+  { path: "/drivers", title: "Become a Driver | Cargo One", h1: "Drive with Cargo One", description: "Join Cargo One as a driver and earn on your own terms. No commission on driver bids, verified customers, and instant on-delivery payments across the UK." },
+  { path: "/faq", title: "FAQ | Cargo One", h1: "Frequently asked questions", description: "Frequently asked questions about Cargo One — pricing, driver verification, secure payments, live tracking, and proof of delivery." },
+  { path: "/contact", title: "Contact Us | Cargo One", h1: "Contact us", description: "Get in touch with Cargo One — customer support, driver support, business enquiries and press. 24/7 assistance for urgent safety concerns." },
+  { path: "/trust-safety", title: "Trust & Safety | Cargo One", h1: "Trust & Safety", description: "How Cargo One keeps deliveries safe — driver verification, Stripe secure payments, live GPS tracking, photo proof of delivery, and GDPR-compliant data handling." },
+  { path: "/about", title: "About Cargo One", h1: "About Cargo One", description: "Meet Cargo One — the fair, transparent UK logistics marketplace matching customers with vetted drivers. Our mission, values and story." },
+  { path: "/terms", title: "Terms & Conditions", h1: "Terms & Conditions", description: "Cargo One Terms & Conditions." },
+  { path: "/privacy", title: "Privacy Policy", h1: "Privacy Policy", description: "Cargo One Privacy Policy." },
+  { path: "/cookies", title: "Cookie Policy", h1: "Cookie Policy", description: "Cargo One Cookie Policy." },
+];
+
+export function serviceSeo(service) {
+  return {
+    path: `/services/${service.slug}`,
+    title: `${service.name} – Instant Quote | Cargo One`,
+    h1: `${service.name} – instant quote`,
+    description: `${service.intro.split(". ")[0].replace(/\.$/, "")}. Get an instant quote and book a verified UK driver with live tracking.`,
+  };
+}
+
+export function serviceJsonLd(service) {
+  const url = `${SITE_URL}/services/${service.slug}`;
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      name: service.name,
+      serviceType: service.name,
+      description: service.intro,
+      url,
+      provider: { "@type": "Organization", name: "Cargo One", url: SITE_URL },
+      areaServed: { "@type": "Country", name: "United Kingdom" },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: service.faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+        { "@type": "ListItem", position: 2, name: "Services", item: `${SITE_URL}/services` },
+        { "@type": "ListItem", position: 3, name: service.name, item: url },
+      ],
+    },
+  ];
+}

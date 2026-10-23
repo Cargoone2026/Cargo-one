@@ -1,0 +1,40 @@
+# Cargo One
+
+> Cargo One is a UK logistics marketplace that connects customers with verified drivers to move almost anything, from a single parcel to a car, a pallet or a house move. Customers get an instant price, book online, follow their driver on a live map and receive photo proof of delivery.
+
+Website: https://cargoone.co.uk
+Area served: United Kingdom
+Availability: open 24/7, 365 days a year
+
+## How it works
+- Enter pickup, drop-off and what you're moving to get an instant price.
+- A verified driver accepts the job, and you can see who's coming.
+- Track the driver live on the map and receive photo proof of delivery.
+
+## Ways to book
+- ASAP: the job is offered straight away to nearby drivers who are online. Used for urgent jobs, including 24/7 vehicle recovery.
+- Scheduled: choose a date and time. Jobs can be posted for driver bids or at a fixed price.
+
+## Services
+- [Man and Van](https://cargoone.co.uk/services/man-and-van)
+- [Furniture Delivery](https://cargoone.co.uk/services/furniture-delivery)
+- [Same Day Courier](https://cargoone.co.uk/services/same-day-courier)
+- [House Removals](https://cargoone.co.uk/services/house-removals)
+- [Car Transport](https://cargoone.co.uk/services/car-transport)
+- [Vehicle Recovery](https://cargoone.co.uk/services/vehicle-recovery): 24/7 ASAP recovery for breakdowns and non-runners
+- [Motorbike Transport](https://cargoone.co.uk/services/motorbike-transport)
+- [Pallet Delivery](https://cargoone.co.uk/services/pallet-delivery)
+- [Marketplace Collection](https://cargoone.co.uk/services/marketplace-collection)
+- [Parcel Delivery](https://cargoone.co.uk/services/parcel-delivery)
+- [Boat Transport](https://cargoone.co.uk/services/boat-transport)
+- [Machinery Haulage](https://cargoone.co.uk/services/machinery-haulage)
+
+## More information
+- [How it works](https://cargoone.co.uk/how-it-works)
+- [All services](https://cargoone.co.uk/services)
+- [Business accounts](https://cargoone.co.uk/business)
+- [Drive with Cargo One](https://cargoone.co.uk/drivers)
+- [Trust & Safety](https://cargoone.co.uk/trust-safety)
+- [FAQ](https://cargoone.co.uk/faq)
+- [Contact](https://cargoone.co.uk/contact)
+- [Terms](https://cargoone.co.uk/terms), [Privacy](https://cargoone.co.uk/privacy), [Cookies](https://cargoone.co.uk/cookies)

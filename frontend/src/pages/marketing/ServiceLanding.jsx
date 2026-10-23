@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, BadgeCheck, CalendarClock, ChevronRight, MapPin, Truck, Zap } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarClock, ChevronRight, Clock, MapPin, Truck, Zap } from "lucide-react";
 import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
-import { SERVICE_BY_SLUG } from "@/data/seo";
+import { SERVICE_BY_SLUG, serviceJsonLd, serviceSeo } from "@/data/seo";
 
 const QUOTE_HREF = "/auth/register?role=customer";
 
@@ -14,35 +14,6 @@ const STEPS = [
   { icon: BadgeCheck, title: "A verified driver takes the job", body: "Drivers are checked before they can accept jobs, and you see who's coming." },
   { icon: MapPin, title: "Track it live", body: "Follow your driver on the map and get photo proof when it's delivered." },
 ];
-
-// FAQPage + BreadcrumbList structured data for this service page only.
-function useJsonLd(service) {
-  useEffect(() => {
-    const url = `https://cargoone.co.uk/services/${service.slug}`;
-    const data = [
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        mainEntity: service.faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: "https://cargoone.co.uk/" },
-          { "@type": "ListItem", position: 2, name: "Services", item: "https://cargoone.co.uk/services" },
-          { "@type": "ListItem", position: 3, name: service.name, item: url },
-        ],
-      },
-    ];
-    const el = document.createElement("script");
-    el.type = "application/ld+json";
-    el.setAttribute("data-service-jsonld", service.slug);
-    el.text = JSON.stringify(data);
-    document.head.appendChild(el);
-    return () => el.remove();
-  }, [service]);
-}
 
 function QuoteButton({ testId }) {
   return (
@@ -53,6 +24,37 @@ function QuoteButton({ testId }) {
     >
       Get an instant quote <ArrowRight className="h-4 w-4" />
     </Link>
+  );
+}
+
+const RECOVERY_POINTS = [
+  "Urgent breakdown and non-runner collection",
+  "Drivers available around the clock",
+  "Live tracking from acceptance to drop-off",
+  "ASAP, bid and fixed-price jobs",
+];
+
+function Recovery247() {
+  return (
+    <section className="mx-auto max-w-[1200px] px-4 pt-6 md:px-10" data-testid="service-recovery-247">
+      <div className="rounded-[20px] bg-[#111111] p-6 text-white md:p-8">
+        <div className="inline-flex items-center gap-2 rounded-full bg-[#D62828] px-3 py-1 text-[12px] font-bold tracking-[1px]">
+          <Clock className="h-3.5 w-3.5" /> OPEN 24/7, 365 DAYS A YEAR
+        </div>
+        <h2 className="mt-3 text-[24px] font-bold md:text-[28px]">24/7 ASAP recovery</h2>
+        <p className="mt-2 max-w-[720px] text-[15px] leading-relaxed text-white/80">
+          Broken down or stuck with a non-runner? Book 24/7 and your ASAP job goes straight to recovery drivers online near you. Prefer to plan? Post it as a bid or fixed-price job instead.
+        </p>
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {RECOVERY_POINTS.map((p) => (
+            <li key={p} className="flex items-start gap-2 text-[14px] text-white/90">
+              <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#D62828]" /> {p}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5"><QuoteButton testId="service-recovery-quote-btn" /></div>
+      </div>
+    </section>
   );
 }
 
@@ -78,27 +80,23 @@ export default function ServiceLanding() {
 }
 
 function ServiceLandingBody({ service }) {
-  useJsonLd(service);
+  const seo = serviceSeo(service);
   const image = CATEGORY_IMAGES[service.image] || IMG.heroServices;
   const related = service.related.map((s) => SERVICE_BY_SLUG[s]).filter(Boolean);
 
   return (
     <div data-testid={`service-page-${service.slug}`}>
-      <SEO
-        title={`${service.name} – Instant Quote | Cargo One`}
-        description={`${service.intro.split(". ")[0]}. Get an instant quote and book a verified UK driver with live tracking.`}
-        path={`/services/${service.slug}`}
-        image={image}
-      />
+      <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={serviceJsonLd(service)} />
       <Hero
         bgImage={image}
         eyebrow="CARGO ONE SERVICES"
-        title={`${service.name} – instant quote`}
+        title={seo.h1}
         subtitle={service.intro}
         compact
         primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }}
       />
       <Breadcrumb name={service.name} />
+      {service.recovery247 ? <Recovery247 /> : null}
 
       <Section>
         <SectionHeading eyebrow="HOW IT WORKS" title={`Book ${service.name.toLowerCase()} in three steps`} />
