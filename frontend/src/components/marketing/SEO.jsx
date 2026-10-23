@@ -7,18 +7,20 @@ import { ORGANIZATION_JSONLD } from "@/data/seo";
  * Matches the shape of the Expo `<SEO />` component.
  */
 export function SEO({ title, description, image, path, jsonLd }) {
+  const isPortal = /^\/(auth|settings|customer|driver|admin)(\/|$)/.test(path || "");
   const ldJson = JSON.stringify([ORGANIZATION_JSONLD, ...(jsonLd ? [].concat(jsonLd) : [])]);
 
   useEffect(() => {
     // Build-time prerendered tags are replaced by the live ones below.
     document.head.querySelectorAll("[data-prerender]").forEach((el) => el.remove());
+    if (isPortal) return undefined;
     const ld = document.createElement("script");
     ld.type = "application/ld+json";
     ld.setAttribute("data-seo-jsonld", "");
     ld.text = ldJson;
     document.head.appendChild(ld);
     return () => ld.remove();
-  }, [ldJson]);
+  }, [ldJson, isPortal]);
 
   useEffect(() => {
     const previousTitle = document.title;

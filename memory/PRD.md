@@ -593,5 +593,13 @@ Each future phase must start from the locked baseline.
 - Vehicle names aligned with the platform VEHICLE_SEED list; unverifiable claims softened. Breadcrumb aligned with hero.
 - Tested: iteration_r71_service_landing_seo.json (12/12 pass). Not deployed.
 - Known site-wide copy conflicts (outside the service pages, untouched): /services "From £5", stat tiles; homepage 4.9★ rating.
-## SEO Phase 0 — PLAN ONLY (awaiting approval)
-- Puppeteer is NOT available in Emergent production builds, so use a Node postbuild script with no browser that writes build/<route>/index.html with head tags injected. Fail-safe. JSON-LD prop on SEO.jsx. Auto sitemap. public/llms.txt.
+## SEO Phase 0 — BUILT (Jun 2026, not deployed)
+- frontend/scripts/prerender.mjs (postbuild, Node only, no browser, fail-safe with exit 0): writes build/<route>.html + build/<route>/index.html for 11 marketing routes + 12 service pages (head tags data-prerender + static <main>), and build/sitemap.xml (24 URLs). build/index.html (home + portal fallback) is untouched.
+- SEO.jsx: jsonLd prop; always Organization JSON-LD on marketing paths (skipped for /auth,/settings,/customer,/driver,/admin); removes [data-prerender] on mount.
+- seo.js: MARKETING_ROUTES (mirrors page SEO props by hand, keep in sync), serviceSeo, serviceJsonLd, ORGANIZATION_JSONLD.
+- Vehicle pages (car-transport, vehicle-recovery, motorbike-transport): 24/7 ASAP recovery block + real recovery vehicle list.
+- public/llms.txt added.
+- User rule: do NOT change existing claims/copy on existing pages.
+- Open: Cloudflare must serve /services/x from services/x.html with no trailing-slash redirect. Verify after deploy with curl -I.
+- Older issue, not fixed: header sticky broken by overflow-x:hidden on html/body/#root (index.css). Likely cause of the iOS "blank band". Fix would be global (overflow-x:clip) and needs approval.
+- Tests: iteration_r72_recovery247_seo_prerender.json (all pass).
