@@ -58,7 +58,7 @@ function QuoteButton({ testId }) {
 
 function Breadcrumb({ name }) {
   return (
-    <nav aria-label="Breadcrumb" className="mx-auto max-w-[1100px] px-4 pt-4 md:px-8" data-testid="service-breadcrumb">
+    <nav aria-label="Breadcrumb" className="mx-auto max-w-[1200px] px-4 pt-4 md:px-10" data-testid="service-breadcrumb">
       <ol className="flex flex-wrap items-center gap-1 text-[13px] text-[#6B7280]">
         <li><Link to="/" className="hover:text-[#111111]">Home</Link></li>
         <ChevronRight className="h-3.5 w-3.5" />

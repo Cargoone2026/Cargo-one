@@ -587,3 +587,11 @@ Each future phase must start from the locked baseline.
 - Tag v1.0.0-launch at commit 5fb2e22 (Stripe LIVE, Customer iOS build 10, Driver iOS build 11).
 - Make NO code changes unless the user explicitly asks. Supersedes v1.0.0-golden lock (same rules still apply: never touch ASAP dispatch, quotes, pricing, cancel/refund, Stripe or notifications without explicit approval).
 - SEO service landing pages: data/seo.js (12 services), pages/marketing/ServiceLanding.jsx at /services/:slug (FAQPage+Breadcrumb JSON-LD), App.js route, sitemap +12 URLs, Services.jsx "Browse all services" list.
+
+## SEO Phase 1 — Service landing pages (Jun 2026)
+- /services/{slug} for 12 services: data in frontend/src/data/seo.js, template in pages/marketing/ServiceLanding.jsx (FAQPage + BreadcrumbList JSON-LD), App.js route, sitemap.xml URLs, Services.jsx "Browse all services" list.
+- Vehicle names aligned with the platform VEHICLE_SEED list; unverifiable claims softened. Breadcrumb aligned with hero.
+- Tested: iteration_r71_service_landing_seo.json (12/12 pass). Not deployed.
+- Known site-wide copy conflicts (outside the service pages, untouched): /services "From £5", stat tiles; homepage 4.9★ rating.
+## SEO Phase 0 — PLAN ONLY (awaiting approval)
+- Puppeteer is NOT available in Emergent production builds, so use a Node postbuild script with no browser that writes build/<route>/index.html with head tags injected. Fail-safe. JSON-LD prop on SEO.jsx. Auto sitemap. public/llms.txt.
