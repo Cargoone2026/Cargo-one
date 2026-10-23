@@ -28,7 +28,7 @@ import { Button } from "@/components/ui-portal/Button";
 export const LEGAL_CONTENT = {
   terms: {
     title: "Terms & Conditions",
-    body: `Last updated: 17 October 2026
+    body: `Last updated: 23 October 2026
 
 These Terms & Conditions apply to everyone who uses Cargo One (cargoone.co.uk and the Cargo One customer and driver apps). By creating an account or making a booking you agree to them. If you have a question, contact support@cargoone.co.uk.
 
@@ -52,7 +52,7 @@ Cargo One is an online marketplace. We connect customers who need items moved ("
 
 5. CANCELLATIONS AND REFUNDS (CUSTOMERS)
 - Before a driver has accepted your job, you can cancel free of charge and any booking fee you paid is refunded in full.
-- After a driver has accepted, you can still cancel in the app up until delivery. We keep a cancellation fee (currently 20% of the booking fee, never more than the amount paid) and the rest is refunded to your card. The app shows the exact fee and refund before you confirm.
+- You can cancel a booking in the app or on the website until your items or vehicle are collected; after collection it can no longer be cancelled in the app or website, so please contact our support team and we will help. We keep a cancellation fee (currently 20% of the booking fee, never more than the amount paid) and the rest is refunded to your card. The app shows the exact fee and refund before you confirm.
 - Refunds go back to the original card through Stripe and normally arrive within 5 to 10 working days, depending on your bank.
 - Once a job has been delivered it can no longer be cancelled or refunded in the app. If something went wrong, contact support@cargoone.co.uk.
 

@@ -609,3 +609,7 @@ Each future phase must start from the locked baseline.
 - Copy matches the code: booking fee by Stripe, driver's price paid on delivery; ASAP = nearby drivers alerted first, the search widens, first to accept wins; cancel free before acceptance, fee (currently 20% of the booking fee) after, no in-app cancel once collected.
 - KNOWN MISMATCH (user will fix separately): Terms section 5 says cancel "up until delivery", but the app blocks cancel once collected.
 - Tests: iteration_r73_booking_type_pages.json (all pass).
+
+## Terms section 5 update (23 Oct 2026)
+- In pages/Settings.jsx LEGAL_CONTENT.terms, replaced ONLY the "up until delivery" sentence with the user's sentence. Last updated changed to 23 October 2026. The Terms/app mismatch is resolved.
+- Pending: Task 1 (user will upload their own recovery truck photo for /how-it-works/asap-recovery and /services/vehicle-recovery; do NOT use Unsplash). Task 3 (driver recruitment pages: /drivers/{van-drivers,self-employed,car-transporters,recovery-trucks,hgv} and /drivers/jobs/{20 cities}): waiting for the user's full spec.
