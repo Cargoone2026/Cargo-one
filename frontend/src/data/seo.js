@@ -7,7 +7,7 @@ export const SERVICE_PAGES = [
     intro:
       "Book a local driver with a van for the jobs that are too big for a car but don't need a removal firm: a few boxes to a new flat, a sofa from a showroom, or a clear-out run to the tip.",
     moves: ["Small flat and student moves", "Single bulky items like sofas, beds and fridges", "Boxes, suitcases and storage unit runs", "Shop and showroom collections", "Office kit and IT equipment", "Clear-outs and recycling centre runs"],
-    vehicles: ["Small van", "Medium van (SWB/MWB)", "Large van (LWB)", "Luton van"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
     related: ["furniture-delivery", "house-removals", "marketplace-collection"],
     faqs: [
       { q: "Will the driver help with loading?", a: "Tell us when you post the job. You can say whether you'll load yourself, want the driver to help, or need a second person, and drivers see this before they take the job." },
@@ -24,11 +24,11 @@ export const SERVICE_PAGES = [
     intro:
       "Get a single wardrobe, a corner sofa or a full set of dining furniture moved by a driver who knows how to handle large, heavy pieces through doorways and up stairs.",
     moves: ["Sofas, corner sofas and armchairs", "Beds, mattresses and headboards", "Wardrobes, drawers and sideboards", "Dining tables and chairs", "Flat-pack furniture from retail stores", "Antique and vintage pieces"],
-    vehicles: ["Medium van", "Large van (LWB)", "Luton van with tail lift"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
     related: ["man-and-van", "marketplace-collection", "house-removals"],
     faqs: [
       { q: "Can the driver take furniture upstairs?", a: "Yes, if you say so in the job. Add the floor, whether there's a lift, and any tight stairways so drivers can plan the right help." },
-      { q: "Will my furniture be protected?", a: "Drivers carry blankets and straps for securing loads. If an item is fragile or valuable, mention it so the driver can take extra care." },
+      { q: "Will my furniture be protected?", a: "Mark fragile or valuable pieces in the job and say if you need blankets or wrapping. Drivers see this before they accept, so they can come prepared." },
       { q: "Can you collect from a shop or warehouse?", a: "Yes. Add the store's address and any collection reference. Many customers use Cargo One to bring home items they've bought in store." },
       { q: "Do you assemble or dismantle furniture?", a: "Assembly isn't included as standard. If an item needs to be taken apart to fit through a door, it's best to do this before the driver arrives." },
       { q: "How do I know when it's delivered?", a: "You can follow the driver live on the map, and they upload photo proof of delivery when the job is done." },
@@ -41,7 +41,7 @@ export const SERVICE_PAGES = [
     intro:
       "When something has to arrive today, post an ASAP job and it's offered to available drivers near the pickup. One driver, one job, straight from A to B with no depot stops.",
     moves: ["Urgent documents and contracts", "Spare parts for a breakdown or job site", "Samples and prototypes", "Forgotten items and personal belongings", "Medical and lab supplies (non-hazardous)", "Last-minute event and shop stock"],
-    vehicles: ["Motorcycle courier", "Car", "Small van", "Medium van", "Large van"],
+    vehicles: ["Motorcycle Courier", "Small Van", "Short Wheelbase Van", "Long Wheelbase Van"],
     related: ["parcel-delivery", "pallet-delivery", "man-and-van"],
     faqs: [
       { q: "How quickly will a driver be assigned?", a: "ASAP jobs are offered to nearby online drivers as soon as you pay the deposit. You'll see when a driver accepts, and then their live location on the way to you." },
@@ -58,7 +58,7 @@ export const SERVICE_PAGES = [
     intro:
       "Move home with a driver and vehicle sized to your property, from a studio flat to a family house. Plan it for your moving day or book at short notice.",
     moves: ["Studio, flat and house moves", "Furniture, white goods and appliances", "Boxed belongings and wardrobes", "Garden furniture and equipment", "Moves into and out of storage", "Part-loads and partial moves"],
-    vehicles: ["Large van (LWB)", "Luton van", "Luton with tail lift", "7.5 tonne lorry"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift", "7.5 Tonne Lorry"],
     related: ["furniture-delivery", "man-and-van", "car-transport"],
     faqs: [
       { q: "How far in advance should I book?", a: "Book as soon as you know your moving date to get the most choice of drivers. Short-notice moves are possible too, depending on who's available." },
@@ -73,9 +73,9 @@ export const SERVICE_PAGES = [
     name: "Car Transport",
     image: "vehicles",
     intro:
-      "Move a car without driving it: after buying one online, for a dealer transfer, or to get a non-runner home. Drivers use trailers and transporters suitable for the vehicle.",
+      "Move a car without driving it: after buying one online, for a dealer transfer, or to get a non-runner home. Drivers use car transporters, recovery trucks or flatbeds suited to the vehicle.",
     moves: ["Cars bought online or at auction", "Dealer-to-dealer transfers", "Classic and project cars", "Non-runners and SORN vehicles", "Cars going to or from storage", "Small vans and 4x4s"],
-    vehicles: ["Car transporter", "Trailer and tow vehicle", "Flatbed recovery truck"],
+    vehicles: ["Car Transporter", "Recovery Truck", "Flatbed Truck"],
     related: ["vehicle-recovery", "motorbike-transport", "boat-transport"],
     faqs: [
       { q: "Does the car need to be driveable?", a: "No. Tell us if it's a non-runner, has flat tyres or no keys, so drivers bring the right equipment such as a winch." },
@@ -92,7 +92,7 @@ export const SERVICE_PAGES = [
     intro:
       "Get a broken-down, damaged or non-running vehicle moved to a garage, your home or a scrapyard. Post an ASAP job for urgent recoveries or schedule a planned move.",
     moves: ["Breakdowns needing a tow to a garage", "Non-runners and project vehicles", "Accident-damaged cars", "Vans up to 3.5 tonnes", "Vehicles going for scrap or salvage", "Moves to and from MOT and repair shops"],
-    vehicles: ["Flatbed recovery truck", "Tilt-and-slide recovery", "Trailer and tow vehicle"],
+    vehicles: ["Recovery Truck", "Flatbed Truck", "Car Transporter"],
     related: ["car-transport", "motorbike-transport", "machinery-haulage"],
     faqs: [
       { q: "Can I get a recovery right now?", a: "Choose ASAP and your job goes to nearby available recovery drivers straight away. You'll see their live location once one accepts." },
@@ -109,10 +109,10 @@ export const SERVICE_PAGES = [
     intro:
       "Move a motorbike, scooter or moped safely strapped down on a suitable trailer or van, whether you've bought it privately, need it at a workshop or are taking it to an event.",
     moves: ["Road bikes and sports bikes", "Scooters and mopeds", "Off-road, trail and motocross bikes", "Classic and vintage motorcycles", "Non-running bikes", "Quad bikes"],
-    vehicles: ["Medium van with straps", "Large van", "Motorcycle trailer"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Recovery Truck"],
     related: ["car-transport", "vehicle-recovery", "marketplace-collection"],
     faqs: [
-      { q: "How is the bike secured?", a: "Drivers use straps and wheel chocks or a bike trailer to keep it upright and stable for the journey." },
+      { q: "How is the bike secured?", a: "Drivers strap the bike down so it stays upright and stable for the journey. Mention anything unusual about the bike so they come prepared." },
       { q: "Can you move a bike that doesn't run?", a: "Yes. Mention it in the job so the driver knows to bring a ramp or a second person to help load it." },
       { q: "Can you collect from a private seller?", a: "Yes. Add the seller's address and phone number, and make sure the sale is agreed before the driver arrives." },
       { q: "Do I need to remove luggage or accessories?", a: "It's best to remove loose items like top boxes or panniers, or say if they're staying on." },
@@ -126,7 +126,7 @@ export const SERVICE_PAGES = [
     intro:
       "Send one pallet or a full load directly from collection to delivery, with a vehicle chosen for the size, weight and loading facilities at each end.",
     moves: ["Standard UK and Euro pallets", "Half and quarter pallets", "Stock for shops and warehouses", "Building and trade materials", "Event and exhibition kit on pallets", "Multi-pallet business deliveries"],
-    vehicles: ["Large van", "Luton with tail lift", "7.5 tonne lorry", "18 tonne curtain-sider"],
+    vehicles: ["Luton Van with Tail Lift", "Curtain Side Vehicle", "7.5 Tonne Lorry", "18 Tonne Lorry"],
     related: ["parcel-delivery", "machinery-haulage", "same-day-courier"],
     faqs: [
       { q: "Do I need a forklift at collection?", a: "Not always. If there's no forklift or loading bay, say so and choose a vehicle with a tail lift." },
@@ -143,7 +143,7 @@ export const SERVICE_PAGES = [
     intro:
       "Bought something on eBay, Facebook Marketplace, Gumtree or at an auction that you can't collect yourself? A local driver can pick it up and bring it to your door.",
     moves: ["Furniture from online sellers", "Appliances and white goods", "Bikes, gym equipment and garden items", "Auction lots and house-clearance buys", "Collectables and antiques", "Large items from private sellers"],
-    vehicles: ["Car", "Small van", "Medium van", "Large van", "Luton van"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
     related: ["furniture-delivery", "man-and-van", "motorbike-transport"],
     faqs: [
       { q: "Do I need to pay the seller first?", a: "Yes. Agree the sale and payment with the seller before the driver arrives. The driver only collects and delivers." },
@@ -160,7 +160,7 @@ export const SERVICE_PAGES = [
     intro:
       "Send parcels and packages with a dedicated driver rather than a sorting network, so your item goes straight to its destination, today or on a date you choose.",
     moves: ["Boxes and packages", "Fragile parcels that need careful handling", "Business samples and returns", "Gifts and personal items", "Multiple parcels in one run", "Items that won't fit a standard courier size"],
-    vehicles: ["Motorcycle courier", "Car", "Small van"],
+    vehicles: ["Motorcycle Courier", "Small Van", "Short Wheelbase Van"],
     related: ["same-day-courier", "pallet-delivery", "marketplace-collection"],
     faqs: [
       { q: "Is my parcel delivered directly?", a: "Yes. The driver who collects your parcel delivers it, with no depot or sorting centre in between." },
@@ -177,7 +177,7 @@ export const SERVICE_PAGES = [
     intro:
       "Move a small boat, dinghy, jet ski or boat on its own trailer between home, marina, storage or a boatyard, with a driver who has a suitable tow vehicle.",
     moves: ["Dinghies and small sailing boats", "RIBs and small motor boats", "Jet skis and personal watercraft", "Boats on their own road trailers", "Kayaks and canoes in bulk", "Moves to boatyards and storage"],
-    vehicles: ["4x4 tow vehicle", "Trailer", "Flatbed truck"],
+    vehicles: ["Flatbed Truck", "Recovery Truck", "Other (tow vehicle with trailer)"],
     related: ["car-transport", "machinery-haulage", "vehicle-recovery"],
     faqs: [
       { q: "Does the boat need its own trailer?", a: "If it's already on a road-legal trailer, a driver with a suitable tow vehicle can move it. If not, say so and describe the boat so a driver with the right equipment can take the job." },
@@ -192,15 +192,15 @@ export const SERVICE_PAGES = [
     name: "Machinery Haulage",
     image: "machinery",
     intro:
-      "Transport plant, machinery and heavy equipment between sites, depots and customers, on flatbeds, plant trailers or vehicles with cranes for loading.",
+      "Transport plant, machinery and heavy equipment between sites, depots and customers, on flatbed trucks, lorries or Hiab crane vehicles for loading.",
     moves: ["Mini diggers and small excavators", "Dumpers, rollers and compact plant", "Generators and compressors", "Workshop and factory machinery", "Agricultural equipment", "Access equipment and scissor lifts"],
-    vehicles: ["Plant trailer", "Beavertail lorry", "Flatbed lorry", "HIAB crane lorry"],
+    vehicles: ["Flatbed Truck", "Hiab Crane Vehicle", "7.5 Tonne Lorry", "18 Tonne Lorry"],
     related: ["pallet-delivery", "vehicle-recovery", "boat-transport"],
     faqs: [
       { q: "What information do you need for machinery?", a: "The make and model, weight, dimensions, and whether it can be driven or needs lifting on and off." },
       { q: "Can the driver load it with a crane?", a: "Yes, if you choose a vehicle with a crane. Say whether there's a forklift or crane on site, or if the driver needs to bring one." },
       { q: "Can you move machinery to a building site?", a: "Yes. Add any site rules, access times and a contact for the site manager so the delivery runs smoothly." },
-      { q: "Is the load secured for the journey?", a: "Drivers secure machinery with chains or straps suited to the load and check it during the journey." },
+      { q: "Is the load secured for the journey?", a: "Drivers are responsible for securing the load for the journey. Give accurate weight and dimensions so they can bring the right restraints." },
       { q: "Can you handle very large loads?", a: "For abnormal loads that need permits or escorts, contact us first so we can check what's possible." },
     ],
   },
