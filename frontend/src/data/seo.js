@@ -273,13 +273,14 @@ export const BOOKING_TYPES = [
     faqs: [
       { q: "Who sets the fixed price?", a: "You do. When you post the job we show a suggested price as a guide, and you choose the price drivers will see." },
       { q: "What's the difference from a Bid Job?", a: "With a Bid Job, drivers send you offers to compare. With a Fixed Price Job, the price is set before you post it and the first suitable driver to accept takes the job." },
-      { q: "What if no driver accepts my price?", a: "Your job stays open to drivers until one accepts. If it isn't being picked up, you can post it as a Bid Job instead and let drivers send offers." },
+      { q: "What if no driver accepts my price?", a: "Your job stays open to drivers until one accepts. No booking fee is taken before then, so if it isn't being picked up you can cancel it free of charge and post it again as a Bid Job." },
       PAY_FAQ,
       cancelFaq("your items are"),
     ],
   },
   {
     slug: "asap-transport",
+    description: "Need it moved now? Get an instant price for ASAP Transport, book 24/7 and track a nearby driver live, with drivers available around the clock.",
     name: "ASAP Transport",
     image: "same_day",
     intro:
@@ -308,6 +309,7 @@ export const BOOKING_TYPES = [
   },
   {
     slug: "asap-recovery",
+    description: "24/7 ASAP Recovery for breakdowns and non-runners. Get an instant price, book 24/7 and track your recovery driver live.",
     name: "ASAP Recovery",
     image: "vehicles",
     intro:
@@ -409,7 +411,7 @@ export function bookingTypeSeo(type) {
     path: `/how-it-works/${type.slug}`,
     title: `${type.name} – How Booking Works | Cargo One`,
     h1: `${type.name} on Cargo One`,
-    description: `${type.intro.split(". ")[0].replace(/\.$/, "")}. See how it works, who it suits, and how payment and cancellation work.`,
+    description: type.description || `${type.intro.split(". ")[0].replace(/\.$/, "")}. See how it works, who it suits, and how payment works.`,
   };
 }
 

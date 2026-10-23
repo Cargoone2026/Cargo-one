@@ -603,3 +603,9 @@ Each future phase must start from the locked baseline.
 - Open: Cloudflare must serve /services/x from services/x.html with no trailing-slash redirect. Verify after deploy with curl -I.
 - Older issue, not fixed: header sticky broken by overflow-x:hidden on html/body/#root (index.css). Likely cause of the iOS "blank band". Fix would be global (overflow-x:clip) and needs approval.
 - Tests: iteration_r72_recovery247_seo_prerender.json (all pass).
+
+## Booking-type pages (Jun 2026, not deployed)
+- /how-it-works/{bid-jobs,fixed-price-jobs,asap-transport,asap-recovery}: BOOKING_TYPES in seo.js, template pages/marketing/BookingTypeLanding.jsx, route in App.js, "Ways to book" section added at the bottom of HowItWorks.jsx, public/sitemap.xml + prerender list (27 pages).
+- Copy matches the code: booking fee by Stripe, driver's price paid on delivery; ASAP = nearby drivers alerted first, the search widens, first to accept wins; cancel free before acceptance, fee (currently 20% of the booking fee) after, no in-app cancel once collected.
+- KNOWN MISMATCH (user will fix separately): Terms section 5 says cancel "up until delivery", but the app blocks cancel once collected.
+- Tests: iteration_r73_booking_type_pages.json (all pass).
