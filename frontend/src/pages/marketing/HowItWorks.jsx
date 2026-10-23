@@ -19,6 +19,7 @@ import { IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { useResponsive } from "@/hooks/useResponsive";
+import { BOOKING_TYPES } from "@/data/seo";
 
 const STEPS = [
   { icon: ClipboardEdit, title: "Post your delivery", body: "Choose your category, add pickup & drop-off, dates, dimensions and any photos. Set a fixed price or accept bids." },
@@ -124,6 +125,25 @@ export default function HowItWorks() {
             <ArrowRight className="h-[18px] w-[18px]" />
           </Link>
         </div>
+      </Section>
+      <Section bg="#fff">
+        <SectionHeading eyebrow="WAYS TO BOOK" title="Ways to book" />
+        <ul className="grid gap-4 md:grid-cols-2" data-testid="how-ways-to-book">
+          {BOOKING_TYPES.map((b) => (
+            <li key={b.slug}>
+              <Link
+                to={`/how-it-works/${b.slug}`}
+                data-testid={`how-ways-to-book-${b.slug}`}
+                className="flex h-full flex-col gap-1 rounded-[20px] border border-[#E5E7EB] bg-white p-6 transition-colors hover:border-[#D62828]"
+              >
+                <span className="inline-flex items-center gap-1 text-[18px] font-bold text-[#111111]">
+                  {b.name} <ArrowRight className="h-4 w-4 text-[#D62828]" />
+                </span>
+                <span className="text-[14px] leading-relaxed text-[#6B7280]">{b.intro}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </Section>
     </>
   );

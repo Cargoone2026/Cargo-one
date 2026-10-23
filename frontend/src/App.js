@@ -10,6 +10,7 @@ import Home from "@/pages/marketing/Home";
 import HowItWorks from "@/pages/marketing/HowItWorks";
 import Services from "@/pages/marketing/Services";
 import ServiceLanding from "@/pages/marketing/ServiceLanding";
+import BookingTypeLanding from "@/pages/marketing/BookingTypeLanding";
 import Business from "@/pages/marketing/Business";
 import Drivers from "@/pages/marketing/Drivers";
 import FAQ from "@/pages/marketing/FAQ";
@@ -119,6 +120,7 @@ export default function App() {
             {/* Marketing */}
             <Route path="/" element={<Marketing Page={Home} />} />
             <Route path="/how-it-works" element={<Marketing Page={HowItWorks} />} />
+            <Route path="/how-it-works/:slug" element={<Marketing Page={BookingTypeLanding} />} />
             <Route path="/services" element={<Marketing Page={Services} />} />
             <Route path="/services/:slug" element={<Marketing Page={ServiceLanding} />} />
             <Route path="/business" element={<Marketing Page={Business} />} />

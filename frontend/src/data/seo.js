@@ -211,6 +211,134 @@ export const SERVICE_PAGES = [
 
 export const SERVICE_BY_SLUG = Object.fromEntries(SERVICE_PAGES.map((s) => [s.slug, s]));
 
+const PAY_FAQ = {
+  q: "How do I pay?",
+  a: "You pay Cargo One's booking fee by card through Stripe to confirm the booking. It's a percentage of the driver's price, tiered by job value, and you see it before you pay. The driver's price itself is paid directly to the driver on delivery.",
+};
+
+const cancelFaq = (what) => ({
+  q: "Can I cancel?",
+  a: `Before a driver accepts, you can cancel free of charge and your booking fee is refunded in full. After a driver accepts, you can still cancel in the app until ${what} collected. A cancellation fee (currently 20% of the booking fee) is kept and the rest goes back to your card, and the app shows the exact amounts before you confirm. Once ${what} collected, the booking can't be cancelled in the app, so contact support@cargoone.co.uk.`,
+});
+
+// Data for /how-it-works/{slug} booking-type pages. Copy mirrors how the app works today.
+export const BOOKING_TYPES = [
+  {
+    slug: "bid-jobs",
+    name: "Bid Jobs",
+    image: "heroHow",
+    intro:
+      "Post a scheduled job and let verified drivers send you their offers. Compare each driver's price, rating and reviews, then accept the one that suits you.",
+    steps: [
+      { title: "Post your job", body: "Add pickup, drop-off, a date and what you're moving. You can set a maximum budget if you want to." },
+      { title: "Drivers send offers", body: "Verified drivers who can do the job send you a price, often with a short message." },
+      { title: "Compare and accept", body: "See each driver's price, rating and number of reviews side by side, then accept the offer you want." },
+      { title: "Pay the booking fee", body: "Pay Cargo One's booking fee by card to confirm. The driver's price is paid to the driver on delivery." },
+      { title: "Track and get proof", body: "Follow your driver live on the day, chat in the app and get photo proof of delivery." },
+    ],
+    bestFor: [
+      "Planned moves where you'd like to compare offers",
+      "House removals and multi-item furniture jobs",
+      "Unusual or awkward loads where drivers price the detail",
+      "Anyone who wants to choose a driver by rating and reviews",
+    ],
+    related: ["house-removals", "furniture-delivery", "man-and-van"],
+    faqs: [
+      { q: "How long do I have to wait for offers?", a: "It depends on the job, the route and how many drivers are available for your date. You'll be notified as offers come in, and you can accept one whenever you're ready." },
+      { q: "Do I have to accept an offer?", a: "No. Posting a job is free and you only pay the booking fee once you accept an offer." },
+      { q: "What can I see about each driver?", a: "Each offer shows the driver's price, their rating and how many reviews they have, so you can compare before you choose." },
+      PAY_FAQ,
+      cancelFaq("your items are"),
+    ],
+  },
+  {
+    slug: "fixed-price-jobs",
+    name: "Fixed Price Jobs",
+    image: "heroServices",
+    intro:
+      "Set your price up front and post the job. Drivers see exactly what the job pays, and a suitable driver accepts it. No bidding and no back and forth.",
+    steps: [
+      { title: "Post your job with a price", body: "Add the job details and set a fixed price. We show a suggested price as a guide." },
+      { title: "A suitable driver accepts", body: "Drivers see your price up front. A verified driver whose vehicle suits the job accepts it." },
+      { title: "Pay the booking fee", body: "Pay Cargo One's booking fee by card to confirm. The driver's price is paid to the driver on delivery." },
+      { title: "Track and get proof", body: "Follow your driver live on the day and get photo proof when it's delivered." },
+    ],
+    bestFor: [
+      "Regular or routine jobs where you know the going rate",
+      "Businesses that want a set cost for each delivery",
+      "Simple A to B moves like parcels, pallets and single items",
+      "Anyone who'd rather not compare offers",
+    ],
+    related: ["pallet-delivery", "parcel-delivery", "marketplace-collection"],
+    faqs: [
+      { q: "Who sets the fixed price?", a: "You do. When you post the job we show a suggested price as a guide, and you choose the price drivers will see." },
+      { q: "What's the difference from a Bid Job?", a: "With a Bid Job, drivers send you offers to compare. With a Fixed Price Job, the price is set before you post it and the first suitable driver to accept takes the job." },
+      { q: "What if no driver accepts my price?", a: "Your job stays open to drivers until one accepts. If it isn't being picked up, you can post it as a Bid Job instead and let drivers send offers." },
+      PAY_FAQ,
+      cancelFaq("your items are"),
+    ],
+  },
+  {
+    slug: "asap-transport",
+    name: "ASAP Transport",
+    image: "same_day",
+    intro:
+      "Need something moved now? Get an instant price, pay the booking fee, and your job is sent straight to available drivers nearby. Book 24/7, with drivers available around the clock.",
+    steps: [
+      { title: "Get an instant price", body: "Enter pickup, drop-off and what you're moving, then choose a vehicle. The price is shown straight away." },
+      { title: "Pay the booking fee", body: "Pay Cargo One's booking fee by card. The driver's price is paid to the driver on delivery." },
+      { title: "Nearby drivers are alerted", body: "Available drivers near the pickup are alerted first, and the search widens if needed. The first suitable driver to accept is assigned." },
+      { title: "Track it live", body: "See your driver on the map from the moment they accept, through collection to drop-off." },
+      { title: "Get proof of delivery", body: "The driver uploads photo proof when the job is done and you get a notification." },
+    ],
+    bestFor: [
+      "Urgent same-day deliveries",
+      "Last-minute collections from shops and sellers",
+      "Business jobs that can't wait until tomorrow",
+      "Jobs that come up at night or at the weekend",
+    ],
+    related: ["same-day-courier", "man-and-van", "parcel-delivery"],
+    faqs: [
+      { q: "When can I book ASAP Transport?", a: "You can book 24/7, every day of the year. ASAP jobs go to drivers who are online and available at that moment." },
+      { q: "How is a driver chosen?", a: "Available drivers near the pickup with a suitable vehicle are alerted first. If needed, the search widens to drivers further away. The first suitable driver to accept is assigned to your job." },
+      { q: "What if no driver has accepted yet?", a: "While your job is still waiting for a driver, you can cancel it in the app and your booking fee is refunded in full." },
+      PAY_FAQ,
+      cancelFaq("your items are"),
+    ],
+  },
+  {
+    slug: "asap-recovery",
+    name: "ASAP Recovery",
+    image: "vehicles",
+    intro:
+      "Broken down or stuck with a non-runner? Book 24/7 and your recovery job is sent straight to recovery drivers available around the clock near you, with live tracking from acceptance to drop-off.",
+    vehiclesFrom: "vehicle-recovery",
+    steps: [
+      { title: "Tell us about the vehicle", body: "Add where the vehicle is, where it's going, and whether it runs, has keys or has wheels that won't turn." },
+      { title: "Get an instant price", body: "Choose a suitable recovery vehicle and see the price straight away." },
+      { title: "Pay the booking fee", body: "Pay Cargo One's booking fee by card. The driver's price is paid to the driver on delivery." },
+      { title: "Recovery drivers are alerted", body: "Recovery drivers near you are alerted first, and the search widens if needed. The first suitable driver to accept is assigned." },
+      { title: "Track the recovery live", body: "Follow the recovery truck on the map, and get photos when the vehicle is dropped off." },
+    ],
+    bestFor: [
+      "Urgent breakdowns at home, at work or by the roadside",
+      "Non-runners that need moving to a garage or home",
+      "Accident-damaged vehicles that can't be driven",
+      "Cars, vans, motorbikes and heavier vehicles",
+    ],
+    related: ["vehicle-recovery", "car-transport", "motorbike-transport"],
+    faqs: [
+      { q: "Can I book a recovery at night or on a bank holiday?", a: "Yes. You can book 24/7, 365 days a year. Your job goes to recovery drivers who are online at that moment." },
+      { q: "What if my vehicle is on a motorway?", a: "For safety, vehicles on a live motorway should first be moved by the official services. You can then book a recovery from a safe place such as a recovery yard." },
+      { q: "Do I need to stay with the vehicle?", a: "If you can, yes. If you can't, add the exact location, how to access the vehicle and where the keys are." },
+      PAY_FAQ,
+      cancelFaq("the vehicle is"),
+    ],
+  },
+];
+
+export const BOOKING_TYPE_BY_SLUG = Object.fromEntries(BOOKING_TYPES.map((b) => [b.slug, b]));
+
 export const SITE_URL = "https://cargoone.co.uk";
 
 export const ORGANIZATION_JSONLD = {
@@ -274,4 +402,40 @@ export function serviceJsonLd(service) {
       ],
     },
   ];
+}
+
+export function bookingTypeSeo(type) {
+  return {
+    path: `/how-it-works/${type.slug}`,
+    title: `${type.name} – How Booking Works | Cargo One`,
+    h1: `${type.name} on Cargo One`,
+    description: `${type.intro.split(". ")[0].replace(/\.$/, "")}. See how it works, who it suits, and how payment and cancellation work.`,
+  };
+}
+
+export function bookingTypeJsonLd(type) {
+  return [
+    faqJsonLd(type.faqs),
+    breadcrumbJsonLd([
+      ["Home", "/"],
+      ["How it works", "/how-it-works"],
+      [type.name, `/how-it-works/${type.slug}`],
+    ]),
+  ];
+}
+
+function faqJsonLd(faqs) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+  };
+}
+
+function breadcrumbJsonLd(items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map(([name, path], i) => ({ "@type": "ListItem", position: i + 1, name, item: `${SITE_URL}${path}` })),
+  };
 }

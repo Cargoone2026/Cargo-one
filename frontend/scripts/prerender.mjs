@@ -38,12 +38,11 @@ function headTags({ url, title, description, jsonLd }) {
   ].join("\n        ");
 }
 
-function bodyContent({ h1, description, service }) {
-  let html = `<main><h1>${esc(h1)}</h1><p>${esc(service ? service.intro : description)}</p>`;
-  if (service) {
-    html += `<h2>What we move</h2><ul>${service.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>`;
-    html += `<h2>Vehicles used</h2><ul>${service.vehicles.map((v) => `<li>${esc(v)}</li>`).join("")}</ul>`;
-    html += `<h2>FAQs</h2>${service.faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("")}`;
+function bodyContent({ h1, description, intro, lists = [], faqs }) {
+  let html = `<main><h1>${esc(h1)}</h1><p>${esc(intro || description)}</p>`;
+  for (const [title, items] of lists) html += `<h2>${esc(title)}</h2><ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
+  if (faqs) {
+    html += `<h2>FAQs</h2>${faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("")}`;
     html += `<p><a href="/auth/register?role=customer">Get an instant quote</a> · <a href="/services">All services</a> · <a href="/drivers">Drive with CargoOne</a></p>`;
   }
   return `${html}</main>`;
@@ -51,7 +50,7 @@ function bodyContent({ h1, description, service }) {
 
 function renderPage(template, page, data) {
   const url = `${data.SITE_URL}${page.path}`;
-  const jsonLd = [data.ORGANIZATION_JSONLD, ...(page.service ? data.serviceJsonLd(page.service) : [])];
+  const jsonLd = [data.ORGANIZATION_JSONLD, ...(page.jsonLd || [])];
   let html = template
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(page.title)}</title>`)
     .replace(/<meta\s+name="description"[^>]*>/, "");
@@ -61,7 +60,7 @@ function renderPage(template, page, data) {
 }
 
 function sitemap(data, pages) {
-  const urls = [{ path: "/", priority: "1.0", changefreq: "weekly" }, ...pages.map((p) => ({ path: p.path, priority: p.service ? "0.8" : "0.7", changefreq: "monthly" }))];
+  const urls = [{ path: "/", priority: "1.0", changefreq: "weekly" }, ...pages.map((p) => ({ path: p.path, priority: p.detail ? "0.8" : "0.7", changefreq: "monthly" }))];
   const body = urls.map((u) => `  <url>\n    <loc>${data.SITE_URL}${u.path}</loc>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
 }
@@ -71,7 +70,15 @@ async function main() {
   const data = await loadData();
   const pages = [
     ...data.MARKETING_ROUTES,
-    ...data.SERVICE_PAGES.map((service) => ({ ...data.serviceSeo(service), service })),
+    ...data.SERVICE_PAGES.map((s) => ({
+      ...data.serviceSeo(s), intro: s.intro, faqs: s.faqs, jsonLd: data.serviceJsonLd(s), detail: true,
+      lists: [["What we move", s.moves], ["Vehicles used", s.vehicles]],
+    })),
+    ...data.BOOKING_TYPES.map((b) => ({
+      ...data.bookingTypeSeo(b), intro: b.intro, faqs: b.faqs, jsonLd: data.bookingTypeJsonLd(b), detail: true,
+      lists: [["Step by step", b.steps.map((st) => `${st.title}: ${st.body}`)], ["Who it's best for", b.bestFor],
+        ...(b.vehiclesFrom ? [["Recovery vehicles", data.SERVICE_BY_SLUG[b.vehiclesFrom].vehicles]] : [])],
+    })),
   ];
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];
