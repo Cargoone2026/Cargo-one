@@ -613,3 +613,9 @@ Each future phase must start from the locked baseline.
 ## Terms section 5 update (23 Oct 2026)
 - In pages/Settings.jsx LEGAL_CONTENT.terms, replaced ONLY the "up until delivery" sentence with the user's sentence. Last updated changed to 23 October 2026. The Terms/app mismatch is resolved.
 - Pending: Task 1 (user will upload their own recovery truck photo for /how-it-works/asap-recovery and /services/vehicle-recovery; do NOT use Unsplash). Task 3 (driver recruitment pages: /drivers/{van-drivers,self-employed,car-transporters,recovery-trucks,hgv} and /drivers/jobs/{20 cities}): waiting for the user's full spec.
+
+## Driver recruitment pages + recovery photo (23 Oct 2026, not deployed)
+- New template pages/marketing/DriverLanding.jsx (DriverTypeLanding, DriverCityLanding). Routes /drivers/:slug and /drivers/jobs/:city. Data in seo.js: DRIVER_TYPES (5), DRIVER_CITIES (20), DRIVER_WORK_FLOW, DRIVER_DOCUMENTS (matches backend REQUIRED_DOC_TYPES), DRIVER_PAY_STEPS, DRIVER_PAY_LINE (the user's exact wording).
+- Drivers.jsx: only a bottom "Driver work by type and city" section added. Sitemap and prerender now cover 52 pages (build sitemap has 53 URLs).
+- Recovery hero: public/images/recovery-truck-hero.webp (user's own photo, Range Rover badges blurred at user request, 1536x1024, 152 KB) via heroImage on vehicle-recovery, asap-recovery and drivers/recovery-trucks. SEO.jsx turns relative og:image paths into absolute URLs.
+- Tests: iteration_r74_driver_recruitment_pages.json (100%).
