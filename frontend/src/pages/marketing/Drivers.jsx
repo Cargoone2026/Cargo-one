@@ -10,6 +10,7 @@ import { IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { useResponsive } from "@/hooks/useResponsive";
+import { DRIVER_CITIES, DRIVER_TYPES } from "@/data/seo";
 
 const REQUIREMENTS = [
   "Valid UK driving licence (car, van, LGV or HGV)",
@@ -113,6 +114,29 @@ export default function Drivers() {
             Become a Driver
             <ArrowRight className="h-[18px] w-[18px]" />
           </Link>
+        </div>
+      </Section>
+      <Section bg="#fff">
+        <SectionHeading eyebrow="FIND YOUR WORK" title="Driver work by type and city" />
+        <div className="grid gap-8 md:grid-cols-[1fr_2fr]" data-testid="drivers-browse-links">
+          <ul className="space-y-2" data-testid="drivers-browse-types">
+            {DRIVER_TYPES.map((t) => (
+              <li key={t.slug}>
+                <Link to={`/drivers/${t.slug}`} data-testid={`drivers-browse-type-${t.slug}`} className="inline-flex items-center gap-1 text-[15px] font-semibold text-[#D62828] hover:underline">
+                  {t.h1} <ArrowRight className="h-4 w-4" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="drivers-browse-cities">
+            {DRIVER_CITIES.map((c) => (
+              <li key={c.slug}>
+                <Link to={`/drivers/jobs/${c.slug}`} data-testid={`drivers-browse-city-${c.slug}`} className="text-[14px] font-semibold text-[#111111] hover:text-[#D62828] hover:underline">
+                  Courier jobs in {c.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </Section>
     </>

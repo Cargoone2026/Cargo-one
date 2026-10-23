@@ -77,7 +77,7 @@ export default function BookingTypeLanding() {
 
 function BookingTypeBody({ type }) {
   const seo = bookingTypeSeo(type);
-  const image = IMG[type.image] || CATEGORY_IMAGES[type.image] || IMG.heroHow;
+  const image = type.heroImage || IMG[type.image] || CATEGORY_IMAGES[type.image] || IMG.heroHow;
   const others = BOOKING_TYPES.filter((b) => b.slug !== type.slug);
   const services = type.related.map((s) => SERVICE_BY_SLUG[s]).filter(Boolean);
   const vehicles = type.vehiclesFrom ? SERVICE_BY_SLUG[type.vehiclesFrom]?.vehicles : null;

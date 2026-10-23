@@ -81,7 +81,7 @@ export default function ServiceLanding() {
 
 function ServiceLandingBody({ service }) {
   const seo = serviceSeo(service);
-  const image = CATEGORY_IMAGES[service.image] || IMG.heroServices;
+  const image = service.heroImage || CATEGORY_IMAGES[service.image] || IMG.heroServices;
   const related = service.related.map((s) => SERVICE_BY_SLUG[s]).filter(Boolean);
 
   return (

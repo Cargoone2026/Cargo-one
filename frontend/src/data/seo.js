@@ -88,6 +88,7 @@ export const SERVICE_PAGES = [
   },
   {
     slug: "vehicle-recovery",
+    heroImage: "/images/recovery-truck-hero.webp",
     name: "Vehicle Recovery",
     image: "vans",
     intro:
@@ -315,6 +316,7 @@ export const BOOKING_TYPES = [
     intro:
       "Broken down or stuck with a non-runner? Book 24/7 and your recovery job is sent straight to recovery drivers available around the clock near you, with live tracking from acceptance to drop-off.",
     vehiclesFrom: "vehicle-recovery",
+    heroImage: "/images/recovery-truck-hero.webp",
     steps: [
       { title: "Tell us about the vehicle", body: "Add where the vehicle is, where it's going, and whether it runs, has keys or has wheels that won't turn." },
       { title: "Get an instant price", body: "Choose a suitable recovery vehicle and see the price straight away." },
@@ -440,4 +442,229 @@ function breadcrumbJsonLd(items) {
     "@type": "BreadcrumbList",
     itemListElement: items.map(([name, path], i) => ({ "@type": "ListItem", position: i + 1, name, item: `${SITE_URL}${path}` })),
   };
+}
+
+// ---------- Driver recruitment pages (/drivers/{slug} and /drivers/jobs/{city}) ----------
+export const DRIVER_SIGNUP_HREF = "/auth/register?role=driver";
+
+export const DRIVER_PAY_LINE = "CargoOne takes no commission from your price — the booking fee is paid by the customer.";
+
+export const DRIVER_WORK_FLOW = [
+  { title: "Live Mode: ASAP Transport", body: "Go online in the driver app and share your location. ASAP Transport offers are sent to online drivers nearby with a suitable vehicle, 24/7. The first suitable driver to accept gets the job." },
+  { title: "Live Mode: ASAP Recovery", body: "With a recovery vehicle on your profile, you can also receive ASAP Recovery offers for breakdowns and non-runners, around the clock. Go offline whenever you want to stop." },
+  { title: "Bid Jobs", body: "Customers post scheduled jobs and you send your own price. The customer compares offers and accepts the one they want." },
+  { title: "Fixed Price Jobs", body: "Some customers set a price up front. If the job and price suit you, accept it. There's no bidding." },
+];
+
+export const DRIVER_DOCUMENTS = [
+  "Driving licence",
+  "Insurance for the work you do (for example goods-in-transit and public liability where required)",
+  "Vehicle registration document (V5C)",
+  "Photos of your vehicle",
+  "A profile photo",
+  "Proof of address",
+];
+
+export const DRIVER_PAY_STEPS = [
+  "You set your price on Bid Jobs, or see the price before you accept Fixed Price Jobs and ASAP offers.",
+  "The customer pays Cargo One's booking fee by card to confirm the booking.",
+  "The customer pays your price directly to you on delivery, unless the booking screen says otherwise.",
+  DRIVER_PAY_LINE,
+];
+
+const DRIVER_PAY_FAQ = {
+  q: "How do I get paid?",
+  a: `The customer pays your price directly to you on delivery, unless the booking screen says otherwise. ${DRIVER_PAY_LINE}`,
+};
+
+const DRIVER_DOCS_FAQ = {
+  q: "What do I need to sign up?",
+  a: "Register as a driver and upload your driving licence, insurance, V5C vehicle registration, vehicle photos, a profile photo and proof of address. Cargo One reviews each document and your account is activated once they're all approved.",
+};
+
+export const DRIVER_TYPES = [
+  {
+    slug: "van-drivers",
+    name: "Van Drivers",
+    h1: "Van driver jobs",
+    image: "heroDrivers",
+    intro: "Use your small van, SWB, LWB or Luton for local and long-distance jobs, from single items and parcels to house moves. Go online for ASAP work or bid on scheduled jobs.",
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
+    suits: ["Owner-drivers with their own van", "Man and van operators", "Drivers who want ASAP work between planned jobs", "Small removal firms"],
+    faqs: [
+      { q: "What van do I need?", a: "Any van you can register on your profile, from a small van up to a Luton with tail lift. Jobs are matched to vehicles that suit them." },
+      { q: "Can I pick which jobs I do?", a: "Yes. You choose which Bid Jobs to price, which Fixed Price Jobs to accept, and whether to accept ASAP offers when you're online." },
+      { q: "Do I need a helper?", a: "Some customers ask for a second person in the job details. You can see this before you bid or accept." },
+      DRIVER_DOCS_FAQ,
+      DRIVER_PAY_FAQ,
+    ],
+  },
+  {
+    slug: "self-employed",
+    name: "Self-Employed Drivers",
+    h1: "Self-employed courier work",
+    image: "heroDrivers",
+    intro: "Work for yourself with Cargo One. Choose your hours, set your own prices on Bid Jobs, and go online for ASAP work when it suits you.",
+    vehicles: ["Motorcycle Courier", "Small Van", "Long Wheelbase Van", "Luton Van", "Recovery Truck", "7.5 Tonne Lorry"],
+    suits: ["Independent couriers", "Drivers building their own transport business", "Part-time drivers fitting work around other commitments", "Drivers who prefer to set their own prices"],
+    faqs: [
+      { q: "Am I employed by Cargo One?", a: "No. Drivers on Cargo One are independent and responsible for their own vehicle, licence, insurance, tax and legal compliance, as set out in our Terms." },
+      { q: "Can I choose my own hours?", a: "Yes. Go online in Live Mode when you want ASAP offers and go offline when you're done. Scheduled jobs are ones you choose to bid on or accept." },
+      { q: "Who sets the price?", a: "On Bid Jobs you send your own price. On Fixed Price Jobs and ASAP offers you see the price before you accept." },
+      DRIVER_DOCS_FAQ,
+      DRIVER_PAY_FAQ,
+    ],
+  },
+  {
+    slug: "car-transporters",
+    name: "Car Transporters",
+    h1: "Car transporter jobs",
+    image: "vehicles",
+    intro: "Move cars for private buyers, dealers and owners of non-runners. Take scheduled Bid Jobs and Fixed Price Jobs, or go online for ASAP vehicle work.",
+    vehicles: ["Car Transporter", "Enclosed Trailer Van", "Light Recovery Van", "Pickup Recovery", "Heavy Recovery / Lowloader"],
+    suits: ["Single and multi-car transporter operators", "Enclosed trailer owners moving classic or prestige cars", "Recovery operators with transporter capacity", "Drivers doing trade plate and dealer work"],
+    faqs: [
+      { q: "What vehicles count as car transport?", a: "Car transporters, enclosed trailer vans and recovery vehicles. Add the vehicles you use to your profile so jobs are matched to them." },
+      { q: "Do customers say whether the car runs?", a: "Customers add vehicle details and notes to the job, such as whether it runs or rolls. Read them before you bid or accept." },
+      { q: "Can I take long-distance jobs?", a: "Yes. Scheduled Bid Jobs and Fixed Price Jobs can be anywhere in the UK, and you choose which ones to take." },
+      DRIVER_DOCS_FAQ,
+      DRIVER_PAY_FAQ,
+    ],
+  },
+  {
+    slug: "recovery-trucks",
+    name: "Recovery Truck Drivers",
+    h1: "Work for recovery truck drivers",
+    image: "vehicles",
+    heroImage: "/images/recovery-truck-hero.webp",
+    intro: "Receive ASAP Recovery offers for breakdowns and non-runners 24/7 when you're online, plus scheduled recovery and transport jobs to bid on or accept.",
+    vehicles: ["Light Recovery Van", "Pickup Recovery", "Motorcycle Recovery", "3.5T Recovery Truck", "7.5T Recovery Truck", "10–18T Recovery", "26T Recovery", "32T Recovery", "Heavy Recovery / Lowloader", "Heavy Articulated Recovery", "Heavy 6×4 / 8×4 Recovery", "Heavy Tractor Recovery"],
+    suits: ["Independent recovery operators", "Garages with a recovery vehicle", "Night and weekend recovery drivers", "Heavy recovery operators"],
+    faqs: [
+      { q: "How do ASAP Recovery offers reach me?", a: "Go online in Live Mode with a recovery vehicle on your profile. Offers go to online recovery drivers nearby, and the search widens if needed. The first suitable driver to accept gets the job." },
+      { q: "Can I work nights and weekends?", a: "Yes. Customers can book 24/7, and you decide when you're online." },
+      { q: "Do I see the job before I accept?", a: "Yes. You see the pickup area, drop-off, vehicle details and price before you accept. Full addresses and contact details are shared once the booking is confirmed." },
+      DRIVER_DOCS_FAQ,
+      DRIVER_PAY_FAQ,
+    ],
+  },
+  {
+    slug: "hgv",
+    name: "HGV Drivers",
+    h1: "HGV driver jobs",
+    image: "freight",
+    intro: "Use your rigid, curtain-sider, crane or artic for pallets, machinery and bulk loads. Bid on scheduled jobs, accept fixed-price work, or go online for ASAP jobs.",
+    vehicles: ["7.5 Tonne Lorry", "18 Tonne Lorry", "Curtain Side Vehicle", "Articulated HGV", "Hiab Crane Vehicle", "Refrigerated Vehicle"],
+    suits: ["Owner-operators with a rigid or artic", "Hiab and crane operators", "Hauliers filling return loads", "Refrigerated vehicle operators"],
+    faqs: [
+      { q: "What licence do I need?", a: "The licence category for the vehicle you drive. Upload your driving licence when you sign up and Cargo One reviews it with your other documents." },
+      { q: "Can I use Cargo One for return loads?", a: "Yes. Scheduled Bid Jobs and Fixed Price Jobs show the route before you bid or accept, so you can pick work that fits your journey." },
+      { q: "Do customers give load details?", a: "Customers add what they're moving, with weights, sizes and access notes where they can. Check these before you bid." },
+      DRIVER_DOCS_FAQ,
+      DRIVER_PAY_FAQ,
+    ],
+  },
+];
+
+const city = (slug, name, region, nearby, areas, routes, note, localFaq) => ({ slug, name, region, nearby, areas, routes, note, localFaq });
+
+export const DRIVER_CITIES = [
+  city("london", "London", "Greater London", ["Reading", "Brighton", "Southampton"], ["Park Royal", "Canary Wharf", "Croydon", "Stratford", "around Heathrow"], ["M25", "A406 North Circular", "A13", "M4", "M1"],
+    "London jobs range from short central drops to runs out along the M25 to the Home Counties.",
+    { q: "Do I need to think about ULEZ or the Congestion Charge?", a: "Yes. London's ULEZ and Congestion Charge apply to many vehicles. Check your vehicle on Transport for London's website and factor any charges into your price." }),
+  city("birmingham", "Birmingham", "the West Midlands", ["Coventry", "Leicester", "Nottingham", "Stoke-on-Trent"], ["Digbeth", "the Jewellery Quarter", "Aston", "Tyseley", "around the NEC"], ["M6", "M5", "M42", "A38(M) Aston Expressway"],
+    "Birmingham sits where the M6, M5 and M42 meet, so many jobs head out across the Midlands and beyond.",
+    { q: "Does Birmingham's Clean Air Zone affect me?", a: "It can. The Clean Air Zone covers the roads inside the A4540 Middleway ring road. Check your vehicle on the government's Clean Air Zone checker before taking city-centre jobs." }),
+  city("manchester", "Manchester", "Greater Manchester", ["Liverpool", "Leeds", "Sheffield", "Bradford", "Stoke-on-Trent"], ["Trafford Park", "Salford Quays", "Ancoats", "Stockport", "around Manchester Airport"], ["M60", "M62", "M56", "M6"],
+    "The M60 ring road links Manchester's industrial estates, and the M62 runs east to Yorkshire and west to Merseyside.",
+    { q: "Can I do trans-Pennine jobs from Manchester?", a: "Yes. Bid Jobs and Fixed Price Jobs can run along the M62 to Leeds and Bradford, or over to Sheffield. You choose which ones to take." }),
+  city("leeds", "Leeds", "West Yorkshire", ["Bradford", "Sheffield", "Manchester"], ["Leeds city centre", "Cross Green", "Holbeck", "Headingley", "Thorpe Park"], ["M1", "M62", "M621", "A64"],
+    "Leeds is where the M1 meets the M62, with jobs across West Yorkshire and out to York along the A64.",
+    { q: "Are there student move jobs in Leeds?", a: "Customers post all kinds of moves, including flat and student moves around areas like Headingley. Jobs vary through the year, so check Live Mode and new Bid Jobs regularly." }),
+  city("liverpool", "Liverpool", "Merseyside", ["Manchester", "Stoke-on-Trent"], ["the docks at Seaforth and Bootle", "Speke", "the Baltic Triangle", "Knowsley"], ["M62", "M57", "M58", "the Mersey tunnels"],
+    "Liverpool work can include runs around the docks, across to the Wirral through the tunnels and east along the M62.",
+    { q: "Do I need to pay the Mersey tunnel tolls?", a: "The Queensway and Kingsway tunnels charge tolls. If a job uses them, include the cost in your price." }),
+  city("sheffield", "Sheffield", "South Yorkshire", ["Leeds", "Nottingham", "Manchester", "Bradford"], ["Meadowhall", "the Lower Don Valley", "Kelham Island", "Hillsborough"], ["M1", "Sheffield Parkway", "A61", "A57"],
+    "Sheffield sits beside the M1, with routes west over the Pennines towards Manchester.",
+    { q: "Are hilly routes a problem for heavier vehicles?", a: "Sheffield and the Pennine routes are hilly. Read the access notes and check your route before you bid on heavier loads." }),
+  city("bristol", "Bristol", "the South West", ["Cardiff", "Reading", "Southampton"], ["Avonmouth", "Temple Meads", "Cribbs Causeway", "Clifton"], ["M5", "M4", "M32", "M49"],
+    "Bristol connects the M5 and M4, so work can head into South Wales, London and the South West.",
+    { q: "Does Bristol's Clean Air Zone affect me?", a: "It can. Bristol has a Clean Air Zone in the city centre. Check your vehicle on the government's Clean Air Zone checker before taking central jobs." }),
+  city("newcastle", "Newcastle", "the North East", ["Edinburgh", "Leeds"], ["the Quayside", "Team Valley in Gateshead", "around the Metrocentre", "Cobalt Business Park"], ["A1(M)", "A19", "A69", "the Tyne Tunnel"],
+    "Newcastle jobs run along the A1 and A19 across Tyne and Wear, with longer runs north to Scotland and south to Yorkshire.",
+    { q: "Does Newcastle have a Clean Air Zone?", a: "Yes, there's a Clean Air Zone in the city centre. Check your vehicle on the government's Clean Air Zone checker before taking central jobs." }),
+  city("nottingham", "Nottingham", "the East Midlands", ["Leicester", "Sheffield", "Birmingham", "Coventry"], ["the Lace Market", "Beeston", "Colwick", "around East Midlands Airport"], ["M1", "A52", "A453", "A610"],
+    "Nottingham sits between the M1 and the A52, close to the East Midlands logistics corridor.",
+    { q: "Can I take jobs between Nottingham and Leicester?", a: "Yes. Bid Jobs and Fixed Price Jobs can be anywhere, and runs along the M1 corridor are one option. You choose which ones to take." }),
+  city("leicester", "Leicester", "the East Midlands", ["Nottingham", "Coventry", "Birmingham"], ["Leicester city centre", "Fosse Park", "Beaumont Leys", "around Magna Park near Lutterworth"], ["M1", "M69", "A46", "A6"],
+    "Leicester is close to the Midlands distribution parks, with the M1 and M69 a short drive away.",
+    { q: "Is there warehouse and pallet work near Leicester?", a: "Customers post pallet and freight jobs too, and Leicester is near several large distribution parks. Check new Bid Jobs and Fixed Price Jobs for work that fits your vehicle." }),
+  city("glasgow", "Glasgow", "Scotland", ["Edinburgh"], ["the Merchant City", "Finnieston", "Hillington Park", "the Clyde waterfront"], ["M8", "M74", "M77", "M80"],
+    "Glasgow jobs connect the M8 to Edinburgh, the M74 south and the M80 north.",
+    { q: "Does Glasgow's Low Emission Zone affect me?", a: "It can. Glasgow has a Low Emission Zone in the city centre. Check your vehicle meets the rules before taking central jobs." }),
+  city("edinburgh", "Edinburgh", "Scotland", ["Glasgow", "Newcastle"], ["Leith", "the Old Town", "Sighthill", "Newbridge", "around Edinburgh Airport"], ["A720 City Bypass", "M8", "M9", "A1"],
+    "Edinburgh work runs around the City Bypass, west along the M8 and south down the A1.",
+    { q: "Does Edinburgh's Low Emission Zone affect me?", a: "It can. Edinburgh has a Low Emission Zone in the city centre. Check your vehicle meets the rules before taking central jobs." }),
+  city("cardiff", "Cardiff", "South Wales", ["Bristol"], ["Cardiff Bay", "Splott", "Cardiff city centre", "Wentloog"], ["M4", "A470", "A48(M)", "A4232"],
+    "Cardiff jobs run along the M4 to Bristol and up the A470 into the valleys.",
+    { q: "Can I take jobs over the Severn bridges?", a: "Yes. Runs between Cardiff and Bristol along the M4 are common routes. You choose which jobs to take." }),
+  city("belfast", "Belfast", "Northern Ireland", [], ["Belfast Harbour", "the Titanic Quarter", "Duncrue", "Boucher Road"], ["M1", "M2", "A2", "the Westlink"],
+    "Belfast work covers the harbour, city and routes out along the M1 and M2 to Lisburn, Newtownabbey and beyond.",
+    { q: "Can I drive for Cargo One in Northern Ireland?", a: "Yes. Sign up with your documents in the usual way. Once they're approved you can go online and take jobs around Belfast and across Northern Ireland." }),
+  city("coventry", "Coventry", "the West Midlands", ["Birmingham", "Leicester", "Nottingham"], ["Coventry city centre", "Ansty Park", "Ryton", "Whitley"], ["A45", "A46", "M6", "M69"],
+    "Coventry sits between the M6, M69 and A45, close to Birmingham and Leicester.",
+    { q: "Is Coventry a good base for Midlands work?", a: "Coventry is close to the M6, M69 and A45, so Midlands jobs are within reach. You choose which jobs to bid on or accept." }),
+  city("bradford", "Bradford", "West Yorkshire", ["Leeds", "Manchester", "Sheffield"], ["Bradford city centre", "Euroway", "Shipley", "Keighley"], ["M606", "M62", "A650", "A647"],
+    "Bradford links to the M62 via the M606, with Leeds just a few miles east.",
+    { q: "Does Bradford have a Clean Air Zone?", a: "Yes. Bradford has a Clean Air Zone. Check your vehicle on the government's Clean Air Zone checker before taking jobs inside it." }),
+  city("stoke-on-trent", "Stoke-on-Trent", "Staffordshire", ["Manchester", "Birmingham", "Liverpool"], ["Hanley", "Etruria", "Trentham Lakes", "Burslem", "Longton"], ["A500", "M6", "A50", "A53"],
+    "Stoke-on-Trent is made up of six towns linked by the A500, with the M6 running alongside.",
+    { q: "Can I reach Manchester and Birmingham jobs from Stoke?", a: "Stoke sits on the M6 between the two, so jobs in either direction are an option. You choose which ones to take." }),
+  city("southampton", "Southampton", "Hampshire", ["Reading", "Brighton", "Bristol", "London"], ["the docks", "Southampton city centre", "Nursling", "Hedge End"], ["M27", "M3", "A33", "A36"],
+    "Southampton jobs can include runs around the port and along the M27 and M3.",
+    { q: "Are there port-related jobs in Southampton?", a: "Customers post all kinds of jobs, which can include collections near the port. Read the access notes on any job near the docks before you bid." }),
+  city("reading", "Reading", "Berkshire", ["London", "Southampton", "Bristol"], ["Green Park", "Reading town centre", "Theale", "Thames Valley Park"], ["M4", "A33", "A329(M)", "A4"],
+    "Reading sits on the M4 between London and Bristol, with the A33 heading south to the M3.",
+    { q: "Can I take London jobs from Reading?", a: "Yes. The M4 links Reading to West London, and you choose which jobs to bid on or accept." }),
+  city("brighton", "Brighton", "East Sussex", ["London", "Southampton"], ["the North Laine", "Hove", "Shoreham Port", "Hollingbury"], ["A23", "M23", "A27", "A259"],
+    "Brighton work runs along the coast on the A27 and A259, and north to London on the A23 and M23.",
+    { q: "Is parking hard for jobs in central Brighton?", a: "Central Brighton has a lot of controlled parking. Check the access notes and plan where you'll stop before you bid." }),
+];
+
+export const DRIVER_TYPE_BY_SLUG = Object.fromEntries(DRIVER_TYPES.map((d) => [d.slug, d]));
+export const DRIVER_CITY_BY_SLUG = Object.fromEntries(DRIVER_CITIES.map((c) => [c.slug, c]));
+export const DRIVER_CITY_BY_NAME = Object.fromEntries(DRIVER_CITIES.map((c) => [c.name, c]));
+
+export function cityFaqs(c) {
+  const nearby = c.nearby.length ? `, and runs to places like ${c.nearby.slice(0, 3).join(", ")}` : "";
+  return [
+    { q: `Can I drive for Cargo One in ${c.name}?`, a: `Yes. Once your documents are approved you can go online in Live Mode in ${c.name} and across ${c.region}, and bid on or accept scheduled jobs.` },
+    { q: `What kind of jobs can I take around ${c.name}?`, a: `Customers can post jobs anywhere in and around ${c.name}, including ${c.areas.slice(0, 3).join(", ")}. Work includes ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs${nearby}.` },
+    c.localFaq,
+    DRIVER_DOCS_FAQ,
+    DRIVER_PAY_FAQ,
+  ];
+}
+
+export function driverTypeSeo(d) {
+  return {
+    path: `/drivers/${d.slug}`,
+    title: `${d.h1} | Drive with Cargo One`,
+    h1: d.h1,
+    description: `${d.intro.split(". ")[0].replace(/\.$/, "")}. Sign up to drive with Cargo One.`,
+  };
+}
+
+export function driverCitySeo(c) {
+  return {
+    path: `/drivers/jobs/${c.slug}`,
+    title: `Courier & Driver Jobs in ${c.name} | Cargo One`,
+    h1: `Courier jobs in ${c.name}`,
+    intro: `Find courier, delivery and recovery work in ${c.name} and across ${c.region}. ${c.note}`,
+    description: `Drive with Cargo One in ${c.name} and ${c.region}: ASAP Transport and ASAP Recovery 24/7 in Live Mode, plus Bid Jobs and Fixed Price Jobs.`,
+  };
+}
+
+export function driverJsonLd(seo, faqs, crumbs) {
+  return [faqJsonLd(faqs), breadcrumbJsonLd([["Home", "/"], ["Drivers", "/drivers"], ...crumbs, [seo.h1, seo.path]])];
 }

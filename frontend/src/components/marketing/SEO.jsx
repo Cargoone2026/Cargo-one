@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ORGANIZATION_JSONLD } from "@/data/seo";
+import { ORGANIZATION_JSONLD, SITE_URL } from "@/data/seo";
 
 /**
  * Minimal, dependency-free document-head updater. Sets <title>, description,
@@ -9,6 +9,8 @@ import { ORGANIZATION_JSONLD } from "@/data/seo";
 export function SEO({ title, description, image, path, jsonLd }) {
   const isPortal = /^\/(auth|settings|customer|driver|admin)(\/|$)/.test(path || "");
   const ldJson = JSON.stringify([ORGANIZATION_JSONLD, ...(jsonLd ? [].concat(jsonLd) : [])]);
+
+  const imageUrl = image && image.startsWith("/") ? `${SITE_URL}${image}` : image;
 
   useEffect(() => {
     // Build-time prerendered tags are replaced by the live ones below.
@@ -38,11 +40,11 @@ export function SEO({ title, description, image, path, jsonLd }) {
       { property: "og:title", content: title },
       { property: "og:description", content: description },
       { property: "og:url", content: url },
-      ...(image ? [{ property: "og:image", content: image }] : []),
+      ...(image ? [{ property: "og:image", content: imageUrl }] : []),
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: title },
       { name: "twitter:description", content: description },
-      ...(image ? [{ name: "twitter:image", content: image }] : []),
+      ...(image ? [{ name: "twitter:image", content: imageUrl }] : []),
     ];
 
     const added = [];
@@ -76,7 +78,7 @@ export function SEO({ title, description, image, path, jsonLd }) {
       added.forEach((el) => el.remove());
       if (addedCanonical && canonical) canonical.remove();
     };
-  }, [title, description, image, path]);
+  }, [title, description, imageUrl, path]);
 
   return null;
 }

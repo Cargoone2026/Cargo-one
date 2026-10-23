@@ -38,12 +38,12 @@ function headTags({ url, title, description, jsonLd }) {
   ].join("\n        ");
 }
 
-function bodyContent({ h1, description, intro, lists = [], faqs }) {
+function bodyContent({ h1, description, intro, lists = [], faqs, cta = ["Get an instant quote", "/auth/register?role=customer"] }) {
   let html = `<main><h1>${esc(h1)}</h1><p>${esc(intro || description)}</p>`;
   for (const [title, items] of lists) html += `<h2>${esc(title)}</h2><ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
   if (faqs) {
     html += `<h2>FAQs</h2>${faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("")}`;
-    html += `<p><a href="/auth/register?role=customer">Get an instant quote</a> · <a href="/services">All services</a> · <a href="/drivers">Drive with CargoOne</a></p>`;
+    html += `<p><a href="${esc(cta[1])}">${esc(cta[0])}</a> · <a href="/services">All services</a> · <a href="/drivers">Drive with CargoOne</a></p>`;
   }
   return `${html}</main>`;
 }
@@ -79,6 +79,21 @@ async function main() {
       lists: [["Step by step", b.steps.map((st) => `${st.title}: ${st.body}`)], ["Who it's best for", b.bestFor],
         ...(b.vehiclesFrom ? [["Recovery vehicles", data.SERVICE_BY_SLUG[b.vehiclesFrom].vehicles]] : [])],
     })),
+    ...data.DRIVER_TYPES.map((d) => {
+      const seo = data.driverTypeSeo(d);
+      return {
+        ...seo, intro: d.intro, faqs: d.faqs, jsonLd: data.driverJsonLd(seo, d.faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
+        lists: [["Vehicles", d.vehicles], ["Who it suits", d.suits], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
+      };
+    }),
+    ...data.DRIVER_CITIES.map((c) => {
+      const seo = data.driverCitySeo(c);
+      const faqs = data.cityFaqs(c);
+      return {
+        ...seo, faqs, jsonLd: data.driverJsonLd(seo, faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
+        lists: [["Busy areas", c.areas], ["Routes", c.routes], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
+      };
+    }),
   ];
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];
