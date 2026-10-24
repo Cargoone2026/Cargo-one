@@ -634,3 +634,4 @@ Each future phase must start from the locked baseline.
 - Tests: iteration_r76_hero_images_local_seo_retest.json (100%).
 - 24 Oct 2026: /images/services-hero-van.webp replaced with the user's AI-generated van photo, as APPROVED by the user. It's an AI-extended scene (badge and plate removed or blurred), cropped 1920x1179, 100 KB. It's used only on /services and /how-it-works/fixed-price-jobs; no code changes.
 - 24 Oct 2026: heroHow reverted to the original Unsplash photo-1580674285054 (/how-it-works only, as before). New key heroSeoBoxes (/images/how-it-works-hero-boxes.webp) is used by /couriers, the city hubs, Bid Jobs and as the service x city fallback. Stray m_*.jpg files deleted from the repo root.
+- 24 Oct 2026: /images/how-it-works-hero-boxes.webp (heroSeoBoxes) replaced with the user's AI-generated 'van full of boxes' image (1170x732, 60 KB). Used on the SEO pages only.
