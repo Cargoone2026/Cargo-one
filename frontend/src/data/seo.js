@@ -724,7 +724,7 @@ export const LOCAL_CITIES = [
   {
     slug: "glasgow", name: "Glasgow", region: "the west of Scotland",
     residential: ["the West End", "Shawlands", "Dennistoun", "Partick", "Bearsden", "Govanhill"],
-    retail: ["Buchanan Galleries", "St Enoch Centre", "Silverburn", "intu Braehead"],
+    retail: ["Buchanan Galleries", "St Enoch Centre", "Silverburn", "Braehead"],
     business: ["the International Financial Services District", "the Merchant City", "Blythswood Square", "Finnieston"],
     industrial: ["Hillington Park", "Queenslie", "the Clyde Gateway", "Eurocentral"],
     roads: ["M8", "M74", "M77", "M80"],
@@ -836,10 +836,11 @@ const SERVICE_LOCAL = {
 export function localService(service, c) {
   const svcIdx = SERVICE_PAGES.findIndex((s) => s.slug === service.slug);
   const cfg = SERVICE_LOCAL[service.slug];
-  const areas = cfg.facet === "roads" ? c.residential : c[cfg.facet];
+  const pool = cfg.facet === "roads" ? c.residential : c[cfg.facet];
+  const areas = pool.map((_, i) => pool[(i + svcIdx) % pool.length]);
   const allRoutes = cityRoutes(c);
   const routes = [0, 1, 2].map((i) => allRoutes[(svcIdx + i) % allRoutes.length]);
-  const lead = cfg.lead(c, c[cfg.facet].slice(0, 4));
+  const lead = cfg.lead(c, (cfg.facet === "roads" ? c.roads : areas).slice(0, 4));
   const access = [c.parking, ...(cfg.facet === "roads" ? [] : [`Main roads for ${service.name.toLowerCase()} jobs include the ${list(c.roads.slice(0, 3))}.`])];
   const pick = [svcIdx % 5, (svcIdx + 2) % 5].map((i) => service.faqs[i]);
   const faqs = [

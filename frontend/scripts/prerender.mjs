@@ -40,7 +40,8 @@ function headTags({ url, title, description, jsonLd }) {
 
 function bodyContent({ h1, description, intro, lists = [], faqs, cta = ["Get an instant quote", "/auth/register?role=customer"] }) {
   let html = `<main><h1>${esc(h1)}</h1><p>${esc(intro || description)}</p>`;
-  for (const [title, items] of lists) html += `<h2>${esc(title)}</h2><ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
+  const li = (i) => (Array.isArray(i) ? `<li><a href="${esc(i[1])}">${esc(i[0])}</a></li>` : `<li>${esc(i)}</li>`);
+  for (const [title, items] of lists) html += `<h2>${esc(title)}</h2><ul>${items.map(li).join("")}</ul>`;
   if (faqs) {
     html += `<h2>FAQs</h2>${faqs.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("")}`;
     html += `<p><a href="${esc(cta[1])}">${esc(cta[0])}</a> · <a href="/services">All services</a> · <a href="/drivers">Drive with CargoOne</a></p>`;
@@ -94,13 +95,13 @@ async function main() {
         lists: [["Busy areas", c.areas], ["Routes", c.routes], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
-    { ...data.COURIERS_INDEX_SEO, lists: [["Cities", data.LOCAL_CITIES.map((c) => `Couriers in ${c.name}`)]] },
+    { ...data.COURIERS_INDEX_SEO, lists: [["Cities", data.LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])]] },
     ...data.LOCAL_CITIES.map((c) => {
       const seo = data.cityHubSeo(c);
       const faqs = data.cityHubFaqs(c);
       return {
         ...seo, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
-        lists: [["Services", data.SERVICE_PAGES.map((s) => `${s.name} in ${c.name}`)], ["Areas we cover", [...c.residential, ...c.business, ...c.industrial]], ["Getting around", [c.parking, ...(c.cleanAir ? [c.cleanAir.text] : [])]]],
+        lists: [["Services", data.SERVICE_PAGES.map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...c.residential, ...c.business, ...c.industrial]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby big cities", data.cityRoutes(c).map((r) => [`Couriers in ${r.to.name} (via ${r.roads})`, `/couriers/${r.to.slug}`])]],
       };
     }),
     ...data.SERVICE_PAGES.flatMap((s) => data.LOCAL_CITIES.map((c) => {
@@ -108,7 +109,7 @@ async function main() {
       const l = data.localService(s, c);
       return {
         ...seo, intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
-        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => `${c.name} to ${r.to.name} via the ${r.roads}`)], ["Getting around", [...l.access, ...(c.cleanAir ? [c.cleanAir.text] : [])]]],
+        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", [...l.access, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.SERVICE_PAGES.filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
       };
     })),
   ];

@@ -619,3 +619,10 @@ Each future phase must start from the locked baseline.
 - Drivers.jsx: only a bottom "Driver work by type and city" section added. Sitemap and prerender now cover 52 pages (build sitemap has 53 URLs).
 - Recovery hero: public/images/recovery-truck-hero.webp (user's own photo, Range Rover badges blurred at user request, 1536x1024, 152 KB) via heroImage on vehicle-recovery, asap-recovery and drivers/recovery-trucks. SEO.jsx turns relative og:image paths into absolute URLs.
 - Tests: iteration_r74_driver_recruitment_pages.json (100%).
+
+## Local SEO Wave 1 (24 Oct 2026, not deployed)
+- /couriers (index), /couriers/{city} (10 hubs), /services/{service}/{city} (120 pages). Template: pages/marketing/LocalLanding.jsx. Data in seo.js: LOCAL_CITIES (local details by area type; cleanAir only for London, Birmingham, Glasgow, Newcastle, Sheffield and Bristol, with official links; none for Manchester, Leeds, Liverpool and Nottingham), ROUTE_ROADS, SERVICE_LOCAL (the area type each service uses + its lead sentence), localService(), serviceCitySeo(), cityHubSeo(), cityHubFaqs().
+- ServiceLanding: bottom "In your city" list added. DriverLanding city pages: link to /couriers/{city} for the 10 cities.
+- Prerender 183 pages (static <main> includes <a> links); build sitemap has 184 URLs.
+- KNOWN, NOT FIXED (existing pages): IMG.heroServices (Unsplash photo-1494412574745) returns 404, so the /services hero is black. New hubs use IMG.heroHow.
+- Tests: iteration_r75_local_seo_wave1.json (100%). Fixed after: routes wrap on mobile, area chips rotate per service, Braehead name, prerender anchors.
