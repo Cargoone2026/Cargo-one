@@ -632,3 +632,4 @@ Each future phase must start from the locked baseline.
 - prerender.mjs now writes og:image/twitter:image (loads images.js too); MARKETING_ROUTES have `img` keys.
 - Route rows on service x city pages now line up under the link text.
 - Tests: iteration_r76_hero_images_local_seo_retest.json (100%).
+- 24 Oct 2026: /images/services-hero-van.webp replaced with the user's AI-generated van photo, as APPROVED by the user. It's an AI-extended scene (badge and plate removed or blurred), cropped 1920x1179, 100 KB. It's used only on /services and /how-it-works/fixed-price-jobs; no code changes.
