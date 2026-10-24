@@ -124,8 +124,8 @@ export function CouriersIndex() {
   const seo = COURIERS_INDEX_SEO;
   return (
     <div data-testid="couriers-index-page">
-      <SEO title={seo.title} description={seo.description} path={seo.path} image={IMG.heroHow} />
-      <Hero bgImage={IMG.heroHow} eyebrow="CITIES" title={seo.h1} subtitle={seo.description} compact primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }} />
+      <SEO title={seo.title} description={seo.description} path={seo.path} image={IMG.heroSeoBoxes} />
+      <Hero bgImage={IMG.heroSeoBoxes} eyebrow="CITIES" title={seo.h1} subtitle={seo.description} compact primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }} />
       <Crumbs items={[["Home", "/"], ["Couriers"]]} />
       <Section>
         <LinkList title="Choose your city" testId="couriers-index-cities" cols items={LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])} />
@@ -143,8 +143,8 @@ export function CityHub() {
   const routes = cityRoutes(c);
   return (
     <div data-testid={`city-hub-${c.slug}-page`}>
-      <SEO title={seo.title} description={seo.description} path={seo.path} image={IMG.heroHow} jsonLd={cityHubJsonLd(c, faqs)} />
-      <Hero bgImage={IMG.heroHow} eyebrow={c.region.replace(/^the /, "").toUpperCase()} title={seo.h1} subtitle={seo.intro} compact primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }} />
+      <SEO title={seo.title} description={seo.description} path={seo.path} image={IMG.heroSeoBoxes} jsonLd={cityHubJsonLd(c, faqs)} />
+      <Hero bgImage={IMG.heroSeoBoxes} eyebrow={c.region.replace(/^the /, "").toUpperCase()} title={seo.h1} subtitle={seo.intro} compact primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }} />
       <Crumbs items={[["Home", "/"], ["Couriers", "/couriers"], [c.name]]} />
       <Section>
         <SectionHeading eyebrow="SERVICES" title={`Services in ${c.name}`} />
@@ -195,7 +195,7 @@ export function ServiceCity() {
 function ServiceCityBody({ service, c }) {
   const seo = serviceCitySeo(service, c);
   const local = localService(service, c);
-  const image = service.heroImage || CATEGORY_IMAGES[service.image] || IMG.heroHow;
+  const image = service.heroImage || CATEGORY_IMAGES[service.image] || IMG.heroSeoBoxes;
   const others = SERVICE_PAGES.filter((s) => s.slug !== service.slug);
   return (
     <div data-testid={`service-city-${service.slug}-${c.slug}-page`}>

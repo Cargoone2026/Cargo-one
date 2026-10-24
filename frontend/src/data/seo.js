@@ -227,7 +227,7 @@ export const BOOKING_TYPES = [
   {
     slug: "bid-jobs",
     name: "Bid Jobs",
-    image: "heroHow",
+    image: "heroSeoBoxes",
     intro:
       "Post a scheduled job and let verified drivers send you their offers. Compare each driver's price, rating and reviews, then accept the one that suits you.",
     steps: [

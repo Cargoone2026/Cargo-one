@@ -86,7 +86,7 @@ async function main() {
       lists: [["What we move", s.moves], ["Vehicles used", s.vehicles]],
     })),
     ...data.BOOKING_TYPES.map((b) => ({
-      ...data.bookingTypeSeo(b), image: b.heroImage || IMG[b.image] || CAT[b.image] || IMG.heroHow, intro: b.intro, faqs: b.faqs, jsonLd: data.bookingTypeJsonLd(b), detail: true,
+      ...data.bookingTypeSeo(b), image: b.heroImage || IMG[b.image] || CAT[b.image] || IMG.heroSeoBoxes, intro: b.intro, faqs: b.faqs, jsonLd: data.bookingTypeJsonLd(b), detail: true,
       lists: [["Step by step", b.steps.map((st) => `${st.title}: ${st.body}`)], ["Who it's best for", b.bestFor],
         ...(b.vehiclesFrom ? [["Recovery vehicles", data.SERVICE_BY_SLUG[b.vehiclesFrom].vehicles]] : [])],
     })),
@@ -105,12 +105,12 @@ async function main() {
         lists: [["Busy areas", c.areas], ["Routes", c.routes], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
-    { ...data.COURIERS_INDEX_SEO, image: IMG.heroHow, lists: [["Cities", data.LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])]] },
+    { ...data.COURIERS_INDEX_SEO, image: IMG.heroSeoBoxes, lists: [["Cities", data.LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])]] },
     ...data.LOCAL_CITIES.map((c) => {
       const seo = data.cityHubSeo(c);
       const faqs = data.cityHubFaqs(c);
       return {
-        ...seo, image: IMG.heroHow, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
+        ...seo, image: IMG.heroSeoBoxes, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
         lists: [["Services", data.SERVICE_PAGES.map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...c.residential, ...c.business, ...c.industrial]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby big cities", data.cityRoutes(c).map((r) => [`Couriers in ${r.to.name} (via ${r.roads})`, `/couriers/${r.to.slug}`])]],
       };
     }),
