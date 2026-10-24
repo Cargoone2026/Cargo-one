@@ -668,3 +668,234 @@ export function driverCitySeo(c) {
 export function driverJsonLd(seo, faqs, crumbs) {
   return [faqJsonLd(faqs), breadcrumbJsonLd([["Home", "/"], ["Drivers", "/drivers"], ...crumbs, [seo.h1, seo.path]])];
 }
+
+// ---------- Local SEO Wave 1: /couriers/{city} hubs and /services/{service}/{city} ----------
+const GOV_CAZ = "https://www.gov.uk/clean-air-zones";
+
+export const LOCAL_CITIES = [
+  {
+    slug: "london", name: "London", region: "Greater London",
+    residential: ["Clapham", "Islington", "Hackney", "Wandsworth", "Ealing", "Walthamstow"],
+    retail: ["Westfield White City", "Westfield Stratford City", "Camden Market", "Brent Cross"],
+    business: ["the City of London", "Canary Wharf", "Shoreditch", "King's Cross"],
+    industrial: ["Park Royal", "Barking", "Brimsdown in Enfield", "the area around Heathrow"],
+    roads: ["M25", "A406 North Circular", "A13", "A40 Westway"],
+    water: ["Limehouse Basin", "Chelsea Harbour", "the Thames at Brentford", "Little Venice on the Regent's Canal"],
+    parking: "Most London streets have controlled parking and many main roads are red routes, so plan where the driver can load before you book.",
+    cleanAir: { text: "London has the ULEZ across all boroughs and the Congestion Charge in central London. Check whether your vehicle is affected.", url: "https://tfl.gov.uk/modes/driving/ultra-low-emission-zone", label: "TfL ULEZ checker" },
+    character: "From mansion-block flats in the centre to suburban semis inside the M25, London jobs vary hugely in access and distance.",
+  },
+  {
+    slug: "birmingham", name: "Birmingham", region: "the West Midlands",
+    residential: ["Moseley", "Harborne", "Edgbaston", "Kings Heath", "Sutton Coldfield", "Erdington"],
+    retail: ["the Bullring", "the Mailbox", "Fort Shopping Park", "the Custard Factory"],
+    business: ["Colmore Business District", "Brindleyplace", "Paradise", "Snow Hill"],
+    industrial: ["Tyseley", "Aston", "Minworth", "Hams Hall"],
+    roads: ["M6 at Spaghetti Junction", "M5", "M42", "A38(M) Aston Expressway"],
+    water: ["Gas Street Basin", "the Birmingham Canal Navigations", "the Grand Union Canal", "the Worcester and Birmingham Canal"],
+    parking: "Loading inside the A4540 Middleway ring road is limited, while suburbs like Moseley and Harborne are usually easier to park in.",
+    cleanAir: { text: "Birmingham has a Clean Air Zone in the city centre, inside the A4540 Middleway. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
+    character: "Birmingham sits at the heart of the motorway network, so local jobs and longer Midlands runs are both common.",
+  },
+  {
+    slug: "manchester", name: "Manchester", region: "Greater Manchester",
+    residential: ["Didsbury", "Chorlton", "Levenshulme", "Fallowfield", "Prestwich", "Sale"],
+    retail: ["the Trafford Centre", "the Arndale", "Manchester Fort Shopping Park", "the Northern Quarter"],
+    business: ["Spinningfields", "Piccadilly", "MediaCityUK", "St Peter's Square"],
+    industrial: ["Trafford Park", "Openshaw", "Newton Heath", "the area around Manchester Airport"],
+    roads: ["M60", "M62", "M56", "M602"],
+    water: ["Castlefield Basin", "the Bridgewater Canal", "the Rochdale Canal", "Salford Quays"],
+    parking: "Loading space is tight in the Northern Quarter and Ancoats, and Metrolink tram lines run through the city centre.",
+    cleanAir: null,
+    character: "The M60 ring road ties Manchester's suburbs and industrial estates together, with the M62 heading east and west.",
+  },
+  {
+    slug: "leeds", name: "Leeds", region: "West Yorkshire",
+    residential: ["Headingley", "Chapel Allerton", "Roundhay", "Horsforth", "Kirkstall", "Meanwood"],
+    retail: ["Trinity Leeds", "the Victoria Quarter", "the White Rose Centre", "Kirkgate Market"],
+    business: ["Wellington Place", "the South Bank", "Park Square", "Leeds Dock"],
+    industrial: ["Cross Green", "Stourton", "Thorpe Park", "Holbeck"],
+    roads: ["M1", "M62", "M621", "A64"],
+    water: ["Leeds Dock", "Granary Wharf", "the Leeds and Liverpool Canal", "the Aire and Calder Navigation"],
+    parking: "The city-centre loop and inner ring road limit where vehicles can stop, and student areas like Headingley have busy terraced streets.",
+    cleanAir: null,
+    character: "Leeds is where the M1 meets the M62, with terraced suburbs, a compact centre and big distribution sites to the south.",
+  },
+  {
+    slug: "glasgow", name: "Glasgow", region: "the west of Scotland",
+    residential: ["the West End", "Shawlands", "Dennistoun", "Partick", "Bearsden", "Govanhill"],
+    retail: ["Buchanan Galleries", "St Enoch Centre", "Silverburn", "intu Braehead"],
+    business: ["the International Financial Services District", "the Merchant City", "Blythswood Square", "Finnieston"],
+    industrial: ["Hillington Park", "Queenslie", "the Clyde Gateway", "Eurocentral"],
+    roads: ["M8", "M74", "M77", "M80"],
+    water: ["the River Clyde", "the Forth and Clyde Canal", "Spiers Wharf", "marinas on the Firth of Clyde"],
+    parking: "Many tenement streets have controlled parking and shared closes, and the city centre has bus gates to watch for.",
+    cleanAir: { text: "Glasgow has a Low Emission Zone in the city centre. Check whether your vehicle is affected.", url: "https://www.lowemissionzones.scot/", label: "Low Emission Zones Scotland" },
+    character: "Glasgow's tenement flats, busy centre and Clyde-side industry make access details especially important.",
+  },
+  {
+    slug: "liverpool", name: "Liverpool", region: "Merseyside",
+    residential: ["Allerton", "Wavertree", "Woolton", "Crosby", "Aigburth", "West Derby"],
+    retail: ["Liverpool ONE", "Bold Street", "the Edge Lane retail parks", "the Baltic Market"],
+    business: ["the Commercial District", "the Royal Albert Dock", "the Baltic Triangle", "the Knowledge Quarter"],
+    industrial: ["Speke", "Knowsley Industrial Park", "Seaforth", "Bootle"],
+    roads: ["M62", "M57", "M58", "the Mersey tunnels"],
+    water: ["the Royal Albert Dock", "Liverpool Marina", "the Leeds and Liverpool Canal", "the River Mersey"],
+    parking: "Streets around Liverpool ONE have limited loading, and trips to the Wirral use the tolled Mersey tunnels.",
+    cleanAir: null,
+    character: "Liverpool mixes docklands, a busy waterfront centre and leafy southern suburbs, all linked to the M62.",
+  },
+  {
+    slug: "newcastle", name: "Newcastle", region: "Tyne and Wear",
+    residential: ["Jesmond", "Gosforth", "Heaton", "Fenham", "Whitley Bay", "Tynemouth"],
+    retail: ["Eldon Square", "the Metrocentre", "Grainger Market", "Silverlink"],
+    business: ["the Quayside", "Newcastle Helix", "the area around Central Station", "Cobalt Business Park"],
+    industrial: ["Team Valley", "the Port of Tyne", "Benton", "Follingsby"],
+    roads: ["A1 Western Bypass", "A19", "A69", "the Tyne Tunnel"],
+    water: ["Royal Quays Marina", "St Peter's Marina", "the River Tyne", "the Port of Tyne"],
+    parking: "Jesmond and Heaton have resident permit zones, and the Tyne Tunnel is tolled for crossings.",
+    cleanAir: { text: "Newcastle has a Clean Air Zone in the city centre. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
+    character: "Newcastle jobs run either side of the Tyne, from Gateshead's Team Valley to the coast at Tynemouth.",
+  },
+  {
+    slug: "sheffield", name: "Sheffield", region: "South Yorkshire",
+    residential: ["Crookes", "Ecclesall", "Walkley", "Nether Edge", "Hillsborough", "Broomhill"],
+    retail: ["Meadowhall", "Fargate", "the Moor Market", "Crystal Peaks"],
+    business: ["Kelham Island", "the Heart of the City", "the Cultural Industries Quarter", "Sheffield Business Park"],
+    industrial: ["the Lower Don Valley", "Attercliffe", "Tinsley", "the Advanced Manufacturing Park"],
+    roads: ["M1 at Tinsley Viaduct", "Sheffield Parkway", "A61", "A57 Snake Pass"],
+    water: ["Victoria Quays", "the Sheffield and Tinsley Canal", "the River Don"],
+    parking: "Steep hills in Crookes and Walkley and narrow terraced streets mean access is worth checking before the day.",
+    cleanAir: { text: "Sheffield has a Clean Air Zone in and around the city centre. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
+    character: "Sheffield is built on seven hills, with steelmaking heritage in the Don Valley and the Peak District on its doorstep.",
+  },
+  {
+    slug: "bristol", name: "Bristol", region: "the South West",
+    residential: ["Clifton", "Redland", "Bedminster", "Southville", "Bishopston", "Fishponds"],
+    retail: ["Cabot Circus", "Cribbs Causeway", "Broadmead", "St Nicholas Market"],
+    business: ["Temple Quarter", "Harbourside", "Redcliffe", "Aztec West"],
+    industrial: ["Avonmouth", "St Philips Marsh", "Severnside", "Emersons Green"],
+    roads: ["M5 at the Avonmouth Bridge", "M4/M5 Almondsbury interchange", "M32", "A4 Portway"],
+    water: ["the Floating Harbour", "Bristol Marina", "Portishead Marina", "the Feeder Canal"],
+    parking: "Residents' parking zones cover much of central Bristol, and Clifton's streets are steep and narrow.",
+    cleanAir: { text: "Bristol has a Clean Air Zone in the city centre. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
+    character: "Bristol's harbourside centre, hilly suburbs and the Avonmouth docks each bring different access needs.",
+  },
+  {
+    slug: "nottingham", name: "Nottingham", region: "the East Midlands",
+    residential: ["West Bridgford", "Beeston", "Mapperley", "Sherwood", "Arnold", "Lenton"],
+    retail: ["the Victoria Centre", "Hockley", "Castle Marina Retail Park", "Riverside Retail Park"],
+    business: ["the Lace Market", "Castle Wharf", "Nottingham Science Park", "Trent Basin"],
+    industrial: ["Colwick", "Bulwell", "Sherwood Business Park", "the area around East Midlands Airport"],
+    roads: ["M1 junctions 24 to 27", "A52", "A610", "the A6514 Ring Road"],
+    water: ["Castle Marina", "the Nottingham Canal", "the River Trent", "Trent Lock"],
+    parking: "Tram lines and bus lanes in the city centre limit where vehicles can stop, while suburbs like West Bridgford are easier.",
+    cleanAir: null,
+    character: "Nottingham sits between the M1 and the River Trent, with student areas, a historic centre and busy retail parks.",
+  },
+];
+
+const ROUTE_ROADS = {
+  "birmingham-london": "M40 or M1 and M6", "london-manchester": "M1 and M6", "leeds-london": "M1", "bristol-london": "M4",
+  "london-nottingham": "M1", "london-sheffield": "M1", "liverpool-london": "M1 and M6", "london-newcastle": "A1(M)",
+  "birmingham-manchester": "M6", "birmingham-bristol": "M5", "birmingham-nottingham": "M42 and M1", "birmingham-liverpool": "M6",
+  "birmingham-leeds": "M42 and M1", "birmingham-sheffield": "M42 and M1", "leeds-manchester": "M62", "liverpool-manchester": "M62",
+  "manchester-sheffield": "A57 or A628 over the Pennines", "glasgow-manchester": "M6 and M74", "manchester-newcastle": "M62 and A1(M)",
+  "bristol-manchester": "M5 and M6", "leeds-sheffield": "M1", "leeds-newcastle": "A1(M)", "leeds-liverpool": "M62",
+  "leeds-nottingham": "M1", "glasgow-newcastle": "M74, M6 and A69", "glasgow-liverpool": "M74 and M6",
+  "newcastle-sheffield": "A1(M) and M1", "nottingham-sheffield": "M1", "liverpool-sheffield": "M62 and M1",
+  "bristol-nottingham": "M5, M42 and M1", "bristol-liverpool": "M5 and M6", "liverpool-newcastle": "M62 and A1(M)",
+};
+
+export const LOCAL_CITY_BY_SLUG = Object.fromEntries(LOCAL_CITIES.map((c) => [c.slug, c]));
+
+export function cityRoutes(c) {
+  return LOCAL_CITIES.filter((o) => o.slug !== c.slug)
+    .map((o) => ({ to: o, roads: ROUTE_ROADS[[c.slug, o.slug].sort().join("-")] }))
+    .filter((r) => r.roads);
+}
+
+const list = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : a[0]);
+
+// Which local facts each service uses, and how it describes them.
+const SERVICE_LOCAL = {
+  "man-and-van": { facet: "residential", lead: (c, a) => `Our ${c.name} man and van drivers work in flats and houses across ${list(a)}, as well as the city centre. Small moves, single items and tip runs can all be booked.` },
+  "furniture-delivery": { facet: "retail", lead: (c, a) => `Bought a sofa or wardrobe at ${list(a)}? Book a driver to collect it from the store or a seller and deliver it to homes anywhere in ${c.name}.` },
+  "same-day-courier": { facet: "business", lead: (c, a) => `Same-day courier jobs in ${c.name} often start in business areas like ${list(a)}. Book ASAP for an urgent run or schedule it for later today.` },
+  "house-removals": { facet: "residential", lead: (c, a) => `Moving home in ${c.name}? Drivers cover areas like ${list(a)}, with vans and lorries for everything from studio flats to family homes.` },
+  "car-transport": { facet: "roads", lead: (c, a) => `Car transport in ${c.name} covers private sales, dealer moves and non-runners, with transporters using routes like the ${list(a)}.` },
+  "vehicle-recovery": { facet: "roads", lead: (c, a) => `Breakdowns around ${c.name} often happen on busy roads like the ${list(a)}. Book 24/7 and ASAP Recovery jobs go to recovery drivers available around the clock nearby.` },
+  "motorbike-transport": { facet: "residential", lead: (c, a) => `Move a motorbike, scooter or moped to or from homes in ${list(a)}, a ${c.name} workshop or an event, strapped down on a suitable vehicle.` },
+  "pallet-delivery": { facet: "industrial", lead: (c, a) => `Pallet jobs in ${c.name} often run to and from industrial areas like ${list(a)}, using tail-lift vans and lorries.` },
+  "marketplace-collection": { facet: "retail", lead: (c, a) => `Found something on a marketplace in ${c.name}? Drivers can collect from sellers across the city, from shopping areas like ${list(a)} to private homes.` },
+  "parcel-delivery": { facet: "business", lead: (c, a) => `Send parcels and boxes across ${c.name}, from offices in ${list(a)} to homes in the suburbs, booked ASAP or scheduled.` },
+  "boat-transport": { facet: "water", lead: (c, a) => `Moving a boat in or out of ${c.name}? Local waters include ${list(a)}. Boats and trailers can be moved between home, storage, slipways and marinas.` },
+  "machinery-haulage": { facet: "industrial", lead: (c, a) => `Move plant, machinery and workshop equipment to and from sites in ${c.name}, including industrial areas like ${list(a)}.` },
+};
+
+export function localService(service, c) {
+  const svcIdx = SERVICE_PAGES.findIndex((s) => s.slug === service.slug);
+  const cfg = SERVICE_LOCAL[service.slug];
+  const areas = cfg.facet === "roads" ? c.residential : c[cfg.facet];
+  const allRoutes = cityRoutes(c);
+  const routes = [0, 1, 2].map((i) => allRoutes[(svcIdx + i) % allRoutes.length]);
+  const lead = cfg.lead(c, c[cfg.facet].slice(0, 4));
+  const access = [c.parking, ...(cfg.facet === "roads" ? [] : [`Main roads for ${service.name.toLowerCase()} jobs include the ${list(c.roads.slice(0, 3))}.`])];
+  const pick = [svcIdx % 5, (svcIdx + 2) % 5].map((i) => service.faqs[i]);
+  const faqs = [
+    { q: `Which parts of ${c.name} do you cover for ${service.name.toLowerCase()}?`, a: `Anywhere in ${c.name} and across ${c.region}, including ${list(areas.slice(0, 3))}. Enter your pickup and drop-off to see your price.` },
+    { q: `Is there anything to know about access in ${c.name}?`, a: `${c.parking}${c.cleanAir ? ` ${c.cleanAir.text}` : ""} Add access notes to your job so drivers can come prepared.` },
+    { q: `Can I book ${service.name.toLowerCase()} from ${c.name} to ${routes[0].to.name}?`, a: `Yes. ${c.name} to ${routes[0].to.name} jobs usually use the ${routes[0].roads}. Book ASAP or schedule it as a Bid Job or Fixed Price Job.` },
+    ...pick,
+  ];
+  return { areas, routes, lead, access, faqs };
+}
+
+export function serviceCitySeo(service, c) {
+  const { areas } = localService(service, c);
+  return {
+    path: `/services/${service.slug}/${c.slug}`,
+    title: `${service.name} in ${c.name} – Instant Quote | Cargo One`,
+    h1: `${service.name} in ${c.name} – instant quote`,
+    description: `${service.name} in ${c.name}, including ${list(areas.slice(0, 2))}. Get an instant quote, book a verified driver and track it live.`,
+  };
+}
+
+export function serviceCityJsonLd(service, c, faqs) {
+  return [
+    faqJsonLd(faqs),
+    breadcrumbJsonLd([["Home", "/"], ["Services", "/services"], [service.name, `/services/${service.slug}`], [c.name, `/services/${service.slug}/${c.slug}`]]),
+  ];
+}
+
+export function cityHubFaqs(c) {
+  const r = cityRoutes(c);
+  return [
+    { q: `Which areas of ${c.name} do you cover?`, a: `All of ${c.name} and ${c.region}, from homes in ${list(c.residential.slice(0, 3))} to business and industrial areas like ${list([c.business[0], c.industrial[0]])}.` },
+    { q: `Can I book a courier in ${c.name} right now?`, a: `Yes. You can book 24/7. ASAP Transport and ASAP Recovery jobs go to drivers available around the clock near the pickup, and you can follow your driver live once one accepts.` },
+    { q: `What should I know about parking and access in ${c.name}?`, a: `${c.parking}${c.cleanAir ? ` ${c.cleanAir.text}` : ""}` },
+    { q: `Do you do longer journeys from ${c.name}?`, a: `Yes. Popular runs include ${list(r.slice(0, 3).map((x) => `${x.to.name} via the ${x.roads}`))}.` },
+    { q: `Which booking types can I use in ${c.name}?`, a: "ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs are all available. Choose the one that fits when you book." },
+  ];
+}
+
+export function cityHubSeo(c) {
+  return {
+    path: `/couriers/${c.slug}`,
+    title: `Couriers & Man and Van in ${c.name} – Instant Quote | Cargo One`,
+    h1: `Couriers and man and van in ${c.name}`,
+    intro: `${c.character} Get an instant quote for any job in ${c.name} and ${c.region}, book 24/7, and track your verified driver live.`,
+    description: `Couriers, man and van, removals, recovery and more in ${c.name} and ${c.region}. Instant quote, book 24/7 and track your driver live.`,
+  };
+}
+
+export function cityHubJsonLd(c, faqs) {
+  return [faqJsonLd(faqs), breadcrumbJsonLd([["Home", "/"], ["Couriers", "/couriers"], [c.name, `/couriers/${c.slug}`]])];
+}
+
+export const COURIERS_INDEX_SEO = {
+  path: "/couriers",
+  title: "Couriers & Man and Van by City | Cargo One",
+  h1: "Couriers and man and van by city",
+  description: "Find couriers, man and van, removals and vehicle recovery in major UK cities. Instant quote, book 24/7 and track your driver live.",
+};

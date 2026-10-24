@@ -7,7 +7,7 @@ import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import {
   DRIVER_CITIES, DRIVER_CITY_BY_NAME, DRIVER_CITY_BY_SLUG, DRIVER_DOCUMENTS, DRIVER_PAY_LINE, DRIVER_PAY_STEPS,
-  DRIVER_SIGNUP_HREF, DRIVER_TYPES, DRIVER_TYPE_BY_SLUG, DRIVER_WORK_FLOW, cityFaqs, driverCitySeo, driverJsonLd, driverTypeSeo,
+  DRIVER_SIGNUP_HREF, DRIVER_TYPES, DRIVER_TYPE_BY_SLUG, DRIVER_WORK_FLOW, LOCAL_CITY_BY_SLUG, cityFaqs, driverCitySeo, driverJsonLd, driverTypeSeo,
 } from "@/data/seo";
 
 export function DriverTypeLanding() {
@@ -59,6 +59,11 @@ export function DriverCityLanding() {
           <Chips title="Busy areas" items={c.areas} icon={MapPin} testId="driver-city-areas" />
           <Chips title="Routes you'll use" items={c.routes} icon={Route} testId="driver-city-routes" />
         </div>
+        {LOCAL_CITY_BY_SLUG[c.slug] ? (
+          <Link to={`/couriers/${c.slug}`} data-testid="driver-city-couriers-link" className="mt-6 inline-flex items-center gap-1 text-[15px] font-semibold text-[#D62828] hover:underline">
+            Need something moved in {c.name}? See couriers in {c.name} <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : null}
       </Section>
     </DriverPage>
   );

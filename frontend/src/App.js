@@ -12,6 +12,7 @@ import Services from "@/pages/marketing/Services";
 import ServiceLanding from "@/pages/marketing/ServiceLanding";
 import BookingTypeLanding from "@/pages/marketing/BookingTypeLanding";
 import { DriverCityLanding, DriverTypeLanding } from "@/pages/marketing/DriverLanding";
+import { CityHub, CouriersIndex, ServiceCity } from "@/pages/marketing/LocalLanding";
 import Business from "@/pages/marketing/Business";
 import Drivers from "@/pages/marketing/Drivers";
 import FAQ from "@/pages/marketing/FAQ";
@@ -124,6 +125,9 @@ export default function App() {
             <Route path="/how-it-works/:slug" element={<Marketing Page={BookingTypeLanding} />} />
             <Route path="/services" element={<Marketing Page={Services} />} />
             <Route path="/services/:slug" element={<Marketing Page={ServiceLanding} />} />
+            <Route path="/services/:slug/:city" element={<Marketing Page={ServiceCity} />} />
+            <Route path="/couriers" element={<Marketing Page={CouriersIndex} />} />
+            <Route path="/couriers/:city" element={<Marketing Page={CityHub} />} />
             <Route path="/business" element={<Marketing Page={Business} />} />
             <Route path="/drivers" element={<Marketing Page={Drivers} />} />
             <Route path="/drivers/jobs/:city" element={<Marketing Page={DriverCityLanding} />} />

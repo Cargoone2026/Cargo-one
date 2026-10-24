@@ -94,6 +94,23 @@ async function main() {
         lists: [["Busy areas", c.areas], ["Routes", c.routes], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
+    { ...data.COURIERS_INDEX_SEO, lists: [["Cities", data.LOCAL_CITIES.map((c) => `Couriers in ${c.name}`)]] },
+    ...data.LOCAL_CITIES.map((c) => {
+      const seo = data.cityHubSeo(c);
+      const faqs = data.cityHubFaqs(c);
+      return {
+        ...seo, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
+        lists: [["Services", data.SERVICE_PAGES.map((s) => `${s.name} in ${c.name}`)], ["Areas we cover", [...c.residential, ...c.business, ...c.industrial]], ["Getting around", [c.parking, ...(c.cleanAir ? [c.cleanAir.text] : [])]]],
+      };
+    }),
+    ...data.SERVICE_PAGES.flatMap((s) => data.LOCAL_CITIES.map((c) => {
+      const seo = data.serviceCitySeo(s, c);
+      const l = data.localService(s, c);
+      return {
+        ...seo, intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
+        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => `${c.name} to ${r.to.name} via the ${r.roads}`)], ["Getting around", [...l.access, ...(c.cleanAir ? [c.cleanAir.text] : [])]]],
+      };
+    })),
   ];
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];

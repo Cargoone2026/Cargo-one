@@ -5,7 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
-import { SERVICE_BY_SLUG, serviceJsonLd, serviceSeo } from "@/data/seo";
+import { LOCAL_CITIES, SERVICE_BY_SLUG, serviceJsonLd, serviceSeo } from "@/data/seo";
 
 const QUOTE_HREF = "/auth/register?role=customer";
 
@@ -202,6 +202,21 @@ function ServiceLandingBody({ service }) {
               Drive with CargoOne <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
+        </div>
+      </Section>
+
+      <Section bg="#F4F4F4">
+        <div data-testid="service-in-your-city">
+          <h2 className="text-[20px] font-bold text-[#111111]">In your city</h2>
+          <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+            {LOCAL_CITIES.map((c) => (
+              <li key={c.slug}>
+                <Link to={`/services/${service.slug}/${c.slug}`} data-testid={`service-city-link-${c.slug}`} className="text-[14px] font-semibold text-[#111111] hover:text-[#D62828] hover:underline">
+                  {service.name} in {c.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </Section>
     </div>
