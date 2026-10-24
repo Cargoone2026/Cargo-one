@@ -239,10 +239,12 @@ function ServiceCityBody({ service, c }) {
             <h3 className="mt-6 text-[18px] font-bold text-[#111111]">Popular routes</h3>
             <ul className="mt-3 space-y-2" data-testid="service-city-routes">
               {local.routes.map((r) => (
-                <li key={r.to.slug} className="flex flex-wrap items-center gap-x-2 text-[15px] text-[#374151]">
-                  <Route className="h-4 w-4 text-[#D62828]" />
-                  <Link to={`/services/${service.slug}/${r.to.slug}`} className="font-semibold text-[#111111] hover:text-[#D62828] hover:underline">{c.name} to {r.to.name}</Link>
-                  <span className="text-[#6B7280]">via the {r.roads}</span>
+                <li key={r.to.slug} className="flex items-start gap-2 text-[15px] text-[#374151]">
+                  <Route className="mt-1 h-4 w-4 shrink-0 text-[#D62828]" />
+                  <span>
+                    <Link to={`/services/${service.slug}/${r.to.slug}`} className="font-semibold text-[#111111] hover:text-[#D62828] hover:underline">{c.name} to {r.to.name}</Link>{" "}
+                    <span className="text-[#6B7280]">via the {r.roads}</span>
+                  </span>
                 </li>
               ))}
             </ul>

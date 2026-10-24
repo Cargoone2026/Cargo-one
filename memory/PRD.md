@@ -626,3 +626,9 @@ Each future phase must start from the locked baseline.
 - Prerender 183 pages (static <main> includes <a> links); build sitemap has 184 URLs.
 - KNOWN, NOT FIXED (existing pages): IMG.heroServices (Unsplash photo-1494412574745) returns 404, so the /services hero is black. New hubs use IMG.heroHow.
 - Tests: iteration_r75_local_seo_wave1.json (100%). Fixed after: routes wrap on mobile, area chips rotate per service, Braehead name, prerender anchors.
+
+## Hero image fixes (24 Oct 2026, not deployed)
+- images.js: heroServices is now /images/services-hero-van.webp (self-hosted crop of Unsplash photo-1694802180731). heroHow is now /images/how-it-works-hero-boxes.webp (crop of Unsplash photo-1624137527136). Both under the Unsplash Licence, unbranded. heroHow is also used on bid-jobs, /couriers and the hubs.
+- prerender.mjs now writes og:image/twitter:image (loads images.js too); MARKETING_ROUTES have `img` keys.
+- Route rows on service x city pages now line up under the link text.
+- Tests: iteration_r76_hero_images_local_seo_retest.json (100%).

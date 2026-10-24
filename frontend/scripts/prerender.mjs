@@ -11,9 +11,9 @@ const BUILD = path.join(ROOT, "build");
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ldSafe = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
 
-async function loadData() {
-  const tmp = path.join(os.tmpdir(), `cargoone-seo-${process.pid}.mjs`);
-  fs.copyFileSync(path.join(ROOT, "src/data/seo.js"), tmp);
+async function loadModule(rel) {
+  const tmp = path.join(os.tmpdir(), `cargoone-${path.basename(rel, ".js")}-${process.pid}.mjs`);
+  fs.copyFileSync(path.join(ROOT, rel), tmp);
   try {
     return await import(pathToFileURL(tmp).href);
   } finally {
@@ -21,8 +21,14 @@ async function loadData() {
   }
 }
 
-function headTags({ url, title, description, jsonLd }) {
+async function loadData() {
+  const [seo, images] = await Promise.all([loadModule("src/data/seo.js"), loadModule("src/components/marketing/images.js")]);
+  return { ...seo, IMG: images.IMG, CAT: images.CATEGORY_IMAGES };
+}
+
+function headTags({ url, title, description, jsonLd, image }) {
   const p = 'data-prerender=""';
+  const img = image ? [`<meta ${p} property="og:image" content="${esc(image)}" />`, `<meta ${p} name="twitter:image" content="${esc(image)}" />`] : [];
   return [
     `<meta ${p} name="description" content="${esc(description)}" />`,
     `<link ${p} rel="canonical" href="${esc(url)}" />`,
@@ -31,6 +37,7 @@ function headTags({ url, title, description, jsonLd }) {
     `<meta ${p} property="og:title" content="${esc(title)}" />`,
     `<meta ${p} property="og:description" content="${esc(description)}" />`,
     `<meta ${p} property="og:url" content="${esc(url)}" />`,
+    ...img,
     `<meta ${p} name="twitter:card" content="summary_large_image" />`,
     `<meta ${p} name="twitter:title" content="${esc(title)}" />`,
     `<meta ${p} name="twitter:description" content="${esc(description)}" />`,
@@ -56,7 +63,8 @@ function renderPage(template, page, data) {
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(page.title)}</title>`)
     .replace(/<meta\s+name="description"[^>]*>/, "");
   if (!html.includes('<div id="root"></div>') || !html.includes("</head>")) throw new Error("index.html shape not recognised");
-  html = html.replace("</head>", `        ${headTags({ url, title: page.title, description: page.description, jsonLd })}\n    </head>`);
+  const image = page.image && page.image.startsWith("/") ? `${data.SITE_URL}${page.image}` : page.image;
+  html = html.replace("</head>", `        ${headTags({ url, title: page.title, description: page.description, jsonLd, image })}\n    </head>`);
   return html.replace('<div id="root"></div>', `<div id="root">${bodyContent(page)}</div>`);
 }
 
@@ -69,21 +77,23 @@ function sitemap(data, pages) {
 async function main() {
   const template = fs.readFileSync(path.join(BUILD, "index.html"), "utf8");
   const data = await loadData();
+  const { IMG, CAT } = data;
+  const svcImg = (s) => s.heroImage || CAT[s.image] || IMG.heroServices;
   const pages = [
-    ...data.MARKETING_ROUTES,
+    ...data.MARKETING_ROUTES.map((r) => ({ ...r, image: IMG[r.img] })),
     ...data.SERVICE_PAGES.map((s) => ({
-      ...data.serviceSeo(s), intro: s.intro, faqs: s.faqs, jsonLd: data.serviceJsonLd(s), detail: true,
+      ...data.serviceSeo(s), image: svcImg(s), intro: s.intro, faqs: s.faqs, jsonLd: data.serviceJsonLd(s), detail: true,
       lists: [["What we move", s.moves], ["Vehicles used", s.vehicles]],
     })),
     ...data.BOOKING_TYPES.map((b) => ({
-      ...data.bookingTypeSeo(b), intro: b.intro, faqs: b.faqs, jsonLd: data.bookingTypeJsonLd(b), detail: true,
+      ...data.bookingTypeSeo(b), image: b.heroImage || IMG[b.image] || CAT[b.image] || IMG.heroHow, intro: b.intro, faqs: b.faqs, jsonLd: data.bookingTypeJsonLd(b), detail: true,
       lists: [["Step by step", b.steps.map((st) => `${st.title}: ${st.body}`)], ["Who it's best for", b.bestFor],
         ...(b.vehiclesFrom ? [["Recovery vehicles", data.SERVICE_BY_SLUG[b.vehiclesFrom].vehicles]] : [])],
     })),
     ...data.DRIVER_TYPES.map((d) => {
       const seo = data.driverTypeSeo(d);
       return {
-        ...seo, intro: d.intro, faqs: d.faqs, jsonLd: data.driverJsonLd(seo, d.faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
+        ...seo, image: d.heroImage || IMG[d.image] || CAT[d.image] || IMG.heroDrivers, intro: d.intro, faqs: d.faqs, jsonLd: data.driverJsonLd(seo, d.faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
         lists: [["Vehicles", d.vehicles], ["Who it suits", d.suits], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
@@ -91,16 +101,16 @@ async function main() {
       const seo = data.driverCitySeo(c);
       const faqs = data.cityFaqs(c);
       return {
-        ...seo, faqs, jsonLd: data.driverJsonLd(seo, faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
+        ...seo, image: IMG.heroDrivers, faqs, jsonLd: data.driverJsonLd(seo, faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
         lists: [["Busy areas", c.areas], ["Routes", c.routes], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
-    { ...data.COURIERS_INDEX_SEO, lists: [["Cities", data.LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])]] },
+    { ...data.COURIERS_INDEX_SEO, image: IMG.heroHow, lists: [["Cities", data.LOCAL_CITIES.map((c) => [`Couriers in ${c.name}`, `/couriers/${c.slug}`])]] },
     ...data.LOCAL_CITIES.map((c) => {
       const seo = data.cityHubSeo(c);
       const faqs = data.cityHubFaqs(c);
       return {
-        ...seo, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
+        ...seo, image: IMG.heroHow, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
         lists: [["Services", data.SERVICE_PAGES.map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...c.residential, ...c.business, ...c.industrial]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby big cities", data.cityRoutes(c).map((r) => [`Couriers in ${r.to.name} (via ${r.roads})`, `/couriers/${r.to.slug}`])]],
       };
     }),
@@ -108,7 +118,7 @@ async function main() {
       const seo = data.serviceCitySeo(s, c);
       const l = data.localService(s, c);
       return {
-        ...seo, intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
+        ...seo, image: svcImg(s), intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
         lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", [...l.access, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.SERVICE_PAGES.filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
       };
     })),
