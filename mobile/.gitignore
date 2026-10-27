@@ -15,4 +15,3 @@ yarn-error.log
 mapbox.token*
 *.p8
 GoogleService-Info.plist
-google-services.json

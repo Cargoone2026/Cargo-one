@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "864691212666",
+    "project_id": "cargoone-feee9",
+    "storage_bucket": "cargoone-feee9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:864691212666:android:f3154e346bc06b0c2c06c3",
+        "android_client_info": {
+          "package_name": "co.uk.cargoone.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTqQPBoubpWOdcAX5gJsrbl_Uua6E5KrA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:864691212666:android:6213e3585db4cc942c06c3",
+        "android_client_info": {
+          "package_name": "co.uk.cargoone.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTqQPBoubpWOdcAX5gJsrbl_Uua6E5KrA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
