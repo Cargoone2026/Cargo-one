@@ -2,7 +2,7 @@
  * PasskeysScreen — mirrors frontend/src/pages/PasskeysSettings.jsx.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { Alert, Platform, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { deletePasskey, listPasskeys, registerPasskey } from "@cargoone/core";
 import { Fingerprint } from "lucide-react-native";
@@ -60,7 +60,13 @@ export function PasskeysScreen({ navigation }: P) {
           onBack={goBack}
         />
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}>
-          <PrimaryButton title="Add a passkey" onPress={add} loading={busy} testID="add-passkey" />
+          {Platform.OS === "android" ? (
+            <Text style={typography.body} testID="passkeys-android-unavailable">
+              Passkeys aren't available on this device yet. You can keep signing in with your email and password.
+            </Text>
+          ) : (
+            <PrimaryButton title="Add a passkey" onPress={add} loading={busy} testID="add-passkey" />
+          )}
           {rows.length === 0 ? (
             <EmptyState Icon={Fingerprint} title="No passkeys yet" body="Add one to sign in with Face ID next time." />
           ) : (
