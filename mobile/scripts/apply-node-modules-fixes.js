@@ -196,10 +196,42 @@ function patchExpoDevMenuSimulator(nodeModulesDir) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// expo-modules-core (SDK 51) · PermissionsService.kt · requestedPermissions
+// ---------------------------------------------------------------------------
+// compileSdk 35's android.jar annotates PackageInfo.requestedPermissions as
+// @Nullable, so Kotlin rejects `requestedPermissions.contains(permission)`:
+//   PermissionsService.kt:166:36 Only safe (?.) or non-null asserted (!!.)
+//   calls are allowed on a nullable receiver of type Array<(out) String!>?
+// Fixed upstream in SDK 52. Workaround: `(requestedPermissions ?: emptyArray())`
+// — identical behaviour when non-null; null (no permissions declared) now
+// returns false instead of crashing.
+function patchExpoModulesCorePermissions(nodeModulesDir) {
+  const ktPath = path.join(
+    nodeModulesDir,
+    'expo-modules-core',
+    'android', 'src', 'main', 'java', 'expo', 'modules', 'adapters',
+    'react', 'permissions', 'PermissionsService.kt',
+  );
+  if (!fs.existsSync(ktPath)) return;
+  const original = fs.readFileSync(ktPath, 'utf8');
+  const marker = 'return requestedPermissions.contains(permission)';
+  if (!original.includes(marker)) return; // already patched or upstream fixed
+  const patched = original.replace(
+    marker,
+    'return (requestedPermissions ?: emptyArray<String>()).contains(permission)',
+  );
+  fs.writeFileSync(ktPath, patched);
+  const rel = path.relative(workspaceRoot, ktPath);
+  console.log(`[cargoone-postinstall] patched requestedPermissions null-safety in ${rel}`);
+  fixed += 1;
+}
+
 for (const root of candidateRoots) {
   stripAsyncStorageCodegen(root);
   patchExpoDeviceSimulator(root);
   patchExpoDevMenuSimulator(root);
+  patchExpoModulesCorePermissions(root);
 }
 if (fixed === 0) {
   console.log(
