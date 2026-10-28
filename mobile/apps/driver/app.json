@@ -53,6 +53,12 @@
           "cameraPermission": "Take photos of your documents for verification and capture proof-of-delivery photos.",
           "photosPermission": "Choose photos of your documents for verification and attach proof-of-delivery photos."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": { "compileSdkVersion": 35, "targetSdkVersion": 36, "buildToolsVersion": "35.0.0" }
+        }
       ]
     ],
     "extra": {

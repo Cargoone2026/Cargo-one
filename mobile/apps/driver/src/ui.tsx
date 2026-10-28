@@ -22,8 +22,9 @@ import {
   type StyleProp,
   type TextStyle,
   type ViewStyle,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useShellMenu } from "./components/AppShell";
 import {
@@ -64,6 +65,9 @@ export function MapPin({ size = 14, color = colors.brand }: { size?: number; col
 /* Layout                                                               */
 /* -------------------------------------------------------------------- */
 
+// Android 15+ draws edge-to-edge (targetSdk 35+), so also keep content clear of the navigation bar there.
+export const PAGE_EDGES: Edge[] = Platform.OS === "android" ? ["top", "bottom"] : ["top"];
+
 /** Page — matches `bg-white min-h-screen pb-6` + top safe-area. */
 export function Page({
   children,
@@ -95,7 +99,7 @@ export function Page({
     <View style={{ flex: 1, paddingHorizontal: contentPadding ? space[4] : 0 }}>{children}</View>
   );
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: bg }} testID={testID}>
+    <SafeAreaView edges={PAGE_EDGES} style={{ flex: 1, backgroundColor: bg }} testID={testID}>
       {inner}
     </SafeAreaView>
   );

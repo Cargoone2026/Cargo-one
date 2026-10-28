@@ -56,7 +56,13 @@
           "isIosBackgroundLocationEnabled": false
         }
       ],
-      ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.co.uk.cargoone" }]
+      ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.co.uk.cargoone" }],
+      [
+        "expo-build-properties",
+        {
+          "android": { "compileSdkVersion": 35, "targetSdkVersion": 36, "buildToolsVersion": "35.0.0" }
+        }
+      ]
     ],
     "extra": {
       "eas": { "projectId": "ad75bd3e-e249-4feb-a90e-2f60884f4de9" }

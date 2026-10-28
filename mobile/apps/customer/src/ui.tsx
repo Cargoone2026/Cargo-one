@@ -19,8 +19,9 @@ import {
   ViewStyle,
   StyleProp,
   TextStyle,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { ChevronRight, MapPin, LucideIcon } from "lucide-react-native";
 import { CARGO, STATUS_COLOR, STATUS_LABELS, colors, radius, shadow, typography } from "./theme";
 
@@ -29,6 +30,9 @@ export { CARGO };
 /* ------------------------------------------------------------------ */
 /* Layout                                                              */
 /* ------------------------------------------------------------------ */
+
+// Android 15+ draws edge-to-edge (targetSdk 35+), so also keep content clear of the navigation bar there.
+export const PAGE_EDGES: Edge[] = Platform.OS === "android" ? ["top", "bottom"] : ["top"];
 
 /** Page — matches web `bg-white min-h-screen pb-6`. Includes safe-area top. */
 export function Page({
@@ -58,7 +62,7 @@ export function Page({
     <View style={{ flex: 1, paddingHorizontal: contentPadding ? 16 : 0 }}>{children}</View>
   );
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: bg }} testID={testID}>
+    <SafeAreaView edges={PAGE_EDGES} style={{ flex: 1, backgroundColor: bg }} testID={testID}>
       {inner}
     </SafeAreaView>
   );

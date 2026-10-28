@@ -46,6 +46,7 @@ import {
   radius,
   space,
   typography,
+  PAGE_EDGES,
 } from "../ui";
 import { LiveMap, type LiveOffer } from "../components/LiveMap";
 import { LiveBottomSheet, type SheetSnap } from "../components/LiveBottomSheet";
@@ -563,7 +564,7 @@ export default function LiveModeScreen() {
 
   return (
     <SafeAreaView
-      edges={["top"]}
+      edges={PAGE_EDGES}
       style={styles.root}
       testID="driver-live-mode"
     >
