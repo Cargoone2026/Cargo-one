@@ -900,3 +900,230 @@ export const COURIERS_INDEX_SEO = {
   h1: "Couriers and man and van by city",
   description: "Find couriers, man and van, removals and vehicle recovery in major UK cities. Instant quote, book 24/7 and track your driver live.",
 };
+
+// ---------- SEO Phase 3: extra local places (own hubs, service×place and driver pages) ----------
+const B1_SERVICES = ["man-and-van", "house-removals", "furniture-delivery", "same-day-courier", "car-transport", "vehicle-recovery", "marketplace-collection"];
+
+export const LOCAL_PLACES = [
+  {
+    slug: "stafford", name: "Stafford", kind: "town", region: "Staffordshire", services: B1_SERVICES,
+    residential: ["Baswich", "Wildwood", "Rising Brook", "Highfields", "Weeping Cross", "Stone"],
+    retail: ["the Guildhall Shopping Centre", "Riverside", "Greengate Street", "Queensville Retail Park"],
+    business: ["Stafford town centre", "Beacon Business Park", "the area around Stafford station", "Redhill Business Park"],
+    industrial: ["Astonfields", "Redhill Business Park", "Hixon Industrial Estate", "the area around the County Showground"],
+    roads: ["M6 junctions 13 and 14", "A34", "A449", "A518"],
+    parking: "Much of Stafford town centre around Greengate Street is pedestrianised, so loading is easier from the surrounding streets, while suburbs like Baswich and Wildwood usually have driveways.",
+    cleanAir: null,
+    character: "Stafford is Staffordshire's county town, sitting on the M6 between Birmingham and Stoke-on-Trent.",
+    nearby: [["stoke-on-trent", "A34 or M6"], ["cannock", "A34"], ["wolverhampton", "A449"], ["telford", "A518"], ["lichfield", "A513 and A51"], ["birmingham", "M6"]],
+    localFaq: { q: "Can I book a move from Stafford to Stone or the villages nearby?", a: "Yes. Enter the pickup and drop-off anywhere in and around Stafford, including Stone and villages off the A34 and A51, and you'll see your price." },
+    driver: { note: "Stafford sits between M6 junctions 13 and 14, with the A34 running north to Stoke and south to Cannock.", faq: { q: "Is Stafford a good base for M6 work?", a: "Stafford has two M6 junctions, so jobs north to Stoke-on-Trent and south to Birmingham are within easy reach. You choose which jobs to bid on or accept." } },
+  },
+  {
+    slug: "stoke-on-trent", name: "Stoke-on-Trent", kind: "city", region: "Staffordshire", services: B1_SERVICES,
+    residential: ["Trentham", "Penkhull", "Hartshill", "Meir", "Blurton", "Newcastle-under-Lyme"],
+    retail: ["the Potteries Centre in Hanley", "Festival Park", "Trentham Shopping Village", "Hanley's Cultural Quarter"],
+    business: ["Hanley city centre", "the Etruria Valley", "the area around Stoke station", "Trentham Lakes"],
+    industrial: ["Trentham Lakes", "the Etruria Valley", "Sideway", "Longton"],
+    roads: ["A500", "M6 junctions 15 and 16", "A50", "A53"],
+    parking: "Stoke is six towns joined by the A500, and terraced streets in places like Burslem and Longton can be narrow, so check where a vehicle can stop.",
+    cleanAir: null,
+    character: "Stoke-on-Trent grew from six pottery towns, Tunstall, Burslem, Hanley, Stoke, Fenton and Longton, all linked by the A500.",
+    nearby: [["stafford", "A34 or M6"], ["derby", "A50"], ["burton-upon-trent", "A50 and A38"], ["birmingham", "M6"]],
+    localFaq: { q: "Do you cover all six towns in Stoke-on-Trent?", a: "Yes. Drivers cover Tunstall, Burslem, Hanley, Stoke, Fenton and Longton, plus Newcastle-under-Lyme and the villages around them." },
+    driver: null,
+  },
+  {
+    slug: "wolverhampton", name: "Wolverhampton", kind: "city", region: "the West Midlands", services: B1_SERVICES,
+    residential: ["Tettenhall", "Penn", "Finchfield", "Wednesfield", "Bilston", "Codsall"],
+    retail: ["the Mander Centre", "the Wulfrun Centre", "Bentley Bridge Retail Park", "Wolverhampton Market"],
+    business: ["Wolverhampton city centre", "Wolverhampton Science Park", "the Interchange by the station", "Wolverhampton Business Park"],
+    industrial: ["i54 South Staffordshire", "Wobaston Road", "Bilston", "Willenhall Road"],
+    roads: ["M6", "M54", "A449", "A4123 Birmingham New Road"],
+    parking: "The Ring Road loops tightly around the city centre, with pedestrian streets and bus lanes inside it, while Tettenhall and Penn are usually easier for loading.",
+    cleanAir: null,
+    character: "Wolverhampton sits where the Black Country meets Staffordshire, close to the M6 and the M54.",
+    nearby: [["birmingham", "A4123 or M6"], ["walsall", "A454"], ["telford", "M54"], ["cannock", "A460"], ["stafford", "A449"]],
+    localFaq: { q: "Do you cover the Black Country towns around Wolverhampton?", a: "Yes. Drivers cover Wolverhampton and nearby Black Country towns like Bilston, Wednesfield and Willenhall, as well as Codsall and Tettenhall." },
+    driver: { note: "Wolverhampton jobs run between the Black Country, the M6 and the M54 towards Telford.", faq: { q: "Is there industrial work around i54?", a: "Customers post all kinds of jobs, which can include collections and deliveries around i54 and the industrial estates off the M54. Check new Bid Jobs and Fixed Price Jobs for work that fits your vehicle." } },
+  },
+  {
+    slug: "telford", name: "Telford", kind: "town", region: "Shropshire", services: B1_SERVICES,
+    residential: ["Wellington", "Madeley", "Dawley", "Priorslee", "Lawley", "Newport"],
+    retail: ["Telford Centre", "Southwater", "Telford Forge Retail Park", "Wellington Market"],
+    business: ["Telford town centre", "Hadley Park", "Hortonwood", "Stafford Park"],
+    industrial: ["Stafford Park", "Hortonwood", "Halesfield", "Tweedale"],
+    roads: ["M54", "A5", "A442 Queensway", "A518"],
+    parking: "Telford's main roads are mostly dual carriageways and roundabouts, so access is usually easy, while the older streets of Ironbridge and Madeley are narrow and steep.",
+    cleanAir: null,
+    character: "Telford is a new town built around the Ironbridge Gorge, with large industrial estates along the M54.",
+    nearby: [["wolverhampton", "M54"], ["stafford", "A518"], ["birmingham", "M54 and M6"]],
+    localFaq: { q: "Can I book a delivery to or from Ironbridge?", a: "Yes. Add access notes for steep or narrow streets in Ironbridge and Coalbrookdale so drivers can bring a suitable vehicle." },
+    driver: { note: "Telford work runs between its business parks and along the M54 to Wolverhampton and the M6.", faq: { q: "Are there jobs around Telford's industrial estates?", a: "Customers post all kinds of jobs, which can include work around Stafford Park, Halesfield and Hortonwood. Read the job details and access notes before you bid." } },
+  },
+  {
+    slug: "cannock", name: "Cannock", kind: "town", region: "Staffordshire", services: B1_SERVICES,
+    residential: ["Hednesford", "Heath Hayes", "Norton Canes", "Chadsmoor", "Huntington", "Pye Green"],
+    retail: ["McArthurGlen Designer Outlet West Midlands", "Cannock town centre", "Orbital Retail Park", "Hednesford town centre"],
+    business: ["Cannock town centre", "Kingswood Lakeside", "Watling Street Business Park", "Hednesford"],
+    industrial: ["Kingswood Lakeside", "Bridgtown", "Norton Canes", "Watling Street Business Park"],
+    roads: ["M6 Toll", "A5 Watling Street", "A460", "A34"],
+    parking: "Cannock town centre has pedestrian areas and short-stay parking, while estates in Hednesford and Heath Hayes usually have room to load.",
+    cleanAir: null,
+    character: "Cannock sits on the A5 beside Cannock Chase, with the M6 Toll and the M6 close by.",
+    nearby: [["stafford", "A34"], ["wolverhampton", "A460"], ["walsall", "A34"], ["lichfield", "A5190 or A5"], ["birmingham", "M6 Toll and M6"]],
+    localFaq: { q: "Can I book a collection from the designer outlet near Cannock?", a: "Yes. Add the store name and any collection reference to your job, and a driver can collect and deliver to your home." },
+    driver: { note: "Cannock is close to the M6 Toll, the A5 and the M6, with distribution sites around Kingswood Lakeside.", faq: { q: "Do I have to use the M6 Toll?", a: "No. You choose your route. If a job uses the M6 Toll, include the cost in your price." } },
+  },
+  {
+    slug: "walsall", name: "Walsall", kind: "town", region: "the West Midlands", services: B1_SERVICES,
+    residential: ["Aldridge", "Streetly", "Bloxwich", "Pelsall", "Willenhall", "Brownhills"],
+    retail: ["the Saddlers Centre", "Crown Wharf Retail Park", "Walsall Market", "Park Street"],
+    business: ["Walsall town centre", "Walsall Waterfront", "Aldridge", "Darlaston"],
+    industrial: ["Darlaston", "Aldridge", "Willenhall", "Bloxwich"],
+    roads: ["M6 junctions 9 and 10", "A34", "A454 Black Country Route", "A4148 Ring Road"],
+    parking: "The town centre is ringed by the A4148, with pedestrian streets around Park Street, while Aldridge and Streetly are usually easier for loading.",
+    cleanAir: null,
+    character: "Walsall is a Black Country town just off M6 junctions 9 and 10, with a strong manufacturing history.",
+    nearby: [["birmingham", "A34 or M6"], ["wolverhampton", "A454"], ["cannock", "A34"], ["lichfield", "A461"]],
+    localFaq: { q: "Do you cover Aldridge, Bloxwich and Brownhills?", a: "Yes. Drivers cover all of Walsall, including Aldridge, Bloxwich, Brownhills, Pelsall and Willenhall." },
+    driver: { note: "Walsall sits on the M6 between junctions 9 and 10, with Birmingham and Wolverhampton a short drive away.", faq: { q: "Can I take Birmingham jobs from Walsall?", a: "Yes. The A34 and the M6 link Walsall to Birmingham, and you choose which jobs to bid on or accept." } },
+  },
+  {
+    slug: "coventry", name: "Coventry", kind: "city", region: "the West Midlands", services: B1_SERVICES,
+    residential: ["Earlsdon", "Tile Hill", "Allesley", "Styvechale", "Wyken", "Kenilworth"],
+    retail: ["West Orchards", "the Lower Precinct", "Coventry Market", "Gallagher Retail Park"],
+    business: ["Coventry city centre", "Friargate", "Westwood Business Park", "the University of Warwick Science Park"],
+    industrial: ["Ansty Park", "Ryton", "Whitley", "Prologis Park"],
+    roads: ["A45", "A46", "M6", "M69"],
+    parking: "Coventry's inner Ring Road has closely spaced junctions and much of the centre is pedestrianised, so plan where the driver can stop.",
+    cleanAir: null,
+    character: "Coventry is a West Midlands city ringed by the A45 and A46, with the M6 and M69 to the north.",
+    nearby: [["birmingham", "A45 or M6"], ["lichfield", "M6 and A38"], ["walsall", "M6"], ["derby", "M69 and M1"]],
+    localFaq: { q: "Do you cover Kenilworth and the area around the University of Warwick?", a: "Yes. Drivers cover all of Coventry plus nearby places like Kenilworth, the University of Warwick and the villages off the A45 and A46." },
+    driver: null,
+  },
+  {
+    slug: "derby", name: "Derby", kind: "city", region: "Derbyshire", services: B1_SERVICES,
+    residential: ["Allestree", "Littleover", "Mickleover", "Darley Abbey", "Chaddesden", "Spondon"],
+    retail: ["Derbion", "Kingsway Retail Park", "Pride Park", "the Cathedral Quarter"],
+    business: ["Pride Park", "the Cathedral Quarter", "Derby city centre", "Infinity Park"],
+    industrial: ["Sinfin", "Raynesway", "Infinity Park", "Ascot Drive"],
+    roads: ["A38", "A52", "A50", "M1 junctions 24 and 25"],
+    parking: "Derby's inner ring road and busy A38 junctions can slow city-centre jobs, while suburbs like Allestree and Littleover are usually easier to park in.",
+    cleanAir: null,
+    character: "Derby is an East Midlands city with a long engineering history, close to the A38, A50 and M1.",
+    nearby: [["burton-upon-trent", "A38"], ["stoke-on-trent", "A50"], ["lichfield", "A38"], ["birmingham", "A38"]],
+    localFaq: { q: "Do you cover Pride Park and the villages around Derby?", a: "Yes. Drivers cover all of Derby, including Pride Park and Derby city centre, and villages like Duffield and Borrowash." },
+    driver: { note: "Derby jobs run along the A38, A50 and A52, with the M1 a few miles east.", faq: { q: "Can I take jobs between Derby and Nottingham?", a: "Yes. The A52 links Derby and Nottingham, and you choose which jobs to bid on or accept." } },
+  },
+  {
+    slug: "lichfield", name: "Lichfield", kind: "city", region: "Staffordshire", services: B1_SERVICES,
+    residential: ["Boley Park", "Darwin Park", "Curborough", "Streethay", "Whittington", "Shenstone"],
+    retail: ["the Three Spires Shopping Centre", "the Market Square", "Bore Street", "Tamworth Street"],
+    business: ["Lichfield city centre", "the area around Lichfield Trent Valley station", "Burntwood Business Park", "Fradley Park"],
+    industrial: ["Fradley Park", "Burntwood Business Park", "Britannia Way", "Cappers Lane"],
+    roads: ["A38", "A5", "A51", "M6 Toll"],
+    parking: "Lichfield's centre has narrow historic streets near the cathedral and pedestrian areas around the Market Square, so plan where the driver can stop.",
+    cleanAir: null,
+    character: "Lichfield is a small cathedral city in Staffordshire, on the A38 between Birmingham and Burton upon Trent.",
+    nearby: [["birmingham", "A38"], ["burton-upon-trent", "A38"], ["cannock", "A5190 or A5"], ["walsall", "A461"], ["stafford", "A51 and A513"], ["derby", "A38"]],
+    localFaq: { q: "Do you cover Burntwood and Fradley?", a: "Yes. Drivers cover Lichfield city and nearby places like Burntwood, Fradley, Shenstone and Whittington." },
+    driver: { note: "Lichfield sits on the A38 and close to the M6 Toll, with distribution sites around Fradley Park.", faq: { q: "Is there warehouse work around Fradley Park?", a: "Customers post pallet and freight jobs too, which can include sites around Fradley Park. Check new Bid Jobs and Fixed Price Jobs for work that fits your vehicle." } },
+  },
+  {
+    slug: "burton-upon-trent", name: "Burton upon Trent", kind: "town", region: "Staffordshire", services: B1_SERVICES,
+    residential: ["Stapenhill", "Winshill", "Branston", "Horninglow", "Stretton", "Tutbury"],
+    retail: ["the Octagon Centre", "Coopers Square", "Burton Market Hall", "Station Street"],
+    business: ["Burton town centre", "Centrum 100", "the area around Burton station", "Branston"],
+    industrial: ["Centrum 100", "Branston", "Dove Valley Park", "Hawkins Lane"],
+    roads: ["A38", "A50", "A511", "A5121"],
+    parking: "Burton town centre has pedestrian streets and loading limits, while residential areas like Stapenhill and Winshill sit across the River Trent.",
+    cleanAir: null,
+    character: "Burton upon Trent is a brewing town on the River Trent, with the A38 and A50 close by.",
+    nearby: [["derby", "A38"], ["lichfield", "A38"], ["stoke-on-trent", "A50"], ["birmingham", "A38"]],
+    localFaq: { q: "Do you cover the villages around Burton?", a: "Yes. Drivers cover Burton upon Trent and nearby places like Tutbury, Branston, Stretton and Swadlincote." },
+    driver: { note: "Burton jobs run along the A38 to Derby and Lichfield, and the A50 towards Stoke-on-Trent.", faq: { q: "Are there jobs around Centrum 100 and Dove Valley Park?", a: "Customers post all kinds of jobs, which can include distribution sites around Centrum 100 and Dove Valley Park. Read the job details before you bid." } },
+  },
+];
+
+export const LOCAL_PLACE_BY_SLUG = Object.fromEntries(LOCAL_PLACES.map((p) => [p.slug, p]));
+
+const PLACE_LEADS = {
+  "man-and-van": { facet: "residential", lead: (c, a) => `Our ${c.name} man and van drivers work in flats and houses across ${list(a)}, as well as the ${c.kind} centre. Small moves, single items and tip runs can all be booked.` },
+  "house-removals": { facet: "residential", lead: (c, a) => `Moving home in ${c.name}? Drivers cover areas like ${list(a)}, with vans and lorries for everything from studio flats to family homes.` },
+  "furniture-delivery": { facet: "retail", lead: (c, a) => `Bought a sofa or wardrobe at ${list(a)}? Book a driver to collect it from the store or a seller and deliver it to homes in and around ${c.name}.` },
+  "same-day-courier": { facet: "business", lead: (c, a) => `Same-day courier jobs in ${c.name} often start around ${list(a)}. Book ASAP for an urgent run or schedule it for later today.` },
+  "car-transport": { facet: "roads", lead: (c, a) => `Car transport in ${c.name} covers private sales, dealer moves and non-runners, with transporters using routes like the ${list(a)}.` },
+  "vehicle-recovery": { facet: "roads", lead: (c, a) => `Breakdowns around ${c.name} often happen on busy roads like the ${list(a)}. Book 24/7 and ASAP Recovery jobs go to recovery drivers available around the clock nearby.` },
+  "marketplace-collection": { facet: "retail", lead: (c, a) => `Found something on a marketplace in ${c.name}? Drivers can collect from sellers across the ${c.kind} and nearby, from shopping areas like ${list(a)} to private homes.` },
+};
+
+const placeOrCity = (slug) => LOCAL_PLACE_BY_SLUG[slug] || LOCAL_CITY_BY_SLUG[slug];
+
+export function placeNearby(c) {
+  return c.nearby.map(([slug, roads]) => ({ to: placeOrCity(slug), roads }));
+}
+
+export function placeServices(c) {
+  return c.services.map((s) => SERVICE_BY_SLUG[s]);
+}
+
+export const PLACE_SERVICE_PAIRS = LOCAL_PLACES.flatMap((c) => placeServices(c).map((s) => [s, c]));
+
+export function placeService(service, c) {
+  const svcIdx = SERVICE_PAGES.findIndex((s) => s.slug === service.slug);
+  const cfg = PLACE_LEADS[service.slug];
+  const pool = cfg.facet === "roads" ? c.residential : c[cfg.facet];
+  const areas = pool.map((_, i) => pool[(i + svcIdx) % pool.length]);
+  const near = placeNearby(c);
+  const routes = near.length <= 3 ? near : [0, 1, 2].map((i) => near[(svcIdx + i) % near.length]);
+  const lead = cfg.lead(c, (cfg.facet === "roads" ? c.roads : areas).slice(0, 4));
+  const access = [c.parking, ...(cfg.facet === "roads" ? [] : [`Main roads for ${service.name.toLowerCase()} jobs include the ${list(c.roads.slice(0, 3))}.`])];
+  const pick = [svcIdx % 5, (svcIdx + 2) % 5].map((i) => service.faqs[i]);
+  const faqs = [
+    { q: `Which parts of ${c.name} do you cover for ${service.name.toLowerCase()}?`, a: `Anywhere in ${c.name} and across ${c.region}, including ${list(areas.slice(0, 3))}. Enter your pickup and drop-off to see your price.` },
+    { q: `Is there anything to know about access in ${c.name}?`, a: `${c.parking} Add access notes to your job so drivers can come prepared.` },
+    { q: `Can I book ${service.name.toLowerCase()} from ${c.name} to ${routes[0].to.name}?`, a: `Yes. ${c.name} to ${routes[0].to.name} jobs usually use the ${routes[0].roads}. Book ASAP or schedule it as a Bid Job or Fixed Price Job.` },
+    ...pick,
+  ];
+  return { areas, routes, lead, access, faqs };
+}
+
+export function placeServiceSeo(service, c) {
+  const { areas } = placeService(service, c);
+  return {
+    path: `/services/${service.slug}/${c.slug}`,
+    title: `${service.name} in ${c.name} – Instant Quote | Cargo One`,
+    h1: `${service.name} in ${c.name} – instant quote`,
+    description: `${service.name} in ${c.name}, including ${list(areas.slice(0, 2))}. Get an instant quote, book a verified driver and track it live.`,
+  };
+}
+
+export function placeHubFaqs(c) {
+  const r = placeNearby(c);
+  return [
+    { q: `Which areas of ${c.name} do you cover?`, a: `All of ${c.name} and the surrounding area, from homes in ${list(c.residential.slice(0, 3))} to business and industrial areas like ${list([c.business[1], c.industrial[0]])}.` },
+    { q: `Can I book a courier in ${c.name} right now?`, a: "Yes. You can book 24/7. ASAP Transport and ASAP Recovery jobs go to drivers available around the clock near the pickup, and you can follow your driver live once one accepts." },
+    { q: `What should I know about parking and access in ${c.name}?`, a: c.parking },
+    { q: `Do you do longer journeys from ${c.name}?`, a: `Yes. Popular runs include ${list(r.slice(0, 3).map((x) => `${x.to.name} via the ${x.roads}`))}.` },
+    c.localFaq,
+    { q: `Which booking types can I use in ${c.name}?`, a: "ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs are all available. Choose the one that fits when you book." },
+  ];
+}
+
+// Driver-page shape (same as DRIVER_CITIES entries) for places without an existing /drivers/jobs page.
+export const PLACE_DRIVER_CITIES = LOCAL_PLACES.filter((c) => c.driver).map((c) => ({
+  slug: c.slug, name: c.name, region: c.region,
+  nearby: placeNearby(c).map((r) => r.to.name),
+  areas: [...new Set([...c.business.slice(0, 2), ...c.industrial.slice(0, 3)])],
+  routes: c.roads, note: c.driver.note, localFaq: c.driver.faq,
+}));
+
+export const PLACE_DRIVER_CITY_BY_SLUG = Object.fromEntries(PLACE_DRIVER_CITIES.map((c) => [c.slug, c]));
+
+export function placeDriverRelated(c) {
+  return LOCAL_PLACE_BY_SLUG[c.slug].nearby
+    .map(([slug]) => PLACE_DRIVER_CITY_BY_SLUG[slug] || DRIVER_CITY_BY_SLUG[slug])
+    .filter(Boolean);
+}

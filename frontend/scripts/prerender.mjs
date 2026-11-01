@@ -122,6 +122,31 @@ async function main() {
         lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", [...l.access, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.SERVICE_PAGES.filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
       };
     })),
+    // SEO Phase 3 additions
+    ...(data.LOCAL_PLACES || []).map((c) => {
+      const seo = data.cityHubSeo(c);
+      const faqs = data.placeHubFaqs(c);
+      return {
+        ...seo, image: IMG.heroSeoBoxes, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
+        lists: [["Services", data.placeServices(c).map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...new Set([...c.residential, ...c.business, ...c.industrial])]], ["Getting around", [c.parking]], ["Nearby towns and cities", data.placeNearby(c).map((r) => [`Couriers in ${r.to.name} (via the ${r.roads})`, `/couriers/${r.to.slug}`])]],
+      };
+    }),
+    ...(data.PLACE_SERVICE_PAIRS || []).map(([s, c]) => {
+      const seo = data.placeServiceSeo(s, c);
+      const l = data.placeService(s, c);
+      return {
+        ...seo, image: svcImg(s), intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
+        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", l.access], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.placeServices(c).filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
+      };
+    }),
+    ...(data.PLACE_DRIVER_CITIES || []).map((c) => {
+      const seo = data.driverCitySeo(c);
+      const faqs = data.cityFaqs(c);
+      return {
+        ...seo, image: IMG.heroDrivers, faqs, jsonLd: data.driverJsonLd(seo, faqs, []), detail: true, cta: ["Sign up to drive", data.DRIVER_SIGNUP_HREF],
+        lists: [["Busy areas", c.areas], ["Routes", c.routes], ["Driver jobs nearby", data.placeDriverRelated(c).map((r) => [`Courier jobs in ${r.name}`, `/drivers/jobs/${r.slug}`])], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
+      };
+    }),
   ];
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];

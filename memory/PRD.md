@@ -642,3 +642,9 @@ Each future phase must start from the locked baseline.
 
 ## 2026-06 Android Kotlin fix (compileSdk 35)
 - Added patchExpoModulesCorePermissions to mobile/scripts/apply-node-modules-fixes.js: PermissionsService.kt `requestedPermissions` -> `(requestedPermissions ?: emptyArray<String>())`. Idempotent. No other Kotlin compile hits found (webview Java usage listed only).
+
+## 2026-06 SEO Phase 3 · Batch 1 (West Midlands & Staffordshire) — preview only, not deployed
+- New data appended to seo.js: LOCAL_PLACES (10), PLACE_SERVICE_PAIRS (70), PLACE_DRIVER_CITIES (8; coventry & stoke driver pages pre-existed so skipped).
+- New components: pages/marketing/LocalPlaces.jsx (PlaceHub, PlaceService), DriverPlaces.jsx (PlaceDriverJobs). Static per-slug routes added in App.js (static beats existing :param routes).
+- prerender.mjs: additive block. 88 new URLs; sitemap 184 -> 272. QA script: /app/memory/seo_qa.mjs (compare vs git HEAD baseline).
+- Lock approach: no existing arrays/entries/components edited; new places do NOT appear in existing /couriers index or /drivers page.

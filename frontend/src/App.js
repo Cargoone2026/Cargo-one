@@ -13,6 +13,9 @@ import ServiceLanding from "@/pages/marketing/ServiceLanding";
 import BookingTypeLanding from "@/pages/marketing/BookingTypeLanding";
 import { DriverCityLanding, DriverTypeLanding } from "@/pages/marketing/DriverLanding";
 import { CityHub, CouriersIndex, ServiceCity } from "@/pages/marketing/LocalLanding";
+import { PlaceHub, PlaceService } from "@/pages/marketing/LocalPlaces";
+import { PlaceDriverJobs } from "@/pages/marketing/DriverPlaces";
+import { LOCAL_PLACES, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
 import Business from "@/pages/marketing/Business";
 import Drivers from "@/pages/marketing/Drivers";
 import FAQ from "@/pages/marketing/FAQ";
@@ -132,6 +135,9 @@ export default function App() {
             <Route path="/drivers" element={<Marketing Page={Drivers} />} />
             <Route path="/drivers/jobs/:city" element={<Marketing Page={DriverCityLanding} />} />
             <Route path="/drivers/:slug" element={<Marketing Page={DriverTypeLanding} />} />
+            {LOCAL_PLACES.map((c) => <Route key={`place-hub-${c.slug}`} path={`/couriers/${c.slug}`} element={<Marketing Page={PlaceHub} />} />)}
+            {PLACE_SERVICE_PAIRS.map(([s, c]) => <Route key={`place-svc-${s.slug}-${c.slug}`} path={`/services/${s.slug}/${c.slug}`} element={<Marketing Page={PlaceService} />} />)}
+            {PLACE_DRIVER_CITIES.map((c) => <Route key={`place-drv-${c.slug}`} path={`/drivers/jobs/${c.slug}`} element={<Marketing Page={PlaceDriverJobs} />} />)}
             <Route path="/faq" element={<Marketing Page={FAQ} />} />
             <Route path="/contact" element={<Marketing Page={Contact} />} />
             <Route path="/trust-safety" element={<Marketing Page={TrustSafety} />} />
