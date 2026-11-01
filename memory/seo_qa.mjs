@@ -35,12 +35,29 @@ const missing = Object.keys(b.pages).filter((p) => !(p in a.pages));
 const get = (h, re) => (h.match(re) || [])[1];
 const seen = { title: {}, h1: {}, desc: {} };
 const problems = [];
+const wordCounts = {};
 for (const [p, h] of Object.entries(a.pages)) {
   const vals = { title: get(h, /<title>([\s\S]*?)<\/title>/), h1: get(h, /<h1>([\s\S]*?)<\/h1>/), desc: get(h, /name="description" content="([^"]*)"/) };
   for (const k of Object.keys(vals)) (seen[k][vals[k]] ||= []).push(p);
   if (newPaths.includes(p)) {
     if (get(h, /rel="canonical" href="([^"]*)"/) !== `https://cargoone.co.uk${p}`) problems.push(`canonical ${p}`);
     if (/noindex/i.test(h)) problems.push(`noindex ${p}`);
+    const t = vals.title.replace(/&amp;/g, "&");
+    const d = vals.desc.replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+    if (t.length > 60) problems.push(`title>60 (${t.length}) ${p}: ${t}`);
+    if (d.length > 155) problems.push(`desc>155 (${d.length}) ${p}`);
+    if ((h.match(/<h1>/g) || []).length !== 1) problems.push(`h1 count ${p}`);
+    if (/£/.test(h)) problems.push(`£ found ${p}`);
+    const ld = [...h.matchAll(/application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1])).flat();
+    const faq = ld.find((x) => x["@type"] === "FAQPage");
+    if (!faq || faq.mainEntity.length < 3) problems.push(`faq<3 ${p}`);
+    if (!ld.find((x) => x["@type"] === "BreadcrumbList")) problems.push(`no breadcrumb ${p}`);
+    if (p.startsWith("/guides/")) {
+      if (!ld.find((x) => x["@type"] === "Article")) problems.push(`no article ${p}`);
+      const words = h.split("<main>")[1].replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+      wordCounts[p] = words;
+      if (words < 900 || words > 1400) problems.push(`words ${words} ${p}`);
+    }
   }
 }
 for (const k of Object.keys(seen)) for (const [v, ps] of Object.entries(seen[k])) if (ps.length > 1) problems.push(`dup ${k} "${v}" -> ${ps.join(", ")}`);
@@ -54,4 +71,4 @@ const smCount = (a.sitemap.match(/<loc>/g) || []).length;
 const smOld = (b.sitemap.match(/<loc>/g) || []).length;
 const smMissing = [...b.sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]).filter((u) => !a.sitemap.includes(`<loc>${u}</loc>`));
 const smNewMissing = newPaths.filter((p) => !a.sitemap.includes(`<loc>https://cargoone.co.uk${p}</loc>`));
-console.log(JSON.stringify({ newCount: newPaths.length, changedExisting: changed, missingExisting: missing, sitemapOld: smOld, sitemapNew: smCount, sitemapDroppedOld: smMissing, sitemapMissingNew: smNewMissing, problems, newPaths }, null, 1));
+console.log(JSON.stringify({ newCount: newPaths.length, changedExisting: changed, missingExisting: missing, sitemapOld: smOld, sitemapNew: smCount, sitemapDroppedOld: smMissing, sitemapMissingNew: smNewMissing, problems, wordCounts, newPaths }, null, 1));

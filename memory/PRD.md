@@ -663,3 +663,10 @@ Each future phase must start from the locked baseline.
 - B3 nearby lists: Birmingham only on Leicester/Oxford/MK; others list genuinely nearby cities.
 - LONDON_BOROUGHS (15) + /couriers/london/areas. New LondonBoroughs.jsx (BoroughHub, LondonAreas). Existing London hub/CityHub untouched (no links to boroughs; sitemap covers discovery).
 - Totals vs 0722fc2: 254 new URLs, sitemap 184 -> 438, 0 existing changed.
+
+## Batch 5 (guides) + final QA — preview only, NOT deployed
+- /guides + 12 guides (960-1007 words each, Article+FAQPage+Breadcrumb). New Guides.jsx. GUIDES built from GUIDES_BASE + GUIDE_MORE + GUIDE_FINAL + GUIDE_SUMMARY + GUIDE_LAST_FAQS.
+- Borough TfL links (Congestion Charge: lambeth/southwark/islington; tunnels: tower-hamlets). No pound amounts.
+- New pages: title<=60 / desc<=155 via fit() fallbacks (placeHubSeo, placeServiceSeo, boroughSeo, extraServiceSeo).
+- FINAL: 267 new URLs (B1 88, B2 59, B3 91, B4 16, B5 13); sitemap 184 -> 451. Prod build OK; every new URL has route.html + route/index.html. 0 existing pages changed.
+- QA script: node /app/memory/seo_qa.mjs frontend <baseline frontend dir from git archive 0722fc2>.

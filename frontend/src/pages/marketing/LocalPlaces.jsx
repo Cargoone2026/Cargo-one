@@ -6,7 +6,7 @@ import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import {
-  ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, cityHubSeo,
+  ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, placeHubSeo,
   placeHubFaqs, placeNearby, placeService, placeServiceSeo, placeServices, serviceCityJsonLd,
 } from "@/data/seo";
 
@@ -137,7 +137,7 @@ export function PlaceHub() {
   const [, slug] = pathParts(useLocation().pathname);
   const c = LOCAL_PLACE_BY_SLUG[slug];
   if (!c) return <Navigate to="/couriers" replace />;
-  const seo = cityHubSeo(c);
+  const seo = placeHubSeo(c);
   const faqs = placeHubFaqs(c);
   return (
     <div data-testid={`city-hub-${c.slug}-page`}>

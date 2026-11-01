@@ -1177,6 +1177,19 @@ export const EXTRA_SERVICE_PAGES = [
 export const EXTRA_SERVICE_BY_SLUG = Object.fromEntries(EXTRA_SERVICE_PAGES.map((s) => [s.slug, s]));
 export const ALL_SERVICE_PAGES = [...SERVICE_PAGES, ...EXTRA_SERVICE_PAGES];
 export const ALL_SERVICE_BY_SLUG = Object.fromEntries(ALL_SERVICE_PAGES.map((s) => [s.slug, s]));
+
+// Phase 3 pages keep titles ≤60 and meta descriptions ≤155 by falling back to shorter variants.
+const fit = (max, ...options) => options.find((o) => o.length <= max) || options[options.length - 1];
+
+export function extraServiceSeo(service) {
+  const seo = serviceSeo(service);
+  const first = service.intro.split(". ")[0].replace(/\.$/, "");
+  return {
+    ...seo,
+    title: fit(60, seo.title, `${service.name} | Cargo One`),
+    description: fit(155, seo.description, `${first}. Instant quote and live tracking.`, `${first}.`),
+  };
+}
 // Batch 2 services that also get service×place pages (Wave 1 cities + Phase 3 places).
 const LOCAL_EXTRA_SERVICES = ["non-runner-car-transport", "van-transport"];
 
@@ -1578,10 +1591,15 @@ export function placeServiceSeo(service, c) {
   const { areas } = placeService(service, c);
   return {
     path: `/services/${service.slug}/${c.slug}`,
-    title: `${service.name} in ${c.name} – Instant Quote | Cargo One`,
+    title: fit(60, `${service.name} in ${c.name} – Instant Quote | Cargo One`, `${service.name} in ${c.name} | Cargo One`, `${service.name} in ${c.name}`),
     h1: `${service.name} in ${c.name} – instant quote`,
-    description: `${service.name} in ${c.name}, including ${list(areas.slice(0, 2))}. Get an instant quote, book a verified driver and track it live.`,
+    description: fit(155, `${service.name} in ${c.name}, including ${list(areas.slice(0, 2))}. Get an instant quote, book a verified driver and track it live.`, `${service.name} in ${c.name}, including ${areas[0]}. Get an instant quote, book a verified driver and track it live.`, `${service.name} in ${c.name}. Get an instant quote, book a verified driver and track it live.`),
   };
+}
+
+export function placeHubSeo(c) {
+  const seo = cityHubSeo(c);
+  return { ...seo, title: fit(60, seo.title, `Couriers & Man and Van in ${c.name} | Cargo One`, `Couriers in ${c.name} | Cargo One`), description: fit(155, seo.description, `Couriers, man and van, removals and recovery in ${c.name}. Instant quote, book 24/7 and track your driver live.`) };
 }
 
 export function placeHubFaqs(c) {
@@ -1676,6 +1694,7 @@ export const LONDON_BOROUGHS = [
     districts: ["Brixton", "Clapham", "Streatham", "Vauxhall", "Kennington", "Stockwell", "West Norwood", "Waterloo"],
     retail: ["Brixton Village and Market", "Streatham High Road", "Clapham High Street"],
     roads: ["A23", "A3", "A205 South Circular", "A202"],
+    tfl: { label: "TfL Congestion Charge", url: "https://tfl.gov.uk/modes/driving/congestion-charge" },
     parking: "The area around Waterloo is inside the Congestion Charge zone, and most Lambeth streets have controlled parking and bus lanes.",
     character: "Lambeth is an inner south London borough stretching from Waterloo and the South Bank down through Brixton to Streatham.",
     localFaq: { q: "Do you cover Brixton and Streatham?", a: "Yes. Drivers cover all of Lambeth, including Brixton, Streatham, Clapham, Vauxhall and Waterloo." },
@@ -1684,6 +1703,7 @@ export const LONDON_BOROUGHS = [
     districts: ["Bermondsey", "Peckham", "Camberwell", "Dulwich", "Borough", "Elephant and Castle", "Rotherhithe", "Walworth"],
     retail: ["Surrey Quays Shopping Centre", "the Old Kent Road retail parks", "Rye Lane in Peckham"],
     roads: ["A2 Old Kent Road", "A202", "A200", "A205 South Circular"],
+    tfl: { label: "TfL Congestion Charge", url: "https://tfl.gov.uk/modes/driving/congestion-charge" },
     parking: "The north of the borough, around Borough and London Bridge, is inside the Congestion Charge zone, and streets near Borough Market are narrow and busy.",
     character: "Southwark is an inner south London borough on the Thames, from Borough and Bermondsey down to Peckham and Dulwich.",
     localFaq: { q: "Can you collect from Old Kent Road stores?", a: "Yes. Add the store and any collection reference, and the driver can collect and deliver anywhere in London." },
@@ -1700,7 +1720,8 @@ export const LONDON_BOROUGHS = [
     districts: ["Canary Wharf", "Whitechapel", "Bethnal Green", "Bow", "Poplar", "Wapping", "Limehouse", "Mile End", "the Isle of Dogs"],
     retail: ["Canary Wharf", "Brick Lane", "Roman Road Market"],
     roads: ["A13", "A11", "A12", "A1203 The Highway"],
-    parking: "Canary Wharf has its own estate roads and loading rules, and the Blackwall and Silvertown tunnels are charged, so plan the route.",
+    tfl: { label: "TfL Blackwall and Silvertown tunnels charge", url: "https://tfl.gov.uk/modes/driving/silvertown-blackwall-tunnels-charge" },
+    parking: "Canary Wharf has its own estate roads and loading rules, and the Blackwall and Silvertown tunnels have a user charge, so plan the route.",
     character: "Tower Hamlets is an east London borough on the Thames, from Whitechapel and Wapping to Canary Wharf and Bow.",
     localFaq: { q: "Can you deliver to an office in Canary Wharf?", a: "Yes. Add the building, the loading bay and any security booking details so the driver can get in." },
   }),
@@ -1708,7 +1729,8 @@ export const LONDON_BOROUGHS = [
     districts: ["Angel", "Highbury", "Holloway", "Archway", "Finsbury Park", "Barnsbury", "Clerkenwell", "Canonbury"],
     retail: ["Upper Street", "the Nag's Head on Holloway Road", "Chapel Market"],
     roads: ["A1", "A501 City Road", "A503 Seven Sisters Road", "A1 Holloway Road"],
-    parking: "Islington is densely built, with controlled parking on almost every street, and match days at the Emirates Stadium add restrictions around Highbury and Holloway.",
+    tfl: { label: "TfL Congestion Charge", url: "https://tfl.gov.uk/modes/driving/congestion-charge" },
+    parking: "Islington is densely built, with controlled parking on almost every street. The south of the borough around Clerkenwell is inside the Congestion Charge zone, and match days at the Emirates Stadium add restrictions around Highbury and Holloway.",
     character: "Islington is an inner north London borough, from Clerkenwell and Angel up to Highbury, Holloway and Archway.",
     localFaq: { q: "What about Arsenal match days?", a: "Event-day restrictions apply around the Emirates Stadium. Pick another time if you can, or add access notes so the driver can plan." },
   }),
@@ -1745,7 +1767,7 @@ export const LONDON_BOROUGH_SERVICES = ["man-and-van", "house-removals", "vehicl
 export function boroughSeo(b) {
   return {
     path: `/couriers/london/${b.slug}`,
-    title: `Couriers & Man and Van in ${b.name}, London – Instant Quote | Cargo One`,
+    title: fit(60, `Couriers & Man and Van in ${b.name}, London – Instant Quote | Cargo One`, `Couriers & Man and Van in ${b.name}, London | Cargo One`, `Couriers in ${b.name}, London | Cargo One`),
     h1: `Couriers and man and van in ${b.name}`,
     intro: `${b.character} Get an instant quote for any job in ${b.name}, book 24/7, and track your verified driver live.`,
     description: `Couriers, man and van, removals and recovery in ${b.name}, including ${list(b.districts.slice(0, 2))}. Instant quote, book 24/7 and track your driver live.`,
@@ -1784,4 +1806,506 @@ export const LONDON_AREAS_FAQS = [
 
 export function londonAreasJsonLd() {
   return [faqJsonLd(LONDON_AREAS_FAQS), breadcrumbJsonLd(londonCrumbs)];
+}
+
+// ---------- SEO Phase 3 · Batch 5: guides (/guides, /guides/{slug}) ----------
+// No prices or pound figures anywhere in guides; cost guides cover cost factors only.
+const BT = {
+  bid: ["Bid Jobs", "/how-it-works/bid-jobs"],
+  fixed: ["Fixed Price Jobs", "/how-it-works/fixed-price-jobs"],
+  asap: ["ASAP Transport", "/how-it-works/asap-transport"],
+  recovery: ["ASAP Recovery", "/how-it-works/asap-recovery"],
+};
+const SV = (slug) => [ALL_SERVICE_BY_SLUG[slug].name, `/services/${slug}`];
+const COST_FACTORS_FAQ = { q: "Why don't you publish a price list?", a: "Every job is different. Distance, size, access, vehicle and timing all change the price, so you get a price for your exact job when you enter the details instead of a range that may not apply." };
+
+const GUIDES_BASE = [
+  {
+    slug: "how-much-does-furniture-delivery-cost", image: "furniture",
+    title: "How Much Does Furniture Delivery Cost? | Cargo One",
+    h1: "How much does furniture delivery cost?",
+    description: "The factors that affect the cost of furniture delivery, from size and distance to stairs, timing and vehicle, and how to get a price for your job.",
+    intro: "There's no single price for furniture delivery, because no two jobs are the same. A bedside table across town and a corner sofa up three flights of stairs are very different jobs. This guide explains the factors that shape the cost, so you know what drivers are pricing and how to describe your job to get an accurate quote.",
+    sections: [
+      { h: "Size and weight of the item", p: ["The biggest factor is what you're moving. Larger and heavier pieces need a bigger vehicle, more space in the load area and often a second person to carry them. A sofa, wardrobe or dining table takes up far more room than a chair or a flat-packed box.", "Measure the height, width and depth of each item and estimate its weight if you can. Mention anything awkward, such as a sofa with fixed arms or a glass tabletop. Accurate details help match a vehicle that fits first time."] },
+      { h: "Distance and route", p: ["Longer journeys take more time and fuel, so distance plays a big part. Routes matter too. A run on a motorway is usually quicker than the same distance through busy town centres, and tolls, bridges or charging zones can add to a driver's costs.", "If your item is going a long way, think about whether the date is flexible. Drivers already heading in that direction may be able to offer a better price."] },
+      { h: "Access at pickup and drop-off", p: ["Access often affects the cost as much as distance. Stairs, narrow hallways, tight corners and long walks from the parking spot all add time and effort. A ground-floor flat with parking outside is quicker than a top-floor flat with no lift.", "Tell drivers about:"], list: ["The floor number and whether there's a lift", "How far the vehicle can park from the door", "Narrow stairs, tight turns or low doorways", "Parking restrictions or permits needed"] },
+      { h: "How many people are needed", p: ["Some items can be moved by one driver. Heavier or bulkier pieces need two people to carry safely. If you can help carry, say so in the job. If you need full help loading and unloading, make that clear so drivers can plan and price for it."] },
+      { h: "Vehicle type", p: ["Small items fit in a small van, while large or multiple items need a long wheelbase or Luton van. Very heavy pieces may need a van with a tail lift. The vehicle needed is one of the main things that sets the price, which is why accurate sizes matter."] },
+      { h: "Timing and urgency", p: ["If you need something moved today, ASAP Transport sends your job to nearby drivers who are online. If you can wait, scheduling ahead gives drivers time to fit your job around others. Weekends, bank holidays and the end of the month can be busier, so flexible dates can help."] },
+      { h: "Assembly, packing and extras", p: ["Dismantling, reassembly and packing are not included as standard. If an item needs taking apart to get it out of the room, do this before the driver arrives or mention it in the job. Wrapping items in blankets or bubble wrap protects them and reduces the chance of damage."] },
+      { h: "How to get a price for your job", p: ["Enter your pickup, drop-off and items to see an instant price. You can also post the job as a Bid Job and drivers send you their own quotes, or set your own price with a Fixed Price Job and let drivers accept it. Whichever you choose, you can follow your driver live and get photo proof of delivery."] },
+    ],
+    faqs: [
+      COST_FACTORS_FAQ,
+      { q: "Is it cheaper to collect from a shop than a private seller?", a: "Not necessarily. The price depends on distance, size, access and timing rather than who is selling. Shops may have loading bays, which can make collection quicker." },
+      { q: "Can I compare quotes from different drivers?", a: "Yes. Post your job as a Bid Job and approved drivers with suitable vehicles can send quotes, so you can choose the one that suits you." },
+    ],
+    links: [SV("furniture-delivery"), SV("single-item-delivery"), SV("man-and-van"), BT.bid, BT.fixed, BT.asap],
+  },
+  {
+    slug: "how-much-does-car-transport-cost", image: "vehicles",
+    title: "How Much Does Car Transport Cost? | Cargo One",
+    h1: "How much does car transport cost?",
+    description: "What affects the cost of moving a car on a transporter: distance, vehicle size, whether it runs, open or enclosed transport, access and timing.",
+    intro: "Car transport prices vary widely because every vehicle and journey is different. A small hatchback that drives onto a trailer is a simpler job than a low sports car that needs an enclosed trailer, or a non-runner that has to be winched. This guide explains what drivers consider when they price a car move.",
+    sections: [
+      { h: "Distance and route", p: ["Distance is the starting point. Longer journeys mean more fuel, more driving time and sometimes an overnight stop. The route matters too, as motorways are usually quicker than rural roads, and tolls, bridges or clean air zones can add costs.", "A one-way trip can also mean an empty return for the driver. If your dates are flexible, a driver already travelling your way may be able to take the job."] },
+      { h: "Size and weight of the vehicle", p: ["Small cars fit most transporters. Large SUVs, pickups, vans and long-wheelbase vehicles may need a bigger transporter or recovery truck. Tell drivers the make, model and any modifications, such as roof boxes, tow bars or lowered suspension."] },
+      { h: "Whether the car runs", p: ["A car that starts, steers and brakes can be driven onto the transporter. A non-runner needs a winch, skates or a vehicle with a crane, and often more time to load. Say exactly what works and what doesn't: whether it rolls, whether the wheels turn and whether you have the keys."] },
+      { h: "Open or enclosed transport", p: ["Most cars travel on open transporters or trailers. Classic, prestige or newly restored cars are often moved on enclosed trailers to protect them from weather and road debris. Enclosed transport usually needs a specialist vehicle, which can affect the price."] },
+      { h: "Access at collection and delivery", p: ["Transporters and recovery trucks need space to load. Narrow lanes, low bridges, tight car parks and underground garages can make collection harder. Tell drivers about:"], list: ["Height limits in car parks", "Whether the car is in a garage, driveway or on the street", "Whether the road is wide enough for a large vehicle", "Gate codes, keys and contact details at each end"] },
+      { h: "Timing and urgency", p: ["Urgent jobs, such as moving a car that's broken down, can be booked 24/7 as ASAP Recovery. Planned moves, such as collecting a car you've bought, can be scheduled for a date that suits you. Flexible dates give drivers more chance to fit your car in."] },
+      { h: "Collecting from dealers and auctions", p: ["If the car is at a dealer or auction, add the collection address, opening hours and any release paperwork the site needs. Delays at the gate can add time to the job, so having everything ready helps."] },
+      { h: "How to get a price", p: ["Enter the collection and delivery addresses and the vehicle details to see an instant price. You can also post your car as a Bid Job, where approved drivers with suitable vehicles send quotes, or set your own price as a Fixed Price Job. Once a driver accepts, you can follow the car on the map and get photo proof at delivery."] },
+    ],
+    faqs: [
+      COST_FACTORS_FAQ,
+      { q: "Does a non-runner cost more to move?", a: "It can. Non-runners usually need a winch or a recovery vehicle and more time to load. Describe exactly what works so drivers can price accurately." },
+      { q: "Can I book car transport for a specific date?", a: "Yes. Pick a date when you post the job. For urgent breakdowns, book ASAP Recovery instead." },
+    ],
+    links: [SV("car-transport"), SV("non-runner-car-transport"), SV("classic-car-transport"), SV("vehicle-recovery"), BT.bid, BT.fixed, BT.recovery],
+  },
+  {
+    slug: "how-much-do-house-removals-cost", image: "house_moves",
+    title: "How Much Do House Removals Cost? | Cargo One",
+    h1: "How much do house removals cost?",
+    description: "The factors behind house removal costs: how much you're moving, distance, access, number of movers, vehicle size and moving date.",
+    intro: "The cost of a house move depends on what you're moving, how far it's going and how easy it is to load and unload. Two homes with the same number of bedrooms can need very different moves. This guide sets out the factors that matter, so you can describe your move clearly and get an accurate price.",
+    sections: [
+      { h: "How much you're moving", p: ["The volume of belongings is the biggest factor. A studio flat may fit in one van, while a family home may need a Luton van, a lorry or more than one trip. List your large items, such as beds, wardrobes, sofas, white goods and tables, and give a rough number of boxes.", "Clearing out before you move reduces the load. Selling, donating or recycling items you no longer need can make a real difference."] },
+      { h: "Distance", p: ["Local moves are usually done in a day, often with time to spare. Long-distance moves take more driving time and fuel, and very long moves may need two days. The route, tolls and clean air zones can also add to a driver's costs."] },
+      { h: "Access at both properties", p: ["Access affects how long loading and unloading takes. Stairs, lifts, long walks from the van and narrow corridors all add time. Tell drivers about:"], list: ["Floor levels and whether there's a lift", "Parking outside each property and any permits", "Narrow stairs, tight turns or low ceilings", "Items that need to go through windows or be hoisted"] },
+      { h: "Number of movers", p: ["A small move may need one driver. Larger moves usually need two or more people to load safely and quickly. If friends or family are helping, mention it in the job. If you need full help with every item, make that clear."] },
+      { h: "Vehicle size", p: ["The vehicle is matched to the volume of your belongings. Choosing one that's too small can mean extra trips. Choosing the right size from the start keeps the move simple. Lorries and vans with tail lifts can help with very heavy items."] },
+      { h: "Moving date and time", p: ["Fridays, weekends, the end of the month and school holidays are often busy. If you can move midweek or have flexible dates, drivers have more chance to fit you in. You can book ahead as soon as you know your date."] },
+      { h: "Packing and extra services", p: ["Packing, dismantling furniture and reassembly are not included as standard. Having everything packed, labelled and ready before the driver arrives saves time. Clearly mark fragile boxes and keep essentials, like documents, chargers and medicines, with you."] },
+      { h: "How to get a price for your move", p: ["Enter your addresses and list your items to see an instant price. For larger moves, you can post the job as a Bid Job and approved drivers with suitable vehicles can send quotes. Or set your own price with a Fixed Price Job. On the day, you can follow your driver live."] },
+    ],
+    faqs: [
+      COST_FACTORS_FAQ,
+      { q: "Will it cost more if I have lots of stairs?", a: "Stairs and long carries take more time and effort, so they can affect the price. Describe access at both properties so drivers can price accurately." },
+      { q: "How far ahead should I book a house move?", a: "As soon as you know your moving date. Booking early gives you the most choice of drivers, especially for busy dates." },
+    ],
+    links: [SV("house-removals"), SV("long-distance-removals"), SV("man-and-van"), SV("student-moves"), BT.bid, BT.fixed],
+  },
+  {
+    slug: "house-move-checklist", image: "heroSeoBoxes",
+    title: "House Move Checklist: What to Do and When | Cargo One",
+    h1: "House move checklist",
+    description: "A practical house move checklist: what to sort before moving day, how to pack, what to do on the day, and what to check once you're in.",
+    intro: "Moving home is easier when you break it into steps. This checklist covers the main jobs to do in the weeks before your move, on moving day and once you've arrived. Use it alongside your own plans, and tick things off as you go.",
+    sections: [
+      { h: "As soon as you have a moving date", p: ["Start early with the jobs that take the longest to arrange."], list: ["Book your move and choose the vehicle size you need", "Tell your landlord or agree completion dates with your solicitor", "Check parking at both addresses and apply for permits if needed", "Start clearing out items you don't want to take", "Collect boxes, tape, marker pens and protective wrap"] },
+      { h: "Two to three weeks before", p: ["Begin packing rooms you use least, such as lofts, spare rooms and garages. Label each box with its room and a short description of what's inside. Keep a simple list of boxes so you can check nothing goes missing."], list: ["Tell utility suppliers, your council and your bank your new address", "Arrange post redirection", "Update your address with your GP, dentist and employer", "Plan how pets and children will be looked after on the day"] },
+      { h: "The week before", p: ["Pack most of your belongings, leaving only daily essentials. Dismantle furniture that won't fit through doors and keep screws in labelled bags taped to the furniture. Defrost the freezer if it's moving with you."], list: ["Confirm the time and addresses with your driver in the app", "Check access notes are up to date", "Pack an essentials box: kettle, mugs, toiletries, chargers, medicines, bedding", "Keep important documents and valuables with you, not in the van"] },
+      { h: "The day before", p: ["Finish packing and make sure every box is sealed and labelled. Clear a path through the house so items can be carried out easily. If you need to reserve a parking space, check it's in place. Charge your phone so you can follow your driver live on the day."] },
+      { h: "On moving day", p: ["Be ready for the driver to arrive and show them what's going and what's staying. Point out fragile items and heavy boxes. Before the van leaves, walk through every room, cupboard, loft and garden shed to check nothing is left behind."], list: ["Take meter readings at the old property", "Lock windows and doors and hand back keys", "Follow your driver on the map and meet them at the new address", "Direct boxes to the right rooms as they come in"] },
+      { h: "Once you've moved in", p: ["Take meter readings at the new property and check the heating, hot water and smoke alarms work. Unpack the essentials box first and make up beds early so you can rest. Check items for damage as you unpack and raise anything straight away."] },
+      { h: "Booking the right move", p: ["For a small flat or a few items, a man and van is often enough. For a whole house, choose a larger van or lorry and say how many people you need. You can get an instant price, post a Bid Job to receive quotes from approved drivers, or set your own price with a Fixed Price Job."] },
+    ],
+    faqs: [
+      { q: "When should I start packing?", a: "Start two to three weeks before with rooms you use least, then pack the rest in the final week. Leave daily essentials until the last day." },
+      { q: "What should I keep with me on moving day?", a: "Keep documents, keys, valuables, medicines, chargers and an essentials box with you rather than in the van." },
+      { q: "Can I change my booking details before the move?", a: "Keep your addresses, timings and access notes up to date in the app so your driver has the latest information." },
+    ],
+    links: [SV("house-removals"), SV("man-and-van"), SV("long-distance-removals"), SV("student-moves"), BT.bid, BT.fixed],
+  },
+  {
+    slug: "how-to-collect-a-marketplace-or-ebay-purchase", image: "auction_marketplace",
+    title: "How to Collect a Marketplace or eBay Purchase | Cargo One",
+    h1: "How to collect a marketplace or eBay purchase",
+    description: "How to arrange collection of an item bought on eBay, Facebook Marketplace or Gumtree: agreeing with the seller, measuring, staying safe and booking.",
+    intro: "Buying second-hand online is a great way to find furniture, appliances and more, but many listings are collection only. If you don't have a suitable vehicle, you can book a driver to collect it for you. This guide explains how to arrange a smooth collection and avoid common problems.",
+    sections: [
+      { h: "Check the listing before you buy", p: ["Before you commit, check the item's size, weight and condition. Ask the seller for measurements if they aren't listed, and for photos of any damage. Confirm the item is available and that the seller is happy for a driver to collect on your behalf."] },
+      { h: "Agree collection details with the seller", p: ["Arrange a collection window that suits the seller, and ask about access. Sellers often know whether there are stairs, a lift or parking outside."], list: ["The collection address and a contact phone number", "A time window the seller will be in", "Floor level, lifts and parking", "Whether the seller can help carry the item"] },
+      { h: "Pay safely", p: ["Use the platform's own payment and buyer protection options where available. Be cautious of sellers who ask for unusual payment methods or pressure you to pay before you've confirmed the item exists. If you're paying on collection, agree with the seller how this will work before the driver arrives."] },
+      { h: "Measure where it's going", p: ["Measure doorways, hallways and stairs at your home as well as the item. A sofa that fits the room but not the front door can cause problems on delivery day. If it needs to be taken apart, agree with the seller who will do it before collection."] },
+      { h: "Describe the item clearly", p: ["When you book, add the item's size, rough weight and a photo or link to the listing. Mention anything fragile, such as glass, mirrors or electrical items. Clear details help drivers bring the right vehicle and protection."] },
+      { h: "Book the collection", p: ["If you need it collected quickly, ASAP Transport sends your job to nearby drivers who are online. If the seller has given you a later date, schedule the job for then. You can also post it as a Bid Job and compare quotes, or set your own price with a Fixed Price Job."] },
+      { h: "On collection day", p: ["Share the driver's details with the seller if needed, and keep your phone handy in case the driver or seller has questions. You can follow the driver live on the map. When the item arrives, check it over before the driver leaves and you'll get photo proof of delivery."] },
+    ],
+    faqs: [
+      { q: "Do I need to be at the seller's address?", a: "No. The driver collects from the seller and delivers to you. Make sure the seller knows a driver is coming and add their contact details to the job." },
+      { q: "What if the item is bigger than the listing said?", a: "Ask the seller for measurements before booking. If the item is much larger than described, the driver may not be able to take it in the vehicle booked." },
+      { q: "Can a driver collect from an auction house?", a: "Yes. Add the lot number, any collection reference and the auction house's opening times." },
+    ],
+    links: [SV("marketplace-collection"), SV("furniture-delivery"), SV("single-item-delivery"), BT.asap, BT.bid, BT.fixed],
+  },
+  {
+    slug: "how-to-choose-a-courier-or-man-and-van", image: "heroServices",
+    title: "How to Choose a Courier or Man and Van | Cargo One",
+    h1: "How to choose a courier or man and van",
+    description: "What to look for when choosing a courier or man and van: the right vehicle, clear pricing, driver checks, tracking, proof of delivery and reviews.",
+    intro: "Whether you're moving a sofa, sending documents or clearing a flat, choosing the right driver makes the job easier. This guide covers what to look for, what to ask and how to describe your job so you get the right vehicle and a clear price.",
+    sections: [
+      { h: "Courier or man and van?", p: ["A courier service is usually best for parcels, documents and smaller items that just need moving from A to B. A man and van suits bulky items, furniture and small moves where you need help carrying. For whole house moves, look at removals with a larger vehicle and more people."] },
+      { h: "Match the vehicle to the job", p: ["The right vehicle avoids extra trips and wasted cost. Small vans suit a few boxes or a single item. Long wheelbase and Luton vans suit furniture and flat moves. Vans with tail lifts help with heavy items, and lorries suit large house moves or pallets. Give accurate sizes so the vehicle fits first time."] },
+      { h: "Look for clear pricing", p: ["You should know the price before you book. Be clear about what's included, such as help carrying, waiting time and extra stops. On Cargo One, you see a price for your job when you enter the details, or you can compare quotes from approved drivers with a Bid Job."] },
+      { h: "Check the driver is verified", p: ["Drivers should be checked before they can take jobs. On Cargo One, drivers upload their documents and are reviewed before their account is activated, and you can see who's coming once a driver accepts."] },
+      { h: "Tracking and proof of delivery", p: ["Live tracking means you know when your driver is on the way, and photo proof of delivery shows the item arrived safely. Both are useful when you're sending something to someone else or can't be there yourself."] },
+      { h: "Questions to ask before you book", p: ["A few questions can avoid problems on the day:"], list: ["Will the driver help carry, or do I need to help?", "Is the vehicle big enough for everything?", "What happens if there are stairs or no parking?", "Can the driver bring blankets and straps for fragile items?"] },
+      { h: "Describe your job well", p: ["The better your description, the smoother the job. Add sizes, weights, floor levels, parking details and photos. Mention anything fragile or valuable, and check whether you need your own insurance for very valuable items."] },
+      { h: "Choose how to book", p: ["Use ASAP Transport if you need it done now. For planned jobs, post a Bid Job to receive quotes from approved drivers, or set your own price with a Fixed Price Job and let a driver accept it."] },
+    ],
+    faqs: [
+      { q: "How do I know the driver can handle my job?", a: "Describe the job in detail. Drivers see sizes, access and notes before they accept, so they can check their vehicle is suitable." },
+      { q: "Is a man and van cheaper than a removal company?", a: "It depends on the job. For smaller moves a man and van can be a good fit. Enter your details to see a price for your exact job." },
+      { q: "Can I book for the same day?", a: "Yes. Choose ASAP Transport and your job goes to nearby drivers who are online." },
+    ],
+    links: [SV("man-and-van"), SV("same-day-courier"), SV("house-removals"), SV("parcel-delivery"), BT.asap, BT.bid, BT.fixed],
+  },
+  {
+    slug: "what-to-do-if-your-car-breaks-down", image: "/images/recovery-truck-hero.webp",
+    title: "What to Do If Your Car Breaks Down | Cargo One",
+    h1: "What to do if your car breaks down",
+    description: "Safety first: get to a safe place, switch on hazard lights and call 999 if you're in danger. Then how to arrange recovery with ASAP Recovery.",
+    intro: "A breakdown can be stressful, but your safety comes first. Before you think about recovery, make sure you and your passengers are safe. If anyone is in danger, call 999 straight away. Once everyone is safe, you can arrange for your vehicle to be recovered. This guide explains what to do, step by step.",
+    sections: [
+      { h: "1. Get to a safe place", p: ["If you can, move the car off the road or onto the hard shoulder, a verge or an emergency area. Switch on your hazard lights. If it's dark or visibility is poor, keep your sidelights on too.", "On a motorway or fast road, leave the car by the left-hand door and get behind a safety barrier if there is one. Keep well away from moving traffic and don't stand between your car and the road. Don't try to repair the car yourself on a motorway."] },
+      { h: "2. Call 999 if you're in danger", p: ["If you feel you or anyone else is in danger, or the car has stopped in a live lane and you can't get out safely, call 999 immediately. Keep your seatbelt on and hazard lights on if you can't leave the vehicle safely. On a motorway, you can also use an emergency phone to contact the traffic officers."] },
+      { h: "3. Keep yourself visible and warm", p: ["Wear bright or reflective clothing if you have it. Don't use a warning triangle on a motorway, as it isn't safe to walk back along the hard shoulder. On other roads, only place one if it's safe to do so. In cold or wet weather, keep warm and dry while you wait away from traffic."] },
+      { h: "4. Work out what's wrong", p: ["Only once you're safe, note any warning lights, noises or smells, and whether the car will start. This helps a recovery driver bring the right vehicle. Note your exact location using road signs, marker posts, junction numbers or the location on your phone."] },
+      { h: "5. Book ASAP Recovery", p: ["You can book ASAP Recovery 24/7. Enter where the car is, where it needs to go and what's wrong. Your job goes to recovery drivers available around the clock near you, and you can see when one accepts and follow them on the map.", "Include clear details so the right vehicle comes:"], list: ["The make, model and size of the vehicle", "Whether it rolls, steers and brakes", "Whether you have the keys", "Exactly where the car is and which way it's facing"] },
+      { h: "6. While you wait", p: ["Stay somewhere safe, away from traffic. Keep your phone charged and nearby so the driver can contact you. If your situation changes and you feel unsafe, call 999."] },
+      { h: "7. When the recovery driver arrives", p: ["Check the driver and vehicle match the details in the app. Tell them anything you've noticed about the fault. The driver will load the car and take it to the address you chose, such as your home or a garage, and you'll get photo proof at drop-off."] },
+      { h: "If the car isn't urgent", p: ["If the car is already safe, for example on a driveway, you don't need an ASAP job. You can schedule a recovery for later, post a Bid Job to receive quotes, or set your own price with a Fixed Price Job."] },
+    ],
+    faqs: [
+      { q: "What's the first thing I should do if I break down?", a: "Get yourself and your passengers to a safe place and switch on your hazard lights. If anyone is in danger, call 999." },
+      { q: "Can I book recovery at night?", a: "Yes. You can book ASAP Recovery 24/7, and your job goes to recovery drivers available around the clock near you." },
+      { q: "Where can the car be taken?", a: "Anywhere you choose, such as your home, a garage or another address. Add it as the drop-off when you book." },
+    ],
+    links: [SV("vehicle-recovery"), SV("non-runner-car-transport"), SV("car-transport"), BT.recovery, BT.bid, BT.fixed],
+  },
+  {
+    slug: "how-to-transport-a-non-running-car", image: "/images/recovery-truck-hero.webp",
+    title: "How to Transport a Non-Running Car | Cargo One",
+    h1: "How to transport a non-running car",
+    description: "How to move a car that won't start or drive: describing the fault, access for loading, winches and recovery vehicles, paperwork and booking.",
+    intro: "A car that won't start or can't be driven still needs to get to a garage, a new owner or a scrapyard. Moving a non-runner takes a little more planning than a car that drives onto a trailer, but with the right details the job is straightforward. This guide explains what to prepare.",
+    sections: [
+      { h: "Describe exactly what works", p: ["Not all non-runners are the same. A car with a flat battery that rolls and steers is much easier to load than one with seized brakes or missing wheels. Tell drivers:"], list: ["Whether the car rolls freely", "Whether the steering works and the wheels turn", "Whether the handbrake can be released", "Whether you have the keys", "Any damage, flat tyres or missing parts"] },
+      { h: "Choose the right type of vehicle", p: ["Most non-runners are moved on a recovery truck or a transporter with a winch. Cars that won't roll may need skates or a vehicle with a crane. Heavier vehicles, such as large SUVs or vans, may need a larger recovery truck. Accurate details help match a suitable vehicle."] },
+      { h: "Check access for loading", p: ["Recovery vehicles need space to line up with the car and winch it on. A car in a tight garage, a narrow lane or an underground car park can be harder to reach. Add notes about height limits, gates, slopes and how close the truck can get. Photos of the car and its surroundings are very helpful."] },
+      { h: "Prepare the car", p: ["Remove personal belongings and anything loose. If the car has been stood for a while, check whether tyres are flat and say so. Leave the keys with someone at the address, or arrange to meet the driver."] },
+      { h: "Paperwork and ownership", p: ["If you're buying a non-runner, make sure the seller has the right to sell it and that you have the logbook details you need. If the car is going for scrap, use an authorised treatment facility so it's handled properly. Keep any paperwork with you, not in the car."] },
+      { h: "Plan the drop-off", p: ["Tell the driver exactly where the car should go and whether someone will be there. Garages and scrapyards have opening hours, so check these before booking. If the car is going to a driveway, make sure there's space to unload."] },
+      { h: "Book the move", p: ["If the car needs moving urgently, for example after a breakdown, book ASAP Recovery 24/7. If it's safe where it is, schedule a date, post a Bid Job to receive quotes from approved drivers with suitable vehicles, or set your own price with a Fixed Price Job. You can follow the car live and get photo proof at drop-off."] },
+    ],
+    faqs: [
+      { q: "Can you move a car with no keys?", a: "Often yes, but say so in the job. Without keys the steering may lock, so drivers may need extra equipment." },
+      { q: "Can you move a car that won't roll?", a: "Yes, with the right equipment, such as skates or a crane. Describe the problem so a driver with a suitable vehicle can take the job." },
+      { q: "Can I book a non-runner collection for a set date?", a: "Yes. Pick a date when you post the job, or book ASAP Recovery if it's urgent." },
+    ],
+    links: [SV("non-runner-car-transport"), SV("vehicle-recovery"), SV("car-transport"), SV("classic-car-transport"), BT.recovery, BT.bid, BT.fixed],
+  },
+  {
+    slug: "moving-a-static-or-touring-caravan", image: "caravans",
+    title: "Moving a Static or Touring Caravan | Cargo One",
+    h1: "Moving a static or touring caravan",
+    description: "How to prepare for moving a touring or static caravan: sizes and weights, roadworthiness, site access, park rules, wide loads and booking.",
+    intro: "Caravans come in very different sizes, from small touring caravans to large static holiday homes. Each needs a different kind of move. This guide explains what to check and prepare, so drivers with suitable vehicles can plan the job properly.",
+    sections: [
+      { h: "Touring or static?", p: ["Touring caravans are built to be towed and can usually be moved by a driver with a suitable tow vehicle. Static caravans and lodges are much larger and are moved on a flatbed, lowloader or specialist vehicle, often with lifting equipment. Choose the right service when you book."] },
+      { h: "Know the size and weight", p: ["Find the length, width and weight of your caravan. For tourers, the weight and hitch type matter for towing. For statics, width is especially important, as very wide units may need permits or escorts on the road. Your caravan's handbook or the manufacturer's plate usually has these details."] },
+      { h: "Check a touring caravan is roadworthy", p: ["For towing, the caravan's tyres, brakes, lights and hitch need to be safe. If it's been in storage for a long time, check the tyres for cracks and pressure, and make sure the brakes aren't seized. If you're unsure, say so in the job and describe any known problems."] },
+      { h: "Prepare the inside", p: ["Remove or secure loose items, close all windows, roof lights and vents, and lock cupboards. Turn off and disconnect gas bottles. For statics, the park usually arranges disconnecting services, removing skirting and preparing the unit, so check this with them."] },
+      { h: "Plan access at both sites", p: ["Access is often the hardest part of a caravan move. Tell drivers about:"], list: ["Gate widths and turning space", "Slopes, soft ground or grass", "Overhead cables and trees", "Park rules, permitted move times and a site contact"] },
+      { h: "Wide and abnormal loads", p: ["Large static caravans may be wider than standard road limits. These moves can need extra planning, permits or escorts. Contact us first so we can check what's possible before you post the job."] },
+      { h: "Book the move", p: ["Post your caravan move with the full details and photos. Approved drivers with suitable vehicles can send quotes through a Bid Job, or you can set your own price with a Fixed Price Job. Once a driver accepts, you can follow the move live."] },
+    ],
+    faqs: [
+      { q: "Can you move a caravan from a storage site?", a: "Yes. Add the site name, opening times and any gate codes or booking references the driver needs." },
+      { q: "Who prepares a static caravan for moving?", a: "This is usually arranged with the holiday park. Check with them and add what's been done to your job." },
+      { q: "Can a caravan be moved at short notice?", a: "Touring caravans often can. Static moves usually need more planning, so book as early as you can." },
+    ],
+    links: [SV("caravan-transport"), SV("static-caravan-transport"), SV("horsebox-and-trailer-transport"), BT.bid, BT.fixed],
+  },
+  {
+    slug: "shipping-container-transport-guide", image: "shipping_containers",
+    title: "Shipping Container Transport Guide | Cargo One",
+    h1: "Shipping container transport guide",
+    description: "How to plan a shipping or storage container move: sizes, weight, site access, ground conditions, crane unloading and booking a suitable vehicle.",
+    intro: "Shipping and storage containers are popular for farms, building sites, businesses and homes. Moving one takes the right vehicle and a site that's ready for it. This guide explains what to check before you book, so the delivery goes smoothly.",
+    sections: [
+      { h: "Container sizes", p: ["The most common sizes are 10, 20 and 40 foot containers, with standard and high-cube heights. The size sets what vehicle is needed and how much space is required on site. Check the exact size before booking, as some containers are converted or modified."] },
+      { h: "Weight and contents", p: ["An empty container is heavy, and a loaded one can be much heavier. Tell drivers whether the container is empty or loaded and give an estimated total weight. Loaded containers may need a larger vehicle or crane and careful securing."] },
+      { h: "How it will be unloaded", p: ["Containers are usually lifted on and off with a crane on the vehicle, or slid off a tilting bed. If there's a crane or forklift on site, say so. If not, the driver needs a vehicle with its own lifting equipment."] },
+      { h: "Prepare the site", p: ["The ground where the container will sit should be firm and level. Soft grass, mud or steep slopes can make placement difficult or unsafe. Check for:"], list: ["Enough space for the vehicle to reach and manoeuvre", "Overhead cables, trees or roofs near the drop spot", "Gate widths and road access to the site", "A firm, level base for the container"] },
+      { h: "Permissions and rules", p: ["Some sites need permission for a container, and building sites may have delivery rules and booking times. Check with your landlord, site manager or local council if you're unsure. Add site contacts and any rules to your job."] },
+      { h: "Collecting from a depot or private seller", p: ["If you've bought a container, add the collection address, opening times and any release reference. Make sure the seller or depot can load it, or that the driver will be able to lift it."] },
+      { h: "Book the move", p: ["Post your container job with the size, weight, photos of the drop spot and access notes. Approved drivers with suitable vehicles can send quotes through a Bid Job, or you can set your own price with a Fixed Price Job. You can follow the delivery live and get photo proof when it's placed."] },
+    ],
+    faqs: [
+      { q: "Can you deliver a container to a farm or field?", a: "Often yes, if the ground is firm enough and the vehicle can reach. Add photos and ground conditions so drivers can check." },
+      { q: "Do I need a crane on site?", a: "Not usually. Many vehicles have their own crane. Say whether you have lifting equipment on site when you book." },
+      { q: "Can you move a loaded container?", a: "Tell us what's inside and the total weight so a driver with a suitable vehicle can take the job." },
+    ],
+    links: [SV("shipping-container-transport"), SV("freight-and-haulage"), SV("machinery-haulage"), SV("building-materials-delivery"), BT.bid, BT.fixed],
+  },
+  {
+    slug: "bid-jobs-vs-fixed-price-jobs", image: "heroHow",
+    title: "Bid Jobs vs Fixed Price Jobs: Which to Choose | Cargo One",
+    h1: "Bid Jobs vs Fixed Price Jobs: which should you choose?",
+    description: "The difference between Bid Jobs and Fixed Price Jobs on Cargo One, when each works best, and when to use ASAP Transport or ASAP Recovery instead.",
+    intro: "Cargo One gives you four ways to book: ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs. For planned jobs, the main choice is between Bid Jobs and Fixed Price Jobs. This guide explains how each one works and which suits different situations.",
+    sections: [
+      { h: "How Bid Jobs work", p: ["With a Bid Job, you post the details of what you need moving and approved drivers send their own quotes. You can compare the quotes and choose the driver you prefer. Bid Jobs suit jobs where you'd like to see a range of offers, or where the job is unusual and drivers may price it differently."] },
+      { h: "How Fixed Price Jobs work", p: ["With a Fixed Price Job, you set the price you want to pay and drivers can accept it. There's no back-and-forth, and you know your price from the start. Fixed Price Jobs suit people who know what they want to pay and want a simple booking."] },
+      { h: "When to choose a Bid Job", p: ["Bid Jobs often work well for:"], list: ["Larger or unusual jobs, such as caravans, containers or machinery", "Long-distance moves where prices can vary", "Jobs where you want to compare offers before deciding", "Flexible dates that drivers can fit around other work"] },
+      { h: "When to choose a Fixed Price Job", p: ["Fixed Price Jobs often work well for:"], list: ["Regular or repeat jobs where you know a fair price", "Simple jobs with clear sizes and easy access", "Business deliveries where budgets are set", "When you want a quick, simple booking"] },
+      { h: "When to use ASAP instead", p: ["If you need something moved now, use ASAP Transport. Your job goes to nearby drivers who are online, and you see when one accepts. If your vehicle has broken down, use ASAP Recovery, which you can book 24/7, with recovery drivers available around the clock."] },
+      { h: "Tips for either booking type", p: ["Whichever you choose, give clear details. Sizes, weights, photos, access notes and timings help drivers understand the job. Jobs that are clearly described are easier for drivers to quote for or accept."] },
+      { h: "What happens after a driver accepts", p: ["Once a driver accepts your job, you'll see who's coming and can follow them live on the map. For scheduled jobs, you confirm with a deposit once a driver takes it. At delivery, you get photo proof that the job is done."] },
+    ],
+    faqs: [
+      { q: "Can I choose a different booking type later?", a: "You choose the booking type when you post a job. If you'd rather compare quotes than set a price, post it as a Bid Job." },
+      { q: "Which is better for a house move?", a: "Many people choose a Bid Job for house moves so they can compare quotes. If you know what you want to pay, a Fixed Price Job is simpler." },
+      { q: "Is ASAP Transport the same as a Bid Job?", a: "No. ASAP Transport is for jobs that need doing now and goes to nearby drivers who are online. Bid Jobs are for planned jobs where drivers send quotes." },
+    ],
+    links: [BT.bid, BT.fixed, BT.asap, BT.recovery, SV("man-and-van"), SV("house-removals")],
+  },
+  {
+    slug: "preparing-items-for-a-courier", image: "parcels",
+    title: "Preparing Items for a Courier | Cargo One",
+    h1: "Preparing items for a courier",
+    description: "How to pack, measure and prepare items for a courier or man and van: packing materials, labelling, measuring, weight and access notes.",
+    intro: "A little preparation makes any delivery quicker and safer. Whether you're sending a single parcel, a piece of furniture or a van load of boxes, this guide covers how to pack, measure and describe your items, and what to tell the driver about access.",
+    sections: [
+      { h: "Choose the right packaging", p: ["Use strong boxes that are the right size for what's inside. Overfilled boxes can split, and half-empty boxes can crush. Fill gaps with paper or bubble wrap so items don't move around."], list: ["Double-walled boxes for heavy items", "Bubble wrap or paper for fragile items", "Blankets or furniture covers for large pieces", "Strong packing tape on every seam"] },
+      { h: "Pack fragile items carefully", p: ["Wrap glass, ceramics and electronics individually. Pack them tightly so they can't move, and mark boxes clearly as fragile. For mirrors and pictures, protect corners with cardboard and tape across the glass. Mark the job as fragile so drivers know before they accept."] },
+      { h: "Measure everything", p: ["Measure the height, width and depth of each large item. For furniture, measure at the widest points, including arms, legs and handles. Measure doorways and stairs at both addresses too. Accurate sizes help match the right vehicle and avoid surprises on the day."] },
+      { h: "Estimate the weight", p: ["Give a rough weight for heavy items and boxes. Drivers use this to choose a suitable vehicle and decide whether two people are needed. Keep individual boxes to a weight that can be carried safely."] },
+      { h: "Label clearly", p: ["Label every box with what's inside and where it's going. For deliveries to someone else, add their name and phone number. For multi-drop jobs, label items with the address they're going to."] },
+      { h: "Describe access at both ends", p: ["Access affects how long a job takes. Tell drivers about:"], list: ["Floor levels, stairs and lifts", "Where the vehicle can park and any restrictions", "Narrow hallways, gates or tight corners", "Building rules, loading bays or booking times"] },
+      { h: "Be ready on the day", p: ["Have everything packed and in one place before the driver arrives. Clear a path to the door. Make sure someone is at the pickup and drop-off, or add a contact who can meet the driver. You can follow your driver live and get photo proof at delivery."] },
+      { h: "Book the right job", p: ["Need it moved now? Use ASAP Transport. Planning ahead? Post a Bid Job to compare quotes, or set your own price with a Fixed Price Job."] },
+    ],
+    faqs: [
+      { q: "Will the driver bring packing materials?", a: "Packing isn't included as standard. Pack items before the driver arrives, and ask in the job if you need blankets or straps." },
+      { q: "Should I take furniture apart?", a: "If an item won't fit through doors or into the vehicle, dismantle it before the driver arrives and keep fixings in a labelled bag." },
+      { q: "What if my items are bigger than I said?", a: "The vehicle booked may not fit them. Measure carefully and update your job before the driver arrives." },
+    ],
+    links: [SV("same-day-courier"), SV("parcel-delivery"), SV("man-and-van"), SV("fragile-and-high-value-delivery"), BT.asap, BT.bid, BT.fixed],
+  },
+];
+
+// Further sections and FAQs for each guide.
+const GUIDE_MORE = {
+  "how-much-does-furniture-delivery-cost": {
+    sections: [
+      { h: "Multiple items and extra stops", p: ["Moving several pieces at once is usually more efficient than booking separate jobs, as long as they fit in one vehicle. If items are coming from different places, such as a shop and a private seller, add each pickup as a stop. Extra stops add time, so list them all at the start rather than asking the driver to add them on the day."] },
+      { h: "Ways to keep the cost down", p: ["You can't change the size of a sofa, but you can make the job easier:"], list: ["Measure carefully so the right vehicle is sent first time", "Have items ready by the door, wrapped and dismantled if needed", "Offer to help carry if you're able to", "Choose a flexible date rather than a fixed time slot", "Check parking in advance so the driver can stop close by"] },
+    ],
+    faqs: [{ q: "Does furniture delivery include taking items upstairs?", a: "Say exactly where the item needs to go, including floors and stairs. Drivers see this before they accept and can plan the help needed." }],
+  },
+  "how-much-does-car-transport-cost": {
+    sections: [
+      { h: "Preparing the car for collection", p: ["Remove personal belongings and loose items, and leave about a quarter of a tank of fuel or some charge if the car runs. Note any existing damage and take your own photos before collection. Make sure the driver has the keys, any locking wheel nut key and details of anything unusual about the car, such as an alarm or immobiliser."] },
+      { h: "Ways to keep the cost down", p: ["A few simple steps can make the job easier to price:"], list: ["Give flexible collection dates where you can", "Describe the car's condition accurately", "Make sure there's space for a transporter to load", "Have keys, paperwork and contacts ready at both ends"] },
+    ],
+    faqs: [{ q: "Can I travel with the car?", a: "No. The car is moved by the driver. You can follow it live on the map and get photo proof at delivery." }],
+  },
+  "how-much-do-house-removals-cost": {
+    sections: [
+      { h: "Storage and split moves", p: ["If your new home isn't ready, you may need to move some belongings into storage and the rest later. This means two or more jobs, so plan each one with its own addresses and timings. A split move can still be efficient if you list exactly what's going where."] },
+      { h: "Ways to keep the cost down", p: ["You can make a removal simpler and quicker by:"], list: ["Clearing out items you don't need before moving day", "Packing and labelling everything in advance", "Dismantling large furniture beforehand", "Booking a midweek date if you can", "Reserving parking close to both doors"] },
+    ],
+    faqs: [{ q: "Can I book a smaller van and do two trips?", a: "You can, but two trips add time. It's often simpler to choose a vehicle that fits everything in one go." }],
+  },
+  "house-move-checklist": {
+    sections: [
+      { h: "Moving with children and pets", p: ["Moving day can be busy and noisy. If you can, arrange for young children and pets to be looked after elsewhere, or set aside one quiet room with their things. Pack a separate bag with snacks, toys, food, leads and bedding so you don't have to search through boxes at the end of a long day."] },
+      { h: "Rooms that need extra attention", p: ["Kitchens, garages and lofts often take longest. Start the loft and garage early, as they're easy to forget. In the kitchen, use up frozen food, clean out the fridge and pack heavy items in small boxes. Keep a set of plates, cutlery and a kettle for the last day."] },
+    ],
+    faqs: [{ q: "How do I make sure nothing gets left behind?", a: "Before the van leaves, walk through every room, cupboard, loft, shed and garden, and check under stairs and behind doors." }],
+  },
+  "how-to-collect-a-marketplace-or-ebay-purchase": {
+    sections: [
+      { h: "Items that need extra care", p: ["Some second-hand items need a little more thought. Fridges and freezers should ideally travel upright and be left to settle before switching on. Washing machines may need transit bolts fitted. Glass tables, mirrors and large televisions need protecting. Ask the seller whether they have original packaging or fittings."] },
+      { h: "If the seller can't be there", p: ["If the seller has arranged for someone else to hand over the item, add that person's name and number to the job. Agree a backup plan in case the collection window changes, and keep messages with the seller in one place so details are easy to check."] },
+      { h: "Collecting several items at once", p: ["If you've bought more than one item, you can add each pickup as a stop on one job, as long as everything fits in the vehicle. List the items and sizes for each stop so the driver can plan the load."] },
+    ],
+    faqs: [{ q: "Can the driver check the item before collecting?", a: "Drivers collect what you've agreed with the seller. Check condition and details with the seller before you book." }],
+  },
+  "how-to-choose-a-courier-or-man-and-van": {
+    sections: [
+      { h: "Things to watch out for", p: ["Be cautious of prices that seem unusually low, vague descriptions of what's included, or a driver who won't confirm the vehicle size. Make sure you know who is coming and when. Booking through a platform that verifies drivers, shows the price before you book and lets you track the job gives you more confidence."] },
+      { h: "Business and regular deliveries", p: ["If you run a business, look for a service that can handle regular runs, different vehicle sizes and urgent jobs. Live tracking and photo proof of delivery help you keep customers updated. You can post jobs whenever you need them."] },
+      { h: "After the job", p: ["Check items on arrival and raise any problem straight away. Photo proof of delivery helps if there's a question later. If you were happy with the job, a review helps other customers choose."] },
+    ],
+    faqs: [{ q: "Do I need my own insurance?", a: "For very valuable items, check whether you need your own insurance for their full value before you book." }],
+  },
+  "what-to-do-if-your-car-breaks-down": {
+    sections: [
+      { h: "Breaking down on a smart motorway", p: ["If there's no hard shoulder, try to reach an emergency area, marked with orange surfacing and an SOS sign, or leave at the next junction. If you can't, move as far left as possible, switch on hazard lights and call 999 if you feel in danger. Stay in the vehicle with your seatbelt on if it isn't safe to get out."] },
+    ],
+    faqs: [{ q: "Should I try to fix the car myself?", a: "Never attempt repairs on a motorway. On other roads, only do so if you're completely safe and away from traffic." }],
+  },
+  "how-to-transport-a-non-running-car": {
+    sections: [
+      { h: "Common reasons a car becomes a non-runner", p: ["Flat batteries, failed starter motors, fuel problems, engine faults and accident damage are all common causes. Cars that have stood for months may also have flat tyres or brakes that have stuck. Knowing the likely cause helps drivers decide what equipment they need, even if you can't fix it yourself."] },
+      { h: "Moving a project or classic car", p: ["Restoration projects and classics are often non-runners. They may have missing panels, no interior or fragile trim. Mention this in the job and ask for enclosed transport if you need extra protection. Point out jacking and tie-down points if you know them."] },
+      { h: "Selling a non-runner", p: ["If you're selling, agree with the buyer who is arranging collection. Make sure the car is accessible, the keys and paperwork are ready, and someone is there to hand it over."] },
+    ],
+    faqs: [{ q: "Is a non-runner the same as a breakdown?", a: "Not always. A breakdown usually needs urgent recovery, while a non-runner may be parked safely and can be moved on a planned date." }],
+  },
+  "moving-a-static-or-touring-caravan": {
+    sections: [
+      { h: "Timing your move", p: ["Many holiday parks have set times or seasons for moving caravans in and out. Check these first, as they may decide your date. For touring caravans, consider the weather, as high winds can make towing unsafe. Allow time for preparing the caravan at both ends."] },
+      { h: "Buying a caravan privately", p: ["If you're buying, check the caravan's condition, paperwork and that the seller has the right to sell it. Agree who will prepare it for collection, and add the seller's contact details to the job."] },
+      { h: "After delivery", p: ["When the caravan arrives, check it over with the driver before they leave. For static caravans, the park usually arranges reconnecting services and levelling. For touring caravans, check the tyres, brakes and lights before you next tow it yourself."] },
+    ],
+    faqs: [{ q: "Can a touring caravan be moved if the brakes have seized?", a: "Describe the problem in the job. A driver with a suitable vehicle may be able to carry it rather than tow it." }],
+  },
+  "shipping-container-transport-guide": {
+    sections: [
+      { h: "New or used containers", p: ["New containers, sometimes called one-trip containers, are usually in better condition. Used containers can vary, so check doors, seals and the floor before you buy. Either way, the size and weight decide the vehicle needed."] },
+      { h: "Using a container for storage", p: ["Containers make secure, weatherproof storage on farms, sites and at businesses. Place the doors where you can open them fully, and leave room around the container for access. Raising it slightly off the ground on a firm base can help keep it dry."] },
+      { h: "Moving a container again later", p: ["If you might need to move the container in future, keep access to the spot clear and record its size and weight. Empty it before it's moved where possible."] },
+    ],
+    faqs: [{ q: "How much space do I need for delivery?", a: "Enough for the vehicle to reach the spot and manoeuvre, plus clear space around the drop point. Add photos so drivers can check." }],
+  },
+  "bid-jobs-vs-fixed-price-jobs": {
+    sections: [
+      { h: "Example: a sofa from a seller", p: ["Say you've bought a sofa from a private seller across town. If you know roughly what you'd like to pay, a Fixed Price Job lets a driver accept your price. If you're not sure, a Bid Job lets drivers send their quotes so you can compare."] },
+      { h: "Example: a caravan or container", p: ["For larger or specialist jobs, such as moving a caravan or shipping container, prices can vary depending on the vehicle and equipment. A Bid Job lets approved drivers with suitable vehicles send quotes based on your exact job."] },
+      { h: "Example: a breakdown", p: ["If your car has broken down, don't wait for quotes. Get to a safe place, switch on your hazard lights and call 999 if you're in danger. Then book ASAP Recovery so your job goes straight to recovery drivers nearby."] },
+      { h: "Making your job attractive to drivers", p: ["Whether you choose a Bid Job or a Fixed Price Job, clear details help. Add photos, sizes, access notes and flexible times where you can."] },
+    ],
+    faqs: [{ q: "Can I see who's coming before the driver arrives?", a: "Yes. Once a driver accepts your job, you can see who's coming and follow them live on the map." }],
+  },
+  "preparing-items-for-a-courier": {
+    sections: [
+      { h: "Appliances and electronics", p: ["Disconnect appliances ahead of time. Defrost and dry fridges and freezers, and drain washing machines and fit transit bolts if you have them. Pack computers and televisions in their original boxes where possible, or wrap them well and mark them fragile."] },
+      { h: "Items that can't be carried", p: ["Some items aren't suitable for a standard courier, such as flammable liquids, gas bottles, chemicals or anything illegal. If you're unsure, ask before you book. Remove fuel from garden machinery and empty paint tins."] },
+      { h: "Sending to someone else", p: ["If you're sending items to a friend, family member or customer, add their name and phone number and tell them a driver is coming. They can meet the driver and you'll get photo proof when it's delivered."] },
+    ],
+    faqs: [{ q: "How should I send documents?", a: "Use a sealed envelope or document wallet, clearly addressed. For urgent papers, book a document courier or same-day courier." }],
+  },
+};
+
+// Closing sections: a worked example or common mistakes, plus a short summary.
+const GUIDE_SUMMARY = {
+  "how-much-does-car-transport-cost": [
+    { h: "Common mistakes to avoid", p: ["The most common problems come from missing details. A car described as a runner that won't start on the day may need a different vehicle. A collection from an underground car park with a low height limit may not be possible for a large transporter. Keys left with the wrong person, or a dealer who hasn't released the car, can delay the job. Check these points before you book, and update your job if anything changes."] },
+    { h: "In summary", p: ["The cost of car transport depends on distance, the size and condition of the car, open or enclosed transport, access at both ends and how soon you need it moved. Give drivers accurate details, choose the booking type that suits you, and you'll get a price that reflects your exact job."] },
+  ],
+  "how-much-do-house-removals-cost": [
+    { h: "A worked example", p: ["Imagine two moves of the same distance. In the first, a two-bedroom flat on the ground floor is moving to a house with a driveway, with everything packed and furniture dismantled. In the second, a two-bedroom flat on the third floor with no lift is moving to a street with no parking, and packing isn't finished. The second move takes much longer, needs more help and is likely to cost more, even though the distance is the same. That's why describing access and readiness matters so much."] },
+    { h: "In summary", p: ["Removal costs depend on how much you're moving, the distance, access at both properties, the number of movers, the vehicle and your date. Clear details and good preparation help you get an accurate price."] },
+  ],
+  "house-move-checklist": [
+    { h: "Common mistakes to avoid", p: ["Leaving packing until the last day is the most common problem, followed by forgetting to check parking at the new address. Other mistakes include packing keys, documents or chargers in the van, not measuring large furniture against new doorways, and forgetting the loft, shed or garage. Working through this checklist a little at a time helps you avoid all of them."] },
+    { h: "In summary", p: ["Book early, clear out, pack room by room and keep essentials with you. Confirm details with your driver, check access at both ends and follow your driver live on the day."] },
+  ],
+  "how-to-collect-a-marketplace-or-ebay-purchase": [
+    { h: "Common mistakes to avoid", p: ["Buyers sometimes book before confirming the item's size, only to find it won't fit the vehicle or their front door. Others forget to tell the seller a driver is coming, or give a collection window the seller can't make. Paying outside the platform's protection can also leave you at risk. Confirm details with the seller first, measure carefully and keep payment safe."] },
+    { h: "In summary", p: ["Agree collection details with the seller, measure the item and your home, describe the job clearly and choose ASAP Transport, a Bid Job or a Fixed Price Job. You can follow the driver live and get photo proof when it arrives."] },
+  ],
+  "how-to-choose-a-courier-or-man-and-van": [
+    { h: "In summary", p: ["Choose a courier for smaller items and a man and van for bulky items or small moves. Match the vehicle to the job, look for clear pricing, verified drivers, live tracking and photo proof of delivery, and describe your job in detail. Then pick ASAP Transport for urgent jobs, or a Bid Job or Fixed Price Job for planned ones. Taking a few minutes to describe the job properly is the simplest way to make sure the right driver and vehicle turn up."] },
+  ],
+  "what-to-do-if-your-car-breaks-down": [
+    { h: "Be prepared before you travel", p: ["A little preparation can help if you do break down. Keep your phone charged, and carry a warm layer, water and a torch in the car. A reflective jacket is useful on any journey. Check tyres, oil, coolant and lights regularly, and plan longer trips so you know where services and junctions are."] },
+    { h: "In summary", p: ["Safety comes first: get to a safe place, switch on your hazard lights and call 999 if anyone is in danger. Once you're safe, book ASAP Recovery with clear details, wait somewhere away from traffic and follow your recovery driver live."] },
+  ],
+  "how-to-transport-a-non-running-car": [
+    { h: "Common mistakes to avoid", p: ["The most common problem is describing a car as a runner when it isn't, or not mentioning that it won't roll. Others include forgetting height limits in car parks, not having keys available, and not checking the drop-off address is open. Clear photos and an honest description solve most of these."] },
+    { h: "In summary", p: ["Describe what works and what doesn't, check access for loading, prepare the car and paperwork, and plan the drop-off. Book ASAP Recovery if it's urgent, or schedule it as a Bid Job or Fixed Price Job if not."] },
+  ],
+  "moving-a-static-or-touring-caravan": [
+    { h: "Common mistakes to avoid", p: ["The most common problems are underestimating the size or weight, not checking gate widths and overhead cables, and booking a date the park doesn't allow. With touring caravans, flat or perished tyres and seized brakes after storage often cause delays. For static caravans, not confirming who is preparing the unit can hold up the move. Checking these points early saves time on the day."] },
+    { h: "Questions to ask the park or site", p: ["Before you book, ask the park or site:"], list: ["When are caravans allowed to be moved in or out?", "Who disconnects services and removes skirting?", "Is there a site contact for the day?", "Are there any vehicle size limits on site roads?"] },
+    { h: "In summary", p: ["Know your caravan's size and weight, check it's ready to move, plan access at both sites and follow park rules. Post your job with full details and photos, and approved drivers with suitable vehicles can quote."] },
+  ],
+  "shipping-container-transport-guide": [
+    { h: "Common mistakes to avoid", p: ["The most common problems are soft ground, overhead cables near the drop spot and not enough room for the vehicle to manoeuvre. Others include forgetting the doors need space to open, not confirming the exact container size, and not telling drivers the container is loaded. Photos of the site and accurate details avoid most of these."] },
+    { h: "Questions to ask before buying", p: ["If you're buying a container, ask the seller:"], list: ["What size and height is it?", "Is it wind and watertight?", "Can it be loaded at the depot or site?", "Are there any collection times or access limits?"] },
+    { h: "In summary", p: ["Check the size and weight, plan how it will be unloaded, prepare a firm and level site and post your job with photos. Approved drivers with suitable vehicles can then send quotes."] },
+  ],
+  "bid-jobs-vs-fixed-price-jobs": [
+    { h: "Quick comparison", p: ["Here's a simple way to decide:"], list: ["Want to compare offers? Choose a Bid Job.", "Know what you want to pay? Choose a Fixed Price Job.", "Need it moved now? Choose ASAP Transport.", "Broken down? Get safe, then choose ASAP Recovery."] },
+    { h: "In summary", p: ["Bid Jobs let drivers send quotes so you can compare. Fixed Price Jobs let you set the price and a driver accepts it. Both suit planned jobs, while ASAP Transport and ASAP Recovery are for jobs that need doing now. Whichever you choose, clear details, photos and accurate sizes make your job easier for drivers to quote or accept."] },
+  ],
+  "preparing-items-for-a-courier": [
+    { h: "Common mistakes to avoid", p: ["The most common problems are underestimating sizes, using weak or oversized boxes and forgetting to mention stairs or parking. Others include leaving items unpacked when the driver arrives and not telling the recipient a delivery is on the way. A quick check through this guide before booking avoids most of them."] },
+    { h: "A quick checklist", p: ["Before the driver arrives:"], list: ["Everything packed, sealed and labelled", "Fragile items wrapped and marked", "Sizes and weights added to the job", "Access and parking notes up to date", "Someone ready at pickup and drop-off"] },
+    { h: "In summary", p: ["Pack items securely, measure and weigh them, label clearly and describe access at both ends. Then choose ASAP Transport, a Bid Job or a Fixed Price Job and follow your driver live."] },
+  ],
+};
+
+// Final extra section and FAQ per guide.
+const GUIDE_FINAL = {
+  "how-much-does-furniture-delivery-cost": [{ h: "Delivering to someone else", p: ["If the furniture is a gift or going to a family member, add their name and phone number to the job and let them know a driver is coming. Make sure they know where the item should go in the home and whether they need to help carry. You can still follow the driver live and get photo proof when it's delivered, even if you're not there yourself."] }, { q: "Can I add a second item after booking?", a: "Update your job with the new item and its size before the driver accepts, so they can check it fits." }],
+  "how-much-does-car-transport-cost": [{ h: "Moving more than one vehicle", p: ["If you need two or more cars moved, say so in a single job or post separate jobs for each one. Some transporters can carry more than one car, which may suit dealers or people moving home with two vehicles. Give the details for each car, including whether it runs, so drivers can check what they can carry."] }, { q: "Do you move vans and motorbikes too?", a: "Yes. See our van transport and motorbike transport pages, or describe the vehicle when you book." }],
+  "how-much-do-house-removals-cost": [{ h: "Moving white goods and heavy items", p: ["Washing machines, fridges, freezers, pianos and gym equipment are heavy and awkward. Disconnect appliances ahead of time, drain washing machines and defrost freezers. Tell drivers about any very heavy items so they can bring enough help and suitable equipment, such as a van with a tail lift."] }, { q: "Can I move on the same day I book?", a: "For small moves, ASAP Transport sends your job to nearby drivers who are online. Larger moves are best booked ahead." }],
+  "house-move-checklist": [{ h: "Useful things to have on the day", p: ["A few small items make moving day easier: a roll of tape, scissors, a marker pen, bin bags, cleaning cloths, a basic toolkit, light bulbs, phone chargers and plenty of water and snacks. Keep them together in a clearly labelled bag or box that travels with you, not in the van."] }, { q: "Should I clean before I leave?", a: "Yes, especially if you're renting. Leave cleaning products and cloths out until last so you can do a final clean once the van is loaded." }],
+  "how-to-collect-a-marketplace-or-ebay-purchase": [{ h: "Booking a collection from further away", p: ["Sometimes the best deal is in another town or city. Longer collections are still simple to book, but think about timing. A flexible date gives drivers more chance to fit your job in, and a Bid Job lets you compare quotes for longer journeys. Check the seller is happy to hold the item until the collection date."] }, { q: "What if the seller cancels?", a: "Contact the driver as soon as you can through the app and update or cancel the job." }],
+  "how-to-choose-a-courier-or-man-and-van": [{ h: "Same-day and urgent jobs", p: ["When something needs moving today, speed matters. ASAP Transport sends your job to nearby drivers who are online, and you see when one accepts. Describe the job clearly so the first driver to accept has the right vehicle. For broken-down vehicles, ASAP Recovery works the same way with recovery drivers."] }, { q: "Can I message the driver?", a: "Once a driver accepts, you can keep in touch through the app and follow them live on the map." }, { q: "What if my job is unusual?", a: "Post it as a Bid Job with full details and photos, and approved drivers with suitable vehicles can send quotes." }],
+  "what-to-do-if-your-car-breaks-down": [{ h: "After a collision", p: ["If you've been in a collision, check everyone is safe and call 999 if anyone is injured or the road is blocked. Exchange details with other drivers involved. Once the police or emergency services have done what they need to and it's safe, you can arrange recovery of your vehicle."] }, { q: "What details should I give when I book recovery?", a: "Your exact location, the vehicle's make and model, what's wrong, whether it rolls and steers, and where you want it taken." }],
+  "how-to-transport-a-non-running-car": [{ h: "Taking a car to a garage", p: ["If the car is going for repair, call the garage first to check they can accept it and when. Tell them it's arriving on a recovery vehicle and agree where it should be left and what happens with the keys. Add the garage's contact details to your job."] }, { q: "Can a non-runner be delivered to my driveway?", a: "Yes, if there's space for the vehicle to unload. Add access notes and photos of the driveway." }],
+  "moving-a-static-or-touring-caravan": [{ h: "Insurance and paperwork", p: ["Check your own caravan insurance before the move, and keep any paperwork, such as purchase documents or park agreements, with you. For static caravans, the park may need confirmation of the move date and the vehicle coming onto site. Having this ready avoids delays at the gate."] }, { q: "Do you move trailer tents and folding campers?", a: "Yes. Choose caravan transport and describe the trailer, its size and how it hitches." }, { q: "Can a static caravan be moved onto private land?", a: "Often, if there's suitable access and any permissions you need are in place. Contact us first for very large units." }],
+  "shipping-container-transport-guide": [{ h: "Containers on building sites", p: ["Building sites often use containers for tool storage and welfare. Sites usually have delivery booking times, a banksman to guide vehicles and rules about where vehicles can go. Add the site manager's contact details and the delivery booking reference to your job so the driver can get on and off site safely."] }, { q: "Can you collect a container from a port?", a: "Add the collection details, release reference and terminal rules, and drivers with suitable vehicles can check whether they can take the job." }, { q: "Can you move site offices and welfare units?", a: "Yes. Describe the unit, its size and weight, and how it will be lifted." }],
+  "bid-jobs-vs-fixed-price-jobs": [{ h: "Using both for a business", p: ["Businesses often use both. Fixed Price Jobs work well for regular runs where you know the price you want to pay. Bid Jobs work well for one-off or larger jobs, such as moving stock between sites or delivering equipment to an event. ASAP Transport is there for urgent deliveries that can't wait."] }, { q: "Are drivers checked for both booking types?", a: "Yes. Drivers are checked before they can take any jobs, whichever booking type you choose." }, { q: "Can I post a Bid Job for a specialist load?", a: "Yes. Approved drivers with suitable vehicles can send quotes. Add full details and photos." }],
+  "preparing-items-for-a-courier": [{ h: "Preparing large furniture", p: ["Empty drawers and cupboards before the driver arrives, as full furniture is heavier and can break. Remove glass shelves and pack them separately. Tape doors and drawers closed with low-tack tape, and wrap furniture in blankets to protect corners. Keep fixings from dismantled items in a labelled bag."] }, { q: "Can a driver collect from one place and deliver to several?", a: "Yes. Add each drop-off as a stop and label items with the address they're going to." }, { q: "Do I need to be at the pickup?", a: "Someone should be there to hand over the items. Add their contact details if it isn't you." }],
+};
+
+const GUIDE_LAST_FAQS = {
+  "bid-jobs-vs-fixed-price-jobs": [{ q: "Which booking type is quickest to arrange?", a: "For jobs that need doing now, ASAP Transport is quickest because it goes straight to nearby drivers who are online. For planned jobs, a clear Fixed Price Job is simple for drivers to accept." }],
+  "how-to-choose-a-courier-or-man-and-van": [{ q: "Should I choose the cheapest quote?", a: "Price matters, but so does the right vehicle, clear details of what's included and a verified driver. Read each quote carefully before you choose." }, { q: "Can a man and van help with a small office move?", a: "Yes, for smaller office moves. For larger moves with lots of furniture and IT equipment, see office removals." }],
+  "how-to-collect-a-marketplace-or-ebay-purchase": [{ q: "Can the driver bring the item into my home?", a: "Say where the item needs to go, including floors and stairs, and whether you need help carrying. Drivers see this before they accept." }, { q: "What if the item is fragile?", a: "Mark the job as fragile, describe the item and ask the seller to wrap it if possible." }],
+  "how-to-transport-a-non-running-car": [{ q: "Can a car with flat tyres be moved?", a: "Usually yes, but say so in the job. Drivers may need skates or extra equipment to load it." }, { q: "Can you take a non-runner to a scrapyard?", a: "Yes. Add the scrapyard's address and opening hours, and use an authorised treatment facility." }, { q: "Do I need to be there at collection?", a: "Someone should hand over the keys and confirm the car. Add their contact details if it isn't you." }],
+  "moving-a-static-or-touring-caravan": [{ q: "Can you tow a caravan to a workshop for a service?", a: "Yes. Add the workshop's address and opening times, and any booking reference they've given you." }, { q: "What if the caravan hasn't moved for years?", a: "Check the tyres, brakes and hitch, and describe their condition. A driver may need to carry it rather than tow it." }, { q: "Can the move be booked for a weekend?", a: "Pick the date that suits you and the park. Some parks have rules about weekend moves, so check first." }],
+  "preparing-items-for-a-courier": [{ q: "How should I pack a television?", a: "Use the original box if you have it. Otherwise, wrap the screen in a blanket, protect the corners and keep it upright." }, { q: "Can I send a single box?", a: "Yes. See our parcel delivery and same-day courier pages for smaller items." }, { q: "What if I can't lift heavy boxes?", a: "Say so in the job and ask for help carrying, so drivers can plan for it." }],
+  "shipping-container-transport-guide": [{ q: "Can a container be placed next to a building?", a: "Often yes, if there's room for the crane and no overhead obstacles. Add photos so drivers can check." }, { q: "Can you deliver to a business park?", a: "Yes. Add site rules, delivery times and a site contact." }, { q: "How do I describe the drop spot?", a: "Add photos, the ground surface, the distance from the road and anything overhead such as cables or trees." }],
+  "what-to-do-if-your-car-breaks-down": [{ q: "Is it safe to stay in my car?", a: "Usually it's safer to get out and stand behind a barrier, away from traffic. If you can't get out safely, stay in with your seatbelt on and hazard lights on, and call 999." }],
+};
+
+export const GUIDES = GUIDES_BASE.map((g) => {
+  const [extraSection, ...extraFaqs] = GUIDE_FINAL[g.slug];
+  return { ...g, sections: [...g.sections, ...GUIDE_MORE[g.slug].sections, extraSection, ...(GUIDE_SUMMARY[g.slug] || [])], faqs: [...g.faqs, ...GUIDE_MORE[g.slug].faqs, ...extraFaqs, ...(GUIDE_LAST_FAQS[g.slug] || [])] };
+});
+
+export const GUIDE_BY_SLUG = Object.fromEntries(GUIDES.map((g) => [g.slug, g]));
+
+export const GUIDES_INDEX_SEO = {
+  path: "/guides",
+  title: "Moving and Delivery Guides | Cargo One",
+  h1: "Moving and delivery guides",
+  intro: "Practical guides to help you plan moves, deliveries and vehicle recovery, from what affects the cost to how to prepare on the day.",
+  description: "Practical guides on moving home, furniture delivery, car transport, breakdowns and preparing items for a courier, plus how Cargo One booking types work.",
+};
+
+export const GUIDES_INDEX_FAQS = [
+  { q: "Do these guides include prices?", a: "No. Every job is different, so the guides explain what affects the cost. Enter your job details to see a price for your exact job." },
+  { q: "Which booking types can I use?", a: "ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs. The Bid Jobs vs Fixed Price Jobs guide explains which to choose." },
+  { q: "I've broken down. What should I do first?", a: "Get to a safe place and switch on your hazard lights. If anyone is in danger, call 999. Then you can book ASAP Recovery 24/7." },
+];
+
+export function guideSeo(g) {
+  return { path: `/guides/${g.slug}`, title: g.title, h1: g.h1, intro: g.intro, description: g.description };
+}
+
+export function guideJsonLd(g, image) {
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: g.h1,
+      description: g.description,
+      image: image.startsWith("http") ? image : `${SITE_URL}${image}`,
+      author: { "@type": "Organization", name: "Cargo One", url: SITE_URL },
+      publisher: { "@type": "Organization", name: "Cargo One", url: SITE_URL },
+      mainEntityOfPage: `${SITE_URL}/guides/${g.slug}`,
+    },
+    faqJsonLd(g.faqs),
+    breadcrumbJsonLd([["Home", "/"], ["Guides", "/guides"], [g.h1, `/guides/${g.slug}`]]),
+  ];
+}
+
+export function guidesIndexJsonLd() {
+  return [faqJsonLd(GUIDES_INDEX_FAQS), breadcrumbJsonLd([["Home", "/"], ["Guides", "/guides"]])];
 }

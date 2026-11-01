@@ -17,7 +17,8 @@ import { PlaceHub, PlaceService } from "@/pages/marketing/LocalPlaces";
 import { PlaceDriverJobs } from "@/pages/marketing/DriverPlaces";
 import ExtraServiceLanding from "@/pages/marketing/ExtraServiceLanding";
 import { BoroughHub, LondonAreas } from "@/pages/marketing/LondonBoroughs";
-import { EXTRA_SERVICE_PAGES, LOCAL_PLACES, LONDON_AREAS_PATH, LONDON_BOROUGHS, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
+import { GuideArticle, GuidesIndex } from "@/pages/marketing/Guides";
+import { EXTRA_SERVICE_PAGES, GUIDES, LOCAL_PLACES, LONDON_AREAS_PATH, LONDON_BOROUGHS, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
 import Business from "@/pages/marketing/Business";
 import Drivers from "@/pages/marketing/Drivers";
 import FAQ from "@/pages/marketing/FAQ";
@@ -143,6 +144,8 @@ export default function App() {
             {EXTRA_SERVICE_PAGES.map((s) => <Route key={`extra-svc-${s.slug}`} path={`/services/${s.slug}`} element={<Marketing Page={ExtraServiceLanding} />} />)}
             <Route path={LONDON_AREAS_PATH} element={<Marketing Page={LondonAreas} />} />
             {LONDON_BOROUGHS.map((b) => <Route key={`borough-${b.slug}`} path={`/couriers/london/${b.slug}`} element={<Marketing Page={BoroughHub} />} />)}
+            <Route path="/guides" element={<Marketing Page={GuidesIndex} />} />
+            {GUIDES.map((g) => <Route key={`guide-${g.slug}`} path={`/guides/${g.slug}`} element={<Marketing Page={GuideArticle} />} />)}
             <Route path="/faq" element={<Marketing Page={FAQ} />} />
             <Route path="/contact" element={<Marketing Page={Contact} />} />
             <Route path="/trust-safety" element={<Marketing Page={TrustSafety} />} />

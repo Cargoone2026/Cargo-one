@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { ArrowRight, MapPin, Route } from "lucide-react";
+import { ArrowRight, ExternalLink, MapPin, Route } from "lucide-react";
 import { Hero } from "@/components/marketing/Hero";
 import { IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
@@ -36,7 +36,14 @@ export function BoroughHub() {
             <h2 className="mt-6 text-[20px] font-bold text-[#111111]">Main roads</h2>
             <Chips items={b.roads} icon={Route} testId="borough-road-chips" />
           </div>
-          <Access city={{ ...b, cleanAir: LONDON.cleanAir }} notes={[b.parking, `Popular shopping areas include ${b.retail.join(", ")}.`]} />
+          <div>
+            <Access city={{ ...b, cleanAir: LONDON.cleanAir }} notes={[b.parking, `Popular shopping areas include ${b.retail.join(", ")}.`]} />
+            {b.tfl ? (
+              <a href={b.tfl.url} target="_blank" rel="noopener noreferrer" data-testid="borough-tfl-link" className="mt-3 inline-flex items-center gap-1 text-[14px] font-semibold text-[#D62828] underline">
+                {b.tfl.label} <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            ) : null}
+          </div>
         </div>
       </Section>
       <Faqs faqs={faqs} />

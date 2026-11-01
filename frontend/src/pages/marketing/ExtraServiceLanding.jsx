@@ -5,7 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
-import { ALL_SERVICE_BY_SLUG, EXTRA_SERVICE_BY_SLUG, PLACE_SERVICE_PAIRS, serviceJsonLd, serviceSeo } from "@/data/seo";
+import { ALL_SERVICE_BY_SLUG, EXTRA_SERVICE_BY_SLUG, PLACE_SERVICE_PAIRS, extraServiceSeo, serviceJsonLd } from "@/data/seo";
 import { QuoteButton, pathParts } from "@/pages/marketing/LocalPlaces";
 
 // Same layout as ServiceLanding.jsx, driven by EXTRA_SERVICE_PAGES (SEO Phase 3 · Batch 2).
@@ -21,7 +21,7 @@ export default function ExtraServiceLanding() {
   const [, slug] = pathParts(useLocation().pathname);
   const service = EXTRA_SERVICE_BY_SLUG[slug];
   if (!service) return <Navigate to="/services" replace />;
-  const seo = serviceSeo(service);
+  const seo = extraServiceSeo(service);
   const image = service.heroImage || CATEGORY_IMAGES[service.image] || IMG.heroServices;
   return (
     <div data-testid={`service-page-${service.slug}`}>
