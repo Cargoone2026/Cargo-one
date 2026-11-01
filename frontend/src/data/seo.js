@@ -1350,7 +1350,7 @@ export const LOCAL_PLACES = [
     parking: "Bradford is built on steep hills, and terraced streets in areas like Heaton and Thornton can be narrow, so check where a vehicle can stop.",
     cleanAir: { text: "Bradford has a Clean Air Zone inside the Outer Ring Road and along parts of the Aire Valley. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
     character: "Bradford is a West Yorkshire city linked to the M62 by the M606, with Saltaire and the Aire Valley to the north.",
-    nearby: [["leeds", "A647 or A650"], ["manchester", "M62"], ["hull", "M62 and A63"], ["birmingham", "M62 and M1"]],
+    nearby: [["leeds", "A647 or A650"], ["manchester", "M62"], ["hull", "M62 and A63"], ["sheffield", "M62 and M1"]],
     localFaq: { q: "Do you cover Shipley, Saltaire and Bingley?", a: "Yes. Drivers cover all of Bradford, including Shipley, Saltaire, Bingley and Keighley." },
     driver: null,
   },
@@ -1364,7 +1364,7 @@ export const LOCAL_PLACES = [
     parking: "Hull's Old Town has narrow cobbled streets, and the A63 through the city centre can be busy, so plan timings and where to stop.",
     cleanAir: null,
     character: "Hull sits on the Humber Estuary at the end of the M62 and A63, with a busy port to the east of the city.",
-    nearby: [["leeds", "A63 and M62"], ["bradford", "A63 and M62"], ["sheffield", "M62 and M18"], ["birmingham", "M62, M18 and M1"]],
+    nearby: [["leeds", "A63 and M62"], ["bradford", "A63 and M62"], ["sheffield", "M62 and M18"]],
     localFaq: { q: "Can I book a move across the Humber Bridge?", a: "Yes. Enter your pickup and drop-off and you'll see your price, including jobs to and from North Lincolnshire." },
     driver: { note: "Hull jobs run along the A63 and M62, with port and industrial work around the docks and Saltend.", faq: { q: "Are there jobs around the Port of Hull?", a: "Customers post all kinds of jobs, which can include collections and deliveries around the port and Saltend. Read the job details and access notes before you bid." } },
   },
@@ -1378,7 +1378,7 @@ export const LOCAL_PLACES = [
     parking: "Edinburgh's Old Town has steep, cobbled streets and much of the city has controlled parking, so plan where the driver can stop.",
     cleanAir: { text: "Edinburgh has a Low Emission Zone in the city centre. Check whether your vehicle is affected.", url: "https://www.lowemissionzones.scot/", label: "Low Emission Zones Scotland" },
     character: "Edinburgh is Scotland's capital, ringed by the A720 City Bypass, with Leith and the Firth of Forth to the north.",
-    nearby: [["glasgow", "M8"], ["aberdeen", "M90 and A90"], ["newcastle", "A1"], ["birmingham", "A702, A74(M) and M6"]],
+    nearby: [["glasgow", "M8"], ["newcastle", "A1"], ["aberdeen", "M90 and A90"]],
     localFaq: { q: "Do you cover Leith, Musselburgh and the Lothians?", a: "Yes. Drivers cover all of Edinburgh, plus Leith, Musselburgh, Dalkeith, Livingston and nearby towns." },
     driver: null,
   },
@@ -1392,7 +1392,7 @@ export const LOCAL_PLACES = [
     parking: "Much of Cardiff city centre around Queen Street is pedestrianised and has bus lanes, while suburbs like Whitchurch and Llandaff are usually easier for loading.",
     cleanAir: null,
     character: "Cardiff is the capital of Wales, between the M4 to the north and Cardiff Bay to the south.",
-    nearby: [["swansea", "M4"], ["bristol", "M4"], ["plymouth", "M4 and M5"], ["birmingham", "A449, M50 and M5"]],
+    nearby: [["swansea", "M4"], ["bristol", "M4"], ["plymouth", "M4 and M5"]],
     localFaq: { q: "Do you cover Penarth, Barry and the Valleys?", a: "Yes. Drivers cover all of Cardiff and nearby places like Penarth, Barry, Caerphilly and Pontypridd." },
     driver: null,
   },
@@ -1406,7 +1406,7 @@ export const LOCAL_PLACES = [
     parking: "Traffic around the docks can be heavy on cruise days, and the Itchen Bridge is tolled, so plan the route and timings.",
     cleanAir: null,
     character: "Southampton is a port city on the M27 and M3, home to busy cruise and container docks.",
-    nearby: [["portsmouth", "M27"], ["oxford", "A34"], ["reading", "M3 and A33"], ["brighton", "M27 and A27"], ["birmingham", "A34 and M40"]],
+    nearby: [["portsmouth", "M27"], ["oxford", "A34"], ["reading", "M3 and A33"], ["brighton", "M27 and A27"]],
     localFaq: { q: "Can you collect from or deliver to the docks?", a: "Yes. Add the terminal or gate, any booking reference and access times so the driver knows where to go." },
     driver: null,
   },
@@ -1420,7 +1420,7 @@ export const LOCAL_PLACES = [
     parking: "Portsea Island has dense terraced streets with tight parking, and most traffic comes on and off the island via the M275, A3 and A2030.",
     cleanAir: { text: "Portsmouth has a Clean Air Zone in the south-west of Portsea Island. Check whether your vehicle is affected.", url: GOV_CAZ, label: "GOV.UK Clean Air Zone checker" },
     character: "Portsmouth is an island city on the south coast, with a naval base and ferry port and the M275 linking it to the M27.",
-    nearby: [["southampton", "M27"], ["brighton", "A27"], ["london", "A3(M) and A3"], ["birmingham", "A34 and M40"]],
+    nearby: [["southampton", "M27"], ["brighton", "A27"], ["london", "A3(M) and A3"]],
     localFaq: { q: "Can you collect from the ferry port?", a: "Yes. Add the terminal, any booking reference and arrival times so the driver knows where to meet you." },
     driver: { note: "Portsmouth jobs run off the M275 and A27, with the M27 linking to Southampton.", faq: { q: "Is getting on and off Portsea Island slow?", a: "The M275, A3 and A2030 are the main routes on and off the island and can be busy at peak times. Plan your timings and price accordingly." } },
   },
@@ -1434,7 +1434,7 @@ export const LOCAL_PLACES = [
     parking: "Reading's inner distribution road has bus lanes and busy junctions, and the Thames bridges to Caversham can be slow at peak times.",
     cleanAir: null,
     character: "Reading is a large Berkshire town on the M4 and the River Thames, with business parks at Green Park and Thames Valley Park.",
-    nearby: [["london", "M4"], ["oxford", "A4074"], ["southampton", "A33 and M3"], ["birmingham", "A34 and M40"]],
+    nearby: [["london", "M4"], ["oxford", "A4074"], ["southampton", "A33 and M3"]],
     localFaq: { q: "Do you cover Wokingham, Bracknell and Newbury?", a: "Yes. Drivers cover all of Reading and nearby places like Wokingham, Bracknell, Theale and Newbury." },
     driver: null,
   },
@@ -1462,7 +1462,7 @@ export const LOCAL_PLACES = [
     parking: "The Barbican has narrow cobbled streets and Plymouth is hilly, so add access notes for steep driveways and tight streets.",
     cleanAir: null,
     character: "Plymouth is a Devon port city on the A38, with the Tamar Bridge into Cornwall to the west.",
-    nearby: [["bristol", "A38 and M5"], ["cardiff", "M5 and M4"], ["birmingham", "A38 and M5"]],
+    nearby: [["bristol", "A38 and M5"], ["swansea", "M5 and M4"], ["cardiff", "M5 and M4"]],
     localFaq: { q: "Do you cover Cornwall from Plymouth?", a: "Yes. Enter a pickup or drop-off in Cornwall and you'll see your price. Jobs often cross the Tamar Bridge on the A38." },
     driver: { note: "Plymouth jobs run along the A38 Devon Expressway, with the Tamar Bridge into Cornwall.", faq: { q: "Do I pay the Tamar Bridge toll?", a: "The Tamar Bridge toll is charged travelling east from Cornwall into Devon. If a job uses it, include the cost in your price." } },
   },
@@ -1476,7 +1476,7 @@ export const LOCAL_PLACES = [
     parking: "Areas like Uplands and Townhill have steep, narrow streets, and Mumbles Road can be busy in summer, so plan where the driver can stop.",
     cleanAir: null,
     character: "Swansea is a coastal city on Swansea Bay in South Wales, at the western end of the M4.",
-    nearby: [["cardiff", "M4"], ["bristol", "M4"], ["birmingham", "M4 and M5"]],
+    nearby: [["cardiff", "M4"], ["bristol", "M4"], ["plymouth", "M4 and M5"]],
     localFaq: { q: "Do you cover Gower, Neath and Llanelli?", a: "Yes. Drivers cover all of Swansea plus nearby places like Gower, Neath, Port Talbot and Llanelli." },
     driver: { note: "Swansea jobs run along the M4 between junctions 42 and 47, with Cardiff further east.", faq: { q: "Can I take jobs between Swansea and Cardiff?", a: "Yes. The M4 links Swansea and Cardiff, and you choose which jobs to bid on or accept." } },
   },
@@ -1504,7 +1504,7 @@ export const LOCAL_PLACES = [
     parking: "Most of Brighton and Hove has controlled parking, and streets in Hanover and the Lanes are narrow and steep, so plan where the driver can stop.",
     cleanAir: null,
     character: "Brighton is a seaside city on the south coast, linked to London by the A23 and M23, with the A27 along the South Downs.",
-    nearby: [["london", "A23 and M23"], ["portsmouth", "A27"], ["southampton", "A27 and M27"], ["birmingham", "M23, M25 and M40"]],
+    nearby: [["london", "A23 and M23"], ["southampton", "A27 and M27"], ["portsmouth", "A27"]],
     localFaq: { q: "Do you cover Hove, Shoreham and Lewes?", a: "Yes. Drivers cover all of Brighton and Hove and nearby places like Shoreham-by-Sea, Lewes and Worthing." },
     driver: null,
   },
@@ -1518,7 +1518,7 @@ export const LOCAL_PLACES = [
     parking: "Aberdeen city centre has bus gates and restricted streets around Union Street, while suburbs like Cults and Westhill are usually easier for loading.",
     cleanAir: { text: "Aberdeen has a Low Emission Zone in the city centre. Check whether your vehicle is affected.", url: "https://www.lowemissionzones.scot/", label: "Low Emission Zones Scotland" },
     character: "Aberdeen is a North Sea port city in the north-east of Scotland, with the Aberdeen Western Peripheral Route to the west.",
-    nearby: [["edinburgh", "A90 and M90"], ["glasgow", "A90, A9 and M80"], ["birmingham", "A90, M74 and M6"]],
+    nearby: [["edinburgh", "A90 and M90"], ["glasgow", "A90, A9 and M80"]],
     localFaq: { q: "Do you cover Westhill, Dyce and Aberdeenshire towns?", a: "Yes. Drivers cover all of Aberdeen and nearby places like Westhill, Dyce, Portlethen and Inverurie." },
     driver: { note: "Aberdeen jobs run along the AWPR, A90 and A96, with industrial work around Altens, Tullos and Dyce.", faq: { q: "Do I need to know about the Low Emission Zone?", a: "Aberdeen has a Low Emission Zone in the city centre. Check your vehicle meets the standards before taking jobs inside it." } },
   },
@@ -1610,4 +1610,178 @@ export function placeDriverRelated(c) {
   return LOCAL_PLACE_BY_SLUG[c.slug].nearby
     .map(([slug]) => PLACE_DRIVER_CITY_BY_SLUG[slug] || DRIVER_CITY_BY_SLUG[slug])
     .filter(Boolean);
+}
+
+// ---------- SEO Phase 3 · Batch 4: London boroughs (/couriers/london/{borough}) ----------
+const borough = (slug, name, o) => ({ slug, name, region: "London", ...o });
+
+export const LONDON_BOROUGHS = [
+  borough("croydon", "Croydon", {
+    districts: ["Croydon town centre", "Purley", "Thornton Heath", "Norbury", "South Norwood", "Addiscombe", "Coulsdon", "New Addington"],
+    retail: ["Centrale and the Whitgift Centre", "the Purley Way retail parks", "North End"],
+    roads: ["A23 Purley Way", "A232", "A212", "A22 towards the M25"],
+    parking: "Croydon town centre has tram lines, bus lanes and pedestrian streets around North End, so loading is easier from side streets or a car park.",
+    character: "Croydon is a large south London borough with a busy town centre, the Purley Way retail strip and quick links to the M25.",
+    localFaq: { q: "Can you collect from the Purley Way retail parks?", a: "Yes. Add the store name and any collection reference, and a driver can collect and deliver to your home." },
+  }),
+  borough("barnet", "Barnet", {
+    districts: ["Chipping Barnet", "Finchley", "Hendon", "Golders Green", "Edgware", "Mill Hill", "Whetstone", "Colindale"],
+    retail: ["Brent Cross Shopping Centre", "The Spires in Barnet", "Golders Green Road"],
+    roads: ["A406 North Circular", "A1", "A41", "the start of the M1"],
+    parking: "Many streets in Finchley and Golders Green have controlled parking, and the North Circular around Brent Cross can be slow at peak times.",
+    character: "Barnet is a large north London borough running from the North Circular to the Hertfordshire border, where the M1 and A1 head north.",
+    localFaq: { q: "Do you cover Brent Cross and Colindale?", a: "Yes. Drivers cover all of Barnet, including Brent Cross, Colindale, Hendon and the streets off the A41 and A1." },
+  }),
+  borough("ealing", "Ealing", {
+    districts: ["Ealing Broadway", "Acton", "Southall", "Hanwell", "Greenford", "Northolt", "Perivale"],
+    retail: ["the Ealing Broadway Centre", "Southall Broadway", "Westway Cross in Greenford"],
+    roads: ["A40 Western Avenue", "A406 North Circular", "A4020 Uxbridge Road", "M4"],
+    parking: "Ealing Broadway and Acton have bus lanes and controlled parking, while the industrial areas around Park Royal and Greenford usually have loading space.",
+    character: "Ealing is a west London borough on the A40 and North Circular, with Park Royal, one of London's biggest industrial areas, on its eastern edge.",
+    localFaq: { q: "Can you collect from Park Royal?", a: "Yes. Add the unit name, loading times and any booking reference so the driver can go straight to the right door." },
+  }),
+  borough("enfield", "Enfield", {
+    districts: ["Enfield Town", "Edmonton", "Palmers Green", "Southgate", "Winchmore Hill", "Ponders End", "Enfield Lock"],
+    retail: ["Palace Gardens in Enfield Town", "Edmonton Green", "the Southbury Road retail parks"],
+    roads: ["A10 Great Cambridge Road", "A406 North Circular", "M25 junctions 24 and 25", "A1055"],
+    parking: "The A10 and North Circular carry heavy traffic, while estates in Southgate and Winchmore Hill usually have room to load.",
+    character: "Enfield is London's northernmost borough, with the M25 along its edge and industrial estates around Brimsdown and the Lee Valley.",
+    localFaq: { q: "Do you cover Brimsdown and the Lee Valley?", a: "Yes. Drivers cover the whole borough, including the industrial estates at Brimsdown and along the Lee Valley." },
+  }),
+  borough("brent", "Brent", {
+    districts: ["Wembley", "Kilburn", "Willesden", "Harlesden", "Kingsbury", "Neasden", "Kensal Green"],
+    retail: ["London Designer Outlet", "Brent Park", "Kilburn High Road"],
+    roads: ["A406 North Circular", "A5 Edgware Road", "A40", "M1 at Staples Corner"],
+    parking: "On Wembley Stadium event days, roads and parking around Wembley are restricted, so check the date before you book.",
+    character: "Brent is a north-west London borough, home to Wembley Stadium and part of the Park Royal industrial area.",
+    localFaq: { q: "What happens on Wembley event days?", a: "Event-day parking and road restrictions apply around the stadium. Pick another day if you can, or add extra time and access notes to your job." },
+  }),
+  borough("newham", "Newham", {
+    districts: ["Stratford", "East Ham", "West Ham", "Canning Town", "Forest Gate", "Plaistow", "Beckton", "the Royal Docks"],
+    retail: ["Westfield Stratford City", "the Stratford Centre", "Gallions Reach Shopping Park"],
+    roads: ["A13", "A406 North Circular", "A12", "A118"],
+    parking: "Stratford and Canning Town have busy junctions and bus lanes, and events at ExCeL London and the Olympic Park can add traffic.",
+    character: "Newham is an east London borough covering Stratford, the Olympic Park and the Royal Docks, with the A13 and A12 running through.",
+    localFaq: { q: "Can you deliver to ExCeL London?", a: "Yes. Add the hall, stand number and the venue's delivery booking details so the driver can get to the right loading area." },
+  }),
+  borough("wandsworth", "Wandsworth", {
+    districts: ["Putney", "Battersea", "Balham", "Tooting", "Wandsworth Town", "Earlsfield", "Southfields", "Nine Elms"],
+    retail: ["Southside Wandsworth", "Battersea Power Station", "St John's Road at Clapham Junction"],
+    roads: ["A3", "A205 South Circular", "A24", "A214"],
+    parking: "Most streets in Wandsworth have controlled parking, and the Wandsworth one-way system can be slow, so add parking notes to your job.",
+    character: "Wandsworth is a south-west London borough on the Thames, from Putney and Battersea down to Tooting, with Clapham Junction station at its heart.",
+    localFaq: { q: "Can you deliver to the new flats at Nine Elms and Battersea?", a: "Yes. Add the building's loading bay, concierge details and any booking times for lifts." },
+  }),
+  borough("lambeth", "Lambeth", {
+    districts: ["Brixton", "Clapham", "Streatham", "Vauxhall", "Kennington", "Stockwell", "West Norwood", "Waterloo"],
+    retail: ["Brixton Village and Market", "Streatham High Road", "Clapham High Street"],
+    roads: ["A23", "A3", "A205 South Circular", "A202"],
+    parking: "The area around Waterloo is inside the Congestion Charge zone, and most Lambeth streets have controlled parking and bus lanes.",
+    character: "Lambeth is an inner south London borough stretching from Waterloo and the South Bank down through Brixton to Streatham.",
+    localFaq: { q: "Do you cover Brixton and Streatham?", a: "Yes. Drivers cover all of Lambeth, including Brixton, Streatham, Clapham, Vauxhall and Waterloo." },
+  }),
+  borough("southwark", "Southwark", {
+    districts: ["Bermondsey", "Peckham", "Camberwell", "Dulwich", "Borough", "Elephant and Castle", "Rotherhithe", "Walworth"],
+    retail: ["Surrey Quays Shopping Centre", "the Old Kent Road retail parks", "Rye Lane in Peckham"],
+    roads: ["A2 Old Kent Road", "A202", "A200", "A205 South Circular"],
+    parking: "The north of the borough, around Borough and London Bridge, is inside the Congestion Charge zone, and streets near Borough Market are narrow and busy.",
+    character: "Southwark is an inner south London borough on the Thames, from Borough and Bermondsey down to Peckham and Dulwich.",
+    localFaq: { q: "Can you collect from Old Kent Road stores?", a: "Yes. Add the store and any collection reference, and the driver can collect and deliver anywhere in London." },
+  }),
+  borough("hackney", "Hackney", {
+    districts: ["Shoreditch", "Dalston", "Hackney Central", "Stoke Newington", "Homerton", "Clapton", "Hoxton", "Hackney Wick"],
+    retail: ["Mare Street", "the Kingsland Shopping Centre", "Broadway Market"],
+    roads: ["A10 Kingsland Road", "A107", "A12", "A1207"],
+    parking: "Hackney has controlled parking across most streets, plus low-traffic areas where some roads are closed to through traffic, so check the route.",
+    character: "Hackney is an east London borough, from Shoreditch and Hoxton in the south to Stoke Newington and Clapton in the north.",
+    localFaq: { q: "Do low-traffic areas affect my booking?", a: "Some streets have closures to through traffic. Add access notes and the nearest open road, and the driver can plan the route." },
+  }),
+  borough("tower-hamlets", "Tower Hamlets", {
+    districts: ["Canary Wharf", "Whitechapel", "Bethnal Green", "Bow", "Poplar", "Wapping", "Limehouse", "Mile End", "the Isle of Dogs"],
+    retail: ["Canary Wharf", "Brick Lane", "Roman Road Market"],
+    roads: ["A13", "A11", "A12", "A1203 The Highway"],
+    parking: "Canary Wharf has its own estate roads and loading rules, and the Blackwall and Silvertown tunnels are charged, so plan the route.",
+    character: "Tower Hamlets is an east London borough on the Thames, from Whitechapel and Wapping to Canary Wharf and Bow.",
+    localFaq: { q: "Can you deliver to an office in Canary Wharf?", a: "Yes. Add the building, the loading bay and any security booking details so the driver can get in." },
+  }),
+  borough("islington", "Islington", {
+    districts: ["Angel", "Highbury", "Holloway", "Archway", "Finsbury Park", "Barnsbury", "Clerkenwell", "Canonbury"],
+    retail: ["Upper Street", "the Nag's Head on Holloway Road", "Chapel Market"],
+    roads: ["A1", "A501 City Road", "A503 Seven Sisters Road", "A1 Holloway Road"],
+    parking: "Islington is densely built, with controlled parking on almost every street, and match days at the Emirates Stadium add restrictions around Highbury and Holloway.",
+    character: "Islington is an inner north London borough, from Clerkenwell and Angel up to Highbury, Holloway and Archway.",
+    localFaq: { q: "What about Arsenal match days?", a: "Event-day restrictions apply around the Emirates Stadium. Pick another time if you can, or add access notes so the driver can plan." },
+  }),
+  borough("hillingdon", "Hillingdon", {
+    districts: ["Uxbridge", "Hayes", "Ruislip", "Northwood", "West Drayton", "Harefield", "Yiewsley", "Ickenham"],
+    retail: ["The Chimes in Uxbridge", "Ruislip High Street", "Hayes town centre"],
+    roads: ["M4", "M40", "M25", "A40"],
+    parking: "Roads around Heathrow are busy at all hours, while suburbs like Ruislip and Ickenham usually have driveways.",
+    character: "Hillingdon is London's westernmost borough, home to Heathrow Airport, with the M4, M40 and M25 all running through or along it.",
+    localFaq: { q: "Can you collect from or deliver near Heathrow?", a: "Yes. Add the exact address, cargo shed or unit, and any reference so the driver knows where to go." },
+  }),
+  borough("bromley", "Bromley", {
+    districts: ["Bromley town centre", "Beckenham", "Orpington", "Chislehurst", "Penge", "West Wickham", "Biggin Hill", "Petts Wood"],
+    retail: ["The Glades", "Bromley High Street", "Orpington High Street"],
+    roads: ["A21", "A232", "A20", "M25 junction 4"],
+    parking: "Bromley town centre has pedestrian areas around the High Street, while most of the borough is suburban with driveways.",
+    character: "Bromley is London's largest borough by area, running from Penge and Beckenham to the countryside around Biggin Hill.",
+    localFaq: { q: "Do you cover Biggin Hill and the villages?", a: "Yes. Drivers cover all of Bromley, including Biggin Hill, Downe and the villages towards the M25." },
+  }),
+  borough("lewisham", "Lewisham", {
+    districts: ["Lewisham", "Catford", "Deptford", "New Cross", "Forest Hill", "Sydenham", "Blackheath", "Brockley"],
+    retail: ["the Lewisham Shopping Centre", "Deptford High Street", "Catford Broadway"],
+    roads: ["A2", "A20", "A21", "A205 South Circular"],
+    parking: "Lewisham and Catford town centres have busy one-way systems and bus lanes, and many streets have controlled parking.",
+    character: "Lewisham is a south-east London borough, from Deptford and New Cross down to Catford and Sydenham.",
+    localFaq: { q: "Do you cover Blackheath and Deptford?", a: "Yes. Drivers cover all of Lewisham, including Blackheath, Deptford, New Cross, Catford and Sydenham." },
+  }),
+];
+
+export const LONDON_BOROUGH_BY_SLUG = Object.fromEntries(LONDON_BOROUGHS.map((b) => [b.slug, b]));
+export const LONDON_AREAS_PATH = "/couriers/london/areas";
+export const LONDON_BOROUGH_SERVICES = ["man-and-van", "house-removals", "vehicle-recovery", "car-transport"].map((s) => SERVICE_BY_SLUG[s]);
+
+export function boroughSeo(b) {
+  return {
+    path: `/couriers/london/${b.slug}`,
+    title: `Couriers & Man and Van in ${b.name}, London – Instant Quote | Cargo One`,
+    h1: `Couriers and man and van in ${b.name}`,
+    intro: `${b.character} Get an instant quote for any job in ${b.name}, book 24/7, and track your verified driver live.`,
+    description: `Couriers, man and van, removals and recovery in ${b.name}, including ${list(b.districts.slice(0, 2))}. Instant quote, book 24/7 and track your driver live.`,
+  };
+}
+
+export function boroughFaqs(b) {
+  return [
+    { q: `Which parts of ${b.name} do you cover?`, a: `All of ${b.name}, including ${list(b.districts.slice(0, 5))}, and anywhere else in London.` },
+    { q: `Can I book a courier in ${b.name} right now?`, a: "Yes. You can book 24/7. ASAP Transport and ASAP Recovery jobs go to drivers available around the clock near the pickup, and you can follow your driver live once one accepts." },
+    { q: `What should I know about parking and access in ${b.name}?`, a: `${b.parking} ${LOCAL_CITY_BY_SLUG.london.cleanAir.text}` },
+    b.localFaq,
+    { q: `Which booking types can I use in ${b.name}?`, a: "ASAP Transport, ASAP Recovery, Bid Jobs and Fixed Price Jobs are all available. Choose the one that fits when you book." },
+  ];
+}
+
+const londonCrumbs = [["Home", "/"], ["Couriers", "/couriers"], ["London", "/couriers/london"], ["London areas", LONDON_AREAS_PATH]];
+
+export function boroughJsonLd(b, faqs) {
+  return [faqJsonLd(faqs), breadcrumbJsonLd([...londonCrumbs, [b.name, `/couriers/london/${b.slug}`]])];
+}
+
+export const LONDON_AREAS_SEO = {
+  path: LONDON_AREAS_PATH,
+  title: "London Couriers & Man and Van by Borough | Cargo One",
+  h1: "Couriers and man and van across London",
+  intro: "Find local pages for London boroughs, from Croydon and Bromley to Barnet, Enfield and Hillingdon. Get an instant quote, book 24/7 and track your driver live.",
+  description: "Couriers, man and van, removals and recovery in London boroughs including Croydon, Barnet, Ealing and Newham. Instant quote and live tracking.",
+};
+
+export const LONDON_AREAS_FAQS = [
+  { q: "Do you cover every London borough?", a: "Yes. You can book a job anywhere in London. These pages cover some of the boroughs we're asked about most." },
+  { q: "Does the ULEZ affect my booking?", a: LOCAL_CITY_BY_SLUG.london.cleanAir.text },
+  { q: "Can I book across London, for example Croydon to Barnet?", a: "Yes. Enter any pickup and drop-off in London and you'll see your price straight away." },
+];
+
+export function londonAreasJsonLd() {
+  return [faqJsonLd(LONDON_AREAS_FAQS), breadcrumbJsonLd(londonCrumbs)];
 }

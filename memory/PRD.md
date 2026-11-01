@@ -658,3 +658,8 @@ Each future phase must start from the locked baseline.
 - 14 places added to LOCAL_PLACES with B3_SERVICES (5). Driver pages for 7 (hull, portsmouth, oxford, plymouth, swansea, milton-keynes, aberdeen); others pre-existed.
 - van-transport heroImage -> /images/van-road-hero.webp (user-supplied). Hubs link to existing /drivers/jobs pages too.
 - Totals vs 0722fc2: 238 new URLs, sitemap 184 -> 422, 0 existing changed.
+
+## Batch 3 fix + Batch 4 (London boroughs) — preview only
+- B3 nearby lists: Birmingham only on Leicester/Oxford/MK; others list genuinely nearby cities.
+- LONDON_BOROUGHS (15) + /couriers/london/areas. New LondonBoroughs.jsx (BoroughHub, LondonAreas). Existing London hub/CityHub untouched (no links to boroughs; sitemap covers discovery).
+- Totals vs 0722fc2: 254 new URLs, sitemap 184 -> 438, 0 existing changed.

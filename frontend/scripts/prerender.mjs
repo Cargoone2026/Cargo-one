@@ -123,6 +123,19 @@ async function main() {
       };
     })),
     // SEO Phase 3 additions
+    ...(data.LONDON_AREAS_SEO ? [{
+      ...data.LONDON_AREAS_SEO, image: IMG.heroSeoBoxes, faqs: data.LONDON_AREAS_FAQS, jsonLd: data.londonAreasJsonLd(), detail: true,
+      lists: [["London boroughs", data.LONDON_BOROUGHS.map((b) => [`Couriers in ${b.name}`, `/couriers/london/${b.slug}`])], ["More in London", [["Couriers in London", "/couriers/london"]]]],
+    }] : []),
+    ...(data.LONDON_BOROUGHS || []).map((b) => {
+      const seo = data.boroughSeo(b);
+      const faqs = data.boroughFaqs(b);
+      const london = data.LOCAL_CITY_BY_SLUG.london;
+      return {
+        ...seo, image: IMG.heroSeoBoxes, faqs, jsonLd: data.boroughJsonLd(b, faqs), detail: true,
+        lists: [["Popular services", data.LONDON_BOROUGH_SERVICES.map((s) => [`${s.name} in London`, `/services/${s.slug}/london`])], [`Areas in ${b.name}`, b.districts], ["Main roads", b.roads], ["Getting around", [b.parking, [london.cleanAir.text, london.cleanAir.url]]], ["More in London", [["Couriers in London", "/couriers/london"], ["All London areas", data.LONDON_AREAS_PATH]]], ["Other London areas", data.LONDON_BOROUGHS.filter((o) => o.slug !== b.slug).map((o) => [`Couriers in ${o.name}`, `/couriers/london/${o.slug}`])]],
+      };
+    }),
     ...(data.EXTRA_SERVICE_PAGES || []).map((s) => ({
       ...data.serviceSeo(s), image: svcImg(s), intro: s.intro, faqs: s.faqs, jsonLd: data.serviceJsonLd(s), detail: true,
       lists: [["What we move", s.moves], ["Vehicles used", s.vehicles], ["Related services", s.related.map((r) => [data.ALL_SERVICE_BY_SLUG[r].name, `/services/${r}`])],
