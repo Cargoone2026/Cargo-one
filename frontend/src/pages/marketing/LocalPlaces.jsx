@@ -6,7 +6,7 @@ import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import {
-  ALL_SERVICE_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, cityHubSeo,
+  ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, cityHubSeo,
   placeHubFaqs, placeNearby, placeService, placeServiceSeo, placeServices, serviceCityJsonLd,
 } from "@/data/seo";
 
@@ -179,7 +179,7 @@ function PlaceHubServices({ c }) {
           </li>
         ))}
       </ul>
-      {PLACE_DRIVER_CITY_BY_SLUG[c.slug] ? (
+      {PLACE_DRIVER_CITY_BY_SLUG[c.slug] || DRIVER_CITY_BY_SLUG[c.slug] ? (
         <Link to={`/drivers/jobs/${c.slug}`} data-testid="city-hub-driver-jobs-link" className="mt-6 inline-flex items-center gap-1 text-[15px] font-semibold text-[#D62828] hover:underline">
           Drive in {c.name}? See courier jobs in {c.name} <ArrowRight className="h-4 w-4" />
         </Link>

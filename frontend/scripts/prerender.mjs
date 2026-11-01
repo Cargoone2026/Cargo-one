@@ -133,7 +133,7 @@ async function main() {
       const faqs = data.placeHubFaqs(c);
       return {
         ...seo, image: IMG.heroSeoBoxes, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
-        lists: [["Services", data.placeServices(c).map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...new Set([...c.residential, ...c.business, ...c.industrial])]], ["Getting around", [c.parking]], ["Nearby towns and cities", data.placeNearby(c).map((r) => [`Couriers in ${r.to.name} (via the ${r.roads})`, `/couriers/${r.to.slug}`])]],
+        lists: [["Services", data.placeServices(c).map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...new Set([...c.residential, ...c.business, ...c.industrial])]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby towns and cities", data.placeNearby(c).map((r) => [`Couriers in ${r.to.name} (via the ${r.roads})`, `/couriers/${r.to.slug}`])]],
       };
     }),
     ...(data.PLACE_SERVICE_PAIRS || []).map(([s, c]) => {
@@ -141,7 +141,7 @@ async function main() {
       const l = data.placeService(s, c);
       return {
         ...seo, image: svcImg(s), intro: l.lead, faqs: l.faqs, jsonLd: data.serviceCityJsonLd(s, c, l.faqs), detail: true,
-        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", l.access], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.placeServices(c).filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
+        lists: [["What we move", s.moves], ["Vehicles", s.vehicles], ["Areas covered", l.areas], ["Popular routes", l.routes.map((r) => [`${c.name} to ${r.to.name} via the ${r.roads}`, `/services/${s.slug}/${r.to.slug}`])], ["Getting around", [...l.access, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], [`More in ${c.name}`, [[`All services in ${c.name}`, `/couriers/${c.slug}`], [`${s.name} across the UK`, `/services/${s.slug}`], ...data.placeServices(c).filter((o) => o.slug !== s.slug).map((o) => [`${o.name} in ${c.name}`, `/services/${o.slug}/${c.slug}`])]]],
       };
     }),
     ...(data.PLACE_DRIVER_CITIES || []).map((c) => {

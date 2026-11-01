@@ -653,3 +653,8 @@ Each future phase must start from the locked baseline.
 - EXTRA_SERVICE_PAGES (19) separate from SERVICE_PAGES (so /services index + Wave1 hubs unchanged). New ExtraServiceLanding.jsx; static routes per slug.
 - non-runner-car-transport + van-transport x 20 cities (10 Wave1 + 10 B1) = 40 pages via PLACE_SERVICE_PAIRS. B1 hubs now list these 2 too.
 - Totals vs pre-Phase3 (0722fc2): 147 new URLs, sitemap 184 -> 331, 0 existing changed.
+
+## Batch 3 (big UK cities) — preview only
+- 14 places added to LOCAL_PLACES with B3_SERVICES (5). Driver pages for 7 (hull, portsmouth, oxford, plymouth, swansea, milton-keynes, aberdeen); others pre-existed.
+- van-transport heroImage -> /images/van-road-hero.webp (user-supplied). Hubs link to existing /drivers/jobs pages too.
+- Totals vs 0722fc2: 238 new URLs, sitemap 184 -> 422, 0 existing changed.
