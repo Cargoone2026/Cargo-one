@@ -648,3 +648,8 @@ Each future phase must start from the locked baseline.
 - New components: pages/marketing/LocalPlaces.jsx (PlaceHub, PlaceService), DriverPlaces.jsx (PlaceDriverJobs). Static per-slug routes added in App.js (static beats existing :param routes).
 - prerender.mjs: additive block. 88 new URLs; sitemap 184 -> 272. QA script: /app/memory/seo_qa.mjs (compare vs git HEAD baseline).
 - Lock approach: no existing arrays/entries/components edited; new places do NOT appear in existing /couriers index or /drivers page.
+
+## Batch 2 (national services) — preview only
+- EXTRA_SERVICE_PAGES (19) separate from SERVICE_PAGES (so /services index + Wave1 hubs unchanged). New ExtraServiceLanding.jsx; static routes per slug.
+- non-runner-car-transport + van-transport x 20 cities (10 Wave1 + 10 B1) = 40 pages via PLACE_SERVICE_PAIRS. B1 hubs now list these 2 too.
+- Totals vs pre-Phase3 (0722fc2): 147 new URLs, sitemap 184 -> 331, 0 existing changed.

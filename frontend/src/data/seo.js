@@ -901,8 +901,287 @@ export const COURIERS_INDEX_SEO = {
   description: "Find couriers, man and van, removals and vehicle recovery in major UK cities. Instant quote, book 24/7 and track your driver live.",
 };
 
+// ---------- SEO Phase 3 · Batch 2: extra national service pages (/services/{slug}) ----------
+// Kept separate from SERVICE_PAGES so the existing /services index and Wave 1 hubs are unchanged.
+const VEHICLE_FAQ_TRACK = { q: "Can I track it?", a: "Yes. Once the driver sets off you can follow them on the map, and you'll get photo proof at delivery." };
+
+export const EXTRA_SERVICE_PAGES = [
+  {
+    slug: "non-runner-car-transport", name: "Non-Runner Car Transport", heroImage: "/images/recovery-truck-hero.webp", image: "vehicles", recovery247: true,
+    intro: "Move a car that won't start, won't drive or isn't road legal, from a driveway, garage, car park or yard. Book 24/7 as an ASAP job, an open bid or a fixed-price booking.",
+    moves: ["Cars that won't start", "SORN and untaxed vehicles", "Project and restoration cars", "Cars with flat tyres or seized brakes", "Cars going for repair or scrap", "Vehicles with no keys"],
+    vehicles: ["Light Recovery Van", "Pickup Recovery", "3.5T Recovery Truck", "Car Transporter", "Heavy Recovery / Lowloader"],
+    related: ["vehicle-recovery", "car-transport", "classic-car-transport"],
+    faqs: [
+      { q: "What counts as a non-runner?", a: "Any vehicle that can't be driven onto the truck, for example one that won't start, has no keys, or has damaged wheels or brakes." },
+      { q: "Will the driver have a winch?", a: "Say in the job whether the car rolls, steers and brakes. Drivers can then bring a winch, skates or a second person if needed." },
+      { q: "Can you collect from a tight driveway or underground car park?", a: "Add access notes, including height limits and space to load. Drivers see this before they accept, so they can bring a suitable vehicle." },
+      { q: "Can I book a non-runner collection right now?", a: "Yes. You can book 24/7. Choose ASAP and your job goes to recovery drivers available near the pickup, or schedule it for a date that suits you." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "classic-car-transport", name: "Classic Car Transport", image: "vehicles",
+    intro: "Move a classic, vintage or prestige car to a show, a restorer, a new owner or storage, on an open transporter or an enclosed trailer.",
+    moves: ["Classic and vintage cars", "Prestige and sports cars", "Cars going to shows and auctions", "Restoration projects", "Cars going into or out of storage", "Low-clearance vehicles"],
+    vehicles: ["Enclosed Trailer Van", "Car Transporter", "Flatbed Truck"],
+    related: ["car-transport", "non-runner-car-transport", "vehicle-recovery"],
+    faqs: [
+      { q: "Can I ask for enclosed transport?", a: "Yes. Choose an enclosed trailer or say so in the job, and only drivers with a suitable vehicle can take it." },
+      { q: "My car is low. Will that be a problem?", a: "Add the ground clearance and any spoilers or splitters in the notes so drivers can bring suitable ramps." },
+      { q: "Can you deliver to a show or auction?", a: "Yes. Add the venue's address, the arrival time and any entry reference the organisers have given you." },
+      { q: "What if the car doesn't run?", a: "Say so in the job. Drivers with a winch can be matched to it." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "van-transport", name: "Van Transport", image: "vans",
+    intro: "Move a van without driving it, whether you've bought one online, need a fleet vehicle moved or have a van that won't run.",
+    moves: ["Small and medium vans", "Long wheelbase vans", "Luton and box vans", "Campervan conversions", "Fleet and company vans", "Non-running vans"],
+    vehicles: ["Car Transporter", "3.5T Recovery Truck", "7.5T Recovery Truck", "Heavy Recovery / Lowloader"],
+    related: ["car-transport", "non-runner-car-transport", "vehicle-recovery"],
+    faqs: [
+      { q: "What details do I need to give?", a: "The make and model, its rough size and weight, whether it runs, and any access limits at pickup or drop-off." },
+      { q: "Can you move a loaded van?", a: "Tell us if anything is inside and how heavy it is. It's usually best to empty the van before it's moved." },
+      { q: "Can you collect from a dealer or auction?", a: "Yes. Add the collection address and any release reference the site needs." },
+      { q: "Can I book van transport at short notice?", a: "Yes. Choose ASAP and your job goes to nearby drivers who are online, or schedule it for later." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "caravan-transport", name: "Caravan Transport", image: "caravans",
+    intro: "Get a touring caravan towed between home, storage, a dealer, a workshop or a site by a driver with a suitable tow vehicle.",
+    moves: ["Touring caravans", "Caravans bought privately or from a dealer", "Moves to and from storage", "Trips to service and repair workshops", "Moves to holiday parks and sites", "Trailer tents and folding campers"],
+    vehicles: ["Caravan Transport", "Other (tow vehicle with trailer)"],
+    related: ["static-caravan-transport", "horsebox-and-trailer-transport", "car-transport"],
+    faqs: [
+      { q: "What details do you need?", a: "The caravan's length, its weight, the type of hitch, and access details at both ends." },
+      { q: "Does the caravan need to be roadworthy?", a: "For towing, the caravan's tyres, brakes and lights need to be safe to use. If they aren't, say so and describe the problem so a suitable driver can take the job." },
+      { q: "Can you collect from a storage site?", a: "Yes. Add the site name, opening times and any gate codes or booking reference the driver needs." },
+      { q: "Should I empty the caravan first?", a: "Secure or remove loose items and close all windows, vents and roof lights before the driver arrives." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "static-caravan-transport", name: "Static Caravan Transport", image: "static_caravans",
+    intro: "Move a static caravan or holiday lodge between parks, dealers and private land, with a driver and vehicle suited to the size and access.",
+    moves: ["Static caravans", "Holiday homes", "Moves between holiday parks", "Deliveries from dealers", "Moves onto private land", "Removals for replacement"],
+    vehicles: ["Static Caravan Transport", "Flatbed Truck", "Heavy Recovery / Lowloader"],
+    related: ["caravan-transport", "machinery-haulage", "freight-and-haulage"],
+    faqs: [
+      { q: "What do I need to tell you?", a: "The length, width and weight if you know it, plus access details at both sites, including gates, slopes and overhead cables." },
+      { q: "Who prepares the caravan for the move?", a: "Disconnecting services, removing skirting and preparing the caravan is usually arranged with the park. Check with them and add what's been done to the job." },
+      { q: "Can you move very wide units?", a: "Wide units may need extra planning, permits or escorts. Contact us first so we can check what's possible." },
+      { q: "Can the park help on the day?", a: "Add a contact at each park and any times you're allowed to move, so the driver can plan around them." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "horsebox-and-trailer-transport", name: "Horsebox and Trailer Transport", image: "vehicles",
+    intro: "Have a horse trailer, horsebox or general-purpose trailer towed or carried between home, a yard, a dealer or a workshop.",
+    moves: ["Horse trailers", "Small horseboxes", "Car and plant trailers", "Box and livestock trailers", "Trailers bought privately", "Non-running horseboxes"],
+    vehicles: ["Other (tow vehicle with trailer)", "Flatbed Truck", "3.5T Recovery Truck", "7.5T Recovery Truck", "Heavy Recovery / Lowloader"],
+    related: ["caravan-transport", "vehicle-recovery", "agricultural-machinery-transport"],
+    faqs: [
+      { q: "Do you move animals?", a: "This service is for moving the horsebox or trailer itself. If you need animals moved, contact us first." },
+      { q: "What details do you need?", a: "The type of trailer or horsebox, its size and weight, the hitch type, and whether it runs or rolls." },
+      { q: "Can you move a horsebox that won't start?", a: "Yes. Say so in the job and add its size and weight so a recovery driver with a suitable vehicle can take it." },
+      { q: "Can you collect from a yard or field?", a: "Add access notes, including the ground conditions and gate widths, so the driver can bring a suitable vehicle." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "single-item-delivery", name: "Single Item Delivery", image: "single_items",
+    intro: "Move one large or awkward item, like a sofa, fridge, wardrobe or piano stool, without booking a full removal.",
+    moves: ["Sofas and armchairs", "Fridges, freezers and washing machines", "Beds and mattresses", "Wardrobes and cabinets", "Bikes and gym equipment", "Items too big for a parcel courier"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
+    related: ["man-and-van", "furniture-delivery", "marketplace-collection"],
+    faqs: [
+      { q: "Will the driver carry it in?", a: "Say whether you need help carrying, and how many floors and stairs there are, so drivers can plan the right help." },
+      { q: "How do I describe the item?", a: "Add its size, rough weight and a photo if you can. This helps match a vehicle that fits it." },
+      { q: "Can I book for today?", a: "Yes. Choose ASAP and your job goes to nearby drivers who are online, or pick a date and time." },
+      { q: "Can you collect from a shop?", a: "Yes. Add the store address and any collection reference." },
+      { q: "Will I get proof of delivery?", a: "Yes. The driver uploads a photo when the item is delivered." },
+    ],
+  },
+  {
+    slug: "office-removals", name: "Office Removals", image: "office_moves",
+    intro: "Move desks, chairs, IT equipment and archive boxes to a new office, a storage unit or between sites, with vehicles sized to the job.",
+    moves: ["Desks, chairs and meeting tables", "IT equipment and screens", "Filing cabinets and archive boxes", "Small office and studio moves", "Moves between sites", "Office clear-outs"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift", "7.5 Tonne Lorry"],
+    related: ["house-removals", "business-and-retail-deliveries", "document-courier"],
+    faqs: [
+      { q: "Can you move us out of hours?", a: "Yes. Choose the date and time that suits you, including evenings and weekends, when you post the job." },
+      { q: "How do I list everything?", a: "Add the main items, the number of boxes and the floors at each end. Photos help drivers judge the vehicle and help needed." },
+      { q: "Is there a lift or loading bay?", a: "Say so in the job, along with any building rules or booking times for lifts and loading bays." },
+      { q: "Do you pack IT equipment?", a: "Packing isn't included as standard. Back up data, pack and label equipment before the driver arrives." },
+      { q: "Can I use a business account?", a: "See our business page for more on using Cargo One for your company." },
+    ],
+  },
+  {
+    slug: "student-moves", name: "Student Moves", image: "house_moves",
+    intro: "Move into or out of halls or a shared house, take your things home for the summer or move into storage, with a driver and van sized to your stuff.",
+    moves: ["Moves into and out of halls", "Shared house moves", "Boxes, suitcases and bags", "Desks, chairs and small furniture", "Moves home at the end of term", "Storage unit runs"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
+    related: ["man-and-van", "house-removals", "single-item-delivery"],
+    faqs: [
+      { q: "Can friends share one move?", a: "Yes. Add every pickup and drop-off and list everyone's items so the driver knows what to expect." },
+      { q: "How big a van do I need?", a: "A few boxes and bags fit a small van. A room's worth of furniture usually needs a long wheelbase or Luton van." },
+      { q: "Can you collect from halls?", a: "Yes. Add the block name, any loading area and any move-out times the halls have given you." },
+      { q: "Can I book at short notice?", a: "Yes. Choose ASAP for a same-day move, or book ahead for busy weeks at the start and end of term." },
+      { q: "Do I need to be there?", a: "Someone should be at pickup and drop-off. You can add a friend's contact details if you can't be there." },
+    ],
+  },
+  {
+    slug: "long-distance-removals", name: "Long Distance Removals", image: "long_distance_uk",
+    intro: "Move home across the UK, from England to Scotland or Wales or the length of the country, with one driver taking your belongings door to door.",
+    moves: ["Full house moves across the UK", "Flat moves to another city", "Part-loads and single rooms", "Moves into storage near your new home", "Furniture and white goods", "Boxed belongings"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift", "7.5 Tonne Lorry", "18 Tonne Lorry"],
+    related: ["house-removals", "man-and-van", "furniture-delivery"],
+    faqs: [
+      { q: "Does the same driver do the whole journey?", a: "Yes. The driver who collects your belongings delivers them, with no depot in between." },
+      { q: "How far ahead should I book?", a: "Book as soon as you know your moving date to get the most choice of drivers." },
+      { q: "Can the move take two days?", a: "Very long moves may need two days. Agree timings with your driver in the app before the day." },
+      { q: "Can I compare prices?", a: "Post it as a Bid Job and drivers send their own prices, or set your own price with a Fixed Price Job." },
+      { q: "Should I pack before the driver arrives?", a: "Yes. Have everything boxed and labelled, with fragile items clearly marked." },
+    ],
+  },
+  {
+    slug: "shipping-container-transport", name: "Shipping Container Transport", image: "shipping_containers",
+    intro: "Move a storage or shipping container to a farm, site, yard or business, on a vehicle with a crane or the right equipment for unloading.",
+    moves: ["10, 20 and 40 foot containers", "Storage containers", "Site offices and welfare units", "Containers bought privately", "Moves between yards and sites", "Empty container deliveries"],
+    vehicles: ["Shipping Container Capable", "Hiab Crane Vehicle", "Flatbed Truck", "Curtain Side Vehicle"],
+    related: ["freight-and-haulage", "machinery-haulage", "building-materials-delivery"],
+    faqs: [
+      { q: "How is the container unloaded?", a: "Usually by crane on the vehicle. Say whether there's a crane or forklift on site, or if the driver needs to bring one." },
+      { q: "What access is needed?", a: "Firm, level ground, room to manoeuvre and no overhead cables where it's placed. Add photos of the spot if you can." },
+      { q: "Can you move a loaded container?", a: "Tell us what's inside and the total weight so drivers with a suitable vehicle can take the job." },
+      { q: "What sizes can you move?", a: "Add the container's length and weight. Drivers see this before they accept." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "agricultural-machinery-transport", name: "Agricultural Machinery Transport", image: "agricultural",
+    intro: "Move tractors, quad bikes, trailers and farm equipment between farms, dealers, workshops and shows, on flatbeds, lowloaders or crane lorries.",
+    moves: ["Compact and vintage tractors", "Farm trailers and implements", "Quad bikes and utility vehicles", "Mowers and grounds equipment", "Machinery bought at auction", "Non-running farm machinery"],
+    vehicles: ["Flatbed Truck", "Hiab Crane Vehicle", "Heavy Recovery / Lowloader", "7.5 Tonne Lorry", "18 Tonne Lorry"],
+    related: ["machinery-haulage", "horsebox-and-trailer-transport", "freight-and-haulage"],
+    faqs: [
+      { q: "What details do you need?", a: "The make and model, weight, dimensions, and whether it can be driven on or needs lifting or winching." },
+      { q: "Can you collect from a field or yard?", a: "Add access notes, including ground conditions and gate widths, so the driver can bring a suitable vehicle." },
+      { q: "Can you collect from a farm auction?", a: "Yes. Add the lot number and any collection reference." },
+      { q: "Can you move very large machinery?", a: "For abnormal loads that need permits or escorts, contact us first so we can check what's possible." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "building-materials-delivery", name: "Building Materials Delivery", image: "building_materials",
+    intro: "Get timber, plasterboard, bricks, tiles and other materials collected from a merchant or yard and delivered to your site or home.",
+    moves: ["Timber and sheet materials", "Plasterboard and insulation", "Bricks, blocks and paving", "Tiles, sanitaryware and kitchens", "Bagged aggregates on pallets", "Tools and site equipment"],
+    vehicles: ["Long Wheelbase Van", "Luton Van with Tail Lift", "Flatbed Truck", "Hiab Crane Vehicle", "7.5 Tonne Lorry"],
+    related: ["pallet-delivery", "shipping-container-transport", "machinery-haulage"],
+    faqs: [
+      { q: "Can you collect from a builders' merchant?", a: "Yes. Add the merchant's address and your order reference." },
+      { q: "Can the driver offload with a crane?", a: "Choose a crane vehicle or say you need one in the job. Add where materials should be placed." },
+      { q: "Can you deliver to a building site?", a: "Yes. Add site rules, delivery times and a site contact." },
+      { q: "How do I describe the load?", a: "List the materials, quantities and rough weights, and whether they're on pallets." },
+      { q: "Will I get proof of delivery?", a: "Yes. The driver uploads photos when the materials are delivered." },
+    ],
+  },
+  {
+    slug: "event-equipment-transport", name: "Event Equipment Transport", image: "event_equipment",
+    intro: "Move staging, sound and lighting kit, exhibition stands and market stalls to venues and back, booked for the times you need.",
+    moves: ["Exhibition stands and displays", "Sound and lighting equipment", "Staging and marquees", "Market stall and pop-up kit", "Furniture for events", "Return trips after the event"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift", "7.5 Tonne Lorry"],
+    related: ["business-and-retail-deliveries", "freight-and-haulage", "same-day-courier"],
+    faqs: [
+      { q: "Can I book a return trip?", a: "Yes. Post the delivery and the collection as separate jobs, each with its own time." },
+      { q: "Can you deliver to a venue loading dock?", a: "Yes. Add the venue's delivery instructions and booking times." },
+      { q: "What if timings are tight?", a: "Add the latest arrival time in the job so drivers can check it suits them before they accept." },
+      { q: "Do drivers help set up?", a: "Set-up isn't included as standard. Say if you need help unloading." },
+      { q: "Can I track the delivery?", a: "Yes. You can follow your driver live on the map." },
+    ],
+  },
+  {
+    slug: "document-courier", name: "Document Courier", image: "documents",
+    intro: "Send contracts, legal papers, keys and other important documents straight to the recipient with a dedicated driver.",
+    moves: ["Contracts and legal documents", "Signed originals", "Keys and access cards", "Tender and bid documents", "Medical and professional records", "Small items for businesses"],
+    vehicles: ["Motorcycle Courier", "Small Van"],
+    related: ["same-day-courier", "parcel-delivery", "business-and-retail-deliveries"],
+    faqs: [
+      { q: "Is it delivered directly?", a: "Yes. The driver who collects your documents delivers them, with no sorting centre in between." },
+      { q: "Can I send it today?", a: "Yes. Choose ASAP and your job goes to nearby drivers who are online." },
+      { q: "Can I get proof of delivery?", a: "Yes. The driver uploads a photo, and the recipient's signature where available." },
+      { q: "How should I pack documents?", a: "Use a sealed envelope or document wallet, clearly addressed to the recipient." },
+      { q: "Can I name who should receive it?", a: "Yes. Add the recipient's name and phone number to the job." },
+    ],
+  },
+  {
+    slug: "fragile-and-high-value-delivery", name: "Fragile and High-Value Delivery", image: "fragile_high_value",
+    intro: "Move artwork, antiques, mirrors, glass and other delicate items with a driver who knows the item needs extra care.",
+    moves: ["Artwork and framed prints", "Antiques and collectables", "Mirrors and glass", "Musical instruments", "Electronics and AV equipment", "Ceramics and sculpture"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
+    related: ["furniture-delivery", "single-item-delivery", "parcel-delivery"],
+    faqs: [
+      { q: "How do drivers know it's fragile?", a: "Mark the job as fragile and describe the item. Drivers see this before they accept." },
+      { q: "Should I pack the item?", a: "Yes. Wrap and protect it well before the driver arrives, and say if you need blankets or straps." },
+      { q: "Can I check the item on delivery?", a: "Yes. The driver uploads photos at delivery, and you can check the item with them before they leave." },
+      { q: "What if the item is very valuable?", a: "Check whether you need your own insurance for its value before you book." },
+      { q: "Can I track it?", a: "Yes. You can follow your driver live on the map." },
+    ],
+  },
+  {
+    slug: "garden-and-outdoor-items", name: "Garden and Outdoor Items", image: "garden_outdoor",
+    intro: "Move garden furniture, sheds, hot tubs, ride-on mowers and plant pots between homes, stores and sellers.",
+    moves: ["Garden furniture and BBQs", "Flat-pack sheds and greenhouses", "Hot tubs", "Ride-on mowers", "Large plant pots and planters", "Play equipment and trampolines"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift", "Flatbed Truck"],
+    related: ["single-item-delivery", "marketplace-collection", "man-and-van"],
+    faqs: [
+      { q: "Can you move a hot tub?", a: "Yes. Add its size and weight, and access at both ends, including gates and steps." },
+      { q: "Can you collect from a garden centre?", a: "Yes. Add the store address and any order reference." },
+      { q: "Do you take items through the house?", a: "Say whether items need to go through the house or round the side, and add gate widths." },
+      { q: "Can I book for today?", a: "Yes. Choose ASAP and your job goes to nearby drivers who are online." },
+      { q: "Will I get proof of delivery?", a: "Yes. The driver uploads photos when the job is done." },
+    ],
+  },
+  {
+    slug: "freight-and-haulage", name: "Freight and Haulage", image: "freight",
+    intro: "Book lorries and HGVs for full loads, part loads and bulk goods across the UK, with vehicles matched to the weight and size.",
+    moves: ["Full and part loads", "Palletised goods", "Bulk stock for warehouses", "Long-distance haulage", "Return loads", "Loads needing tail lifts or cranes"],
+    vehicles: ["7.5 Tonne Lorry", "18 Tonne Lorry", "Curtain Side Vehicle", "Articulated HGV", "Hiab Crane Vehicle", "Refrigerated Vehicle"],
+    related: ["pallet-delivery", "machinery-haulage", "business-and-retail-deliveries"],
+    faqs: [
+      { q: "What details do you need?", a: "What's being moved, total weight, number of pallets or dimensions, and loading facilities at each end." },
+      { q: "Can I compare prices?", a: "Post it as a Bid Job and drivers send their own prices, or set your own price with a Fixed Price Job." },
+      { q: "Do you have refrigerated vehicles?", a: "Choose a refrigerated vehicle when you book, and drivers with one can take the job." },
+      { q: "Is there a forklift needed?", a: "Say whether there's a forklift or loading bay at each end, or choose a vehicle with a tail lift." },
+      VEHICLE_FAQ_TRACK,
+    ],
+  },
+  {
+    slug: "business-and-retail-deliveries", name: "Business and Retail Deliveries", image: "retail_business",
+    intro: "Move stock, orders and equipment for your business, from shop restocks and customer deliveries to runs between sites.",
+    moves: ["Shop restocks and stock transfers", "Customer orders and deliveries", "Shop fittings and displays", "Trade and wholesale orders", "Returns and collections", "Runs between sites"],
+    vehicles: ["Small Van", "Long Wheelbase Van", "Luton Van with Tail Lift", "7.5 Tonne Lorry"],
+    related: ["same-day-courier", "pallet-delivery", "freight-and-haulage"],
+    faqs: [
+      { q: "Can I book regular runs?", a: "Yes. You can post jobs as often as you need." },
+      { q: "Can my customers track the delivery?", a: "You can follow the driver live and get photo proof of delivery to share." },
+      { q: "Can I book a delivery for today?", a: "Yes. Choose ASAP and your job goes to nearby drivers who are online." },
+      { q: "Do you offer business accounts?", a: "See our business page for more on using Cargo One for your company." },
+      { q: "Can you collect from a warehouse?", a: "Yes. Add the warehouse address, loading times and any reference." },
+    ],
+  },
+];
+
+export const EXTRA_SERVICE_BY_SLUG = Object.fromEntries(EXTRA_SERVICE_PAGES.map((s) => [s.slug, s]));
+export const ALL_SERVICE_PAGES = [...SERVICE_PAGES, ...EXTRA_SERVICE_PAGES];
+export const ALL_SERVICE_BY_SLUG = Object.fromEntries(ALL_SERVICE_PAGES.map((s) => [s.slug, s]));
+// Batch 2 services that also get service×place pages (Wave 1 cities + Phase 3 places).
+const LOCAL_EXTRA_SERVICES = ["non-runner-car-transport", "van-transport"];
+
 // ---------- SEO Phase 3: extra local places (own hubs, service×place and driver pages) ----------
-const B1_SERVICES = ["man-and-van", "house-removals", "furniture-delivery", "same-day-courier", "car-transport", "vehicle-recovery", "marketplace-collection"];
+const B1_SERVICES = ["man-and-van", "house-removals", "furniture-delivery", "same-day-courier", "car-transport", "vehicle-recovery", "marketplace-collection", ...LOCAL_EXTRA_SERVICES];
 
 export const LOCAL_PLACES = [
   {
@@ -1057,22 +1336,29 @@ const PLACE_LEADS = {
   "car-transport": { facet: "roads", lead: (c, a) => `Car transport in ${c.name} covers private sales, dealer moves and non-runners, with transporters using routes like the ${list(a)}.` },
   "vehicle-recovery": { facet: "roads", lead: (c, a) => `Breakdowns around ${c.name} often happen on busy roads like the ${list(a)}. Book 24/7 and ASAP Recovery jobs go to recovery drivers available around the clock nearby.` },
   "marketplace-collection": { facet: "retail", lead: (c, a) => `Found something on a marketplace in ${c.name}? Drivers can collect from sellers across the ${c.kind} and nearby, from shopping areas like ${list(a)} to private homes.` },
+  "non-runner-car-transport": { facet: "roads", lead: (c, a) => `Got a car in ${c.name} that won't start or drive? Drivers with recovery vehicles and winches collect from driveways, garages and car parks, using routes like the ${list(a)}.` },
+  "van-transport": { facet: "roads", lead: (c, a) => `Need a van moved in or out of ${c.name}? Drivers collect vans from dealers, auctions, businesses and homes, using routes like the ${list(a)}.` },
 };
 
 const placeOrCity = (slug) => LOCAL_PLACE_BY_SLUG[slug] || LOCAL_CITY_BY_SLUG[slug];
 
 export function placeNearby(c) {
+  if (!c.nearby) return cityRoutes(c);
   return c.nearby.map(([slug, roads]) => ({ to: placeOrCity(slug), roads }));
 }
 
 export function placeServices(c) {
-  return c.services.map((s) => SERVICE_BY_SLUG[s]);
+  if (!c.services) return [...SERVICE_PAGES, ...LOCAL_EXTRA_SERVICES.map((s) => ALL_SERVICE_BY_SLUG[s])];
+  return c.services.map((s) => ALL_SERVICE_BY_SLUG[s]);
 }
 
-export const PLACE_SERVICE_PAIRS = LOCAL_PLACES.flatMap((c) => placeServices(c).map((s) => [s, c]));
+export const PLACE_SERVICE_PAIRS = [
+  ...LOCAL_PLACES.flatMap((c) => placeServices(c).map((s) => [s, c])),
+  ...LOCAL_EXTRA_SERVICES.flatMap((slug) => LOCAL_CITIES.map((c) => [ALL_SERVICE_BY_SLUG[slug], c])),
+];
 
 export function placeService(service, c) {
-  const svcIdx = SERVICE_PAGES.findIndex((s) => s.slug === service.slug);
+  const svcIdx = ALL_SERVICE_PAGES.findIndex((s) => s.slug === service.slug);
   const cfg = PLACE_LEADS[service.slug];
   const pool = cfg.facet === "roads" ? c.residential : c[cfg.facet];
   const areas = pool.map((_, i) => pool[(i + svcIdx) % pool.length]);
@@ -1083,7 +1369,7 @@ export function placeService(service, c) {
   const pick = [svcIdx % 5, (svcIdx + 2) % 5].map((i) => service.faqs[i]);
   const faqs = [
     { q: `Which parts of ${c.name} do you cover for ${service.name.toLowerCase()}?`, a: `Anywhere in ${c.name} and across ${c.region}, including ${list(areas.slice(0, 3))}. Enter your pickup and drop-off to see your price.` },
-    { q: `Is there anything to know about access in ${c.name}?`, a: `${c.parking} Add access notes to your job so drivers can come prepared.` },
+    { q: `Is there anything to know about access in ${c.name}?`, a: `${c.parking}${c.cleanAir ? ` ${c.cleanAir.text}` : ""} Add access notes to your job so drivers can come prepared.` },
     { q: `Can I book ${service.name.toLowerCase()} from ${c.name} to ${routes[0].to.name}?`, a: `Yes. ${c.name} to ${routes[0].to.name} jobs usually use the ${routes[0].roads}. Book ASAP or schedule it as a Bid Job or Fixed Price Job.` },
     ...pick,
   ];

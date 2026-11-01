@@ -1,12 +1,12 @@
 import React from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { ArrowRight, BadgeCheck, ChevronRight, Clock, MapPin, Route, Truck } from "lucide-react";
+import { ArrowRight, BadgeCheck, ChevronRight, Clock, ExternalLink, MapPin, Route, Truck } from "lucide-react";
 import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import {
-  LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, SERVICE_BY_SLUG, cityHubJsonLd, cityHubSeo,
+  ALL_SERVICE_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, cityHubSeo,
   placeHubFaqs, placeNearby, placeService, placeServiceSeo, placeServices, serviceCityJsonLd,
 } from "@/data/seo";
 
@@ -95,6 +95,14 @@ export function Access({ city, notes }) {
           <li key={n} className="flex items-start gap-2 text-[15px] text-[#374151]"><BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#D62828]" /> {n}</li>
         ))}
       </ul>
+      {city.cleanAir ? (
+        <p className="mt-4 rounded-[12px] bg-[#F4F4F4] p-4 text-[14px] text-[#374151]" data-testid="local-clean-air">
+          {city.cleanAir.text}{" "}
+          <a href={city.cleanAir.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-[#D62828] underline">
+            {city.cleanAir.label} <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -182,8 +190,8 @@ function PlaceHubServices({ c }) {
 
 export function PlaceService() {
   const [, slug, place] = pathParts(useLocation().pathname);
-  const service = SERVICE_BY_SLUG[slug];
-  const c = LOCAL_PLACE_BY_SLUG[place];
+  const service = ALL_SERVICE_BY_SLUG[slug];
+  const c = LOCAL_PLACE_BY_SLUG[place] || LOCAL_CITY_BY_SLUG[place];
   if (!service || !c) return <Navigate to="/services" replace />;
   const seo = placeServiceSeo(service, c);
   const local = placeService(service, c);
