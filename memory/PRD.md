@@ -670,3 +670,9 @@ Each future phase must start from the locked baseline.
 - New pages: title<=60 / desc<=155 via fit() fallbacks (placeHubSeo, placeServiceSeo, boroughSeo, extraServiceSeo).
 - FINAL: 267 new URLs (B1 88, B2 59, B3 91, B4 16, B5 13); sitemap 184 -> 451. Prod build OK; every new URL has route.html + route/index.html. 0 existing pages changed.
 - QA script: node /app/memory/seo_qa.mjs frontend <baseline frontend dir from git archive 0722fc2>.
+
+## SEO Phase 4 (remaining UK cities) — preview only, NOT deployed (2026-06)
+- 43 places appended to LOCAL_PLACES via p4() helper (P4_NORTH_WEST, P4_YORKSHIRE_NE, P4_EAST, P4_SOUTH, P4_NATIONS); 7 services each; driver pages for 42 (Belfast driver page pre-existed).
+- New optional nearbyTowns field -> "Towns we cover nearby" block in LocalPlaces.jsx (conditional) + 1 prerender line; placeNearbyTowns() links towns that have their own hub.
+- Nearby routes limited to hubs that have all 7 service pages (Phase 3 Batch 3 cities only have 5) to avoid broken links.
+- Totals: 386 new URLs; sitemap 451 -> 837. Baseline for byte-identical check: git archive of Phase 3 commit 2059d06.

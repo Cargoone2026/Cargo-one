@@ -157,7 +157,7 @@ async function main() {
       const faqs = data.placeHubFaqs(c);
       return {
         ...seo, image: IMG.heroSeoBoxes, faqs, jsonLd: data.cityHubJsonLd(c, faqs), detail: true,
-        lists: [["Services", data.placeServices(c).map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...new Set([...c.residential, ...c.business, ...c.industrial])]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby towns and cities", data.placeNearby(c).map((r) => [`Couriers in ${r.to.name} (via the ${r.roads})`, `/couriers/${r.to.slug}`])]],
+        lists: [["Services", data.placeServices(c).map((s) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])], ["Areas we cover", [...new Set([...c.residential, ...c.business, ...c.industrial])]], ["Getting around", [c.parking, ...(c.cleanAir ? [[c.cleanAir.text, c.cleanAir.url]] : [])]], ["Nearby towns and cities", data.placeNearby(c).map((r) => [`Couriers in ${r.to.name} (via the ${r.roads})`, `/couriers/${r.to.slug}`])], ...(c.nearbyTowns ? [["Towns we cover nearby", [c.nearbyTowns.text, ...data.placeNearbyTowns(c).map((t) => (t.slug ? [t.name, `/couriers/${t.slug}`] : t.name))]]] : [])],
       };
     }),
     ...(data.PLACE_SERVICE_PAIRS || []).map(([s, c]) => {

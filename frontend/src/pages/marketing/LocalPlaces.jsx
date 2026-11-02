@@ -6,7 +6,7 @@ import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import {
-  ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, placeHubSeo,
+  ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, placeNearbyTowns, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, placeHubSeo,
   placeHubFaqs, placeNearby, placeService, placeServiceSeo, placeServices, serviceCityJsonLd,
 } from "@/data/seo";
 
@@ -155,6 +155,7 @@ export function PlaceHub() {
           <Access city={c} notes={[c.parking, `Main roads include the ${c.roads.join(", ")}.`]} />
         </div>
       </Section>
+      {c.nearbyTowns ? <NearbyTowns c={c} /> : null}
       <Faqs faqs={faqs} />
       <Section bg="#F4F4F4">
         <div className="grid gap-8 md:grid-cols-2">
@@ -273,6 +274,27 @@ function PlaceServiceLocal({ service, c, local }) {
           </ul>
         </div>
         <Access city={c} notes={local.access} />
+      </div>
+    </Section>
+  );
+}
+
+
+// SEO Phase 4: shown only for entries with nearbyTowns.
+function NearbyTowns({ c }) {
+  return (
+    <Section>
+      <div data-testid="city-hub-nearby-towns">
+        <h2 className="text-[20px] font-bold text-[#111111]">Towns we cover nearby</h2>
+        <p className="mt-2 max-w-[760px] text-[15px] leading-relaxed text-[#374151]">{c.nearbyTowns.text}</p>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {placeNearbyTowns(c).map((t) => (
+            <li key={t.name} className="inline-flex items-center gap-1.5 rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-[13px] font-semibold text-[#111111]">
+              <MapPin className="h-3.5 w-3.5 text-[#6B7280]" />
+              {t.slug ? <Link to={`/couriers/${t.slug}`} className="text-[#D62828] hover:underline">{t.name}</Link> : t.name}
+            </li>
+          ))}
+        </ul>
       </div>
     </Section>
   );
