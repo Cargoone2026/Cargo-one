@@ -18,6 +18,8 @@ import { PlaceDriverJobs } from "@/pages/marketing/DriverPlaces";
 import ExtraServiceLanding from "@/pages/marketing/ExtraServiceLanding";
 import { BoroughHub, LondonAreas } from "@/pages/marketing/LondonBoroughs";
 import { GuideArticle, GuidesIndex } from "@/pages/marketing/Guides";
+import AsapPage from "@/pages/marketing/AsapPages";
+import { ASAP_PAGES } from "@/data/seo";
 import { EXTRA_SERVICE_PAGES, GUIDES, LOCAL_PLACES, LONDON_AREAS_PATH, LONDON_BOROUGHS, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
 import Business from "@/pages/marketing/Business";
 import Drivers from "@/pages/marketing/Drivers";
@@ -146,6 +148,7 @@ export default function App() {
             {LONDON_BOROUGHS.map((b) => <Route key={`borough-${b.slug}`} path={`/couriers/london/${b.slug}`} element={<Marketing Page={BoroughHub} />} />)}
             <Route path="/guides" element={<Marketing Page={GuidesIndex} />} />
             {GUIDES.map((g) => <Route key={`guide-${g.slug}`} path={`/guides/${g.slug}`} element={<Marketing Page={GuideArticle} />} />)}
+            {ASAP_PAGES.map((p) => <Route key={`asap-${p.path}`} path={p.path} element={<Marketing Page={AsapPage} />} />)}
             <Route path="/faq" element={<Marketing Page={FAQ} />} />
             <Route path="/contact" element={<Marketing Page={Contact} />} />
             <Route path="/trust-safety" element={<Marketing Page={TrustSafety} />} />

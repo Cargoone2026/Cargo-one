@@ -176,6 +176,11 @@ async function main() {
         lists: [["Busy areas", c.areas], ["Routes", c.routes], ["Driver jobs nearby", data.placeDriverRelated(c).map((r) => [`Courier jobs in ${r.name}`, `/drivers/jobs/${r.slug}`])], ["How the work flows", data.DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["What you need", data.DRIVER_DOCUMENTS], ["How payment works", data.DRIVER_PAY_STEPS]],
       };
     }),
+    // ASAP live dispatch hub
+    ...(data.ASAP_PAGES || []).map((p) => ({
+      path: p.path, title: p.title, h1: p.h1, description: p.description, intro: p.intro, image: p.image, faqs: p.faqs, jsonLd: data.asapJsonLd(p), detail: true,
+      lists: data.asapLists(p),
+    })),
   ];
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];

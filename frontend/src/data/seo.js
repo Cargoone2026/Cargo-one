@@ -2833,3 +2833,375 @@ const HUB_SLUG_BY_NAME = Object.fromEntries([...LOCAL_CITIES, ...LOCAL_PLACES].m
 export function placeNearbyTowns(c) {
   return c.nearbyTowns.towns.map((name) => ({ name, slug: HUB_SLUG_BY_NAME[name] }));
 }
+
+// ---------- SEO: ASAP live dispatch hub (/asap, /asap/live-tracking, /asap/recovery, /asap/recovery/{city}) ----------
+// Facts only from the existing ASAP pages and the app. No prices, times, counts, ratings or brand comparisons.
+const ASAP_PAY = "Pay Cargo One's booking fee by card. The driver's price is paid to the driver on delivery.";
+const ASAP_CANCEL = "While your job is still waiting for a driver, you can cancel it in the app and your booking fee is refunded in full. Once the vehicle or items have been collected, the job can't be cancelled in the app, so contact support.";
+const ASAP_MOTORWAY = "If the vehicle is on a live motorway, it should first be moved by the official services. Once it is somewhere safe, such as a recovery yard, you can book ASAP Recovery from there.";
+const ASAP_SAFETY = ["Get yourself and any passengers to a safe place, away from moving traffic", "Switch on your hazard lights", "If anyone is in danger, call 999", "On a live motorway, the official services move the vehicle first; book recovery once it is in a safe place"];
+const ASAP_APP_LINKS = [["Download on the App Store", "https://apps.apple.com/app/cargo-one"], ["Get it on Google Play", "https://play.google.com/store/apps/details?id=com.cargoone.app"]];
+const ASAP_IMG = { van: "/images/van-road-hero.webp", recovery: "/images/recovery-truck-hero.webp", boxes: "/images/how-it-works-hero-boxes.webp" };
+const ASAP_CRUMB = ["ASAP", "/asap"];
+const ASAP_RECOVERY_CRUMB = ["ASAP Recovery", "/asap/recovery"];
+
+const ASAP_HUB = {
+  path: "/asap", kind: "Service", eyebrow: "ASAP · LIVE DISPATCH", image: ASAP_IMG.van,
+  title: "On-Demand Courier & Recovery, Booked Live 24/7 | Cargo One",
+  h1: "On-demand courier and recovery, booked live 24/7",
+  description: "How Cargo One's ASAP live dispatch works: book a courier or vehicle recovery 24/7, see an instant price and track a nearby driver live on the map.",
+  intro: "ASAP is Cargo One's on-demand, app-based way to book. Instead of posting a job and waiting for offers, you get an instant price, pay the booking fee and your job is sent straight to available drivers near the pickup. You can book 24/7, 365 days a year, with drivers available around the clock.",
+  crumbs: [["Home", "/"], ["ASAP"]],
+  sections: [
+    { h: "What ASAP means on Cargo One", p: ["ASAP stands for \"as soon as possible\". It is live dispatch: the job is offered to drivers who are online and available at that moment, rather than booked for a later date. There are two ASAP booking types.", "ASAP Transport is for moving things now, from a single parcel or a marketplace collection to a van load. ASAP Recovery is for vehicles that need moving now, such as breakdowns, non-runners and accident-damaged vehicles. Both work in the same live way, and neither comes with a guaranteed arrival or response time, because it depends on which drivers are available near you when you book."] },
+    { h: "How live dispatch works, step by step", p: ["Every ASAP booking follows the same flow, whether you're moving a sofa or recovering a car."], list: [
+      "Enter the details: pickup, drop-off and what's being moved. For recovery, add where the vehicle is, where it's going, whether it runs, whether you have the keys and whether the wheels turn.",
+      "Choose a vehicle and see an instant price straight away.",
+      `Pay the booking fee: ${ASAP_PAY}`,
+      "Nearby drivers are alerted: available drivers near the pickup with a suitable vehicle are alerted first, and the search widens if needed.",
+      "A driver is assigned: the first suitable driver to accept is assigned to your job.",
+      "Track it live: follow the driver on the map from acceptance, through collection, to drop-off.",
+      "Get photo proof: the driver uploads photo proof when the job is done and you get a notification.",
+    ] },
+    { h: "What you see in the app", p: ["The app keeps you informed at each stage, so you're not left wondering whether anyone is coming."], list: [
+      "An instant price as soon as you've entered the job and chosen a vehicle",
+      "A clear waiting state while nearby drivers are being alerted",
+      "The moment a driver accepts, and who is coming",
+      "A live map showing the driver from acceptance, through collection, to drop-off",
+      "Photo proof when the job is done, with a notification to let you know",
+    ] },
+    { h: "ASAP Transport vs ASAP Recovery", p: ["ASAP Transport covers goods and items: same-day deliveries, urgent collections, last-minute marketplace pickups and business jobs that can't wait until tomorrow. You choose a vehicle that suits the load.", "ASAP Recovery covers vehicles. You tell us about the vehicle and its condition, choose a suitable recovery vehicle and the job goes to recovery drivers near you. Recovery drivers use vehicles such as tow trucks, flatbeds and low-loaders, depending on the vehicle being moved."] },
+    { h: "Safety first", p: ["If you've broken down, your safety comes before booking anything."], list: ASAP_SAFETY },
+    { h: "Cancelling while you wait", p: [ASAP_CANCEL] },
+  ],
+  table: {
+    h: "ASAP vs Bid Jobs vs Fixed Price Jobs",
+    head: ["", "ASAP Transport / ASAP Recovery", "Bid Jobs", "Fixed Price Jobs"],
+    rows: [
+      ["When", "Now, 24/7", "A date you choose", "A date you choose"],
+      ["Price", "Instant price shown when you book", "Drivers send you their offers", "You set the price, with a suggested price as a guide"],
+      ["How a driver is found", "Nearby available drivers are alerted; the first suitable driver to accept is assigned", "You compare offers and accept the one you want", "The first suitable driver to accept takes the job"],
+      ["Best for", "Urgent jobs, breakdowns and non-runners", "Planned moves where you want to compare offers", "Routine jobs where you know the going rate"],
+      ["Payment", ASAP_PAY, ASAP_PAY, ASAP_PAY],
+    ],
+  },
+  faqs: [
+    { q: "Can I get a man and van right now?", a: "Yes. Book ASAP Transport, enter your pickup, drop-off and what you're moving, and choose a van that suits the load. You see an instant price, and once you've paid the booking fee the job goes straight to available drivers nearby. Arrival times aren't guaranteed, as they depend on which drivers are available at that moment." },
+    { q: "Is there an app to book a courier on demand in the UK?", a: "Yes. The Cargo One app lets you book ASAP Transport and ASAP Recovery 24/7 across the UK. You get an instant price, your job is sent to nearby drivers, and you can track the driver live on the map." },
+    { q: "How do I track my courier live?", a: "Once a driver accepts your ASAP job, you can follow them on the map in the app, from acceptance, through collection, to drop-off. When the job is done, the driver uploads photo proof and you get a notification." },
+    { q: "Can I book vehicle recovery at night?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year, including nights, weekends and bank holidays. The job is offered to recovery drivers who are online when you book." },
+    { q: "How is a driver chosen for an ASAP job?", a: "Available drivers near the pickup with a suitable vehicle are alerted first. If needed, the search widens to drivers further away. The first suitable driver to accept is assigned to your job." },
+    { q: "How do I pay for an ASAP booking?", a: ASAP_PAY },
+    { q: "Can I cancel an ASAP booking?", a: ASAP_CANCEL },
+    { q: "Is there a guaranteed arrival time?", a: "No. ASAP jobs go to drivers who are available near you when you book, so there's no guaranteed arrival or response time. You can follow the driver live on the map once they accept." },
+    { q: "When should I use a Bid Job or Fixed Price Job instead?", a: "If the job can wait for a set date, a Bid Job lets you compare offers from drivers, and a Fixed Price Job lets you set the price up front. ASAP is for when you need it done now." },
+    { q: "My car has broken down on the motorway. Can I book recovery?", a: ASAP_MOTORWAY },
+  ],
+  links: [
+    ["How ASAP Transport works", "/how-it-works/asap-transport"], ["How ASAP Recovery works", "/how-it-works/asap-recovery"],
+    ["How live tracking works", "/asap/live-tracking"], ["24/7 ASAP vehicle recovery", "/asap/recovery"],
+    ["Same Day Courier", "/services/same-day-courier"], ["Vehicle Recovery", "/services/vehicle-recovery"],
+    ["Non-Runner Car Transport", "/services/non-runner-car-transport"], ["What to do if your car breaks down", "/guides/what-to-do-if-your-car-breaks-down"],
+    ["Bid Jobs", "/how-it-works/bid-jobs"], ["Fixed Price Jobs", "/how-it-works/fixed-price-jobs"],
+  ],
+  appLinks: true,
+};
+
+const ASAP_TRACKING = {
+  path: "/asap/live-tracking", kind: "Article", eyebrow: "ASAP · LIVE TRACKING", image: ASAP_IMG.boxes,
+  title: "Live Courier & Recovery Tracking Explained | Cargo One",
+  h1: "How live courier and recovery tracking works",
+  description: "What you see when you track an ASAP Transport or ASAP Recovery job live: driver accepted, on the way, collected, delivered and photo proof.",
+  intro: "When you book ASAP Transport or ASAP Recovery, you don't have to wonder where your driver is. From the moment a driver accepts your job, you can follow them on the map in the Cargo One app, through collection and on to drop-off, with photo proof when the job is done.",
+  crumbs: [["Home", "/"], ASAP_CRUMB, ["Live tracking"]],
+  sections: [
+    { h: "Before a driver accepts", p: ["After you've paid the booking fee, your job is sent to available drivers near the pickup with a suitable vehicle. The search widens if needed. While you're waiting for a driver, the app shows that drivers are being alerted.", "If your plans change while you're still waiting for a driver, you can cancel in the app and your booking fee is refunded in full."] },
+    { h: "Driver accepted", p: ["The first suitable driver to accept is assigned to your job, and you can see who's coming. From this point the driver appears on the live map."] },
+    { h: "On the way to the pickup", p: ["You can watch the driver head towards the pickup on the map. If you're waiting with a broken-down vehicle, make sure you're somewhere safe while you wait. For recovery jobs, the details you added about the vehicle, the keys and access help the driver when they arrive."] },
+    { h: "Collected and on to the drop-off", p: ["Once your items or vehicle have been collected, the map follows the driver to the drop-off. After collection, the job can't be cancelled in the app, so contact support if something changes."] },
+    { h: "Delivered, with photo proof", p: ["When the job is done, the driver uploads photo proof and you get a notification. The photos give you a record of how and where your items or vehicle were left."] },
+    { h: "The stages at a glance", p: ["Every ASAP job moves through the same stages, so you always know where things stand."], list: ["Waiting for a driver: nearby drivers are being alerted", "Accepted: a driver has taken the job and appears on the map", "On the way: the driver is heading to the pickup", "Collected: your items or vehicle are on board", "Delivered: photo proof is uploaded and you're notified"] },
+  ],
+  faqs: [
+    { q: "When does live tracking start?", a: "Live tracking starts when a driver accepts your ASAP job. You can then follow them on the map from acceptance, through collection, to drop-off." },
+    { q: "Can I track a recovery truck live?", a: "Yes. ASAP Recovery jobs are tracked in the same way as ASAP Transport, so you can follow the recovery driver on the map from acceptance to drop-off." },
+    { q: "Will I know when my delivery is complete?", a: "Yes. When the job is done, the driver uploads photo proof and you get a notification." },
+    { q: "Do I need the app to track my driver?", a: "Live tracking is shown on the map in the Cargo One app once a driver accepts your job." },
+    { q: "What if no driver has accepted yet?", a: "While your job is still waiting for a driver, you can cancel it in the app and your booking fee is refunded in full." },
+  ],
+  links: [
+    ["ASAP live dispatch explained", "/asap"], ["24/7 ASAP vehicle recovery", "/asap/recovery"],
+    ["How ASAP Transport works", "/how-it-works/asap-transport"], ["How ASAP Recovery works", "/how-it-works/asap-recovery"],
+    ["Same Day Courier", "/services/same-day-courier"], ["Vehicle Recovery", "/services/vehicle-recovery"],
+  ],
+  appLinks: true,
+};
+
+const ASAP_RECOVERY = {
+  path: "/asap/recovery", kind: "Service", serviceType: "Vehicle recovery", eyebrow: "ASAP RECOVERY · 24/7", image: ASAP_IMG.recovery,
+  title: "24/7 ASAP Vehicle Recovery: How It Works | Cargo One",
+  h1: "24/7 ASAP vehicle recovery: how it works",
+  description: "An in-depth look at ASAP Recovery: what to do first after a breakdown, what details to give, the recovery vehicles used and how live tracking works.",
+  intro: "A breakdown rarely happens at a convenient time. ASAP Recovery lets you book vehicle recovery live, 24/7, 365 days a year, from the Cargo One app or website. This page goes through the whole process in detail: staying safe, what to tell the driver, which recovery vehicles are used and what happens once your job is sent out.",
+  crumbs: [["Home", "/"], ASAP_CRUMB, ["ASAP Recovery"]],
+  sections: [
+    { h: "When to use ASAP Recovery", p: ["ASAP Recovery is for any vehicle that needs moving now and can't, or shouldn't, be driven. That includes:"], list: ["Breakdowns at home, at work, in a car park or by the roadside", "Non-runners that need taking to a garage, a home or a yard", "Accident-damaged vehicles that can't be driven safely", "Cars, vans, motorbikes and heavier vehicles"] },
+    { h: "Stay safe before you book", p: ["Booking a recovery comes second to keeping everyone safe. Before you open the app:"], list: ASAP_SAFETY },
+    { h: "The motorway rule", p: [ASAP_MOTORWAY, "This applies to any live motorway, at any time of day. Booking from a safe place keeps you, the recovery driver and other road users out of danger."] },
+    { h: "What to tell the driver", p: ["The more accurate your details, the easier it is for a suitable driver to accept and to recover the vehicle first time. When you book, you add:"], list: ["The exact location of the vehicle, such as the street, car park level or a nearby landmark", "Where the vehicle is going", "Whether the vehicle runs", "Whether you have the keys", "Whether the wheels turn, or if any are locked or damaged", "How to access the vehicle, especially if you can't stay with it"] },
+    { h: "Recovery vehicles drivers use", p: ["You choose a suitable recovery vehicle when you book. In general terms, recovery drivers use:"], list: ["Tow trucks, which lift one end of the vehicle and tow it on its other wheels", "Flatbeds, including tilt-and-slide beds, which carry the whole vehicle on a bed that tilts down to load it", "Low-loaders, with a low deck for low, long or heavy vehicles"] },
+    { h: "What happens after you book", p: [`You see an instant price once you've chosen a recovery vehicle. ${ASAP_PAY}`, "Recovery drivers near the vehicle with a suitable vehicle are alerted first, and the search widens if needed. The first suitable driver to accept is assigned, and there is no guaranteed arrival or response time."] },
+    { h: "Live tracking and photo proof", p: ["Once a driver accepts, you can follow the recovery on the map from acceptance, through collection, to drop-off. When the vehicle is dropped off, the driver uploads photo proof and you get a notification."] },
+    { h: "Cancelling", p: [ASAP_CANCEL] },
+  ],
+  faqs: [
+    { q: "Can I get my car recovered right now?", a: "You can book ASAP Recovery 24/7. Your job is sent straight to recovery drivers who are online near the vehicle, and the first suitable driver to accept is assigned. There's no guaranteed arrival time." },
+    { q: "My car won't start. Is that a recovery job?", a: "Yes. Non-runners are one of the most common ASAP Recovery jobs. Say that the vehicle doesn't run, whether you have the keys and whether the wheels turn, so a suitable recovery vehicle is used." },
+    { q: "Can you recover an accident-damaged car?", a: "Yes, as long as it is somewhere safe. If the vehicle is on a live motorway, the official services move it first, and you can then book recovery from a safe place." },
+    { q: "Do I need to stay with the vehicle?", a: "Stay with it if it's safe to do so. If you have to leave, give the precise location, explain how the driver can get to the vehicle and say where the keys will be." },
+    { q: "Can I book a recovery at night or at the weekend?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year, and the job is offered to recovery drivers online near the vehicle when you book." },
+    { q: "How do I pay for ASAP Recovery?", a: ASAP_PAY },
+  ],
+  links: [
+    ["How ASAP Recovery works", "/how-it-works/asap-recovery"], ["ASAP live dispatch explained", "/asap"], ["How live tracking works", "/asap/live-tracking"],
+    ["Vehicle Recovery", "/services/vehicle-recovery"], ["Non-Runner Car Transport", "/services/non-runner-car-transport"],
+    ["What to do if your car breaks down", "/guides/what-to-do-if-your-car-breaks-down"], ["How to transport a non-running car", "/guides/how-to-transport-a-non-running-car"],
+  ],
+  appLinks: true,
+};
+
+// City-specific copy: unique intro, road notes and FAQs per city. Areas come from the existing city data.
+const ASAP_RECOVERY_CITY_DATA = [
+  {
+    slug: "london",
+    intro: "Breaking down in London can mean anything from a car that won't start on a residential street in Clapham to a van stuck on the North Circular at rush hour. With ASAP Recovery you can book live from your phone, day or night, and follow the recovery driver across the city on the map.",
+    roads: [
+      ["M25", "The orbital motorway around London. If you stop on the M25, the official services move the vehicle first; book recovery once it is somewhere safe."],
+      ["A406 North Circular", "A busy dual carriageway through north London. If you break down here, get to a safe place away from traffic before booking."],
+      ["A13", "The main road east towards Barking and Dagenham. Give the exact junction or nearby landmark so the driver can find you."],
+      ["A40 Westway", "The elevated route into west London. If the vehicle can't be moved to a safe spot, put your safety first and call 999 if anyone is in danger."],
+    ],
+    faqs: [
+      { q: "Can I book ASAP Recovery from a London car park?", a: "Yes. Add the car park name, the level and where the vehicle is parked, plus any height limits at the entrance, so the driver can plan the right recovery vehicle." },
+      { q: "I've broken down on the M25. What should I do?", a: "The M25 is a live motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery from there and track the driver live." },
+      { q: "Can I track the recovery truck through London traffic?", a: "Yes. Once a driver accepts, you can follow them on the map from acceptance, through collection, to drop-off anywhere in London." },
+    ],
+  },
+  {
+    slug: "birmingham",
+    intro: "Birmingham sits at the centre of the motorway network, so breakdowns here range from cars that won't start in Moseley or Harborne to vehicles that have been moved off the M6 near Spaghetti Junction. ASAP Recovery lets you book live, 24/7, and see the recovery driver on the map as they come to you.",
+    roads: [
+      ["M6 at Spaghetti Junction", "One of the busiest motorway junctions in the country. If you stop on the M6, the official services move the vehicle first; then book recovery from a safe place."],
+      ["M5", "The motorway running south-west from Birmingham. The same motorway rule applies: wait for the official services if you're on the live carriageway."],
+      ["M42", "Running east and south of the city past the airport and the NEC. Book once the vehicle has been moved somewhere safe."],
+      ["A38(M) Aston Expressway", "A short motorway into the city centre. Motorway rules apply here too, so the official services move a stopped vehicle first."],
+    ],
+    faqs: [
+      { q: "Can I book recovery after breaking down near Spaghetti Junction?", a: "If the vehicle is on the live motorway, the official services move it first. Once it is somewhere safe, book ASAP Recovery and follow the driver live on the map." },
+      { q: "My car won't start at home in Birmingham. Can you help?", a: "Yes. Book ASAP Recovery, say the car doesn't run, whether you have the keys and whether the wheels turn, and add where it's going, such as your garage." },
+      { q: "Can I book recovery in Birmingham on a Sunday night?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year, and the job is offered to recovery drivers online near the vehicle when you book." },
+    ],
+  },
+  {
+    slug: "manchester",
+    intro: "Manchester is ringed by the M60, with the M62, M56 and M602 feeding traffic in from every direction. Whether your car has given up in Didsbury, Chorlton or the Trafford Park area, ASAP Recovery lets you book live and track your recovery driver across Greater Manchester.",
+    roads: [
+      ["M60", "The ring motorway around Manchester. If you stop on it, the official services move the vehicle first; then you can book recovery from a safe place."],
+      ["M62", "The trans-Pennine motorway to the north of the city. The motorway rule applies on the live carriageway."],
+      ["M56", "Running south to the airport and towards Cheshire. Book recovery once the vehicle has been moved somewhere safe."],
+      ["M602", "The short motorway link into Salford. Motorway rules apply, so wait for the official services if you've stopped on it."],
+    ],
+    faqs: [
+      { q: "I've broken down on the M60. Can I book ASAP Recovery?", a: "Not while the vehicle is on the live motorway. The official services move it first, and once it is somewhere safe you can book ASAP Recovery from there." },
+      { q: "Can I get a non-runner collected from a Manchester street?", a: "Yes. Add the exact street, whether the car runs, has keys and has wheels that turn, and how to access it if you can't stay with it." },
+      { q: "Will I see when the recovery driver is close?", a: "Yes. Once a driver accepts, you can follow them on the map as they head to the vehicle in Manchester." },
+    ],
+  },
+  {
+    slug: "leeds",
+    intro: "Leeds is where the M1, M62 and M621 meet, and the A64 runs out towards York. Breakdowns here can happen anywhere from Headingley's terraced streets to the industrial estates at Cross Green and Stourton. ASAP Recovery lets you book live and follow the recovery on the map.",
+    roads: [
+      ["M1", "Running south from Leeds. If you stop on the M1, the official services move the vehicle first; book recovery from a safe place."],
+      ["M62", "The east-west motorway south of the city. The same motorway rule applies on the live carriageway."],
+      ["M621", "The motorway link into the city centre. Wait for the official services if you've stopped on it."],
+      ["A64", "The main road east from Leeds. If you break down on it, get to a safe place away from traffic first."],
+    ],
+    faqs: [
+      { q: "Can I book recovery from an industrial estate in Leeds?", a: "Yes. Add the estate, the unit or a landmark, and how the driver can reach the vehicle, especially outside working hours." },
+      { q: "My car broke down on the M621. What happens next?", a: "The M621 is a motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery and track the driver live." },
+      { q: "Can I book ASAP Recovery in Leeds late at night?", a: "Yes. ASAP Recovery runs 24/7, 365 days a year, and late-night jobs in Leeds are offered to recovery drivers who are online when you book." },
+    ],
+  },
+  {
+    slug: "glasgow",
+    intro: "Glasgow's motorways, the M8, M74, M77 and M80, carry traffic right through and around the city. If your car won't go in the West End, Shawlands or Dennistoun, or has been moved off a motorway to a safe place, ASAP Recovery lets you book live and track the driver on the map.",
+    roads: [
+      ["M8", "The motorway through the heart of Glasgow. If you stop on it, the official services move the vehicle first; then book recovery from a safe place."],
+      ["M74", "Running south-east from the city. The motorway rule applies on the live carriageway."],
+      ["M77", "Heading south-west towards Ayrshire. Book recovery once the vehicle is somewhere safe."],
+      ["M80", "Running north-east towards Stirling. Wait for the official services if you've stopped on it."],
+    ],
+    faqs: [
+      { q: "I've broken down on the M8 in Glasgow. Can I book recovery?", a: "The M8 is a live motorway, so the official services move the vehicle first. Once it is in a safe place, you can book ASAP Recovery from there." },
+      { q: "Can you collect a car from a tenement street in Glasgow?", a: "Yes. Add the exact address, where the car is parked and any access details, plus whether it runs, has keys and has wheels that turn." },
+      { q: "Can I track my recovery driver in Glasgow?", a: "Yes. Once a driver accepts, you can follow them on the map from acceptance, through collection, to drop-off." },
+    ],
+  },
+  {
+    slug: "liverpool",
+    intro: "Liverpool is served by the M62, M57 and M58, with the Mersey tunnels linking the city to the Wirral. Whether your car won't start in Allerton or Wavertree or has broken down near the docks at Seaforth, ASAP Recovery lets you book live and follow the recovery on the map.",
+    roads: [
+      ["M62", "The main motorway east out of Liverpool. If you stop on it, the official services move the vehicle first; book recovery from a safe place."],
+      ["M57", "Running along the east side of the city. The motorway rule applies on the live carriageway."],
+      ["M58", "Heading north-east towards Wigan. Book recovery once the vehicle is somewhere safe."],
+      ["The Mersey tunnels", "The road links under the river to the Wirral. If you have a problem here, follow the instructions you're given and book recovery once the vehicle is somewhere safe."],
+    ],
+    faqs: [
+      { q: "Can I book recovery to take my car from Liverpool to a garage on the Wirral?", a: "Yes. Add the pickup and the garage as the drop-off, and you'll see an instant price for the recovery vehicle you choose." },
+      { q: "I broke down on the M62 near Liverpool. What do I do?", a: "The M62 is a live motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery from there." },
+      { q: "Can I book ASAP Recovery in Liverpool on a bank holiday?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year." },
+    ],
+  },
+  {
+    slug: "newcastle",
+    intro: "Around Newcastle, the A1 Western Bypass, A19, A69 and the Tyne Tunnel carry most of the traffic. If your car has broken down in Jesmond, Gosforth or Heaton, or at the Team Valley, ASAP Recovery lets you book live, 24/7, and track the recovery driver on the map.",
+    roads: [
+      ["A1 Western Bypass", "The main route around the west of the city. If you break down on it, get to a safe place away from traffic before booking."],
+      ["A19", "Running north to south on the east side of Tyneside. Give the nearest junction or landmark so the driver can find the vehicle."],
+      ["A69", "Heading west towards Carlisle. Stay safe, switch on your hazard lights and call 999 if anyone is in danger."],
+      ["The Tyne Tunnel", "The A19 crossing under the river. If you have a problem here, follow the instructions you're given and book recovery once the vehicle is somewhere safe."],
+    ],
+    faqs: [
+      { q: "Can I book recovery from the Team Valley in Gateshead?", a: "Yes. Add the exact location, such as the unit or a nearby landmark, and how the driver can reach the vehicle." },
+      { q: "My car won't start in Newcastle. Can a recovery driver take it to my garage?", a: "Yes. Say the car doesn't run, whether you have the keys and whether the wheels turn, and add your garage as the drop-off." },
+      { q: "Can I follow the recovery truck live in Newcastle?", a: "Yes. Once a driver accepts, you can follow them on the map from acceptance, through collection, to drop-off." },
+    ],
+  },
+  {
+    slug: "sheffield",
+    intro: "Sheffield's hills and the M1 at Tinsley Viaduct both have their share of breakdowns, from cars that won't start on steep streets in Crookes or Walkley to vehicles that have stopped on the Parkway. ASAP Recovery lets you book live and follow the recovery driver on the map.",
+    roads: [
+      ["M1 at Tinsley Viaduct", "The motorway past the east of the city. If you stop on the M1, the official services move the vehicle first; then book recovery from a safe place."],
+      ["Sheffield Parkway", "The main route between the M1 and the city centre. If you break down here, get to a safe place away from traffic first."],
+      ["A61", "Running north and south through the city. Give the nearest junction or landmark when you book."],
+      ["A57 Snake Pass", "The route west over the Peak District. Add the exact spot, as there may be few landmarks nearby."],
+    ],
+    faqs: [
+      { q: "Can you recover a car from a steep street in Sheffield?", a: "Yes. Tell us the exact address, whether the car runs and whether the wheels turn, so a suitable recovery vehicle is used." },
+      { q: "I broke down on the Snake Pass. Can I book ASAP Recovery?", a: "Yes, once you're safe. Switch on your hazard lights, call 999 if anyone is in danger, and add the exact location, as there may be few landmarks nearby." },
+      { q: "Can I book recovery in Sheffield at night?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year." },
+    ],
+  },
+  {
+    slug: "bristol",
+    intro: "Bristol sits beside the M4 and M5, with the M32 bringing traffic into the centre and the A4 Portway running out to Avonmouth. Whether your car won't start in Clifton or Bedminster, or has been moved off the M5 to a safe place, ASAP Recovery lets you book live and track the recovery driver.",
+    roads: [
+      ["M5 at the Avonmouth Bridge", "A busy motorway crossing west of the city. If you stop on it, the official services move the vehicle first; then book recovery from a safe place."],
+      ["M4/M5 Almondsbury interchange", "Where the two motorways meet north of Bristol. The motorway rule applies on the live carriageway."],
+      ["M32", "The motorway into the city centre. Wait for the official services if you've stopped on it."],
+      ["A4 Portway", "Running alongside the river to Avonmouth. If you break down here, get to a safe place away from traffic before booking."],
+    ],
+    faqs: [
+      { q: "I've broken down on the M32 in Bristol. Can I book recovery?", a: "The M32 is a motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery and track the driver live." },
+      { q: "Can I get a car recovered from Clifton's narrow streets?", a: "Yes. Add the exact address, where the car is parked and any access details, so the driver can plan how to reach it." },
+      { q: "Can I book ASAP Recovery in Bristol at the weekend?", a: "Yes. Weekends are no different: ASAP Recovery can be booked 24/7, every day of the year." },
+    ],
+  },
+  {
+    slug: "nottingham",
+    intro: "Nottingham is served by the M1 between junctions 24 and 27, with the A52, A610 and the A6514 Ring Road carrying traffic around the city. If your car has broken down in West Bridgford, Beeston or Sherwood, ASAP Recovery lets you book live, 24/7, and track the recovery driver.",
+    roads: [
+      ["M1 junctions 24 to 27", "The motorway west of the city. If you stop on the M1, the official services move the vehicle first; then book recovery from a safe place."],
+      ["A52", "Running east and west through Nottingham. If you break down here, get to a safe place away from traffic first."],
+      ["A610", "Heading north-west towards the M1. Give the nearest junction or landmark when you book."],
+      ["The A6514 Ring Road", "The ring road around the city. Stay safe, switch on your hazard lights and call 999 if anyone is in danger."],
+    ],
+    faqs: [
+      { q: "Can I book recovery from the Nottingham Ring Road?", a: "Yes, once you're safe. Get away from moving traffic, switch on your hazard lights, then add the nearest junction or landmark when you book." },
+      { q: "My car broke down on the M1 near Nottingham. What now?", a: "The M1 is a live motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery from there." },
+      { q: "Will I get photo proof when my car is dropped off?", a: "Yes. When the vehicle is dropped off, the driver uploads photo proof and you get a notification." },
+    ],
+  },
+  {
+    slug: "stoke-on-trent",
+    intro: "Stoke-on-Trent is linked by the A500 to junctions 15 and 16 of the M6, with the A50 and A53 heading out east and north. Whether your car won't start in Trentham or Hartshill or has broken down near the Etruria Valley, ASAP Recovery lets you book live and follow the recovery on the map.",
+    roads: [
+      ["A500", "The main road through the Potteries. If you break down on it, get to a safe place away from traffic before booking."],
+      ["M6 junctions 15 and 16", "The motorway either side of the city. If you stop on the M6, the official services move the vehicle first; then book recovery from a safe place."],
+      ["A50", "Heading east towards Derby. Give the nearest junction or landmark so the driver can find the vehicle."],
+      ["A53", "Running north-east towards Leek. Add the exact spot, especially on the quieter stretches."],
+    ],
+    faqs: [
+      { q: "Can I book recovery after breaking down on the A500?", a: "Yes, once you're safe. Get away from moving traffic, switch on your hazard lights and call 999 if anyone is in danger, then book ASAP Recovery." },
+      { q: "Can a recovery driver take my car from Stoke to a garage in Newcastle-under-Lyme?", a: "Yes. Add the garage as the drop-off and you'll see an instant price for the recovery vehicle you choose." },
+      { q: "Can I book ASAP Recovery in Stoke-on-Trent at night?", a: "Yes. ASAP Recovery can be booked 24/7, 365 days a year." },
+    ],
+  },
+  {
+    slug: "preston",
+    intro: "Preston sits on the M6, with the M55 heading to Blackpool, the M61 to Manchester and the A59 running east and west. If your car won't start in Fulwood or Penwortham, or has broken down near Preston Docks, ASAP Recovery lets you book live and track the recovery driver on the map.",
+    roads: [
+      ["M6", "The main north-south motorway past Preston. If you stop on it, the official services move the vehicle first; then book recovery from a safe place."],
+      ["M55", "The motorway west towards Blackpool. The motorway rule applies on the live carriageway."],
+      ["M61", "Heading south towards Bolton and Manchester. Book recovery once the vehicle is somewhere safe."],
+      ["A59", "Running through the city towards Liverpool and Skipton. If you break down here, get to a safe place away from traffic first."],
+    ],
+    faqs: [
+      { q: "I've broken down on the M55 near Preston. Can I book recovery?", a: "The M55 is a live motorway, so the official services move the vehicle first. Once it is somewhere safe, you can book ASAP Recovery from there." },
+      { q: "Can you collect a non-runner from Preston Docks?", a: "Yes. Add the exact location and access details, plus whether the vehicle runs, has keys and has wheels that turn." },
+      { q: "Can I follow my recovery driver live in Preston?", a: "Yes. Once a driver accepts, you can follow them on the map from acceptance, through collection, to drop-off." },
+    ],
+  },
+];
+
+function asapCityPage(d) {
+  const c = LOCAL_CITY_BY_SLUG[d.slug] || LOCAL_PLACE_BY_SLUG[d.slug];
+  return {
+    path: `/asap/recovery/${d.slug}`, kind: "Service", serviceType: "Vehicle recovery", city: c.name, eyebrow: `ASAP RECOVERY · ${c.name.toUpperCase()}`, image: ASAP_IMG.recovery,
+    title: `ASAP Recovery ${c.name}: Book & Track Live | Cargo One`,
+    h1: `ASAP Recovery in ${c.name}, booked and tracked live`,
+    description: `Broken down in ${c.name}? Book ASAP Recovery live 24/7, see an instant price and track your recovery driver on the map until drop-off.`,
+    intro: d.intro,
+    crumbs: [["Home", "/"], ASAP_CRUMB, ASAP_RECOVERY_CRUMB, [c.name]],
+    sections: [
+      { h: `Main roads around ${c.name}`, p: [`These are some of the main roads around ${c.name}. The safety steps are the same wherever you are: get to a safe place, switch on your hazard lights and call 999 if anyone is in danger.`], list: d.roads.map(([r, t]) => `${r}: ${t}`) },
+      { h: `Booking ASAP Recovery in ${c.name} now`, p: [`Add where the vehicle is in ${c.name}, where it's going, whether it runs, whether you have the keys and whether the wheels turn, then choose a recovery vehicle to see an instant price. ${ASAP_PAY}`, "Recovery drivers near the vehicle are alerted first, and the search widens if needed. The first suitable driver to accept is assigned. There's no guaranteed arrival time, as it depends on which drivers are online at that moment."] },
+      { h: "Tracking your recovery live", p: ["Once a driver accepts, you can follow the recovery on the map from acceptance, through collection, to drop-off. When the vehicle is dropped off, the driver uploads photo proof and you get a notification. While you're still waiting for a driver, you can cancel in the app and your booking fee is refunded in full."] },
+      { h: `Areas we cover in ${c.name}`, p: [`ASAP Recovery can be booked from anywhere in ${c.name}, including residential streets and industrial areas such as:`], list: [...c.residential, ...c.industrial] },
+    ],
+    faqs: d.faqs,
+    links: [
+      [`Vehicle Recovery in ${c.name}`, `/services/vehicle-recovery/${d.slug}`], [`Couriers in ${c.name}`, `/couriers/${d.slug}`],
+      ["24/7 ASAP vehicle recovery", "/asap/recovery"], ["How ASAP Recovery works", "/how-it-works/asap-recovery"], ["How live tracking works", "/asap/live-tracking"],
+    ],
+    otherCities: true,
+  };
+}
+
+export const ASAP_RECOVERY_CITIES = ASAP_RECOVERY_CITY_DATA.map(asapCityPage);
+export const ASAP_PAGES = [ASAP_HUB, ASAP_TRACKING, ASAP_RECOVERY, ...ASAP_RECOVERY_CITIES];
+export const ASAP_PAGE_BY_PATH = Object.fromEntries(ASAP_PAGES.map((p) => [p.path, p]));
+
+export function asapOtherCities(p) {
+  return ASAP_RECOVERY_CITIES.filter((o) => o.path !== p.path).map((o) => [`ASAP Recovery in ${o.city}`, o.path]);
+}
+
+export function asapLists(p) {
+  return [
+    ...p.sections.map((s) => [s.h, [...s.p, ...(s.list || [])]]),
+    ...(p.table ? [[p.table.h, p.table.rows.map((r) => `${r[0]}: ${r.slice(1).map((v, i) => `${p.table.head[i + 1]}: ${v}`).join(" · ")}`)]] : []),
+    ["Related pages", p.links],
+    ...(p.otherCities ? [["ASAP Recovery in other cities", asapOtherCities(p)]] : []),
+    ...(p.path === "/asap/recovery" ? [["ASAP Recovery by city", ASAP_RECOVERY_CITIES.map((o) => [`ASAP Recovery in ${o.city}`, o.path])]] : []),
+    ...(p.appLinks ? [["Get the Cargo One app", ASAP_APP_LINKS]] : []),
+  ];
+}
+
+export function asapJsonLd(p) {
+  const url = `${SITE_URL}${p.path}`;
+  const main = p.kind === "Article"
+    ? { "@context": "https://schema.org", "@type": "Article", headline: p.h1, description: p.description, image: `${SITE_URL}${p.image}`, author: { "@type": "Organization", name: "Cargo One", url: SITE_URL }, publisher: { "@type": "Organization", name: "Cargo One", url: SITE_URL }, mainEntityOfPage: url }
+    : { "@context": "https://schema.org", "@type": "Service", name: p.h1, serviceType: p.serviceType || "On-demand courier and vehicle recovery", description: p.description, url, provider: { "@type": "Organization", name: "Cargo One", url: SITE_URL }, areaServed: p.city ? { "@type": "City", name: p.city } : { "@type": "Country", name: "United Kingdom" } };
+  const crumbs = p.crumbs.map(([name, path]) => [name, path || p.path]);
+  return [main, faqJsonLd(p.faqs), breadcrumbJsonLd(crumbs)];
+}

@@ -38,3 +38,19 @@ Availability: open 24/7, 365 days a year
 - [FAQ](https://cargoone.co.uk/faq)
 - [Contact](https://cargoone.co.uk/contact)
 - [Terms](https://cargoone.co.uk/terms), [Privacy](https://cargoone.co.uk/privacy), [Cookies](https://cargoone.co.uk/cookies)
+
+## ASAP live dispatch and ASAP Recovery
+- ASAP is Cargo One's on-demand, app-based live dispatch. There are two ASAP booking types: ASAP Transport (moving items now) and ASAP Recovery (moving vehicles now, such as breakdowns, non-runners and accident-damaged vehicles).
+- Book 24/7, 365 days a year, with drivers available around the clock. There are no guaranteed arrival or response times.
+- The customer enters pickup, drop-off and what's being moved (for recovery: vehicle location, destination, whether it runs, whether there are keys and whether the wheels turn), chooses a vehicle and sees an instant price.
+- Pay Cargo One's booking fee by card. The driver's price is paid to the driver on delivery.
+- Available drivers near the pickup with a suitable vehicle are alerted first; the search widens if needed; the first suitable driver to accept is assigned.
+- Live tracking on the map from acceptance, through collection, to drop-off. The driver uploads photo proof when the job is done and the customer gets a notification.
+- While still waiting for a driver, the customer can cancel in the app and the booking fee is refunded in full. After collection, the job can't be cancelled in the app; contact support.
+- Motorway safety: vehicles on a live motorway should first be moved by the official services; then book recovery from a safe place.
+- Other booking types: Bid Jobs (drivers send offers for a scheduled job) and Fixed Price Jobs (the customer sets the price up front).
+- [ASAP live dispatch explained](https://cargoone.co.uk/asap)
+- [How live tracking works](https://cargoone.co.uk/asap/live-tracking)
+- [24/7 ASAP vehicle recovery](https://cargoone.co.uk/asap/recovery)
+- ASAP Recovery by city: [London](https://cargoone.co.uk/asap/recovery/london), [Birmingham](https://cargoone.co.uk/asap/recovery/birmingham), [Manchester](https://cargoone.co.uk/asap/recovery/manchester), [Leeds](https://cargoone.co.uk/asap/recovery/leeds), [Glasgow](https://cargoone.co.uk/asap/recovery/glasgow), [Liverpool](https://cargoone.co.uk/asap/recovery/liverpool), [Newcastle](https://cargoone.co.uk/asap/recovery/newcastle), [Sheffield](https://cargoone.co.uk/asap/recovery/sheffield), [Bristol](https://cargoone.co.uk/asap/recovery/bristol), [Nottingham](https://cargoone.co.uk/asap/recovery/nottingham), [Stoke-on-Trent](https://cargoone.co.uk/asap/recovery/stoke-on-trent), [Preston](https://cargoone.co.uk/asap/recovery/preston)
+- [How ASAP Transport works](https://cargoone.co.uk/how-it-works/asap-transport), [How ASAP Recovery works](https://cargoone.co.uk/how-it-works/asap-recovery)

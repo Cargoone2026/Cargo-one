@@ -676,3 +676,10 @@ Each future phase must start from the locked baseline.
 - New optional nearbyTowns field -> "Towns we cover nearby" block in LocalPlaces.jsx (conditional) + 1 prerender line; placeNearbyTowns() links towns that have their own hub.
 - Nearby routes limited to hubs that have all 7 service pages (Phase 3 Batch 3 cities only have 5) to avoid broken links.
 - Totals: 386 new URLs; sitemap 451 -> 837. Baseline for byte-identical check: git archive of Phase 3 commit 2059d06.
+
+## SEO: ASAP live dispatch hub (2026-06, additive only, preview only, NOT deployed)
+- New: /asap, /asap/live-tracking, /asap/recovery, /asap/recovery/{london,birmingham,manchester,leeds,glasgow,liverpool,newcastle,sheffield,bristol,nottingham,stoke-on-trent,preston} (15 pages).
+- Files: NEW `frontend/src/pages/marketing/AsapPages.jsx`; lines appended only to `src/data/seo.js` (+372), `scripts/prerender.mjs` (+5), `src/App.js` (+3), `public/llms.txt` (+16 "ASAP live dispatch and ASAP Recovery" section).
+- QA (`/app/memory/seo_qa.mjs` vs baseline): 0 existing pages changed, sitemap 837 → 852, no dup titles/H1/descriptions, no broken links, no £, titles ≤60, descriptions ≤155, Service/Article + FAQPage + BreadcrumbList, self-canonical.
+- Privacy note on live tracking OMITTED (code doesn't clearly confirm "job only": driver location is also shared while online in Live Mode; booking trail stays viewable by customer/driver/admin after delivery).
+- Linked only from new pages, sitemap and llms.txt (no existing page changes).
