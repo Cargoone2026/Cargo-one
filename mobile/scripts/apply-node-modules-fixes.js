@@ -227,11 +227,92 @@ function patchExpoModulesCorePermissions(nodeModulesDir) {
   fixed += 1;
 }
 
+// ---------------------------------------------------------------------------
+// Android libraries (all) · *.kt · MutableList.removeLast() / removeFirst()
+// ---------------------------------------------------------------------------
+// With compileSdk 35, Kotlin binds `list.removeLast()` / `list.removeFirst()`
+// to the Java 21 List.removeLast()/removeFirst() methods, which only exist on
+// Android 15+ (API 35). On older devices the app crashes at runtime with:
+//   java.lang.NoSuchMethodError: No interface method removeLast()Ljava/lang/Object;
+//   in class Ljava/util/List  (react-native-screens ScreenStack.kt:319)
+// Workaround: rewrite `X.removeLast()` -> `X.removeAt(X.size - 1)` and
+// `X.removeFirst()` -> `X.removeAt(0)` — same element removed and returned on
+// every API level. Every call site in the scanned files is guarded by an
+// isEmpty() check, so the exception type on an empty list is never reached.
+// Only simple receivers (`a`, `a.b`) are rewritten; anything else is logged.
+// Scans <pkg>/android/src/**/*.kt for every package (incl. scoped and nested).
+function patchKotlinListRemoveLastFirst(nodeModulesDir) {
+  if (!fs.existsSync(nodeModulesDir)) return;
+
+  function walkKt(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...walkKt(full));
+      else if (entry.isFile() && entry.name.endsWith('.kt')) out.push(full);
+    }
+    return out;
+  }
+
+  function packageDirs(nmDir) {
+    const out = [];
+    for (const entry of fs.readdirSync(nmDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const full = path.join(nmDir, entry.name);
+      if (entry.name.startsWith('@')) {
+        for (const sub of fs.readdirSync(full, { withFileTypes: true })) {
+          if (sub.isDirectory()) out.push(path.join(full, sub.name));
+        }
+      } else out.push(full);
+    }
+    return out;
+  }
+
+  const simple = /(?<![\w.)\]?!])([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\.remove(Last|First)\(\)/g;
+
+  function patchPackages(nmDir) {
+    for (const pkgDir of packageDirs(nmDir)) {
+      const srcDir = path.join(pkgDir, 'android', 'src');
+      if (fs.existsSync(srcDir)) {
+        for (const ktPath of walkKt(srcDir)) {
+          const original = fs.readFileSync(ktPath, 'utf8');
+          if (!/\.remove(Last|First)\(\)/.test(original)) continue;
+          const rel = path.relative(workspaceRoot, ktPath);
+          const lines = original.split('\n');
+          const patchedLines = lines.map((line, i) => {
+            const next = line.replace(simple, (_m, recv, which) =>
+              which === 'Last' ? `${recv}.removeAt(${recv}.size - 1)` : `${recv}.removeAt(0)`,
+            );
+            if (next !== line) {
+              console.log(`[cargoone-postinstall] patched removeLast/removeFirst in ${rel}:${i + 1}`);
+              console.log(`    - ${line.trim()}`);
+              console.log(`    + ${next.trim()}`);
+            }
+            if (/\.remove(Last|First)\(\)/.test(next)) {
+              console.warn(`[cargoone-postinstall] WARNING unpatched removeLast/removeFirst (complex receiver) in ${rel}:${i + 1}`);
+            }
+            return next;
+          });
+          const patched = patchedLines.join('\n');
+          if (patched === original) continue;
+          fs.writeFileSync(ktPath, patched);
+          fixed += 1;
+        }
+      }
+      const nested = path.join(pkgDir, 'node_modules');
+      if (fs.existsSync(nested)) patchPackages(nested);
+    }
+  }
+
+  patchPackages(nodeModulesDir);
+}
+
 for (const root of candidateRoots) {
   stripAsyncStorageCodegen(root);
   patchExpoDeviceSimulator(root);
   patchExpoDevMenuSimulator(root);
   patchExpoModulesCorePermissions(root);
+  patchKotlinListRemoveLastFirst(root);
 }
 if (fixed === 0) {
   console.log(
