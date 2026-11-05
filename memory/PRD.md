@@ -683,3 +683,9 @@ Each future phase must start from the locked baseline.
 - QA (`/app/memory/seo_qa.mjs` vs baseline): 0 existing pages changed, sitemap 837 → 852, no dup titles/H1/descriptions, no broken links, no £, titles ≤60, descriptions ≤155, Service/Article + FAQPage + BreadcrumbList, self-canonical.
 - Privacy note on live tracking OMITTED (code doesn't clearly confirm "job only": driver location is also shared while online in Live Mode; booking trail stays viewable by customer/driver/admin after delivery).
 - Linked only from new pages, sitemap and llms.txt (no existing page changes).
+
+## Android customer start-up crash fix (2026-06, mobile build config only)
+- Root cause: duplicate React / React Native copies (nested under lucide-react-native/node_modules) → two BatchedBridge instances → "AppRegistry.runApplication ... n = 0".
+- Fix: NEW `mobile/apps/customer/metro.config.js` (expo getDefaultConfig, watchFolders=[workspaceRoot], nodeModulesPaths=[app, root], resolveRequest forces react, react-native, react-native-svg, scheduler, @react-native/* to resolve from apps/customer/index.ts).
+- Verified (container, --no-bytecode since hermesc is x86-only on ARM container): Android bundle MessageQueue.js 3→1, react/index.js 3→1, lucide nested react-native/react 0. iOS export succeeds.
+- NOTE: `mobile/yarn.lock` has a pre-existing uncommitted change (not from this task) — user to decide.
