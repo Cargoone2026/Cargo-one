@@ -10,7 +10,7 @@
  *     · Account (Fleet, Notifications, Settings) · Legal · Danger (Logout).
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Image, Pressable, Text, View } from "react-native";
+import { Alert, Image, Platform, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { DriverAPI, type Review } from "@cargoone/core";
@@ -31,7 +31,7 @@ export default function ProfileScreen({ navigation }: P) {
 
   const pickPhoto = useCallback(async () => {
     if (uploadingRef.current) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const perm = Platform.OS === "android" ? { granted: true } : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert("Photo permission needed", "Please allow photo library access to update your profile picture.");
       return;

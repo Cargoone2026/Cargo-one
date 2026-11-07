@@ -1,6 +1,6 @@
 // DocumentsScreen — lists verification docs; upload/replace via camera or library.
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, ActivityIndicator, RefreshControl, Text, View } from "react-native";
+import { Alert, ActivityIndicator, Platform, RefreshControl, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as ImagePicker from "expo-image-picker";
 import { DriverAPI, type DriverDocument } from "@cargoone/core";
@@ -62,7 +62,7 @@ export default function DocumentsScreen({ navigation }: P) {
         if (!perm.granted) return setErr(type, "Camera permission is required to photograph documents.");
         res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.5, allowsEditing: false });
       } else {
-        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        const perm = Platform.OS === "android" ? { granted: true } : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) return setErr(type, "Photo library permission is required to attach photos.");
         res = await ImagePicker.launchImageLibraryAsync({
           base64: true, quality: 0.5, mediaTypes: ImagePicker.MediaTypeOptions.Images,

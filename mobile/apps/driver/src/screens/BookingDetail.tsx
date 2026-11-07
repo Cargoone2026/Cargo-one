@@ -666,7 +666,7 @@ function PODPane({
   const addFromLibrary = async () => {
     setErr(null);
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const perm = Platform.OS === "android" ? { granted: true } : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         setErr("Photo library permission is required to attach photos.");
         return;
