@@ -128,6 +128,7 @@ Cargo One (cargoone.co.uk) is the data controller for the personal data describe
 - Our email provider, for transactional emails such as receipts and password resets.
 - Expo and Apple push notification services, to deliver app notifications.
 - Our hosting and infrastructure providers, who store and run the service on our behalf.
+- Google (Google Analytics), only if you accept analytics cookies on the website, to understand how the website is used. See section 7.
 - The police or other authorities where the law requires it.
 We do not sell your personal data, and we do not share it with advertisers.
 
@@ -141,7 +142,7 @@ We do not sell your personal data, and we do not share it with advertisers.
 You can delete your account in the app (Settings → Delete account) or on the website (Settings → Delete account), as long as you do not have an active booking. When you delete your account we remove your documents and notifications and anonymise your personal details (your name, email address, phone number and profile photo are removed, and your name is replaced with "Deleted user" on past bookings, messages and reviews). Booking and payment records are kept in anonymised form where the law requires us to keep financial records. You will no longer be able to sign in.
 
 7. COOKIES
-We only use essential cookies and browser storage to keep you signed in and secure. We do not use analytics or advertising cookies, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you. See our Cookie Policy at cargoone.co.uk/cookies.
+We use essential cookies and browser storage to keep you signed in and secure. With your permission, the website also uses Google Analytics cookies (provided by Google; cookies _ga and _ga_*; kept for up to 14 months) to understand how the website is used. Google Analytics only loads after you choose "Accept analytics", records anonymous page views only, never receives your name, email address, phone number, addresses, job details or account ID, and is never used on signed-in account pages. You can withdraw consent at any time via "Cookie settings" in the website footer. We do not use advertising cookies, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you. See our Cookie Policy at cargoone.co.uk/cookies.
 
 8. YOUR RIGHTS
 Under UK GDPR you have the right to access your data, correct it, have it erased, restrict or object to how we use it, and receive a copy in a portable format. To use any of these rights, email support@cargoone.co.uk. We will reply within one month. If you are unhappy with how we handle your data you can complain to the Information Commissioner's Office (ico.org.uk).
@@ -163,10 +164,19 @@ Cargo One — cargoone.co.uk — support@cargoone.co.uk`,
     body: `Last updated: 17 October 2026
 
 ESSENTIAL
-Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember that you have seen our cookie notice. The site cannot work without these, so they do not need your consent.
+Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember your cookie choice. The site cannot work without these, so they do not need your consent.
 
-ANALYTICS AND ADVERTISING
-We do not use analytics, tracking or advertising cookies on the website, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you.
+ANALYTICS (ONLY WITH YOUR CONSENT)
+If you choose "Accept analytics" in our cookie banner, the website uses Google Analytics to understand how the site is used.
+- Provider: Google (Google Analytics 4).
+- Purpose: understanding website usage through anonymous page views. We do not send your name, email address, phone number, addresses, job details or account ID to Google, and Google Analytics is never loaded on signed-in account pages.
+- Cookies: _ga and _ga_*.
+- Retention: up to 14 months.
+- Withdrawing consent: click "Cookie settings" in the website footer and choose "Essential only". Google Analytics stops and we remove its cookies where your browser allows.
+If you choose "Essential only", Google Analytics is never loaded.
+
+ADVERTISING
+We do not use advertising cookies on the website, and the apps do not use advertising trackers. Our hosting provider (Cloudflare) records anonymous, cookie-free visit statistics (for example page views) to keep the site secure and running; this does not identify you.
 
 QUESTIONS
 Contact support@cargoone.co.uk. See also our Privacy Policy at cargoone.co.uk/privacy.`,

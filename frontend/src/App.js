@@ -19,6 +19,7 @@ import ExtraServiceLanding from "@/pages/marketing/ExtraServiceLanding";
 import { BoroughHub, LondonAreas } from "@/pages/marketing/LondonBoroughs";
 import { GuideArticle, GuidesIndex } from "@/pages/marketing/Guides";
 import AsapPage from "@/pages/marketing/AsapPages";
+import { AnalyticsTracker } from "@/components/AnalyticsTracker";
 import { ASAP_PAGES } from "@/data/seo";
 import { EXTRA_SERVICE_PAGES, GUIDES, LOCAL_PLACES, LONDON_AREAS_PATH, LONDON_BOROUGHS, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
 import Business from "@/pages/marketing/Business";
@@ -125,6 +126,7 @@ export default function App() {
     <div className="App">
       <BrowserRouter>
         <ScrollToTop />
+        <AnalyticsTracker />
         <AuthProvider>
           <Routes>
             {/* Marketing */}

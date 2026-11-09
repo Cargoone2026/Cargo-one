@@ -21,7 +21,7 @@ import {
   Package,
   ShieldCheck,
   ShoppingBag,
-  Star,
+  Clock,
   Users,
   Truck,
   Wrench,
@@ -38,10 +38,10 @@ import { SEO } from "@/components/marketing/SEO";
 import { useResponsive } from "@/hooks/useResponsive";
 
 const STATS = [
-  { label: "Verified drivers", value: "5,000+" },
-  { label: "Deliveries completed", value: "120k" },
-  { label: "Avg. driver rating", value: "4.9★" },
-  { label: "UK coverage", value: "98%" },
+  { label: "Customer Support", value: "24/7", sub: "Here when you need us." },
+  { label: "Commitment", value: "100%", sub: "Dedicated to quality service." },
+  { label: "Priority: You", value: "1st", sub: "Your needs always come first." },
+  { label: "Service Coverage", value: "UK-Wide", sub: "Supporting customers across the UK." },
 ];
 
 const CATEGORIES = [
@@ -89,7 +89,7 @@ export default function HomePage() {
             { icon: ShieldCheck, text: "Vetted & insured drivers" },
             { icon: CreditCard, text: "Secure payments via Stripe" },
             { icon: MapPin, text: "Live GPS tracking" },
-            { icon: Star, text: "4.9★ average rating" },
+            { icon: Clock, text: "Book 24/7" },
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-2">
               <Icon className="h-5 w-5 text-[#D62828]" />
@@ -220,8 +220,9 @@ export default function HomePage() {
         <div className="flex flex-wrap justify-center gap-4">
           {STATS.map((s) => (
             <div key={s.label} className="flex flex-grow basis-[160px] flex-col items-center py-4">
-              <p className="text-[44px] font-bold tracking-[-1px] text-[#D62828]">{s.value}</p>
+              <p className="whitespace-nowrap text-[36px] font-bold tracking-[-1px] text-[#D62828] sm:text-[44px]">{s.value}</p>
               <p className="mt-1 text-[14px] font-medium text-[#6B7280]">{s.label}</p>
+              <p className="mt-0.5 text-center text-[12px] text-[#9CA3AF]" data-testid={`home-stat-sub-${s.label.toLowerCase().replace(/[^a-z]+/g, "-")}`}>{s.sub}</p>
             </div>
           ))}
         </div>

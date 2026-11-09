@@ -689,3 +689,8 @@ Each future phase must start from the locked baseline.
 - Fix: NEW `mobile/apps/customer/metro.config.js` (expo getDefaultConfig, watchFolders=[workspaceRoot], nodeModulesPaths=[app, root], resolveRequest forces react, react-native, react-native-svg, scheduler, @react-native/* to resolve from apps/customer/index.ts).
 - Verified (container, --no-bytecode since hermesc is x86-only on ARM container): Android bundle MessageQueue.js 3→1, react/index.js 3→1, lucide nested react-native/react 0. iOS export succeeds.
 - NOTE: `mobile/yarn.lock` has a pre-existing uncommitted change (not from this task) — user to decide.
+
+## Stats update + GA4 with consent (2026-06, preview only, NOT deployed)
+- Home STATS → 24/7 Customer Support / 100% Commitment / 1st Priority: You / UK-Wide Service Coverage (with sub-lines); trust strip "Book 24/7"; Services coverage → 24/7, UK-Wide, 4 Ways to book, 12 types.
+- GA4 G-G5NKZYESDR via `src/lib/analytics.js` + `components/AnalyticsTracker.jsx`: loads gtag.js only after "Accept analytics" (key cargoone.cookie_consent.v3), Consent Mode v2 defaults denied, analytics_storage granted on accept, ads always denied; manual page_view with bare path (no query); blocked on /admin, /customer, /driver, /driver-profile, /auth, /settings; "Essential only" sets ga-disable, denies consent, clears _ga cookies. Footer "Cookie settings" reopens banner.
+- Cookie Policy + Privacy Policy updated for GA. Verified in browser: 0 GA requests before consent / after Essential only; hits after accept; none on /customer.

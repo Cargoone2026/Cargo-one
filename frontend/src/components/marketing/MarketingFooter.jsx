@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { OPEN_SETTINGS_EVENT } from "@/lib/analytics";
 import { Facebook, Instagram, Linkedin, MessageCircle, Package, Phone, Twitter } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -220,6 +221,15 @@ export function MarketingFooter() {
             >
               Cookies
             </Link>
+            <span className="text-white/30">•</span>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event(OPEN_SETTINGS_EVENT))}
+              className="text-white/65 hover:text-white"
+              data-testid="footer-cookie-settings"
+            >
+              Cookie settings
+            </button>
           </div>
         </div>
       </div>

@@ -99,14 +99,15 @@ export default function Services() {
         />
         <div className={`flex flex-wrap gap-4 ${isMobile ? "flex-col" : "flex-row"}`}>
           {[
-            { label: "UK postcodes covered", value: "98%" },
-            { label: "Average pickup ETA", value: "< 90 min" },
-            { label: "Cross-border routes", value: "27 countries" },
+            { label: "Book any time", value: "24/7" },
+            { label: "Service coverage", value: "UK-Wide" },
+            { label: "Ways to book", value: "4", sub: "Bid, Fixed Price, ASAP Transport, ASAP Recovery" },
             { label: "Vehicle classes", value: "12 types" },
           ].map((s) => (
             <div key={s.label} className="flex min-w-[200px] flex-1 flex-col items-center rounded-[20px] border border-[#E5E7EB] bg-white p-6">
               <p className="text-[40px] font-bold tracking-[-1px] text-[#D62828]">{s.value}</p>
               <p className="mt-1 text-[14px] text-[#6B7280]">{s.label}</p>
+              {s.sub ? <p className="mt-0.5 text-center text-[12px] text-[#9CA3AF]" data-testid="services-ways-to-book-sub">{s.sub}</p> : null}
             </div>
           ))}
         </div>
