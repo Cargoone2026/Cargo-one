@@ -94,7 +94,7 @@ Cargo One — cargoone.co.uk — support@cargoone.co.uk`,
   },
   privacy: {
     title: "Privacy Policy",
-    body: `Last updated: 17 October 2026
+    body: `Last updated: 9 November 2026
 
 This policy explains, in plain English, what personal data Cargo One collects, why, who we share it with, and your rights. It applies to customers, drivers and admin users of cargoone.co.uk and the Cargo One customer and driver apps.
 
@@ -161,7 +161,7 @@ Cargo One — cargoone.co.uk — support@cargoone.co.uk`,
   },
   cookies: {
     title: "Cookie Policy",
-    body: `Last updated: 17 October 2026
+    body: `Last updated: 9 November 2026
 
 ESSENTIAL
 Cargo One uses essential cookies and browser storage to keep you signed in, protect your account (security and anti-forgery tokens) and remember your cookie choice. The site cannot work without these, so they do not need your consent.

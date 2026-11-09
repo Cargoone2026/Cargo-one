@@ -95,7 +95,7 @@ export default function Services() {
         <SectionHeading
           eyebrow="COVERAGE"
           title="UK-wide network. Same-day possible."
-          subtitle="Cargo One drivers cover every UK postcode with same-day, next-day and scheduled options. Cross-border European deliveries available on request."
+          subtitle="Cargo One drivers cover every UK postcode with same-day, next-day and scheduled options. European deliveries coming soon."
         />
         <div className={`flex flex-wrap gap-4 ${isMobile ? "flex-col" : "flex-row"}`}>
           {[
