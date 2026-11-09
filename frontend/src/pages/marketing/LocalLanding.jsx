@@ -5,6 +5,8 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecentJobs } from "@/components/marketing/RecentJobs";
+import { SERVICE_JOB_CATEGORY } from "@/data/seo";
 import {
   COURIERS_INDEX_SEO, LOCAL_CITIES, LOCAL_CITY_BY_SLUG, SERVICE_BY_SLUG, SERVICE_PAGES,
   cityHubFaqs, cityHubJsonLd, cityHubSeo, cityRoutes, localService, serviceCityJsonLd, serviceCitySeo,
@@ -168,6 +170,7 @@ export function CityHub() {
           <Access city={c} notes={[c.parking, `Main roads include the ${c.roads.join(", ")}.`]} />
         </div>
       </Section>
+      <RecentJobs town={c.name} />
       <Faqs faqs={faqs} />
       <Section bg="#F4F4F4">
         <div className="grid gap-8 md:grid-cols-2">
@@ -253,6 +256,7 @@ function ServiceCityBody({ service, c }) {
         </div>
       </Section>
       {service.slug === "vehicle-recovery" ? <section className="mx-auto max-w-[1200px] px-4 md:px-10"><Asap247 city={c} /></section> : null}
+      <RecentJobs town={c.name} category={SERVICE_JOB_CATEGORY[service.slug]} />
       <Faqs faqs={local.faqs} />
       <Section bg="#F4F4F4">
         <div className="grid gap-8 md:grid-cols-3">

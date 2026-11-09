@@ -30,6 +30,7 @@ const COLUMNS = [
       { label: "Become a Driver", href: "/drivers#earnings" },
       { label: "Driver Requirements", href: "/drivers#requirements" },
       { label: "Earnings", href: "/drivers#why-drive" },
+      { label: "Find jobs", href: "/find-jobs" },
     ],
   },
   {

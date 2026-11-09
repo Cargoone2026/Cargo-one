@@ -132,6 +132,10 @@ export default function AdminJobs() {
                   </span>
                 </div>
               </button>
+              <FeedToggle
+                job={j}
+                onChange={(hidden) => setJobs((list) => list.map((x) => (x.id === j.id ? { ...x, public_feed_hidden: hidden } : x)))}
+              />
             </li>
           ))
         )}
@@ -148,6 +152,33 @@ export default function AdminJobs() {
         />
       ) : null}
     </div>
+  );
+}
+
+function FeedToggle({ job, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const hidden = !!job.public_feed_hidden;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await api(`/admin/jobs/${job.id}/public-feed`, { method: "POST", body: { hidden: !hidden } });
+      onChange(!hidden);
+    } catch {
+      /* leave state unchanged on failure */
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={busy}
+      data-testid={`admin-job-feed-toggle-${job.id}`}
+      className="mt-1 text-[12px] font-semibold text-[#6B7280] underline hover:text-[#111111] disabled:opacity-50"
+    >
+      {hidden ? "Show on public feed" : "Hide from public feed"}
+    </button>
   );
 }
 

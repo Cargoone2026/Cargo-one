@@ -10,6 +10,7 @@ import {
   PLACE_DRIVER_CITY_BY_SLUG, cityFaqs, driverCitySeo, driverJsonLd, placeDriverRelated,
 } from "@/data/seo";
 import { pathParts } from "@/pages/marketing/LocalPlaces";
+import { RecentJobs } from "@/components/marketing/RecentJobs";
 
 // Same layout as DriverCityLanding (DriverLanding.jsx), driven by PLACE_DRIVER_CITIES.
 export function PlaceDriverJobs() {
@@ -43,6 +44,7 @@ export function PlaceDriverJobs() {
       </Section>
       <WorkFlow />
       <RequirementsAndPay />
+      <RecentJobs town={c.name} title={`Recent jobs near ${c.name}`} />
       <DriverFaqs faqs={faqs} />
       <Related cities={placeDriverRelated(c)} />
     </div>

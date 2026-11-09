@@ -54,3 +54,16 @@ Availability: open 24/7, 365 days a year
 - [24/7 ASAP vehicle recovery](https://cargoone.co.uk/asap/recovery)
 - ASAP Recovery by city: [London](https://cargoone.co.uk/asap/recovery/london), [Birmingham](https://cargoone.co.uk/asap/recovery/birmingham), [Manchester](https://cargoone.co.uk/asap/recovery/manchester), [Leeds](https://cargoone.co.uk/asap/recovery/leeds), [Glasgow](https://cargoone.co.uk/asap/recovery/glasgow), [Liverpool](https://cargoone.co.uk/asap/recovery/liverpool), [Newcastle](https://cargoone.co.uk/asap/recovery/newcastle), [Sheffield](https://cargoone.co.uk/asap/recovery/sheffield), [Bristol](https://cargoone.co.uk/asap/recovery/bristol), [Nottingham](https://cargoone.co.uk/asap/recovery/nottingham), [Stoke-on-Trent](https://cargoone.co.uk/asap/recovery/stoke-on-trent), [Preston](https://cargoone.co.uk/asap/recovery/preston)
 - [How ASAP Transport works](https://cargoone.co.uk/how-it-works/asap-transport), [How ASAP Recovery works](https://cargoone.co.uk/how-it-works/asap-recovery)
+
+## Item delivery pages
+- [Sofa Delivery](https://cargoone.co.uk/services/sofa-delivery)
+- [Piano Transport](https://cargoone.co.uk/services/piano-transport): describe access, stairs and weight so suitable drivers can quote
+- [Appliance Delivery](https://cargoone.co.uk/services/appliance-delivery): washing machines, fridges, cookers
+- [Bike and Bicycle Delivery](https://cargoone.co.uk/services/bike-and-bicycle-delivery)
+- [Gym Equipment Delivery](https://cargoone.co.uk/services/gym-equipment-delivery)
+- [Hot Tub Delivery](https://cargoone.co.uk/services/hot-tub-delivery): describe access, stairs and weight so suitable drivers can quote
+- [Bed and Mattress Delivery](https://cargoone.co.uk/services/bed-and-mattress-delivery)
+- [Wardrobe and Flat-Pack Delivery](https://cargoone.co.uk/services/wardrobe-and-flat-pack-delivery)
+
+## Jobs for drivers
+- [Find courier, man and van & recovery jobs](https://cargoone.co.uk/find-jobs): anonymised recent jobs (item type and towns only). Bid Jobs and Fixed Price Jobs are free for drivers; bidding happens in the CargoOne Driver app.

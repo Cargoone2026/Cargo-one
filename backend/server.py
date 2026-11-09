@@ -7588,6 +7588,106 @@ async def list_vehicles(include_inactive: bool = False):
     return [_clean_doc(d) for d in docs]
 
 
+# ---------- Public recent-jobs feed (anonymised, read-only) ----------
+from service_catalog import CATEGORY_SEED as _FEED_CATEGORY_SEED  # noqa: E402
+
+_FEED_CACHE: dict = {}
+_FEED_CACHE_SECONDS = 60
+_FEED_EXCLUDED_STATUSES = ["cancelled", "awaiting_manual_quote"]
+_FEED_TOWN_RE = re.compile(r"^[A-Za-z][A-Za-z .'\-&]{0,39}$")  # town names only — skips anything with digits (postcodes / house numbers)
+
+
+def _feed_posted_label(created_at: Optional[str]) -> str:
+    try:
+        dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return "Earlier"
+    now = datetime.now(timezone.utc)
+    if dt.date() == now.date():
+        return "Today"
+    age = now - dt
+    if age <= timedelta(days=7):
+        return "This week"
+    if age <= timedelta(days=31):
+        return "This month"
+    return "Earlier"
+
+
+async def _feed_category_labels() -> dict:
+    labels = {c["key"]: c["name"] for c in _FEED_CATEGORY_SEED}
+    docs = await db.service_categories.find({}, {"_id": 0, "key": 1, "name": 1}).to_list(500)
+    labels.update({d["key"]: d["name"] for d in docs if d.get("key") and d.get("name")})
+    return labels
+
+
+@api.get("/public/recent-jobs")
+async def public_recent_jobs(town: Optional[str] = None, category: Optional[str] = None, limit: int = 12):
+    """Public, anonymised feed of recently posted UK jobs. Allow-listed fields only."""
+    limit = max(1, min(int(limit or 12), 30))
+    town_q = (town or "").strip()[:60]
+    cat_q = (category or "").strip()[:60]
+    key = (town_q.lower(), cat_q, limit)
+    hit = _FEED_CACHE.get(key)
+    now_m = time.monotonic()
+    if hit and now_m - hit[0] < _FEED_CACHE_SECONDS:
+        return hit[1]
+
+    query: dict = {
+        "deleted_at": None,
+        "route_class": "domestic_uk",
+        "status": {"$nin": _FEED_EXCLUDED_STATUSES},
+        "public_feed_hidden": {"$ne": True},
+    }
+    if town_q:
+        rx = {"$regex": f"^{re.escape(town_q)}$", "$options": "i"}
+        query["$or"] = [{"pickup_town": rx}, {"dropoff_town": rx}]
+    if cat_q:
+        query["category"] = {"$in": [cat_q] + [k for k, v in LEGACY_CATEGORY_MAP.items() if v == cat_q and k != cat_q]}
+
+    projection = {"_id": 0, "category": 1, "service_type": 1, "pickup_town": 1, "dropoff_town": 1, "created_at": 1, "status": 1}
+    docs = await db.jobs.find(query, projection).sort("created_at", -1).to_list(limit * 3)
+    labels = await _feed_category_labels()
+    items = []
+    for j in docs:
+        pt, dt_ = (j.get("pickup_town") or "").strip(), (j.get("dropoff_town") or "").strip()
+        if not (_FEED_TOWN_RE.match(pt) and _FEED_TOWN_RE.match(dt_)):
+            continue
+        is_recovery = (j.get("service_type") or "") == "breakdown_recovery"
+        raw = j.get("category") or ""
+        label = labels.get(LEGACY_CATEGORY_MAP.get(raw, raw)) or ("Vehicle recovery" if is_recovery else "Transport job")
+        items.append({
+            "category_label": label,
+            "service_type": "recovery" if is_recovery else "transport",
+            "pickup_town": pt,
+            "dropoff_town": dt_,
+            "posted": _feed_posted_label(j.get("created_at")),
+            "is_open": j.get("status") == "posted",
+        })
+        if len(items) >= limit:
+            break
+    payload = {"items": items, "total": len(items)}
+    _FEED_CACHE[key] = (now_m, payload)
+    for k in [k for k, v in _FEED_CACHE.items() if now_m - v[0] >= _FEED_CACHE_SECONDS]:
+        _FEED_CACHE.pop(k, None)
+    return payload
+
+
+class PublicFeedToggle(BaseModel):
+    hidden: bool
+
+
+@api.post("/admin/jobs/{job_id}/public-feed")
+async def admin_set_public_feed(job_id: str, payload: PublicFeedToggle, _: dict = Depends(require_role("admin"))):
+    res = await db.jobs.update_one({"id": job_id}, {"$set": {"public_feed_hidden": payload.hidden}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    _FEED_CACHE.clear()
+    return {"ok": True, "job_id": job_id, "public_feed_hidden": payload.hidden}
+
+
+
 class VehicleRecommendRequest(BaseModel):
     category_key: str
     weight_kg: Optional[float] = None

@@ -7,6 +7,7 @@ import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { ALL_SERVICE_BY_SLUG, EXTRA_SERVICE_BY_SLUG, PLACE_SERVICE_PAIRS, extraServiceSeo, serviceJsonLd } from "@/data/seo";
 import { QuoteButton, pathParts } from "@/pages/marketing/LocalPlaces";
+import { RecentJobs } from "@/components/marketing/RecentJobs";
 
 // Same layout as ServiceLanding.jsx, driven by EXTRA_SERVICE_PAGES (SEO Phase 3 · Batch 2).
 const STEPS = [
@@ -32,6 +33,8 @@ export default function ExtraServiceLanding() {
       <Steps service={service} />
       <MovesVehicles service={service} />
       <Timing />
+      {service.guide ? <ItemGuide service={service} /> : null}
+      {service.recentJobs ? <RecentJobs category={service.jobCategory} /> : null}
       <ServiceFaqs service={service} />
       <RelatedAndBook service={service} />
       <InYourCity service={service} />
@@ -136,6 +139,34 @@ function Timing() {
         </div>
       </div>
       <div className="mt-6 flex justify-center"><QuoteButton testId="service-quote-btn-mid" /></div>
+    </Section>
+  );
+}
+
+function ItemGuide({ service }) {
+  const g = service.guide;
+  const cols = [["How to prepare", g.prepare, "item-guide-prepare"], ["What to add to your job", g.details, "item-guide-details"]];
+  return (
+    <Section bg="#F4F4F4">
+      <SectionHeading eyebrow="BEFORE YOU BOOK" title={`Getting ready for ${service.name.toLowerCase()}`} />
+      <div className="grid gap-8 md:grid-cols-2">
+        {cols.map(([title, items, testId]) => (
+          <div key={testId} data-testid={testId}>
+            <h3 className="text-[18px] font-bold text-[#111111]">{title}</h3>
+            <ul className="mt-3 space-y-2">
+              {items.map((m) => <li key={m} className="flex items-start gap-2 text-[15px] text-[#374151]"><BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#D62828]" /> {m}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8 rounded-[20px] border border-[#E5E7EB] bg-white p-6" data-testid="item-guide-booking">
+        <h3 className="text-[18px] font-bold text-[#111111]">Which booking type suits it?</h3>
+        <p className="mt-2 text-[15px] leading-relaxed text-[#374151]">{g.booking}</p>
+        <div className="mt-3 flex flex-wrap gap-4 text-[14px] font-semibold">
+          <Link to="/how-it-works/bid-jobs" className="text-[#D62828] hover:underline">How Bid Jobs work</Link>
+          <Link to="/how-it-works/fixed-price-jobs" className="text-[#D62828] hover:underline">How Fixed Price Jobs work</Link>
+        </div>
+      </div>
     </Section>
   );
 }

@@ -1172,6 +1172,148 @@ export const EXTRA_SERVICE_PAGES = [
       { q: "Can you collect from a warehouse?", a: "Yes. Add the warehouse address, loading times and any reference." },
     ],
   },
+  // Item pages (jobs-feed task). `guide` adds prepare / details / booking-type sections; `recentJobs` shows the anonymised feed.
+  {
+    slug: "sofa-delivery", name: "Sofa Delivery", image: "furniture", recentJobs: true, jobCategory: "furniture_delivery",
+    intro: "Move a sofa, corner unit or armchair between homes, from a shop or after a marketplace sale. Post the job, compare drivers and book 24/7.",
+    moves: ["Two and three-seater sofas", "Corner and modular sofas", "Sofa beds", "Armchairs and footstools", "Recliners", "Sofas bought second-hand or online"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
+    related: ["furniture-delivery", "marketplace-collection", "man-and-van"],
+    guide: {
+      prepare: ["Remove cushions, throws and any loose parts and bag them up", "Take the feet off if they unscrew, and keep the screws in a taped bag", "Measure the sofa and check it fits through doors, hallways and stair turns at both ends", "Clear a path from the sofa to the door before the driver arrives"],
+      details: ["The type of sofa and its length, depth and height", "Whether it splits into sections or has removable arms", "Floors, stairs and whether there's a lift at each end", "Whether you need a second person to help carry it", "Parking or loading limits near either address"],
+      booking: "A Bid Job suits most sofa moves: drivers send their own prices and you compare them before you accept. If you already know what you want to pay, post a Fixed Price Job instead.",
+    },
+    faqs: [
+      { q: "Will the driver carry the sofa?", a: "Say whether you need help carrying it and how many floors and stairs there are. Drivers see this before they quote, and you can ask for a second person." },
+      { q: "Can you collect a sofa I bought online?", a: "Yes. Add the seller's address, any collection reference and when they're available." },
+      { q: "My sofa is very large. Will it fit in a van?", a: "Add the measurements and whether it comes apart. Drivers can then choose a suitable van, such as a Luton." },
+      { q: "When can I book?", a: "You can book 24/7. Pick the date that suits you when you post the job." },
+    ],
+  },
+  {
+    slug: "piano-transport", name: "Piano Transport", image: "fragile_high_value", recentJobs: true,
+    intro: "Move an upright or digital piano between homes, to a school or studio, or after a sale. Describe the piano and the access, and drivers with suitable vehicles can quote.",
+    moves: ["Upright pianos", "Digital and electric pianos", "Keyboards and stands", "Piano stools and benches", "Pianos bought second-hand", "Moves to schools, studios and venues"],
+    vehicles: ["Long Wheelbase Van", "Luton Van with Tail Lift"],
+    related: ["single-item-delivery", "house-removals", "furniture-delivery"],
+    guide: {
+      prepare: ["Close and lock the lid, or tape it shut with tape that won't mark the finish", "Remove music, ornaments and anything stored inside the stool", "Measure the piano and the narrowest doorway, hallway and stair turn on the route", "Make sure the floor and path are clear and dry"],
+      details: ["The type of piano and its height, width and depth", "Its approximate weight, if you know it", "Access at both ends: steps, stairs, floors and whether there's a lift", "How far the van can park from the door", "How many people you think the move will need"],
+      booking: "Post it as a Bid Job so drivers can price the job from your details about access, stairs and weight. If you want a set price, use a Fixed Price Job, and only drivers happy with that price and the access will accept.",
+    },
+    faqs: [
+      { q: "What should I include in the job?", a: "Mention access, stairs and weight in the job so suitable drivers can quote. Add measurements and photos of the route if you can." },
+      { q: "Are your drivers specialist piano movers?", a: "Cargo One drivers are verified courier and van drivers, not specialist piano movers. Describe the piano and access fully so drivers can decide whether the job suits them." },
+      { q: "Can you move a grand piano?", a: "Describe it in the job, with its size, weight and access. Drivers can then decide whether they have a suitable vehicle and team." },
+      { q: "Will the piano need tuning after the move?", a: "Pianos are often retuned after a move. That isn't part of the delivery, so arrange it separately." },
+    ],
+  },
+  {
+    slug: "appliance-delivery", name: "Appliance Delivery", image: "single_items", recentJobs: true,
+    intro: "Move a washing machine, fridge, freezer, cooker or dishwasher between homes, from a shop or after a marketplace sale. Book 24/7 and track the driver live.",
+    moves: ["Washing machines and tumble dryers", "Fridges, freezers and American-style fridge freezers", "Cookers and range cookers", "Dishwashers", "Microwaves and small appliances", "Appliances bought second-hand"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van", "Luton Van with Tail Lift"],
+    related: ["single-item-delivery", "marketplace-collection", "man-and-van"],
+    guide: {
+      prepare: ["Disconnect the appliance before collection; gas cookers should be disconnected by a qualified engineer", "Empty and defrost fridges and freezers, and dry them out", "Fit transit bolts to a washing machine if you still have them", "Drain any water from hoses, and tape doors and loose shelves shut"],
+      details: ["The type of appliance and its height, width and depth", "Whether it's free-standing and already disconnected", "Floors, stairs and doorways at both ends", "Whether you need help carrying it", "Whether the old appliance needs taking away (say so clearly)"],
+      booking: "A Fixed Price Job works well for a single appliance on a simple route. For heavy items, stairs or several appliances, a Bid Job lets drivers price in the work involved.",
+    },
+    faqs: [
+      { q: "Will the driver install or plumb in the appliance?", a: "No. Drivers move the appliance. Installation, plumbing and gas work should be arranged separately with a qualified person." },
+      { q: "Can a fridge be transported lying down?", a: "It's usually best to keep a fridge upright. Check the manufacturer's advice and mention it in the job." },
+      { q: "Can you collect from a shop or seller?", a: "Yes. Add the address, any order or collection reference and when it's ready." },
+    ],
+  },
+  {
+    slug: "bike-and-bicycle-delivery", name: "Bike and Bicycle Delivery", image: "single_items", recentJobs: true,
+    intro: "Send a bicycle, e-bike or cargo bike across town or across the UK, whether you've sold it, bought it or are moving home. Book 24/7.",
+    moves: ["Road, mountain and hybrid bikes", "Electric bikes", "Cargo and tandem bikes", "Children's bikes", "Bikes bought or sold online", "Several bikes in one job"],
+    vehicles: ["Small Van", "Short Wheelbase Van", "Long Wheelbase Van"],
+    related: ["single-item-delivery", "marketplace-collection", "same-day-courier"],
+    guide: {
+      prepare: ["Remove lights, bottles, bags and any accessories you want to keep", "Turn the handlebars or lower the saddle if it helps the bike fit", "For an e-bike, check the battery is secure or remove it and say so", "Protect the derailleur and frame with a cloth or bubble wrap"],
+      details: ["The type of bike and how many there are", "Whether it's boxed or unboxed", "Whether it's an e-bike and where the battery will be", "Access at both ends, such as a flat, a shed or a shop", "Any time limits at the pickup or drop-off"],
+      booking: "For one bike on a simple route, a Fixed Price Job is quick to set up. If you're moving several bikes or need a long-distance run, post a Bid Job and compare drivers' prices.",
+    },
+    faqs: [
+      { q: "Can you move an e-bike?", a: "Yes. Say it's an e-bike and whether the battery is fitted, so drivers know what they're carrying." },
+      { q: "Does the bike need to be boxed?", a: "No, but say whether it's boxed or not. Unboxed bikes travel best with some protection on the frame." },
+      { q: "Can I send several bikes together?", a: "Yes. List how many bikes there are in the job, and choose a van with enough space." },
+      { q: "When can I book?", a: "You can book 24/7 and choose the collection date that suits you." },
+    ],
+  },
+  {
+    slug: "gym-equipment-delivery", name: "Gym Equipment Delivery", image: "single_items", recentJobs: true,
+    intro: "Move a treadmill, cross trainer, weights or home gym between homes, from a seller or to a studio. Add the weight and access, and drivers can quote.",
+    moves: ["Treadmills", "Exercise bikes and cross trainers", "Rowing machines", "Weight benches and racks", "Dumbbells, plates and kettlebells", "Multi-gyms"],
+    vehicles: ["Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
+    related: ["single-item-delivery", "marketplace-collection", "furniture-delivery"],
+    guide: {
+      prepare: ["Fold the treadmill or remove parts that come off easily, and bag the bolts", "Unplug the equipment and tape down loose cables and safety keys", "Box or bag small weights so they can't roll around", "Check the equipment fits through doors and stairs at both ends"],
+      details: ["What the equipment is, its size and its approximate weight", "Whether it folds or comes apart", "Floors, stairs and lifts at both ends", "Whether you need a second person to help carry it", "How far the van can park from the door"],
+      booking: "Heavy or bulky equipment usually suits a Bid Job, so drivers can price in the weight and stairs. For a light item on an easy route, a Fixed Price Job is a simple option.",
+    },
+    faqs: [
+      { q: "Will the driver take a treadmill apart?", a: "Dismantling isn't usually included. Fold or dismantle it before collection, or say in the job if you need help." },
+      { q: "My equipment is very heavy. What should I add?", a: "Add the approximate weight, the number of floors and stairs, and whether there's a lift, so drivers can bring enough help." },
+      { q: "Can you collect from a gym or seller?", a: "Yes. Add the address, the collection time and any loading instructions." },
+    ],
+  },
+  {
+    slug: "hot-tub-delivery", name: "Hot Tub Delivery", image: "garden_outdoor", recentJobs: true, jobCategory: "garden_outdoor",
+    intro: "Move an inflatable or hard-shell hot tub between homes, from a seller or to a new garden. Describe the tub and the access, and drivers with suitable vehicles can quote.",
+    moves: ["Inflatable hot tubs", "Hard-shell hot tubs and spas", "Hot tub covers and steps", "Hot tubs bought second-hand", "Swim spas (describe size and access)", "Garden furniture and accessories"],
+    vehicles: ["Long Wheelbase Van", "Luton Van with Tail Lift", "Flatbed Truck", "Hiab Crane Vehicle"],
+    related: ["single-item-delivery", "marketplace-collection", "man-and-van"],
+    guide: {
+      prepare: ["Drain the hot tub completely and leave it to dry", "Have the electrics safely disconnected by a qualified person", "Remove the cover, steps and any loose parts", "Measure the route to the garden, including gates, side passages and steps"],
+      details: ["The type of hot tub, its dimensions and its approximate dry weight", "Access at both ends: gates, steps, slopes and how close a vehicle can get", "Whether it needs to go over a fence or wall", "Whether you need several people to help move it", "Ground conditions, such as grass, gravel or decking"],
+      booking: "Post a hot tub as a Bid Job so drivers can price it from your details about access, stairs and weight. If the access is simple and you know your budget, you can use a Fixed Price Job instead.",
+    },
+    faqs: [
+      { q: "What should I include in the job?", a: "Mention access, stairs and weight in the job so suitable drivers can quote. Photos of the route to the garden help too." },
+      { q: "Are your drivers specialist hot tub movers?", a: "Cargo One drivers are verified courier and transport drivers, not specialist hot tub movers. Describe the tub and access fully so drivers can decide whether the job suits them." },
+      { q: "Will the driver connect the hot tub?", a: "No. Electrical connection should be done by a qualified person once the tub is in place." },
+      { q: "Can you lift a hot tub over a fence?", a: "Say so in the job and describe the space. Some drivers may have a vehicle with a crane, such as a Hiab, and can quote if it suits them." },
+    ],
+  },
+  {
+    slug: "bed-and-mattress-delivery", name: "Bed and Mattress Delivery", image: "furniture", recentJobs: true, jobCategory: "furniture_delivery",
+    intro: "Move a bed frame, mattress, divan or bunk bed between homes, from a shop or after a marketplace sale. Book 24/7 and get photo proof at delivery.",
+    moves: ["Mattresses of all sizes", "Divan bases and headboards", "Bed frames", "Bunk beds and cabin beds", "Cots and children's beds", "Beds bought second-hand or online"],
+    vehicles: ["Short Wheelbase Van", "Long Wheelbase Van", "Luton Van"],
+    related: ["furniture-delivery", "marketplace-collection", "student-moves"],
+    guide: {
+      prepare: ["Strip the bed and bag the bedding separately", "Wrap the mattress in a cover or plastic to keep it clean and dry", "Take the frame apart if you can, and keep the bolts in a taped bag", "Measure the headboard and frame against doors and stairs"],
+      details: ["The size of the bed or mattress (single, double, king or super king)", "Whether the frame is assembled or flat", "Floors, stairs and lifts at both ends", "Whether you need help carrying it", "Any parking limits near the addresses"],
+      booking: "A Fixed Price Job is simple for a mattress or a flat-packed frame. For a full bed set, bunk beds or tricky access, post a Bid Job and compare drivers' prices.",
+    },
+    faqs: [
+      { q: "Will the driver assemble the bed?", a: "Assembly isn't usually included. Take the bed apart before collection, or say in the job if you need help." },
+      { q: "Can you move a mattress in the rain?", a: "Wrap the mattress before collection so it stays clean and dry while it's carried and loaded." },
+      { q: "Can you collect a bed I bought online?", a: "Yes. Add the seller's address, any reference and when it's ready." },
+    ],
+  },
+  {
+    slug: "wardrobe-and-flat-pack-delivery", name: "Wardrobe and Flat-Pack Delivery", image: "furniture", recentJobs: true, jobCategory: "furniture_delivery",
+    intro: "Move wardrobes, chests of drawers and flat-pack furniture, from a store collection to a move between homes. Book 24/7 and track the driver live.",
+    moves: ["Wardrobes and armoires", "Chests of drawers and sideboards", "Flat-pack furniture from stores", "Bookcases and shelving units", "Desks and office furniture", "Flat-pack kitchen and garden furniture"],
+    vehicles: ["Short Wheelbase Van", "Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
+    related: ["furniture-delivery", "single-item-delivery", "office-removals"],
+    guide: {
+      prepare: ["Empty wardrobes and drawers before collection", "Take doors and shelves off assembled wardrobes if you can, and bag the fixings", "For store collections, have the order number and collection reference ready", "Measure tall or wide pieces against doors, hallways and stair turns"],
+      details: ["What the items are, how many boxes or pieces there are and their sizes", "Whether the furniture is flat-packed or assembled", "Floors, stairs and lifts at both ends", "Store collection details, such as the order number and collection point", "Whether you need help carrying heavy boxes"],
+      booking: "For a single store collection, a Fixed Price Job is quick to post. For larger loads or assembled furniture with stairs, a Bid Job lets drivers price in the work.",
+    },
+    faqs: [
+      { q: "Can you collect flat-pack furniture from a store?", a: "Yes. Add the store address, order number and collection reference, and the driver collects it for you." },
+      { q: "Will the driver assemble the furniture?", a: "No. Drivers move the furniture. Arrange assembly separately if you need it." },
+      { q: "Can you move an assembled wardrobe?", a: "Yes. Add its size and whether the doors come off, plus details of stairs and doorways at both ends." },
+      { q: "When can I book?", a: "You can book 24/7 and pick the collection date that suits you." },
+    ],
+  },
 ];
 
 export const EXTRA_SERVICE_BY_SLUG = Object.fromEntries(EXTRA_SERVICE_PAGES.map((s) => [s.slug, s]));
@@ -3205,3 +3347,48 @@ export function asapJsonLd(p) {
   const crumbs = p.crumbs.map(([name, path]) => [name, path || p.path]);
   return [main, faqJsonLd(p.faqs), breadcrumbJsonLd(crumbs)];
 }
+
+// ---------- Jobs feed: /find-jobs page + service → job category mapping ----------
+// Service page slug → catalogue category key, used to filter the anonymised recent-jobs feed.
+export const SERVICE_JOB_CATEGORY = {
+  "furniture-delivery": "furniture_delivery",
+  "house-removals": "house_removals",
+  "car-transport": "cars_vehicles",
+  "motorbike-transport": "motorcycles",
+  "pallet-delivery": "pallets",
+  "marketplace-collection": "auction_marketplace",
+  "parcel-delivery": "parcels",
+  "same-day-courier": "same_day_express",
+  "boat-transport": "boats_marine",
+  "machinery-haulage": "machinery_plant",
+  "caravan-transport": "caravans",
+  "static-caravan-transport": "static_caravans",
+  "van-transport": "vans",
+  "single-item-delivery": "single_items",
+  "office-removals": "office_commercial",
+  "freight-and-haulage": "freight",
+  "business-and-retail-deliveries": "retail_business",
+};
+
+export const FIND_JOBS_PATH = "/find-jobs";
+export const FIND_JOBS_SEO = {
+  path: FIND_JOBS_PATH,
+  title: "Courier, Van & Recovery Jobs UK - Find Work Free | CargoOne",
+  h1: "Find courier, man and van & recovery jobs",
+  description: "Find courier, man and van and recovery work across the UK. Customers post jobs, verified drivers quote. Bid Jobs and Fixed Price Jobs are free for drivers.",
+  intro: "Customers post jobs, and verified drivers quote. Bid Jobs and Fixed Price Jobs are always free for drivers, and bidding happens in the CargoOne Driver app.",
+};
+export const FIND_JOBS_FAQS = [
+  { q: "Is it free?", a: "Yes. Bid Jobs and Fixed Price Jobs are always free for drivers. It's free to sign up and send your price." },
+  { q: "What documents do I need?", a: `You'll need: ${DRIVER_DOCUMENTS.join("; ")}.` },
+  { q: "How do I get paid?", a: DRIVER_PAY_LINE },
+  { q: "Which areas?", a: "Jobs are posted across the UK, so you can find work wherever you drive." },
+];
+export function findJobsJsonLd() {
+  return [faqJsonLd(FIND_JOBS_FAQS), breadcrumbJsonLd([["Home", "/"], ["Drivers", "/drivers"], ["Find jobs", FIND_JOBS_PATH]])];
+}
+
+MARKETING_ROUTES.push({
+  ...FIND_JOBS_SEO, img: "heroDrivers", faqs: FIND_JOBS_FAQS, jsonLd: findJobsJsonLd(), detail: true, cta: ["Sign up free to quote", DRIVER_SIGNUP_HREF],
+  lists: [["How it works for drivers", DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["Find jobs by city", DRIVER_CITIES.map((c) => [`Courier jobs in ${c.name}`, `/drivers/jobs/${c.slug}`])]],
+});

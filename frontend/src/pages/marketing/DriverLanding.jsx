@@ -5,6 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecentJobs } from "@/components/marketing/RecentJobs";
 import {
   DRIVER_CITIES, DRIVER_CITY_BY_NAME, DRIVER_CITY_BY_SLUG, DRIVER_DOCUMENTS, DRIVER_PAY_LINE, DRIVER_PAY_STEPS,
   DRIVER_SIGNUP_HREF, DRIVER_TYPES, DRIVER_TYPE_BY_SLUG, DRIVER_WORK_FLOW, LOCAL_CITY_BY_SLUG, cityFaqs, driverCitySeo, driverJsonLd, driverTypeSeo,
@@ -52,6 +53,7 @@ export function DriverCityLanding() {
       crumbs={[]}
       relatedTypes={DRIVER_TYPES}
       relatedCities={nearbyPages.length ? nearbyPages : DRIVER_CITIES.filter((x) => x.slug !== c.slug).slice(0, 4)}
+      recentTown={c.name}
     >
       <Section bg="#F4F4F4">
         <SectionHeading eyebrow={c.region.replace(/^the /, "").toUpperCase()} title={`Driving in ${c.name}`} />
@@ -69,7 +71,7 @@ export function DriverCityLanding() {
   );
 }
 
-function DriverPage({ id, seo, intro, image, faqs, crumbs, relatedTypes, relatedCities, children }) {
+function DriverPage({ id, seo, intro, image, faqs, crumbs, relatedTypes, relatedCities, recentTown, children }) {
   return (
     <div data-testid={`${id}-page`}>
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={driverJsonLd(seo, faqs, crumbs)} />
@@ -86,6 +88,7 @@ function DriverPage({ id, seo, intro, image, faqs, crumbs, relatedTypes, related
       {children}
       <WorkFlow />
       <RequirementsAndPay />
+      {recentTown ? <RecentJobs town={recentTown} title={`Recent jobs near ${recentTown}`} /> : null}
       <Faqs faqs={faqs} />
       <Related types={relatedTypes} cities={relatedCities} />
     </div>

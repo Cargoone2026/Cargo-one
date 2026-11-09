@@ -120,6 +120,8 @@ Cargo One (cargoone.co.uk) is the data controller for the personal data describe
 - To send service messages (booking updates, receipts, password resets) by email and push notification. Lawful basis: performance of our contract.
 - Location sharing in the apps uses your device permission, which you can turn off at any time in your phone's settings.
 
+Public job listings: to show that CargoOne is active and to help drivers find work, we may display a short anonymised summary of posted jobs on our website: the type of item and the pickup and drop-off towns only. We never show your name, address, postcode, contact details, photos, description or price. You can ask us to remove a listing at any time by emailing admin@cargoone.co.uk.
+
 4. WHO WE SHARE IT WITH
 - The other party on a booking: drivers see the customer's name, contact number and addresses for their job once it is confirmed; customers see their driver's name, photo, vehicle, rating, contact number and live location during the job.
 - Stripe (payments and refunds).

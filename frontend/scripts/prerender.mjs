@@ -150,6 +150,7 @@ async function main() {
     ...(data.EXTRA_SERVICE_PAGES || []).map((s) => ({
       ...data.extraServiceSeo(s), image: svcImg(s), intro: s.intro, faqs: s.faqs, jsonLd: data.serviceJsonLd(s), detail: true,
       lists: [["What we move", s.moves], ["Vehicles used", s.vehicles], ["Related services", s.related.map((r) => [data.ALL_SERVICE_BY_SLUG[r].name, `/services/${r}`])],
+        ...(s.guide ? [["How to prepare", s.guide.prepare], ["What to add to your job", s.guide.details], ["Which booking type suits it?", [s.guide.booking, ["How Bid Jobs work", "/how-it-works/bid-jobs"], ["How Fixed Price Jobs work", "/how-it-works/fixed-price-jobs"]]]] : []),
         ...(data.PLACE_SERVICE_PAIRS.some(([x]) => x.slug === s.slug) ? [["In your city", data.PLACE_SERVICE_PAIRS.filter(([x]) => x.slug === s.slug).map(([, c]) => [`${s.name} in ${c.name}`, `/services/${s.slug}/${c.slug}`])]] : [])],
     })),
     ...(data.LOCAL_PLACES || []).map((c) => {

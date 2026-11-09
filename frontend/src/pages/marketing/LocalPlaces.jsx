@@ -5,6 +5,8 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecentJobs } from "@/components/marketing/RecentJobs";
+import { SERVICE_JOB_CATEGORY } from "@/data/seo";
 import {
   ALL_SERVICE_BY_SLUG, DRIVER_CITY_BY_SLUG, LOCAL_CITY_BY_SLUG, placeNearbyTowns, LOCAL_PLACE_BY_SLUG, PLACE_DRIVER_CITY_BY_SLUG, cityHubJsonLd, placeHubSeo,
   placeHubFaqs, placeNearby, placeService, placeServiceSeo, placeServices, serviceCityJsonLd,
@@ -156,6 +158,7 @@ export function PlaceHub() {
         </div>
       </Section>
       {c.nearbyTowns ? <NearbyTowns c={c} /> : null}
+      <RecentJobs town={c.name} />
       <Faqs faqs={faqs} />
       <Section bg="#F4F4F4">
         <div className="grid gap-8 md:grid-cols-2">
@@ -205,6 +208,7 @@ export function PlaceService() {
       <StepsAndMoves service={service} />
       <PlaceServiceLocal service={service} c={c} local={local} />
       {service.slug === "vehicle-recovery" ? <section className="mx-auto max-w-[1200px] px-4 md:px-10"><Asap247 city={c} /></section> : null}
+      <RecentJobs town={c.name} category={SERVICE_JOB_CATEGORY[service.slug]} />
       <Faqs faqs={local.faqs} />
       <Section bg="#F4F4F4">
         <div className="grid gap-8 md:grid-cols-3">
