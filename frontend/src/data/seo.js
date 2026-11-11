@@ -1314,6 +1314,26 @@ export const EXTRA_SERVICE_PAGES = [
       { q: "When can I book?", a: "You can book 24/7 and pick the collection date that suits you." },
     ],
   },
+  {
+    slug: "large-item-courier", name: "Large Item Courier", image: "single_items", recentJobs: true,
+    title: "Large Item Courier UK – Big & Bulky Item Delivery Quotes | CargoOne",
+    description: "A large item courier for big, bulky and heavy items across the UK. Post your job with size, weight and access details and get quotes from local drivers.",
+    intro: "Need a courier for big items that won't fit in a car or a standard parcel service? Post your large item delivery with the size, weight and access, and local drivers with suitable vans can quote. Book 24/7.",
+    moves: ["Large parcels and big boxes", "Bulky items such as rugs, mirrors and artwork", "Large goods bought online or in store", "Garden and DIY items", "Heavy items that need two people", "Odd-shaped items that need a bigger van"],
+    vehicles: ["Short Wheelbase Van", "Long Wheelbase Van", "Luton Van", "Luton Van with Tail Lift"],
+    related: ["furniture-delivery", "sofa-delivery", "appliance-delivery", "single-item-delivery", "parcel-delivery"],
+    guide: {
+      prepare: ["Measure the item's length, width and height at its widest points", "Weigh it, or give your best estimate, especially if it's heavy", "Wrap or box it so it's protected, and tape down any loose parts", "Check it fits through the doors, hallways and stairs at both ends"],
+      details: ["What the item is and its measurements", "Its approximate weight", "Floors, stairs and whether there's a lift at each end", "Whether you need a second person to help carry it", "Parking or loading limits near either address"],
+      booking: "A large item is often a good fit for a Bid Job, so drivers can price in the size, weight and access. If it's a simple run and you know what you want to pay, a Fixed Price Job is quick to post.",
+    },
+    faqs: [
+      { q: "What counts as a large item?", a: "Anything too big or heavy for a standard parcel service or a car, such as big boxes, bulky goods or items that need two people to carry." },
+      { q: "How do I measure a large item?", a: "Measure the length, width and height at the widest points, including any handles or legs, and add them to your job." },
+      { q: "Will the driver carry it inside?", a: "Say where the item needs to go, how many stairs there are and whether you need help carrying. Drivers see this before they quote." },
+      { q: "Can you collect from a shop or seller?", a: "Yes. Add the address, any order or collection reference and when it's ready." },
+    ],
+  },
 ];
 
 export const EXTRA_SERVICE_BY_SLUG = Object.fromEntries(EXTRA_SERVICE_PAGES.map((s) => [s.slug, s]));
@@ -1328,8 +1348,8 @@ export function extraServiceSeo(service) {
   const first = service.intro.split(". ")[0].replace(/\.$/, "");
   return {
     ...seo,
-    title: fit(60, seo.title, `${service.name} | Cargo One`),
-    description: fit(155, seo.description, `${first}. Instant quote and live tracking.`, `${first}.`),
+    title: service.title || fit(60, seo.title, `${service.name} | Cargo One`),
+    description: service.description || fit(155, seo.description, `${first}. Instant quote and live tracking.`, `${first}.`),
   };
 }
 // Batch 2 services that also get service×place pages (Wave 1 cities + Phase 3 places).
@@ -2748,6 +2768,25 @@ const GUIDES_BASE = [
     ],
     links: [SV("same-day-courier"), SV("parcel-delivery"), SV("man-and-van"), SV("fragile-and-high-value-delivery"), BT.asap, BT.bid, BT.fixed],
   },
+  {
+    slug: "furniture-store-and-flat-pack-delivery", image: "furniture",
+    title: "Getting Furniture Shop & Flat-Pack Purchases Delivered: Your Options | CargoOne",
+    h1: "Getting furniture shop and flat-pack purchases delivered: your options",
+    description: "Your options when a furniture store's own delivery doesn't suit: collect it yourself, use a man and van, or post a job and get quotes from local drivers.",
+    intro: "You've found the right wardrobe or bookcase, but the store's own delivery is expensive, unavailable for your date or simply too slow. This guide explains your options, from collecting it yourself to posting a job for local drivers, and what to tell a driver so the collection goes smoothly.",
+    sections: [
+      { h: "When store delivery doesn't suit", p: ["Large furniture retailers, including stores such as IKEA, often offer their own delivery. Sometimes it's the right choice. Other times the next slot is days away, your postcode isn't covered, or you only need one or two boxes moved and the store service doesn't fit the job.", "CargoOne is independent and not connected with any retailer. If store delivery doesn't suit you, there are other ways to get your purchase home."] },
+      { h: "Option 1: collect it yourself", p: ["If the boxes fit in your car, collecting it yourself is simple. Check the box sizes before you go, as flat-pack boxes are often longer and heavier than they look. Fold the seats down, bring blankets to protect the car and ask the store whether they have trolleys and help with loading.", "Long or heavy boxes can be awkward to carry alone, and a large order may need more than one trip."] },
+      { h: "Option 2: book a man and van", p: ["A man and van is a good fit when the order is too big for your car or you'd like help carrying. The driver collects from the store's collection point, loads the boxes and brings them to your home. Say how many boxes there are and whether you need help carrying them inside."] },
+      { h: "Option 3: post a job and get quotes", p: ["Post your job on CargoOne with the store, your address and what you've bought. Local drivers with suitable vehicles can send their price as a Bid Job, or you can set the price yourself as a Fixed Price Job. If it can't wait, ASAP Transport sends the job straight to available drivers nearby. You can book 24/7 and follow the driver live once they accept."] },
+      { h: "What to tell the driver", p: ["Clear details help the driver collect the right items first time."], list: ["The store's address and the collection point, such as a click-and-collect desk or goods-out door", "Your order number and collection reference, ready to show at the store", "How many boxes or pieces there are, and the size of the largest", "Whether the furniture is flat-packed or already assembled", "Floors, stairs and lifts at your home, and whether you need help carrying"] },
+    ],
+    faqs: [
+      { q: "Can a driver collect from the store for me?", a: "Yes. Add the store address, your order number and collection reference, and any ID the store asks for. Check the store's rules on who can collect an order." },
+      { q: "Will the driver assemble the furniture?", a: "No. Drivers collect and deliver. Arrange assembly separately if you need it." },
+    ],
+    links: [SV("wardrobe-and-flat-pack-delivery"), SV("furniture-delivery"), SV("sofa-delivery"), SV("marketplace-collection"), SV("large-item-courier"), ["Post a job", "/auth/register?role=customer"], BT.bid, BT.fixed],
+  },
 ];
 
 // Further sections and FAQs for each guide.
@@ -2843,6 +2882,13 @@ const GUIDE_MORE = {
     ],
     faqs: [{ q: "How should I send documents?", a: "Use a sealed envelope or document wallet, clearly addressed. For urgent papers, book a document courier or same-day courier." }],
   },
+  "furniture-store-and-flat-pack-delivery": {
+    sections: [
+      { h: "Assembled furniture and display items", p: ["Not everything comes flat-packed. Ex-display pieces and some sofas, beds and cabinets are sold already assembled, and they need more space in the van. Measure them and check they'll fit through your doors, hallways and stairs. Say clearly in the job that the item is assembled, so drivers bring a suitable vehicle and enough help."] },
+      { h: "Choosing the right vehicle", p: ["Flat-pack boxes are heavy for their size and often longer than you expect. A small order of a few boxes usually fits in a small or short wheelbase van. A full room of furniture, a wardrobe set or a large corner sofa often needs a long wheelbase or Luton van. If the store's loading bay is busy or the boxes are very heavy, a van with a tail lift makes loading easier.", "You don't need to know the exact vehicle. List the boxes, their sizes and weights from your order confirmation, and drivers can work out what fits."] },
+    ],
+    faqs: [{ q: "Can one driver collect from more than one store?", a: "Yes. Add each store as a pickup stop, with the order details for each one." }],
+  },
 };
 
 // Closing sections: a worked example or common mistakes, plus a short summary.
@@ -2893,6 +2939,10 @@ const GUIDE_SUMMARY = {
     { h: "A quick checklist", p: ["Before the driver arrives:"], list: ["Everything packed, sealed and labelled", "Fragile items wrapped and marked", "Sizes and weights added to the job", "Access and parking notes up to date", "Someone ready at pickup and drop-off"] },
     { h: "In summary", p: ["Pack items securely, measure and weigh them, label clearly and describe access at both ends. Then choose ASAP Transport, a Bid Job or a Fixed Price Job and follow your driver live."] },
   ],
+  "furniture-store-and-flat-pack-delivery": [
+    { h: "Practical tips", p: ["A little planning makes store collections much easier, and most of it takes only a few minutes."], list: ["Check the order is ready for collection before the driver sets off", "Photograph your order confirmation so you can share the reference quickly", "Keep small fixings bags with their boxes, as they're easy to lose", "Clear a space at home for the boxes before they arrive", "Check the boxes against your order at delivery"] },
+    { h: "In summary", p: ["If a store's delivery doesn't suit, you can collect it yourself, book a man and van or post a job for local drivers to quote. Share the store details, order reference, box sizes and access at home, and you can follow the driver live once they accept."] },
+  ],
 };
 
 // Final extra section and FAQ per guide.
@@ -2909,6 +2959,7 @@ const GUIDE_FINAL = {
   "shipping-container-transport-guide": [{ h: "Containers on building sites", p: ["Building sites often use containers for tool storage and welfare. Sites usually have delivery booking times, a banksman to guide vehicles and rules about where vehicles can go. Add the site manager's contact details and the delivery booking reference to your job so the driver can get on and off site safely."] }, { q: "Can you collect a container from a port?", a: "Add the collection details, release reference and terminal rules, and drivers with suitable vehicles can check whether they can take the job." }, { q: "Can you move site offices and welfare units?", a: "Yes. Describe the unit, its size and weight, and how it will be lifted." }],
   "bid-jobs-vs-fixed-price-jobs": [{ h: "Using both for a business", p: ["Businesses often use both. Fixed Price Jobs work well for regular runs where you know the price you want to pay. Bid Jobs work well for one-off or larger jobs, such as moving stock between sites or delivering equipment to an event. ASAP Transport is there for urgent deliveries that can't wait."] }, { q: "Are drivers checked for both booking types?", a: "Yes. Drivers are checked before they can take any jobs, whichever booking type you choose." }, { q: "Can I post a Bid Job for a specialist load?", a: "Yes. Approved drivers with suitable vehicles can send quotes. Add full details and photos." }],
   "preparing-items-for-a-courier": [{ h: "Preparing large furniture", p: ["Empty drawers and cupboards before the driver arrives, as full furniture is heavier and can break. Remove glass shelves and pack them separately. Tape doors and drawers closed with low-tack tape, and wrap furniture in blankets to protect corners. Keep fixings from dismantled items in a labelled bag."] }, { q: "Can a driver collect from one place and deliver to several?", a: "Yes. Add each drop-off as a stop and label items with the address they're going to." }, { q: "Do I need to be at the pickup?", a: "Someone should be there to hand over the items. Add their contact details if it isn't you." }],
+  "furniture-store-and-flat-pack-delivery": [{ h: "Returns and exchanges", p: ["If something arrives damaged or isn't right, check the store's returns policy first. Many stores accept returns in store, so you can post another job to take the item back. Keep the original packaging where you can, and add the returns reference to the job."] }, { q: "What if the boxes don't fit in one van?", a: "Add the number and size of the boxes to the job so drivers can choose a big enough vehicle, such as a Luton van." }],
 };
 
 const GUIDE_LAST_FAQS = {
@@ -3391,4 +3442,54 @@ export function findJobsJsonLd() {
 MARKETING_ROUTES.push({
   ...FIND_JOBS_SEO, img: "heroDrivers", faqs: FIND_JOBS_FAQS, jsonLd: findJobsJsonLd(), detail: true, cta: ["Sign up free to quote", DRIVER_SIGNUP_HREF],
   lists: [["How it works for drivers", DRIVER_WORK_FLOW.map((w) => `${w.title}: ${w.body}`)], ["Find jobs by city", DRIVER_CITIES.map((c) => [`Courier jobs in ${c.name}`, `/drivers/jobs/${c.slug}`])]],
+});
+
+// ---------- Transport directory (/transport-directory). A-Z entries live in src/data/directory.js ----------
+export const DIRECTORY_PATH = "/transport-directory";
+export const DIRECTORY_SEO = {
+  path: DIRECTORY_PATH,
+  title: "UK Transport Directory – Man and Van, Removals, Car Transport, Recovery & Couriers Near You | CargoOne",
+  h1: "Find the Right Transport Service for Almost Anything",
+  description: "Find the right transport service near you: man and van, house removals, car transport, 24/7 vehicle recovery, pallets, large items and same-day couriers. Post a job and get quotes from local drivers.",
+  intro: "From a single bulky item to a house move, a car, a pallet or a breakdown, choose what you need to move and get quotes from local drivers. Book 24/7.",
+};
+const DSV = (slug) => [ALL_SERVICE_BY_SLUG[slug].name, `/services/${slug}`];
+export const DIRECTORY_CATEGORIES = [
+  { id: "man-and-van", title: "Man and van & removals", body: "From a few boxes to a full house or office move. Say what you're moving and how much help you need.", links: ["man-and-van", "house-removals", "office-removals", "student-moves", "long-distance-removals"].map(DSV) },
+  { id: "furniture", title: "Furniture & large items", body: "Sofas, beds, wardrobes, appliances and other big or awkward items. Add sizes, weight and stairs so drivers can quote.", links: ["furniture-delivery", "sofa-delivery", "large-item-courier", "single-item-delivery", "wardrobe-and-flat-pack-delivery", "bed-and-mattress-delivery", "appliance-delivery", "piano-transport", "hot-tub-delivery", "gym-equipment-delivery", "garden-and-outdoor-items", "fragile-and-high-value-delivery"].map(DSV) },
+  { id: "vehicles", title: "Cars, vans & motorbikes", body: "Move a car, van or motorbike, including non-runners and classic cars. Say whether it runs and whether the wheels turn.", links: ["car-transport", "non-runner-car-transport", "classic-car-transport", "van-transport", "motorbike-transport"].map(DSV) },
+  { id: "recovery", title: "24/7 recovery & ASAP", body: "Broken down? Looking for car recovery near me or a tow truck near me? Book breakdown recovery 24/7 with ASAP Recovery: available drivers nearby are alerted and you can follow the driver live. Get somewhere safe first.", links: [["24/7 ASAP vehicle recovery", "/asap/recovery"], DSV("vehicle-recovery"), ["ASAP live dispatch explained", "/asap"], ["How live tracking works", "/asap/live-tracking"], ["How ASAP Recovery works", "/how-it-works/asap-recovery"], ...ASAP_RECOVERY_CITIES.map((p) => [`ASAP Recovery in ${p.city}`, p.path])] },
+  { id: "towing", title: "Caravans, boats, horseboxes & trailers", body: "Touring and static caravans, boats, jet skis, horseboxes and trailers. Describe the size, weight and how it hitches.", links: ["caravan-transport", "static-caravan-transport", "boat-transport", "horsebox-and-trailer-transport"].map(DSV) },
+  { id: "courier", title: "Courier, parcels & marketplace collections", body: "Same-day couriers, parcels, documents, bikes and collections from online sellers. For urgent jobs, use ASAP Transport.", links: ["same-day-courier", "parcel-delivery", "document-courier", "marketplace-collection", "business-and-retail-deliveries", "bike-and-bicycle-delivery"].map(DSV) },
+  { id: "commercial", title: "Pallets, freight, machinery & commercial", body: "Pallets, full loads, machinery, containers, building materials and event kit. Add weights and loading facilities at both ends.", links: ["pallet-delivery", "freight-and-haulage", "machinery-haulage", "agricultural-machinery-transport", "shipping-container-transport", "building-materials-delivery", "event-equipment-transport"].map(DSV) },
+];
+export const DIRECTORY_AREAS = ["london", "birmingham", "manchester", "leeds", "liverpool", "glasgow", "bristol", "sheffield", "newcastle", "nottingham", "preston", "stoke-on-trent", "stafford"].map((slug) => {
+  const c = LOCAL_CITY_BY_SLUG[slug] || LOCAL_PLACE_BY_SLUG[slug];
+  return [`Man and van & couriers in ${c.name}`, `/couriers/${slug}`];
+});
+export const DIRECTORY_GUIDANCE = [
+  "Not sure which service? Start with what you're moving. Pick the closest match above, or simply post your job and describe it.",
+  "When you post, include the dimensions, the weight, access at both ends (stairs, lifts, parking) and whether you need help loading. The more detail you add, the easier it is for drivers to quote.",
+];
+export const DIRECTORY_FAQS = [
+  { q: "Can I book a single large item?", a: "Yes. Post a job for one item, such as a sofa, wardrobe or appliance, with its size, weight and access, and local drivers can quote." },
+  { q: "Can you move a car that doesn't run?", a: "Yes. Choose non-runner car transport and say whether you have the keys and whether the wheels turn, so drivers can bring a suitable vehicle." },
+  { q: "What if I've broken down?", a: "Get yourself and any passengers somewhere safe first and call 999 if anyone is in danger. Then book ASAP Recovery 24/7 and follow the recovery driver live. On a live motorway, the official services move the vehicle first." },
+  { q: "Do you cover my area?", a: "Post your job with your pickup and drop-off postcodes and see whether local drivers quote. Drivers choose the jobs they take, so availability depends on your area." },
+  { q: "How are prices worked out?", a: "Drivers quote based on distance, size, access and urgency. Our cost guides explain what affects the price for furniture delivery, car transport and house removals." },
+];
+export const DIRECTORY_COST_GUIDES = [["How much does furniture delivery cost?", "/guides/how-much-does-furniture-delivery-cost"], ["How much does car transport cost?", "/guides/how-much-does-car-transport-cost"], ["How much do house removals cost?", "/guides/how-much-do-house-removals-cost"]];
+export function directoryJsonLd() {
+  return [faqJsonLd(DIRECTORY_FAQS), breadcrumbJsonLd([["Home", "/"], ["Transport Directory", DIRECTORY_PATH]])];
+}
+
+MARKETING_ROUTES.push({
+  ...DIRECTORY_SEO, img: "heroSeoBoxes", faqs: DIRECTORY_FAQS, jsonLd: directoryJsonLd(), detail: true, cta: ["Post a job – get quotes from drivers", "/auth/register?role=customer"],
+  lists: [
+    ...DIRECTORY_CATEGORIES.map((c) => [c.title, [c.body, ...c.links]]),
+    ["Popular areas", DIRECTORY_AREAS],
+    ["Not sure which service?", DIRECTORY_GUIDANCE],
+    ["Cost guides", DIRECTORY_COST_GUIDES],
+    ["Looking for work?", [["Find courier, van & recovery jobs", "/find-jobs"]]],
+  ],
 });

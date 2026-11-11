@@ -22,6 +22,7 @@ const COLUMNS = [
       { label: "House Moves", href: "/services" },
       { label: "Vehicles", href: "/services" },
       { label: "Business Accounts", href: "/business" },
+      { label: "Transport directory", href: "/transport-directory" },
     ],
   },
   {

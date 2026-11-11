@@ -21,6 +21,7 @@ import { GuideArticle, GuidesIndex } from "@/pages/marketing/Guides";
 import AsapPage from "@/pages/marketing/AsapPages";
 import { AnalyticsTracker } from "@/components/AnalyticsTracker";
 import FindJobs from "@/pages/marketing/FindJobs";
+import TransportDirectory from "@/pages/marketing/TransportDirectory";
 import { ASAP_PAGES } from "@/data/seo";
 import { EXTRA_SERVICE_PAGES, GUIDES, LOCAL_PLACES, LONDON_AREAS_PATH, LONDON_BOROUGHS, PLACE_DRIVER_CITIES, PLACE_SERVICE_PAIRS } from "@/data/seo";
 import Business from "@/pages/marketing/Business";
@@ -153,6 +154,7 @@ export default function App() {
             {GUIDES.map((g) => <Route key={`guide-${g.slug}`} path={`/guides/${g.slug}`} element={<Marketing Page={GuideArticle} />} />)}
             {ASAP_PAGES.map((p) => <Route key={`asap-${p.path}`} path={p.path} element={<Marketing Page={AsapPage} />} />)}
             <Route path="/find-jobs" element={<Marketing Page={FindJobs} />} />
+            <Route path="/transport-directory" element={<Marketing Page={TransportDirectory} />} />
             <Route path="/faq" element={<Marketing Page={FAQ} />} />
             <Route path="/contact" element={<Marketing Page={Contact} />} />
             <Route path="/trust-safety" element={<Marketing Page={TrustSafety} />} />

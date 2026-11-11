@@ -124,6 +124,11 @@ export default function Services() {
             </li>
           ))}
         </ul>
+        <p className="mt-6 text-[14px]">
+          <Link to="/transport-directory" className="font-semibold text-[#111111] hover:text-[#D62828] hover:underline" data-testid="services-directory-link">
+            Can't find your item? Browse the full transport directory →
+          </Link>
+        </p>
       </Section>
     </>
   );

@@ -183,6 +183,12 @@ async function main() {
       lists: data.asapLists(p),
     })),
   ];
+  // Transport directory: add the A-Z index (src/data/directory.js) to the static HTML.
+  const dirPage = pages.find((p) => p.path === data.DIRECTORY_PATH);
+  if (dirPage) {
+    const dir = await loadModule("src/data/directory.js");
+    dirPage.lists = [...dirPage.lists, ...dir.directoryByLetter().map(([l, items]) => [`A-Z: ${l}`, items.map((e) => [`${e.label} – ${e.line}`, e.path])])];
+  }
   // Render everything in memory first so a failure never leaves a half-written build.
   const files = [];
   for (const page of pages) {

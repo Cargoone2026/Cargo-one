@@ -67,3 +67,10 @@ Availability: open 24/7, 365 days a year
 
 ## Jobs for drivers
 - [Find courier, man and van & recovery jobs](https://cargoone.co.uk/find-jobs): anonymised recent jobs (item type and towns only). Bid Jobs and Fixed Price Jobs are free for drivers; bidding happens in the CargoOne Driver app.
+
+## Transport directory
+- [UK Transport Directory](https://cargoone.co.uk/transport-directory): every CargoOne service by type and an A-Z of items (sofas, pianos, cars that won't start, pallets, caravans, recovery and more), with links to each service page. Post a job and get quotes from local drivers.
+- [Large Item Courier](https://cargoone.co.uk/services/large-item-courier): big, bulky and heavy items; add size, weight and access so drivers can quote
+
+## Guides
+- [Getting furniture shop & flat-pack purchases delivered: your options](https://cargoone.co.uk/guides/furniture-store-and-flat-pack-delivery)

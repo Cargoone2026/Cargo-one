@@ -9,7 +9,8 @@ const TPL = '<!doctype html><html><head><title>x</title><meta name="description"
 
 function run(dir) {
   const tmp = fs.mkdtempSync("/tmp/seoqa-");
-  for (const rel of ["scripts/prerender.mjs", "src/data/seo.js", "src/components/marketing/images.js"]) {
+  for (const rel of ["scripts/prerender.mjs", "src/data/seo.js", "src/components/marketing/images.js", "src/data/directory.js"]) {
+    if (!fs.existsSync(path.join(dir, rel))) continue;
     fs.mkdirSync(path.join(tmp, path.dirname(rel)), { recursive: true });
     fs.copyFileSync(path.join(dir, rel), path.join(tmp, rel));
   }

@@ -700,3 +700,9 @@ Each future phase must start from the locked baseline.
 - Frontend: components/marketing/RecentJobs.jsx (fallback to UK-wide if <3; renders nothing if UK-wide <3 or error) placed above FAQ on /services/:slug/:city, /couriers/:city, /drivers/jobs/:city and the 8 new item pages. New /find-jobs page (FindJobs.jsx) with town filter, DRIVER_WORK_FLOW, DRIVER_CITIES links, 4 FAQs, CTA + app buttons; footer Drivers column "Find jobs". Admin Jobs row toggle "Hide from / Show on public feed".
 - 8 EXTRA_SERVICE_PAGES appended (sofa, piano, appliance, bike, gym, hot tub, bed/mattress, wardrobe/flat-pack) with optional `guide` + `recentJobs` (conditional render keeps old pages identical). Privacy: "Public job listings" paragraph in section 3.
 - QA: 0 existing prerendered pages changed; sitemap 852 → 861.
+
+## Transport directory (2026-11-11, preview only, NOT deployed)
+- New /transport-directory (TransportDirectory.jsx + DirectorySearch.jsx combobox, data/directory.js A-Z 65 entries + searchDirectory), /services/large-item-courier (EXTRA entry; extraServiceSeo now honours optional title/description overrides), /guides/furniture-store-and-flat-pack-delivery (GUIDES_BASE + GUIDE_MORE + GUIDE_SUMMARY + GUIDE_FINAL entries).
+- Footer Services column "Transport directory"; /services page end line link. prerender adds A-Z lists from directory.js. llms.txt sections added. seo_qa.mjs now also copies src/data/directory.js.
+- QA: only /guides index changed (lists new guide); sitemap 861 → 864; owner-specified titles >60 / directory description 199 chars kept as given.
+- No ?category= on post-job links (public link is /auth/register?role=customer; Dashboard ids differ).
