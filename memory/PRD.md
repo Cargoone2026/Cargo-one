@@ -706,3 +706,7 @@ Each future phase must start from the locked baseline.
 - Footer Services column "Transport directory"; /services page end line link. prerender adds A-Z lists from directory.js. llms.txt sections added. seo_qa.mjs now also copies src/data/directory.js.
 - QA: only /guides index changed (lists new guide); sitemap 861 → 864; owner-specified titles >60 / directory description 199 chars kept as given.
 - No ?category= on post-job links (public link is /auth/register?role=customer; Dashboard ids differ).
+
+## Real app-store links + official badges (2026-11-12, preview only, NOT deployed)
+- AppStoreButtons.jsx: `app` prop (customer default | driver); official Apple black badge (developer.apple.com US-UK SVG) at public/images/badges/download-on-the-app-store-black.svg; PLAY_CUSTOMER/PLAY_DRIVER/PLAY_LIVE=false constants; while false shows grey "Android app coming soon" pill (no link); official Google Play PNG saved for later at public/images/badges/get-it-on-google-play-en.png.
+- FindJobs uses app="driver". ASAP_APP_LINKS now only the customer iOS link. 0 occurrences of old placeholder links. Only /asap, /asap/live-tracking, /asap/recovery static HTML changed.

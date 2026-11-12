@@ -1,47 +1,37 @@
 import React from "react";
-import { Apple, Play } from "lucide-react";
 
-export function AppStoreButtons({ onWhite = false }) {
-  const bg = onWhite ? "#111" : "#fff";
-  const fg = onWhite ? "#fff" : "#111";
-  const border = onWhite ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)";
+// Future Google Play listings — flip PLAY_LIVE to true once the apps are public on Google Play.
+const PLAY_CUSTOMER = "https://play.google.com/store/apps/details?id=co.uk.cargoone.customer";
+const PLAY_DRIVER = "https://play.google.com/store/apps/details?id=co.uk.cargoone.driver";
+const PLAY_LIVE = false;
 
-  const btnStyle = {
-    backgroundColor: bg,
-    color: fg,
-    borderColor: border,
-  };
+const APP_STORE = {
+  customer: "https://apps.apple.com/app/cargoone-courier-delivery/id6822449616",
+  driver: "https://apps.apple.com/gb/app/cargoone-driver-courier-jobs/id6822450098",
+};
+const PLAY_STORE = { customer: PLAY_CUSTOMER, driver: PLAY_DRIVER };
 
+// Official store badges (local copies in /public/images/badges). `onWhite` kept for existing calls; black badges suit all backgrounds.
+// eslint-disable-next-line no-unused-vars
+export function AppStoreButtons({ app = "customer", onWhite = false }) {
+  const key = app === "driver" ? "driver" : "customer";
   return (
-    <div className="flex flex-wrap gap-3">
-      <a
-        href="https://apps.apple.com/app/cargo-one"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex min-w-[160px] items-center gap-2 rounded-xl border px-4 py-2.5"
-        style={btnStyle}
-      >
-        <Apple className="h-6 w-6" />
-        <div>
-          <div className="text-[10px] font-medium tracking-wide">
-            Download on the
-          </div>
-          <div className="-mt-0.5 text-[16px] font-bold">App Store</div>
-        </div>
+    <div className="flex flex-wrap items-center gap-3" data-testid="app-store-buttons">
+      <a href={APP_STORE[key]} target="_blank" rel="noopener noreferrer" className="inline-block p-1" data-testid="app-store-badge-link">
+        <img src="/images/badges/download-on-the-app-store-black.svg" alt="Download on the App Store" className="block h-[44px] w-auto" width="132" height="44" />
       </a>
-      <a
-        href="https://play.google.com/store/apps/details?id=com.cargoone.app"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex min-w-[160px] items-center gap-2 rounded-xl border px-4 py-2.5"
-        style={btnStyle}
-      >
-        <Play className="h-6 w-6" />
-        <div>
-          <div className="text-[10px] font-medium tracking-wide">Get it on</div>
-          <div className="-mt-0.5 text-[16px] font-bold">Google Play</div>
-        </div>
-      </a>
+      {PLAY_LIVE ? (
+        <a href={PLAY_STORE[key]} target="_blank" rel="noopener noreferrer" className="inline-block p-1" data-testid="google-play-badge-link">
+          {/* Google's PNG includes built-in clear space, so it's drawn taller to match the Apple badge's visual height. */}
+          <img src="/images/badges/get-it-on-google-play-en.png" alt="Get it on Google Play" className="-my-[9px] block h-[64px] w-auto" width="165" height="64" />
+        </a>
+      ) : (
+        <span className="inline-flex p-1" data-testid="android-coming-soon">
+          <span className="inline-flex h-[44px] items-center rounded-[8px] bg-[#E5E7EB] px-4 text-[13px] font-semibold text-[#4B5563]" aria-label="Android app coming soon">
+            Android app coming soon
+          </span>
+        </span>
+      )}
     </div>
   );
 }

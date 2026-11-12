@@ -82,7 +82,7 @@ function Cta() {
         <Link to={DRIVER_SIGNUP_HREF} data-testid="find-jobs-signup-btn" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#D62828] px-6 py-3 text-[15px] font-bold text-white transition-colors hover:bg-[#B01F1F]">
           Sign up free to quote <ArrowRight className="h-4 w-4" />
         </Link>
-        <div className="mt-5" data-testid="find-jobs-app-links"><AppStoreButtons /></div>
+        <div className="mt-5" data-testid="find-jobs-app-links"><AppStoreButtons app="driver" /></div>
       </div>
     </Section>
   );

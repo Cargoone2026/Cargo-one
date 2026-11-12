@@ -3033,7 +3033,7 @@ const ASAP_PAY = "Pay Cargo One's booking fee by card. The driver's price is pai
 const ASAP_CANCEL = "While your job is still waiting for a driver, you can cancel it in the app and your booking fee is refunded in full. Once the vehicle or items have been collected, the job can't be cancelled in the app, so contact support.";
 const ASAP_MOTORWAY = "If the vehicle is on a live motorway, it should first be moved by the official services. Once it is somewhere safe, such as a recovery yard, you can book ASAP Recovery from there.";
 const ASAP_SAFETY = ["Get yourself and any passengers to a safe place, away from moving traffic", "Switch on your hazard lights", "If anyone is in danger, call 999", "On a live motorway, the official services move the vehicle first; book recovery once it is in a safe place"];
-const ASAP_APP_LINKS = [["Download on the App Store", "https://apps.apple.com/app/cargo-one"], ["Get it on Google Play", "https://play.google.com/store/apps/details?id=com.cargoone.app"]];
+const ASAP_APP_LINKS = [["Download on the App Store", "https://apps.apple.com/app/cargoone-courier-delivery/id6822449616"]];
 const ASAP_IMG = { van: "/images/van-road-hero.webp", recovery: "/images/recovery-truck-hero.webp", boxes: "/images/how-it-works-hero-boxes.webp" };
 const ASAP_CRUMB = ["ASAP", "/asap"];
 const ASAP_RECOVERY_CRUMB = ["ASAP Recovery", "/asap/recovery"];
