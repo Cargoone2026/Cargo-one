@@ -88,9 +88,15 @@ export function trackConversion(name, params = {}) {
     });
     gtag("event", name, { ...allowed, page_location: `${window.location.origin}${def.path}`, page_path: def.path, transport_type: "beacon" });
     if (!isTrackablePath(window.location.pathname)) {
-      setTimeout(() => {
+      // Re-disable before the app's redirect so GA's own history-change page_view can't fire on signed-in pages.
+      // If gtag.js is still loading, it processes the queued event on load; disable straight after that instead.
+      const disable = () => {
         if (!isTrackablePath(window.location.pathname)) window[`ga-disable-${GA_ID}`] = true;
-      }, 1500);
+      };
+      const script = document.querySelector('script[data-testid="ga-script"]');
+      if (window.google_tag_manager && window.google_tag_manager[GA_ID]) disable();
+      else if (script) script.addEventListener("load", () => setTimeout(disable, 0), { once: true });
+      setTimeout(disable, 1500);
     }
   } catch {
     /* analytics must never break the app */
