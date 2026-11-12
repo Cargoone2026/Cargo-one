@@ -710,3 +710,9 @@ Each future phase must start from the locked baseline.
 ## Real app-store links + official badges (2026-11-12, preview only, NOT deployed)
 - AppStoreButtons.jsx: `app` prop (customer default | driver); official Apple black badge (developer.apple.com US-UK SVG) at public/images/badges/download-on-the-app-store-black.svg; PLAY_CUSTOMER/PLAY_DRIVER/PLAY_LIVE=false constants; while false shows grey "Android app coming soon" pill (no link); official Google Play PNG saved for later at public/images/badges/get-it-on-google-play-en.png.
 - FindJobs uses app="driver". ASAP_APP_LINKS now only the customer iOS link. 0 occurrences of old placeholder links. Only /asap, /asap/live-tracking, /asap/recovery static HTML changed.
+
+## GA4 conversion events (2026-11-12, preview only, NOT deployed)
+- analytics.js trackConversion(name, params): only sign_up {method,role} / job_posted {booking_type}; consent-gated; fixed page_location (/auth/register, /customer/post-job); on signed-in paths GA re-disabled via functions queued in window.dataLayer (cold load keeps GA disabled during init → no automatic history page_view leaking /customer/job/<uuid>). AnalyticsTracker disables GA immediately on non-trackable routes (closes 300ms form_start window).
+- Call sites: Register.jsx after register(); PostJob.jsx after POST /jobs. Settings.jsx privacy+cookie wording updated, both dated 12 November 2026.
+- Verified by testing agent (iteration_r77/r78/r79): essential → 0 GA requests; sign_up/job_posted exact params; no portal page_view (warm + cold). Test accounts/jobs deleted.
+- Owner TODO: GA4 Admin > Data stream > Enhanced measurement: turn off "Page changes based on browser history events" (duplicate public page_view, pre-existing).

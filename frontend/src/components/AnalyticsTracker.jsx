@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { CONSENT_EVENT, trackPage } from "@/lib/analytics";
+import { CONSENT_EVENT, isTrackablePath, trackPage } from "@/lib/analytics";
 
 // Sends an anonymous GA page view on route change, only after analytics consent.
 export function AnalyticsTracker() {
   const { pathname } = useLocation();
 
   useEffect(() => {
+    if (!isTrackablePath(pathname)) trackPage(pathname); // disable GA immediately on signed-in/auth pages
     const t = setTimeout(() => trackPage(pathname), 300);
     return () => clearTimeout(t);
   }, [pathname]);
