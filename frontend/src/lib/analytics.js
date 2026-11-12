@@ -70,6 +70,33 @@ function revokeAnalytics() {
   clearGaCookies();
 }
 
+// Anonymous conversion events (sign_up / job_posted) — fixed paths, whitelisted params, consent only.
+const CONVERSIONS = {
+  sign_up: { path: "/auth/register", params: { method: ["email"], role: ["customer", "driver"] } },
+  job_posted: { path: "/customer/post-job", params: { booking_type: ["bid", "fixed"] } },
+};
+
+export function trackConversion(name, params = {}) {
+  try {
+    const def = CONVERSIONS[name];
+    if (!def || getConsent() !== "analytics") return;
+    loadAnalytics();
+    window[`ga-disable-${GA_ID}`] = false;
+    const allowed = {};
+    Object.entries(def.params).forEach(([k, values]) => {
+      if (values.includes(params[k])) allowed[k] = params[k];
+    });
+    gtag("event", name, { ...allowed, page_location: `${window.location.origin}${def.path}`, page_path: def.path, transport_type: "beacon" });
+    if (!isTrackablePath(window.location.pathname)) {
+      setTimeout(() => {
+        if (!isTrackablePath(window.location.pathname)) window[`ga-disable-${GA_ID}`] = true;
+      }, 1500);
+    }
+  } catch {
+    /* analytics must never break the app */
+  }
+}
+
 // Called on every SPA route change; sends a page view with the bare path (no query string or hash).
 export function trackPage(pathname) {
   if (getConsent() !== "analytics") return;

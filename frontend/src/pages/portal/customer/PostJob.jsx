@@ -20,6 +20,7 @@ import { Input } from "@/components/ui-portal/Input";
 import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete";
 import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
+import { trackConversion } from "@/lib/analytics";
 // R48 — leaf components extracted out of this file. Behaviour unchanged;
 // see `./postjob/` for the widgets and metadata.
 import {
@@ -316,6 +317,7 @@ export default function CustomerPostJob() {
         vehicle_required: effectiveVehicleKey || null,
       };
       const job = await api("/jobs", { method: "POST", body });
+      trackConversion("job_posted", { booking_type: pricingType === "fixed" ? "fixed" : "bid" });
       navigate(`/customer/job/${job.id}`, { replace: true });
     } catch (e) {
       setErr(e?.message || "Failed to post job");

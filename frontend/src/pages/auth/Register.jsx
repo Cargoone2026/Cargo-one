@@ -4,6 +4,7 @@ import { Car, ChevronLeft, Info, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { SEO } from "@/components/marketing/SEO";
 import { isValidPhone, isValidUKPostcode } from "@/lib/validators";
+import { trackConversion } from "@/lib/analytics";
 
 const COUNTRIES = [
   "United Kingdom",
@@ -88,6 +89,7 @@ export default function Register() {
         postcode: form.postcode.trim() || null,
         country: form.country || null,
       });
+      trackConversion("sign_up", { method: "email", role: me?.role === "driver" ? "driver" : "customer" });
       navigate(roleLanding(me?.role), { replace: true });
     } catch (err) {
       setError(err?.message || "Failed to register");
