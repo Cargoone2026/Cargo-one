@@ -80,22 +80,29 @@ export function trackConversion(name, params = {}) {
   try {
     const def = CONVERSIONS[name];
     if (!def || getConsent() !== "analytics") return;
+    const key = `ga-disable-${GA_ID}`;
+    const ready = !!(window.google_tag_manager && window.google_tag_manager[GA_ID]);
+    const signedIn = !isTrackablePath(window.location.pathname);
     loadAnalytics();
-    window[`ga-disable-${GA_ID}`] = false;
+    window[key] = false;
+    // Cold load on a signed-in page: keep GA disabled while it initialises (its automatic page_view would carry the
+    // real URL) and enable it only for our event, via functions queued in GA's own command queue.
+    if (signedIn && !ready) {
+      window[key] = true;
+      window.dataLayer.push(function beforeConversion() { window[key] = false; });
+    }
     const allowed = {};
     Object.entries(def.params).forEach(([k, values]) => {
       if (values.includes(params[k])) allowed[k] = params[k];
     });
     gtag("event", name, { ...allowed, page_location: `${window.location.origin}${def.path}`, page_path: def.path, transport_type: "beacon" });
-    if (!isTrackablePath(window.location.pathname)) {
-      // Re-disable before the app's redirect so GA's own history-change page_view can't fire on signed-in pages.
-      // If gtag.js is still loading, it processes the queued event on load; disable straight after that instead.
+    if (signedIn) {
+      // Re-disable straight after the event, before the app's redirect can trigger GA's history-change page_view.
       const disable = () => {
-        if (!isTrackablePath(window.location.pathname)) window[`ga-disable-${GA_ID}`] = true;
+        if (!isTrackablePath(window.location.pathname)) window[key] = true;
       };
-      const script = document.querySelector('script[data-testid="ga-script"]');
-      if (window.google_tag_manager && window.google_tag_manager[GA_ID]) disable();
-      else if (script) script.addEventListener("load", () => setTimeout(disable, 0), { once: true });
+      window.dataLayer.push(function afterConversion() { disable(); });
+      if (ready) disable();
       setTimeout(disable, 1500);
     }
   } catch {
