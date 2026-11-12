@@ -9,6 +9,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { AppStoreButtons } from "@/components/marketing/AppStoreButtons";
 import { useResponsive } from "@/hooks/useResponsive";
 import { DRIVER_CITIES, DRIVER_TYPES } from "@/data/seo";
 
@@ -114,6 +115,7 @@ export default function Drivers() {
             Become a Driver
             <ArrowRight className="h-[18px] w-[18px]" />
           </Link>
+          <div className="mt-5" data-testid="driver-app-links"><AppStoreButtons app="driver" /></div>
         </div>
       </Section>
       <Section bg="#fff">

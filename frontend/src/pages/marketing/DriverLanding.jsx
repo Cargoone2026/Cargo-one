@@ -5,6 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { AppStoreButtons } from "@/components/marketing/AppStoreButtons";
 import { RecentJobs } from "@/components/marketing/RecentJobs";
 import {
   DRIVER_CITIES, DRIVER_CITY_BY_NAME, DRIVER_CITY_BY_SLUG, DRIVER_DOCUMENTS, DRIVER_PAY_LINE, DRIVER_PAY_STEPS,
@@ -174,6 +175,7 @@ function Related({ types, cities }) {
           <Link to={DRIVER_SIGNUP_HREF} data-testid="driver-signup-btn-bottom" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#D62828] px-6 py-3 text-[15px] font-bold text-white transition-colors hover:bg-[#B01F1F]">
             Sign up to drive <ArrowRight className="h-4 w-4" />
           </Link>
+          <div className="mt-5" data-testid="driver-app-links"><AppStoreButtons app="driver" /></div>
         </div>
       </div>
     </Section>
