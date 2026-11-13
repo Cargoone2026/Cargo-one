@@ -146,7 +146,7 @@ function SummaryStrip({ list, q }) {
   ];
   return (
     <p className="mx-4 mt-3 truncate text-[12px] text-[#6B7280] md:mx-8" data-testid="admin-drivers-summary" title={parts.join(" · ")}>
-      <span className="font-semibold text-[#111111]">{q ? `${q}: ` : ""}{list.length} drivers</span>
+      <span className="font-semibold text-[#111111]">{q ? `${q}: ` : ""}{list.length} {list.length === 1 ? "driver" : "drivers"}</span>
       {parts.length ? ` · ${parts.join(" · ")}` : ""}
     </p>
   );

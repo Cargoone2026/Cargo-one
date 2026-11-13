@@ -716,3 +716,9 @@ Each future phase must start from the locked baseline.
 - Call sites: Register.jsx after register(); PostJob.jsx after POST /jobs. Settings.jsx privacy+cookie wording updated, both dated 12 November 2026.
 - Verified by testing agent (iteration_r77/r78/r79): essential → 0 GA requests; sign_up/job_posted exact params; no portal page_view (warm + cold). Test accounts/jobs deleted.
 - Owner TODO: GA4 Admin > Data stream > Enhanced measurement: turn off "Page changes based on browser history events" (duplicate public page_view, pre-existing).
+
+## Admin drivers organiser (2026-11-12, preview only, NOT deployed)
+- Backend (server.py, placed before /admin/drivers/{driver_id} to avoid route shadowing): GET /api/admin/drivers/overview (2 aggregates + 1 find, no base64; display-only stage no_documents/in_progress/ready_to_review/changes_requested/approved/suspended; vehicles from driver_vehicles via vehicle_group() keyword map + users.admin_vehicle_tags), POST /api/admin/drivers/{id}/vehicle-tags (allow-list, sets only admin_vehicle_tags). admin_driver_detail user dict now also returns admin_vehicle_tags.
+- Frontend: admin/Drivers.jsx (stage tabs w/ counts, default Ready to review; vehicle chips incl. Not set; search incl. town/postcode area; info line on card; summary strip; client CSV export with BOM/CRLF + formula-injection guard); components/ui-portal/AdminVehicleTags.jsx; DriverDetail.jsx +2 lines.
+- Mapping gaps to confirm with owner: swb_van, curtain_side, 18_tonne, hiab_crane, refrigerated -> "other".
+- Tested: iteration_r80 (all pass after detail-tags fix).

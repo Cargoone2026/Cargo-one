@@ -5646,6 +5646,7 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
             "postcode": d.get("postcode"),
             "country": d.get("country"),
             "country_code": d.get("country_code"),
+            "admin_vehicle_tags": d.get("admin_vehicle_tags") or [],
             "changes_requested_reason": d.get("changes_requested_reason"),
             "changes_requested_doc_types": d.get("changes_requested_doc_types") or [],
             "suspension_reason": d.get("suspension_reason"),
