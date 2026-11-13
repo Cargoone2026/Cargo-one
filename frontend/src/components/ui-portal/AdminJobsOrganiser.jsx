@@ -63,7 +63,7 @@ export function JobMetaLine({ job }) {
       <span className="rounded-full bg-[#F4F4F4] px-2 py-0.5 font-semibold text-[#111111]">{job.booking_type}</span>
       <span>· {job.bids_count ? `${job.bids_count} bid${job.bids_count === 1 ? "" : "s"}` : "No bids yet"}</span>
       <span>· Posted {ago(job.created_at)}</span>
-      {job.collection_date ? <span>· Collect {job.collection_date}</span> : null}
+      {job.collection_date ? <span>· Collect {String(job.collection_date).slice(0, 10)}</span> : null}
       {job.is_test ? <span className="rounded-full bg-[#F4F4F4] px-2 py-0.5 text-[10px] font-bold uppercase">Test</span> : null}
       {waitClass ? (
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${waitClass}`} data-testid={`admin-job-waiting-${job.id}`}>

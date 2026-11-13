@@ -5762,7 +5762,7 @@ async def admin_jobs_overview(include_deleted: bool = False, _: dict = Depends(r
         price = j.get("fixed_price") if j.get("pricing_type") == "fixed" else (j.get("accepted_price") or j.get("suggested_price"))
         out.append({
             "id": j["id"], "title": j.get("title"), "category": j.get("category"),
-            "category_label": labels.get(j.get("category")) or (j.get("category") or "").replace("_", " ").title(),
+            "category_label": labels.get(j.get("category")) or (j.get("category") or "").replace("_", " ").title() or "Uncategorised",
             "service_type": j.get("service_type"), "pricing_type": j.get("pricing_type"),
             "service_timing": j.get("service_timing"), "status": j.get("status"), "created_at": j.get("created_at"),
             "collection_date": j.get("collection_date"), "pickup_town": j.get("pickup_town"),

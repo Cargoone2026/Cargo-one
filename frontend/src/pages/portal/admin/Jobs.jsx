@@ -153,7 +153,7 @@ export default function AdminJobs() {
           <li className="flex flex-col items-center gap-2 py-16 text-center" data-testid="admin-jobs-empty">
             <Package className="h-10 w-10 text-[#9CA3AF]" />
             <p className="text-[13px] text-[#6B7280]">
-              {q ? "No matching jobs." : "No jobs posted yet."}
+              {q ? "No matching jobs." : jobs.length ? "No jobs match these filters." : "No jobs posted yet."}
             </p>
           </li>
         ) : (
