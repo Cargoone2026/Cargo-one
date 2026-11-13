@@ -5483,10 +5483,10 @@ ADMIN_VEHICLE_TAGS = ["car", "small_van", "large_van", "luton", "recovery", "car
 _VEHICLE_GROUP_KEYWORDS = [
     ("car_transporter", ["transporter"]),
     ("7_5t", ["7.5", "7_5", "7 5"]),
-    ("hgv", ["hgv", "18t", "26t", "44t", "artic", "rigid"]),
+    ("hgv", ["hgv", "18t", "18 tonne", "26t", "44t", "artic", "rigid", "curtain"]),
     ("luton", ["luton"]),
     ("recovery", ["recovery", "tow", "flatbed", "beavertail"]),
-    ("small_van", ["small van", "caddy", "transit connect"]),
+    ("small_van", ["small van", "swb", "caddy", "transit connect"]),
     ("large_van", ["large van", "lwb", "sprinter", "transit"]),
     ("motorbike", ["bike", "motorcycle"]),
     ("car", ["car"]),

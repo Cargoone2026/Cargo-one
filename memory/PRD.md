@@ -722,3 +722,5 @@ Each future phase must start from the locked baseline.
 - Frontend: admin/Drivers.jsx (stage tabs w/ counts, default Ready to review; vehicle chips incl. Not set; search incl. town/postcode area; info line on card; summary strip; client CSV export with BOM/CRLF + formula-injection guard); components/ui-portal/AdminVehicleTags.jsx; DriverDetail.jsx +2 lines.
 - Mapping gaps to confirm with owner: swb_van, curtain_side, 18_tonne, hiab_crane, refrigerated -> "other".
 - Tested: iteration_r80 (all pass after detail-tags fix).
+
+- 2026-06: Admin drivers organiser mapping: swb_van→Small van; 18_tonne, curtain_side→HGV (hiab_crane/refrigerated/other stay Other). backend/server.py _VEHICLE_GROUP_KEYWORDS only.
