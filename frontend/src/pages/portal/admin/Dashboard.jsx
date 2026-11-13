@@ -123,7 +123,7 @@ export default function AdminDashboard() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <CancellationInsightsCard weeks={8} />
-          <RebookAnalyticsCard days={30} windowHours={24} />
+          <RebookAnalyticsCard days={30} windowHours={24} includeTest={includeTest} />
         </div>
 
         <section className="mt-3 space-y-2">

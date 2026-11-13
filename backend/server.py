@@ -5052,9 +5052,13 @@ TEST_EMAIL_REGEX = r"@(example\.com|example\.org|test\.com)$"
 _TEST_USER_QUERY = {"$or": [{"is_test": True}, {"email": {"$regex": TEST_EMAIL_REGEX, "$options": "i"}}]}
 
 
+async def _test_user_ids() -> list:
+    return [u["id"] async for u in db.users.find(_TEST_USER_QUERY, {"_id": 0, "id": 1})]
+
+
 @api.get("/admin/stats")
 async def admin_stats(include_test: bool = False, user: dict = Depends(require_role("admin"))):
-    test_ids = [u["id"] async for u in db.users.find(_TEST_USER_QUERY, {"_id": 0, "id": 1})]
+    test_ids = await _test_user_ids()
     ex_u, ex_j, ex_b = {}, {}, {}
     if not include_test and test_ids:
         ex_u = {"id": {"$nin": test_ids}}
@@ -5104,6 +5108,7 @@ async def admin_set_test_flag(user_id: str, payload: AdminTestFlag, _: dict = De
 async def admin_analytics_rebooks(
     days: int = 30,
     window_hours: int = 24,
+    include_test: bool = False,
     user: dict = Depends(require_role("admin")),
 ):
     """R63 — Rebook analytics.
@@ -5130,7 +5135,8 @@ async def admin_analytics_rebooks(
     cancelled = await db.bookings.find(
         {"status": "cancelled",
          "cancelled_at": {"$gte": since_iso},
-         "service_timing": "asap"},
+         "service_timing": "asap",
+         **({} if include_test else {"customer_id": {"$nin": await _test_user_ids()}})},
         {"_id": 0, "id": 1, "customer_id": 1, "cancelled_at": 1},
     ).sort("cancelled_at", 1).to_list(2000)
 
@@ -5686,6 +5692,88 @@ async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("ad
             "review_count": len(reviews),
         },
     }
+
+
+_IN_PROGRESS_JOB_STATUSES = ("confirmed", "accepted", "travelling", "arrived", "collected", "on_route")
+_COMPLETED_JOB_STATUSES = ("delivered", "pod_uploaded", "completed")
+
+
+def _job_booking_type(j: dict) -> str:
+    if j.get("service_timing") == "asap":
+        return "ASAP Recovery" if j.get("service_type") == "breakdown_recovery" else "ASAP Transport"
+    return "Fixed Price Jobs" if j.get("pricing_type") == "fixed" else "Bid Jobs"
+
+
+def _job_stage(j: dict, booking: Optional[dict], bids: int) -> str:
+    st = (j.get("status") or "").lower()
+    bst = ((booking or {}).get("status") or "").lower()
+    if j.get("deleted_at"):
+        return "deleted"
+    if j.get("support_issue_open"):
+        return "issue"
+    if st.startswith("cancel") or bst.startswith("cancel"):
+        return "cancelled"
+    if st in _COMPLETED_JOB_STATUSES:
+        return "completed"
+    if st in _IN_PROGRESS_JOB_STATUSES:
+        return "in_progress"
+    if st == "awaiting_manual_quote":
+        return "needs_quote"
+    if st == "posted":
+        return "open_with_bids" if bids > 0 else "open_no_bids"
+    return "other"
+
+
+@api.get("/admin/jobs/overview")
+async def admin_jobs_overview(include_deleted: bool = False, _: dict = Depends(require_role("admin"))):
+    fields = ["id", "title", "category", "service_type", "pricing_type", "service_timing", "status",
+              "created_at", "collection_date", "pickup_town", "dropoff_town", "distance_miles",
+              "fixed_price", "accepted_price", "suggested_price", "customer_id", "customer_name",
+              "assigned_driver_name", "deleted_at", "public_feed_hidden"]
+    jobs = await db.jobs.find({} if include_deleted else {"deleted_at": None},
+                              {"_id": 0, **{f: 1 for f in fields}}).sort("created_at", -1).to_list(10000)
+    bids = {r["_id"]: r["n"] async for r in db.bids.aggregate([
+        {"$match": {"status": {"$in": ["pending", "accepted"]}}},
+        {"$group": {"_id": "$job_id", "n": {"$sum": 1}}},
+    ])}
+    bookings = {r["_id"]: r async for r in db.bookings.aggregate([
+        {"$sort": {"created_at": -1}},
+        {"$group": {"_id": "$job_id", "status": {"$first": "$status"}, "payment_status": {"$first": "$payment_status"}}},
+    ])}
+    open_issue_jobs = set(await db.bookings.distinct(
+        "job_id", {"support_issue": {"$exists": True, "$ne": None}, "support_issue.resolved_at": None},
+    ))
+    test_ids = set(await _test_user_ids())
+    labels = await _feed_category_labels()
+    now = datetime.now(timezone.utc)
+    out = []
+    for j in jobs:
+        b = bookings.get(j["id"])
+        booking = {"status": b.get("status"), "payment_status": b.get("payment_status")} if b else None
+        n = bids.get(j["id"], 0)
+        j["support_issue_open"] = j["id"] in open_issue_jobs
+        stage = _job_stage(j, booking, n)
+        waiting = None
+        if stage in ("open_no_bids", "open_with_bids", "needs_quote") and j.get("created_at"):
+            try:
+                waiting = round((now - datetime.fromisoformat(j["created_at"].replace("Z", "+00:00"))).total_seconds() / 3600, 1)
+            except ValueError:
+                pass
+        price = j.get("fixed_price") if j.get("pricing_type") == "fixed" else (j.get("accepted_price") or j.get("suggested_price"))
+        out.append({
+            "id": j["id"], "title": j.get("title"), "category": j.get("category"),
+            "category_label": labels.get(j.get("category")) or (j.get("category") or "").replace("_", " ").title(),
+            "service_type": j.get("service_type"), "pricing_type": j.get("pricing_type"),
+            "service_timing": j.get("service_timing"), "status": j.get("status"), "created_at": j.get("created_at"),
+            "collection_date": j.get("collection_date"), "pickup_town": j.get("pickup_town"),
+            "dropoff_town": j.get("dropoff_town"), "distance_miles": j.get("distance_miles"), "price": price,
+            "customer_name": j.get("customer_name"), "assigned_driver_name": j.get("assigned_driver_name"),
+            "support_issue_open": j["support_issue_open"], "deleted_at": j.get("deleted_at"),
+            "public_feed_hidden": bool(j.get("public_feed_hidden")), "bids_count": n, "booking": booking,
+            "is_test": j.get("customer_id") in test_ids, "booking_type": _job_booking_type(j),
+            "stage": stage, "waiting_hours": waiting,
+        })
+    return out
 
 
 @api.get("/admin/jobs")

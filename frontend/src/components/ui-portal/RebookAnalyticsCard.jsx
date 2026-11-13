@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
  * language of `CancellationInsightsCard` (R41) so it slots neatly onto
  * the dashboard.
  */
-export function RebookAnalyticsCard({ days = 30, windowHours = 24 }) {
+export function RebookAnalyticsCard({ days = 30, windowHours = 24, includeTest = false }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -25,7 +25,7 @@ export function RebookAnalyticsCard({ days = 30, windowHours = 24 }) {
     (async () => {
       try {
         const d = await api(
-          `/admin/analytics/rebooks?days=${days}&window_hours=${windowHours}`
+          `/admin/analytics/rebooks?days=${days}&window_hours=${windowHours}${includeTest ? "&include_test=true" : ""}`
         );
         if (alive) setData(d || null);
       } catch (e) {
@@ -33,7 +33,7 @@ export function RebookAnalyticsCard({ days = 30, windowHours = 24 }) {
       }
     })();
     return () => { alive = false; };
-  }, [days, windowHours]);
+  }, [days, windowHours, includeTest]);
 
   const daily = data?.daily || [];
   const maxCount = Math.max(1, ...daily.map((d) => d.cancelled || 0));

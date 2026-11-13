@@ -4,6 +4,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 import { JobExtras } from "@/components/ui-portal/JobExtras";
+import {
+  STAGE_TABS, BOOKING_TYPES, ChipRow, JobMetaLine, SummaryLine, countBy, exportJobsCsv,
+} from "@/components/ui-portal/AdminJobsOrganiser";
 
 export default function AdminJobs() {
   const [jobs, setJobs] = useState([]);
@@ -12,11 +15,15 @@ export default function AdminJobs() {
   const [params] = useSearchParams();
   const [openId, setOpenId] = useState(params.get("job"));
   const [showDeleted, setShowDeleted] = useState(false);
+  const [tab, setTab] = useState("attention");
+  const [types, setTypes] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [hideTest, setHideTest] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api(`/admin/jobs${showDeleted ? "?include_deleted=true" : ""}`).catch(() => []);
+      const list = await api(`/admin/jobs/overview${showDeleted ? "?include_deleted=true" : ""}`).catch(() => []);
       setJobs(Array.isArray(list) ? list : []);
     } finally {
       setLoading(false);
@@ -26,15 +33,30 @@ export default function AdminJobs() {
     load();
   }, [load]);
 
-  const filtered = useMemo(() => {
+  const base = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return jobs;
-    return jobs.filter((j) =>
-      `${j.title || ""} ${j.pickup_town || ""} ${j.dropoff_town || ""} ${j.category || ""} ${j.customer_name || ""} ${j.status || ""}`
-        .toLowerCase()
-        .includes(term),
+    return jobs.filter(
+      (j) =>
+        (!hideTest || !j.is_test) &&
+        (!term ||
+          `${j.title || ""} ${j.pickup_town || ""} ${j.dropoff_town || ""} ${j.customer_name || ""} ${j.assigned_driver_name || ""} ${j.id}`
+            .toLowerCase()
+            .includes(term)),
     );
-  }, [jobs, q]);
+  }, [jobs, q, hideTest]);
+  const inTab = (j) => STAGE_TABS.find((t) => t.key === tab).match(j);
+  const byType = (j) => types.length === 0 || types.includes(j.booking_type);
+  const byCat = (j) => cats.length === 0 || cats.includes(j.category_label);
+  const tabCounts = useMemo(
+    () => Object.fromEntries(STAGE_TABS.map((t) => [t.key, base.filter((j) => byType(j) && byCat(j) && t.match(j)).length])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, types, cats],
+  );
+  const typeCounts = countBy(base.filter((j) => inTab(j) && byCat(j)), (j) => j.booking_type);
+  const catCounts = countBy(base.filter((j) => inTab(j) && byType(j)), (j) => j.category_label);
+  const catOptions = Object.keys(countBy(jobs, (j) => j.category_label)).sort().map((c) => ({ key: c, label: c }));
+  const filtered = base.filter((j) => inTab(j) && byType(j) && byCat(j));
+  const flip = (setter) => (k) => setter((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
 
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="admin-jobs">
@@ -62,7 +84,7 @@ export default function AdminJobs() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search title, route, category, customer…"
+          placeholder="Search title, town, customer, driver, job ID…"
           data-testid="admin-jobs-search"
           className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#9CA3AF]"
         />
@@ -71,6 +93,57 @@ export default function AdminJobs() {
             <XIcon className="h-4 w-4 text-[#9CA3AF]" />
           </button>
         )}
+      </div>
+
+      <div className="mx-4 mt-3 flex flex-wrap gap-2 md:mx-8" data-testid="admin-jobs-stage-tabs">
+        {STAGE_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            data-testid={`admin-jobs-tab-${t.key}`}
+            className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+              tab === t.key ? "bg-[#D62828] text-white" : "bg-[#F4F4F4] text-[#111111] hover:bg-[#E5E7EB]"
+            }`}
+          >
+            {t.label} <span className={tab === t.key ? "text-white/70" : "text-[#9CA3AF]"}>{tabCounts[t.key]}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mx-4 mt-3 space-y-2 md:mx-8">
+        <ChipRow
+          label="Booking type"
+          options={BOOKING_TYPES.map((t) => ({ key: t, label: t }))}
+          counts={typeCounts}
+          selected={types}
+          onToggle={flip(setTypes)}
+          testPrefix="admin-jobs-type"
+        />
+        <ChipRow label="Service" options={catOptions} counts={catCounts} selected={cats} onToggle={flip(setCats)} testPrefix="admin-jobs-cat" />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SummaryLine list={filtered} />
+          <div className="flex items-center gap-4">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px] text-[#6B7280]">
+              <input
+                type="checkbox"
+                checked={hideTest}
+                onChange={(e) => setHideTest(e.target.checked)}
+                data-testid="admin-jobs-hide-test"
+                className="h-4 w-4 accent-[#D62828]"
+              />
+              Hide test jobs
+            </label>
+            <button
+              type="button"
+              onClick={() => exportJobsCsv(filtered)}
+              data-testid="admin-jobs-export-csv"
+              className="rounded-full bg-[#111111] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#D62828]"
+            >
+              Export CSV
+            </button>
+          </div>
+        </div>
       </div>
 
       <ul className="mx-4 mt-3 space-y-3 md:mx-8">
@@ -121,14 +194,13 @@ export default function AdminJobs() {
                     {j.distance_miles} mi
                   </span>
                 </div>
+                <JobMetaLine job={j} />
                 <div className="mt-3 flex items-center justify-between border-t border-[#F3F4F6] pt-2">
                   <span className="text-[13px] text-[#6B7280]">
                     By {j.customer_name || "—"}
                   </span>
                   <span className="text-[18px] font-bold text-[#111111]">
-                    £{j.pricing_type === "fixed"
-                      ? j.fixed_price
-                      : j.accepted_price || j.suggested_price}
+                    £{j.price}
                   </span>
                 </div>
               </button>
