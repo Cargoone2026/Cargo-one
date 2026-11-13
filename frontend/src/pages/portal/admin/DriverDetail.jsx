@@ -10,6 +10,7 @@ import {
   X as XIcon,
   ExternalLink,
 } from "lucide-react";
+import { AdminVehicleTags } from "@/components/ui-portal/AdminVehicleTags";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui-portal/Button";
 
@@ -197,6 +198,7 @@ export default function AdminDriverDetail() {
       </header>
 
       <div className="mx-auto max-w-[900px] space-y-4 px-4 pt-4 md:px-8">
+        <AdminVehicleTags key={user.id} driverId={user.id} initial={user.admin_vehicle_tags || []} />
         {/* Profile */}
         <section
           className="flex items-center gap-3 rounded-[14px] border border-[#E5E7EB] p-4"

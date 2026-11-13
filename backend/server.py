@@ -5477,6 +5477,120 @@ async def driver_resubmit_verification(user: dict = Depends(get_current_user)):
     return {"ok": True, "status": "pending"}
 
 
+# ---------- Admin drivers overview (read-only, display stages) + admin vehicle tags ----------
+ADMIN_VEHICLE_TAGS = ["car", "small_van", "large_van", "luton", "recovery", "car_transporter", "7_5t", "hgv", "motorbike", "other"]
+# Checked in this order (first match wins) so e.g. "car transporter" isn't read as "car" and "transit connect" isn't "transit".
+_VEHICLE_GROUP_KEYWORDS = [
+    ("car_transporter", ["transporter"]),
+    ("7_5t", ["7.5", "7_5", "7 5"]),
+    ("hgv", ["hgv", "18t", "26t", "44t", "artic", "rigid"]),
+    ("luton", ["luton"]),
+    ("recovery", ["recovery", "tow", "flatbed", "beavertail"]),
+    ("small_van", ["small van", "caddy", "transit connect"]),
+    ("large_van", ["large van", "lwb", "sprinter", "transit"]),
+    ("motorbike", ["bike", "motorcycle"]),
+    ("car", ["car"]),
+]
+
+
+def vehicle_group(key: Optional[str], name: Optional[str]) -> str:
+    text = f"{key or ''} {name or ''}".lower()
+    spaced = text.replace("_", " ")
+    for group, words in _VEHICLE_GROUP_KEYWORDS:
+        for w in words:
+            if w in text or w in spaced:
+                return group
+    return "other"
+
+
+def _postcode_area(pc: Optional[str]) -> Optional[str]:
+    pc = re.sub(r"\s+", " ", (pc or "").strip().upper())
+    if not pc:
+        return None
+    if " " in pc:
+        return pc.split(" ")[0]
+    compact = pc.replace(" ", "")
+    return compact[:-3] if len(compact) > 4 else compact
+
+
+def _driver_stage(drv_status: Optional[str], docs: dict) -> str:
+    if drv_status == "suspended":
+        return "suspended"
+    if drv_status == "active":
+        return "approved"
+    if docs["uploaded"] == 0:
+        return "no_documents"
+    if drv_status == "changes_requested" or docs["rejected"] > 0:
+        return "changes_requested"
+    if docs["uploaded"] >= docs["required"]:
+        return "ready_to_review"
+    return "in_progress"
+
+
+@api.get("/admin/drivers/overview")
+async def admin_drivers_overview(_: dict = Depends(require_role("admin"))):
+    projection = {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "status": 1, "created_at": 1, "town": 1,
+                  "postcode": 1, "documents_verified": 1, "admin_vehicle_tags": 1, "total_jobs": 1, "rating": 1}
+    users = await db.users.find({"role": "driver", "deleted_at": None}, projection).sort("created_at", -1).to_list(20000)
+    required = sorted(REQUIRED_DOC_TYPES)
+
+    doc_rows = await db.documents.aggregate([
+        {"$match": {"active": True, "doc_type": {"$in": required}}},
+        {"$project": {"_id": 0, "user_id": 1, "doc_type": 1, "status": 1}},
+        {"$group": {"_id": {"u": "$user_id", "t": "$doc_type"}, "statuses": {"$addToSet": "$status"}}},
+    ]).to_list(None)
+    docs_by_user: dict = {}
+    for r in doc_rows:
+        docs_by_user.setdefault(r["_id"]["u"], {})[r["_id"]["t"]] = r["statuses"]
+
+    veh_rows = await db.driver_vehicles.aggregate([
+        {"$project": {"_id": 0, "driver_id": 1, "vehicle_type_key": 1, "vehicle_type_name": 1}},
+        {"$group": {"_id": "$driver_id", "types": {"$push": {"k": "$vehicle_type_key", "n": "$vehicle_type_name"}}, "count": {"$sum": 1}}},
+    ]).to_list(None)
+    veh_by_driver = {r["_id"]: r for r in veh_rows}
+
+    out = []
+    for u in users:
+        per_type = docs_by_user.get(u["id"], {})
+        docs = {
+            "uploaded": len(per_type),
+            "approved": sum(1 for ss in per_type.values() if "approved" in ss),
+            "rejected": sum(1 for ss in per_type.values() if "rejected" in ss),
+            "pending": sum(1 for ss in per_type.values() if "pending" in ss),
+            "required": len(required),
+            "missing": [t for t in required if t not in per_type],
+        }
+        v = veh_by_driver.get(u["id"]) or {"types": [], "count": 0}
+        groups = [vehicle_group(t.get("k"), t.get("n")) for t in v["types"]]
+        groups += [t for t in (u.get("admin_vehicle_tags") or []) if t in ADMIN_VEHICLE_TAGS]
+        out.append({
+            "id": u["id"], "name": u.get("name"), "email": u.get("email"), "phone": u.get("phone"),
+            "status": u.get("status"), "created_at": u.get("created_at"), "town": u.get("town"),
+            "postcode_area": _postcode_area(u.get("postcode")), "documents_verified": bool(u.get("documents_verified")),
+            "docs": docs, "stage": _driver_stage(u.get("status"), docs),
+            "vehicles": list(dict.fromkeys(groups)), "vehicle_count": v["count"],
+            "admin_vehicle_tags": [t for t in (u.get("admin_vehicle_tags") or []) if t in ADMIN_VEHICLE_TAGS],
+            "total_jobs": u.get("total_jobs") or 0, "rating": u.get("rating"),
+        })
+    return out
+
+
+class AdminVehicleTags(BaseModel):
+    tags: list[str]
+
+
+@api.post("/admin/drivers/{driver_id}/vehicle-tags")
+async def admin_set_vehicle_tags(driver_id: str, payload: AdminVehicleTags, _: dict = Depends(require_role("admin"))):
+    bad = [t for t in payload.tags if t not in ADMIN_VEHICLE_TAGS]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Unknown vehicle tag(s): {', '.join(bad)}")
+    tags = list(dict.fromkeys(payload.tags))
+    res = await db.users.update_one({"id": driver_id, "role": "driver"}, {"$set": {"admin_vehicle_tags": tags}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    return {"ok": True, "driver_id": driver_id, "admin_vehicle_tags": tags}
+
+
 @api.get("/admin/drivers/{driver_id}")
 async def admin_driver_detail(driver_id: str, _: dict = Depends(require_role("admin"))):
     """Full driver verification snapshot for the admin review screen.
@@ -7685,6 +7799,9 @@ async def admin_set_public_feed(job_id: str, payload: PublicFeedToggle, _: dict 
         raise HTTPException(status_code=404, detail="Job not found")
     _FEED_CACHE.clear()
     return {"ok": True, "job_id": job_id, "public_feed_hidden": payload.hidden}
+
+
+
 
 
 
