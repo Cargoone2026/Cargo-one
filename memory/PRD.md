@@ -724,3 +724,5 @@ Each future phase must start from the locked baseline.
 - Tested: iteration_r80 (all pass after detail-tags fix).
 
 - 2026-06: Admin drivers organiser mapping: swb_van→Small van; 18_tonne, curtain_side→HGV (hiab_crane/refrigerated/other stay Other). backend/server.py _VEHICLE_GROUP_KEYWORDS only.
+
+- 2026-06: Admin delete allows cancelled jobs (helper _is_inactive_booking_status/_deletable_booking); /admin/stats excludes test accounts (is_test or @example.com/.org/@test.com), include_test param; POST /admin/users/{id}/test-flag; dashboard note+toggle; Users modal "Mark as test account".

@@ -5048,19 +5048,29 @@ async def mark_read(note_id: str, user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 
 
+TEST_EMAIL_REGEX = r"@(example\.com|example\.org|test\.com)$"
+_TEST_USER_QUERY = {"$or": [{"is_test": True}, {"email": {"$regex": TEST_EMAIL_REGEX, "$options": "i"}}]}
+
+
 @api.get("/admin/stats")
-async def admin_stats(user: dict = Depends(require_role("admin"))):
-    total_users = await db.users.count_documents({"role": "customer", "deleted_at": None})
-    total_drivers = await db.users.count_documents({"role": "driver", "deleted_at": None})
-    pending_drivers = await db.users.count_documents({"role": "driver", "status": "pending"})
-    total_jobs = await db.jobs.count_documents({"deleted_at": None})
+async def admin_stats(include_test: bool = False, user: dict = Depends(require_role("admin"))):
+    test_ids = [u["id"] async for u in db.users.find(_TEST_USER_QUERY, {"_id": 0, "id": 1})]
+    ex_u, ex_j, ex_b = {}, {}, {}
+    if not include_test and test_ids:
+        ex_u = {"id": {"$nin": test_ids}}
+        ex_j = {"customer_id": {"$nin": test_ids}}
+        ex_b = {"customer_id": {"$nin": test_ids}, "driver_id": {"$nin": test_ids}}
+    total_users = await db.users.count_documents({"role": "customer", "deleted_at": None, **ex_u})
+    total_drivers = await db.users.count_documents({"role": "driver", "deleted_at": None, **ex_u})
+    pending_drivers = await db.users.count_documents({"role": "driver", "status": "pending", **ex_u})
+    total_jobs = await db.jobs.count_documents({"deleted_at": None, **ex_j})
     active_jobs = await db.jobs.count_documents({"status": {"$in": ["posted", "accepted", "confirmed",
                                                                       "travelling", "collected", "on_route"]},
-                                                 "deleted_at": None})
-    total_bookings = await db.bookings.count_documents({"deleted_at": None})
-    paid_bookings = await db.bookings.count_documents({"payment_status": "paid"})
+                                                 "deleted_at": None, **ex_j})
+    total_bookings = await db.bookings.count_documents({"deleted_at": None, **ex_b})
+    paid_bookings = await db.bookings.count_documents({"payment_status": "paid", **ex_b})
     revenue_agg = await db.bookings.aggregate([
-        {"$match": {"payment_status": "paid"}},
+        {"$match": {"payment_status": "paid", **ex_b}},
         {"$group": {"_id": None, "total": {"$sum": "$deposit_amount"}}},
     ]).to_list(1)
     revenue = revenue_agg[0]["total"] if revenue_agg else 0
@@ -5073,7 +5083,21 @@ async def admin_stats(user: dict = Depends(require_role("admin"))):
         "total_bookings": total_bookings,
         "paid_bookings": paid_bookings,
         "revenue_gbp": round(revenue, 2),
+        "test_accounts": len(test_ids),
+        "include_test": include_test,
     }
+
+
+class AdminTestFlag(BaseModel):
+    is_test: bool
+
+
+@api.post("/admin/users/{user_id}/test-flag")
+async def admin_set_test_flag(user_id: str, payload: AdminTestFlag, _: dict = Depends(require_role("admin"))):
+    res = await db.users.update_one({"id": user_id}, {"$set": {"is_test": payload.is_test}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "user_id": user_id, "is_test": payload.is_test}
 
 
 @api.get("/admin/analytics/rebooks")
@@ -5677,22 +5701,35 @@ async def admin_list_jobs(include_deleted: bool = False, user: dict = Depends(re
 
 
 INACTIVE_BOOKING_STATUSES = ("cancelled", "delivered", "pod_uploaded", "completed")
+_PRE_START_BOOKING_STATUSES = (None, "", "pending", "deposit_paid")
+
+
+def _is_inactive_booking_status(st: Optional[str]) -> bool:
+    st = (st or "").lower()
+    return st in INACTIVE_BOOKING_STATUSES or st.startswith("cancelled") or st.startswith("canceled")
+
+
+def _deletable_booking(b: dict, job_cancelled: bool) -> bool:
+    # Admin delete only: finished/cancelled bookings, or a cancelled job whose booking never started.
+    if _is_inactive_booking_status(b.get("status")) or b.get("cancelled_at"):
+        return True
+    return job_cancelled and b.get("status") in _PRE_START_BOOKING_STATUSES
 
 
 @api.delete("/admin/jobs/{job_id}")
 async def admin_soft_delete_job(job_id: str, user: dict = Depends(require_role("admin"))):
     """Soft delete: hides the job + its bookings from lists. No refunds/Stripe/notifications."""
-    job = await db.jobs.find_one({"id": job_id}, {"_id": 0, "id": 1, "deleted_at": 1})
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0, "id": 1, "deleted_at": 1, "status": 1})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.get("deleted_at"):
         return {"ok": True, "job_id": job_id, "deleted_at": job["deleted_at"]}
-    active_paid = await db.bookings.find_one(
-        {"job_id": job_id, "payment_status": "paid",
-         "status": {"$nin": list(INACTIVE_BOOKING_STATUSES)}},
-        {"_id": 0, "id": 1},
-    )
-    if active_paid:
+    paid = await db.bookings.find(
+        {"job_id": job_id, "payment_status": "paid"},
+        {"_id": 0, "status": 1, "cancelled_at": 1},
+    ).to_list(50)
+    job_cancelled = (job.get("status") or "").lower().startswith(("cancelled", "canceled"))
+    if any(not _deletable_booking(b, job_cancelled) for b in paid):
         raise HTTPException(
             status_code=409,
             detail="This job has an active paid booking. Cancel it through the normal cancel/refund flow first.",

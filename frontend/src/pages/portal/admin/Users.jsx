@@ -556,6 +556,8 @@ function UserDetailModal({ userId, onClose, onDeleted }) {
                 </div>
               ) : null}
 
+              {u.role !== "admin" ? <TestAccountToggle user={u} /> : null}
+
               {u.deleted_at ? (
                 <p className="rounded-[10px] bg-[#FEF2F2] px-3 py-2 text-[13px] text-[#7F1D1D]" data-testid="admin-user-modal-deleted-note">
                   Deleted {new Date(u.deleted_at).toLocaleString()} — read-only record.
@@ -579,5 +581,31 @@ function Stat({ label, value }) {
       </p>
       <p className="text-[15px] font-bold text-[#111111]">{value ?? "—"}</p>
     </div>
+  );
+}
+
+function TestAccountToggle({ user }) {
+  const [on, setOn] = useState(!!user.is_test);
+  const [busy, setBusy] = useState(false);
+  const toggle = async (next) => {
+    setBusy(true);
+    try {
+      await api(`/admin/users/${user.id}/test-flag`, { method: "POST", body: { is_test: next } });
+      setOn(next);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <label className="flex items-center gap-2 text-[13px] text-[#111111]">
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={busy}
+        onChange={(e) => toggle(e.target.checked)}
+        data-testid="admin-user-test-flag-toggle"
+      />
+      Mark as test account
+    </label>
   );
 }

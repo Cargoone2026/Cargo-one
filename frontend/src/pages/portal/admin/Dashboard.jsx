@@ -29,12 +29,13 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [openIssues, setOpenIssues] = useState(0);
+  const [includeTest, setIncludeTest] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [s, ic] = await Promise.all([
-        api("/admin/stats").catch(() => ({})),
+        api(`/admin/stats${includeTest ? "?include_test=true" : ""}`).catch(() => ({})),
         api("/admin/support-issues/count").catch(() => ({ open: 0 })),
       ]);
       setStats(s || {});
@@ -42,7 +43,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includeTest]);
   useEffect(() => {
     load();
   }, [load]);
@@ -104,6 +105,20 @@ export default function AdminDashboard() {
             Icon={CheckCircle2}
             color="#16A34A"
           />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#9CA3AF]">
+          <span data-testid="admin-dashboard-test-note">
+            {includeTest ? "Totals include test accounts" : "Totals exclude test accounts"} ({stats.test_accounts ?? 0})
+          </span>
+          <label className="flex items-center gap-2">
+            Include test data
+            <input
+              type="checkbox"
+              checked={includeTest}
+              onChange={(e) => setIncludeTest(e.target.checked)}
+              data-testid="admin-dashboard-include-test-toggle"
+            />
+          </label>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
