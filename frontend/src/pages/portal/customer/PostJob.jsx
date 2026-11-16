@@ -21,6 +21,8 @@ import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete"
 import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { trackConversion } from "@/lib/analytics";
+import { useAuth } from "@/context/AuthContext";
+import { QuoteAccountStep } from "@/components/ui-portal/QuoteAccountStep";
 // R48 — leaf components extracted out of this file. Behaviour unchanged;
 // see `./postjob/` for the widgets and metadata.
 import {
@@ -38,9 +40,13 @@ import {
 const STEP_COUNT = 5;
 const NOT_SURE_KEY = "__not_sure__";
 
-export default function CustomerPostJob() {
+export default function CustomerPostJob({ guest = false }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isGuest = guest && user?.role !== "customer";
+  const canPrice = !isGuest;
+  const [showAccount, setShowAccount] = useState(false);
   const { data: categories, loading: catLoading } = useCategories();
   const { data: vehicles, loading: vehLoading } = useVehicles();
 
@@ -157,7 +163,7 @@ export default function CustomerPostJob() {
       dropoff &&
       Number.isFinite(Number(dropoff.lat)) &&
       Number.isFinite(Number(dropoff.lng));
-    if (!pickupOk || !dropoffOk || !categoryKey) {
+    if (!pickupOk || !dropoffOk || !categoryKey || !canPrice) {
       setQuote(null);
       return;
     }
@@ -185,7 +191,7 @@ export default function CustomerPostJob() {
     return () => {
       cancelled = true;
     };
-  }, [pickup, dropoff, categoryKey, weightKg, lengthM, widthM, heightM]);
+  }, [pickup, dropoff, categoryKey, weightKg, lengthM, widthM, heightM, canPrice]);
 
   const previewCharge = useMemo(() => {
     if (pricingType === "fixed" && fixedPrice) return Number(fixedPrice);
@@ -195,7 +201,7 @@ export default function CustomerPostJob() {
   }, [pricingType, fixedPrice, maxBudget, quote]);
 
   useEffect(() => {
-    if (step !== 5 || previewCharge <= 0) {
+    if (step !== 5 || previewCharge <= 0 || !canPrice) {
       setFeePreview(null);
       return;
     }
@@ -213,7 +219,7 @@ export default function CustomerPostJob() {
     return () => {
       cancelled = true;
     };
-  }, [step, previewCharge]);
+  }, [step, previewCharge, canPrice]);
 
   const requestRec = useCallback(async () => {
     if (!selectedCategory) return;
@@ -326,13 +332,29 @@ export default function CustomerPostJob() {
     }
   }
 
+  function continueAsGuest() {
+    setErr(null);
+    if (!pickup || !dropoff) return setErr("Please choose pickup and delivery addresses");
+    if (!selectedCategory) return setErr("Please choose a service category");
+    setShowAccount(true);
+  }
+
+  if (isGuest && showAccount) {
+    const summary = [
+      selectedCategory?.name || title,
+      `${pickup?.town || pickup?.formatted_address || ""} → ${dropoff?.town || dropoff?.formatted_address || ""}`,
+      collectionDate,
+    ].filter(Boolean).join(" · ");
+    return <QuoteAccountStep summary={summary} onCustomer={() => setShowAccount(false)} onBack={() => setShowAccount(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-white" data-testid="customer-post-job">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 pt-6 md:px-8">
         <button
           type="button"
-          onClick={() => (step > 1 ? setStep((s) => s - 1) : navigate(-1))}
+          onClick={() => (step > 1 ? setStep((s) => s - 1) : guest && !(window.history.state?.idx > 0) ? navigate("/") : navigate(-1))}
           data-testid="post-job-back"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F4F4] hover:bg-[#E5E7EB]"
           aria-label="Back"
@@ -508,6 +530,7 @@ export default function CustomerPostJob() {
                     </div>
                   </div>
                 ) : null}
+                {isGuest ? <GuestPriceNote /> : null}
                 {quote && !quote.requires_manual_review ? (
                   <div className="grid grid-cols-3 gap-2">
                     <QuoteStat
@@ -732,6 +755,7 @@ export default function CustomerPostJob() {
               />
             </div>
 
+            {isGuest ? <div className="mt-4"><GuestPriceNote /></div> : null}
             <div
               className="mt-4 rounded-[16px] border border-[#E5E7EB] bg-white p-4"
               data-testid="postjob-summary"
@@ -804,7 +828,7 @@ export default function CustomerPostJob() {
       </div>
 
       {/* Footer CTA */}
-      <div className="fixed inset-x-0 bottom-16 border-t border-[#E5E7EB] bg-white/95 backdrop-blur lg:bottom-0 lg:left-64">
+      <div className={guest ? "fixed inset-x-0 bottom-0 border-t border-[#E5E7EB] bg-white/95 backdrop-blur" : "fixed inset-x-0 bottom-16 border-t border-[#E5E7EB] bg-white/95 backdrop-blur lg:bottom-0 lg:left-64"}>
         <div className="mx-auto max-w-[720px] px-4 py-3 md:px-8">
           {step < STEP_COUNT ? (
             <Button
@@ -817,6 +841,13 @@ export default function CustomerPostJob() {
                   : !canNext4
               }
               testID="postjob-next-button"
+            />
+          ) : isGuest ? (
+            <Button
+              title="Continue"
+              onClick={continueAsGuest}
+              disabled={!canSubmit}
+              testID="postjob-guest-continue-button"
             />
           ) : (
             <Button
@@ -833,3 +864,10 @@ export default function CustomerPostJob() {
   );
 }
 
+function GuestPriceNote() {
+  return (
+    <p className="rounded-[12px] bg-[#FFF7ED] p-3 text-[13px] text-[#111111]" data-testid="guest-price-note">
+      Create a free account (or log in) to see your price estimate and booking fee.
+    </p>
+  );
+}

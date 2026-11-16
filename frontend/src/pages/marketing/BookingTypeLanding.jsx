@@ -7,12 +7,13 @@ import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { BOOKING_TYPES, BOOKING_TYPE_BY_SLUG, SERVICE_BY_SLUG, bookingTypeJsonLd, bookingTypeSeo } from "@/data/seo";
 
-const QUOTE_HREF = "/auth/register?role=customer";
+const QUOTE_HREF = "/get-quote";
+const quoteHref = (slug) => (slug === "asap-transport" ? "/get-quote/asap" : slug === "asap-recovery" ? "/get-quote/asap?mode=recovery" : QUOTE_HREF);
 
-function QuoteButton({ testId }) {
+function QuoteButton({ testId, href = QUOTE_HREF }) {
   return (
     <Link
-      to={QUOTE_HREF}
+      to={href}
       data-testid={testId}
       className="inline-flex items-center gap-2 rounded-full bg-[#D62828] px-6 py-3 text-[15px] font-bold text-white transition-colors hover:bg-[#B01F1F]"
     >
@@ -86,7 +87,7 @@ function BookingTypeBody({ type }) {
   return (
     <div data-testid={`booking-type-page-${type.slug}`}>
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={bookingTypeJsonLd(type)} />
-      <Hero bgImage={image} eyebrow="WAYS TO BOOK" title={seo.h1} subtitle={type.intro} compact primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }} />
+      <Hero bgImage={image} eyebrow="WAYS TO BOOK" title={seo.h1} subtitle={type.intro} compact primaryCta={{ label: "Get an instant quote", href: quoteHref(type.slug) }} />
       <Breadcrumb name={type.name} />
 
       <Section>
@@ -116,7 +117,7 @@ function BookingTypeBody({ type }) {
                 ))}
               </ul>
             </div>
-            <QuoteButton testId="booking-type-quote-btn-mid" />
+            <QuoteButton testId="booking-type-quote-btn-mid" href={quoteHref(type.slug)} />
           </div>
         </div>
       </Section>
@@ -142,7 +143,7 @@ function BookingTypeBody({ type }) {
           <div className="rounded-[20px] bg-[#111111] p-6 text-white">
             <h2 className="text-[20px] font-bold">Ready to book?</h2>
             <p className="mt-1 text-[14px] text-white/70">See your price in a few seconds, then book a verified driver.</p>
-            <div className="mt-4"><QuoteButton testId="booking-type-quote-btn-bottom" /></div>
+            <div className="mt-4"><QuoteButton testId="booking-type-quote-btn-bottom" href={quoteHref(type.slug)} /></div>
             <Link to="/drivers" data-testid="booking-type-drive-link" className="mt-4 inline-flex items-center gap-1 text-[14px] font-semibold text-white underline">
               Drive with CargoOne <ArrowRight className="h-4 w-4" />
             </Link>

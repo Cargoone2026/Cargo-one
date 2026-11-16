@@ -7,7 +7,7 @@ import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
 import { LOCAL_CITIES, SERVICE_BY_SLUG, serviceJsonLd, serviceSeo } from "@/data/seo";
 
-const QUOTE_HREF = "/auth/register?role=customer";
+const QUOTE_HREF = "/get-quote";
 
 const STEPS = [
   { icon: Zap, title: "Get an instant price", body: "Enter pickup, drop-off and what you're moving. You see the price before you book." },

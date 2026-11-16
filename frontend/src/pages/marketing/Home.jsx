@@ -78,7 +78,7 @@ export default function HomePage() {
         eyebrow="CARGO ONE — UK LOGISTICS MARKETPLACE"
         title={"Ship Anything.\nAnywhere.\nInstant Quotes."}
         subtitle="Post a job in 60 seconds. Compare bids from verified UK drivers, pay a small booking fee, and track your delivery live from pickup to doorstep."
-        primaryCta={{ label: "Get an Instant Quote", href: "/auth/register?role=customer" }}
+        primaryCta={{ label: "Get an Instant Quote", href: "/get-quote" }}
         secondaryCta={{ label: "How It Works", href: "/how-it-works" }}
       />
 
@@ -124,7 +124,7 @@ export default function HomePage() {
         </div>
         <div className="mt-8 flex justify-center">
           <Link
-            to="/auth/register?role=customer"
+            to="/get-quote"
             data-testid="home-post-job-cta"
             className="inline-flex items-center gap-2 rounded-full bg-[#D62828] px-6 py-3 text-[16px] font-bold text-white transition-colors hover:bg-[#B01F1F]"
           >
@@ -260,7 +260,7 @@ export default function HomePage() {
           </p>
           <div className={`mt-3 flex ${isMobile ? "w-full flex-col" : "flex-row"} items-center gap-3`}>
             <Link
-              to="/auth/register?role=customer"
+              to="/get-quote"
               className="rounded-full bg-white px-6 py-3 text-[16px] font-bold text-[#D62828]"
             >
               Get a Quote

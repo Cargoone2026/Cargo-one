@@ -95,7 +95,7 @@ export function MarketingHeader() {
             </button>
           ) : (
             <Link
-              to="/auth/register?role=customer"
+              to="/get-quote"
               data-testid="marketing-signup"
               className="whitespace-nowrap rounded-full bg-[#D62828] px-3 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[#B01F1F] sm:px-5 sm:py-2.5 sm:text-[14px]"
             >

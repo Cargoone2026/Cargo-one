@@ -10,7 +10,7 @@ import { directoryByLetter } from "@/data/directory";
 import { DIRECTORY_AREAS, DIRECTORY_CATEGORIES, DIRECTORY_COST_GUIDES, DIRECTORY_FAQS, DIRECTORY_GUIDANCE, DIRECTORY_SEO, directoryJsonLd } from "@/data/seo";
 import { Crumbs, Faqs } from "@/pages/marketing/LocalPlaces";
 
-const POST_JOB_HREF = "/auth/register?role=customer";
+const POST_JOB_HREF = "/get-quote";
 
 // UK transport directory: smart search, category cards, A-Z index, popular areas and FAQs.
 export default function TransportDirectory() {

@@ -51,6 +51,7 @@ import CustomerMessages from "@/pages/portal/customer/Messages";
 import CustomerProfile from "@/pages/portal/customer/Profile";
 import CustomerPostJob from "@/pages/portal/customer/PostJob";
 import CustomerAsapRequest from "@/pages/portal/customer/AsapRequest";
+import GetQuote from "@/pages/GetQuote";
 import CustomerDispatch from "@/pages/portal/customer/Dispatch";
 import CustomerJobDetail from "@/pages/portal/customer/JobDetail";
 import CustomerBookingDetail from "@/pages/portal/customer/BookingDetail";
@@ -164,6 +165,8 @@ export default function App() {
             <Route path="/cookies" element={<Marketing Page={() => <Legal slug="cookies" />} />} />
 
             {/* Auth */}
+            <Route path="/get-quote" element={<GetQuote />} />
+            <Route path="/get-quote/asap" element={<GetQuote />} />
             <Route path="/auth/welcome" element={<Welcome />} />
             <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/register" element={<Register />} />

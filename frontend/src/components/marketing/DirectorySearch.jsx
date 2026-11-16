@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Search } from "lucide-react";
 import { searchDirectory } from "@/data/directory";
 
-const POST_JOB_HREF = "/auth/register?role=customer";
+const POST_JOB_HREF = "/get-quote";
 
 // Client-side "What do you need to move?" search over the A-Z directory entries. Combobox with keyboard support.
 export function DirectorySearch() {

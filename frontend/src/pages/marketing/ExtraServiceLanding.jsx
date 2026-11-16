@@ -27,7 +27,7 @@ export default function ExtraServiceLanding() {
   return (
     <div data-testid={`service-page-${service.slug}`}>
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={serviceJsonLd(service)} />
-      <Hero bgImage={image} eyebrow="CARGO ONE SERVICES" title={seo.h1} subtitle={service.intro} compact primaryCta={{ label: "Get an instant quote", href: "/auth/register?role=customer" }} />
+      <Hero bgImage={image} eyebrow="CARGO ONE SERVICES" title={seo.h1} subtitle={service.intro} compact primaryCta={{ label: "Get an instant quote", href: "/get-quote" }} />
       <Breadcrumb name={service.name} />
       {service.recovery247 ? <Recovery247 /> : null}
       <Steps service={service} />

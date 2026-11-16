@@ -16,7 +16,7 @@ async function fetchJobs(params) {
 }
 
 // Anonymised "Recently posted jobs" list. Falls back to UK-wide; renders nothing if fewer than 3 jobs or on error.
-export function RecentJobs({ town, category, title = "Recently posted jobs", postHref = "/auth/register?role=customer", limit = 6, header = null }) {
+export function RecentJobs({ town, category, title = "Recently posted jobs", postHref = "/get-quote", limit = 6, header = null }) {
   const [state, setState] = useState(null);
 
   useEffect(() => {

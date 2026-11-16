@@ -10,6 +10,8 @@ import { Input } from "@/components/ui-portal/Input";
 import { AddressAutocomplete } from "@/components/ui-portal/AddressAutocomplete";
 import { RouteMap } from "@/components/ui-portal/RouteMap";
 import { PhotoUpload } from "@/components/ui-portal/PhotoUpload";
+import { useAuth } from "@/context/AuthContext";
+import { QuoteAccountStep } from "@/components/ui-portal/QuoteAccountStep";
 // R46 — child components extracted out of this file. Behaviour unchanged;
 // see `./asap/` for the leaf views.
 import {
@@ -36,9 +38,13 @@ import {
  * We DO NOT recompute pricing here — every commercial value is read from
  * the backend job response.
  */
-export default function CustomerAsapRequest() {
+export default function CustomerAsapRequest({ guest = false, initialMode } = {}) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState("transport"); // transport | breakdown_recovery
+  const { user } = useAuth();
+  const isGuest = guest && user?.role !== "customer";
+  const canPrice = !isGuest;
+  const [showAccount, setShowAccount] = useState(false);
+  const [mode, setMode] = useState(initialMode || "transport"); // transport | breakdown_recovery
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
   const [note, setNote] = useState("");
@@ -288,7 +294,7 @@ export default function CustomerAsapRequest() {
   // truth. Debounced 350 ms; aborts on unmount + on input churn so
   // out-of-order responses can never overwrite a fresher price.
   useEffect(() => {
-    if (!pickup || !dropoff) { setQuote(null); return undefined; }
+    if (!pickup || !dropoff || !canPrice) { setQuote(null); return undefined; }
     let cancelled = false;
     const t = setTimeout(async () => {
       setQuoteLoading(true);
@@ -385,7 +391,15 @@ export default function CustomerAsapRequest() {
     return () => { cancelled = true; clearTimeout(t); };
   }, [pickup, dropoff, mode, transportCategory, transportVehicleKey, recoveryVehicleKey, asapWeightKg,
       asapLengthM, asapWidthM, asapHeightM, asapItemCount,
-      needsForklift, needsLoadingHelp, vehicle]);
+      needsForklift, needsLoadingHelp, vehicle, canPrice]);
+
+  const guestValidationError = () => {
+    if (!pickup || !pickup.formatted_address || !Number.isFinite(pickup.lat) || !Number.isFinite(pickup.lng) || (pickup.lat === 0 && pickup.lng === 0)) return "Please confirm your collection location.";
+    if (!dropoff || !dropoff.formatted_address || !Number.isFinite(dropoff.lat) || !Number.isFinite(dropoff.lng) || (dropoff.lat === 0 && dropoff.lng === 0)) return "Please enter a delivery destination.";
+    if (mode === "breakdown_recovery" && (!vehicle.make || !vehicle.model)) return "Please enter the vehicle make and model.";
+    if (mode === "transport" && !transportCategory) return "Please select what you're sending.";
+    return null;
+  };
 
   const onSubmit = useCallback(async () => {
     // Explicit user-friendly validation — never surface raw backend JSON.
@@ -520,11 +534,23 @@ export default function CustomerAsapRequest() {
     }
   }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription, transportVehicleKey, asapWeightKg, asapItemCount, asapLengthM, asapWidthM, asapHeightM, needsForklift, needsLoadingHelp, quote, estimatedTotal]);
 
+  if (isGuest && showAccount) {
+    const vehicleLabel = mode === "breakdown_recovery"
+      ? [vehicle.make, vehicle.model].filter(Boolean).join(" ")
+      : (transportVehicles.find((v) => v.key === transportVehicleKey)?.label || "");
+    const summary = [
+      mode === "breakdown_recovery" ? "ASAP Recovery" : "ASAP Transport",
+      `${pickup?.town || pickup?.formatted_address || ""} → ${dropoff?.town || dropoff?.formatted_address || ""}`,
+      vehicleLabel,
+    ].filter(Boolean).join(" · ");
+    return <QuoteAccountStep summary={summary} onCustomer={() => setShowAccount(false)} onBack={() => setShowAccount(false)} />;
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-6" data-testid="customer-asap-request">
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => (guest && !(window.history.state?.idx > 0) ? navigate("/") : navigate(-1))}
         className="mb-4 inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900"
         data-testid="asap-back"
       >
@@ -917,6 +943,11 @@ export default function CustomerAsapRequest() {
                Deliberately omit the standalone "Fare (driver charge)" line
                — customers only care about the total price + the amount they
                pay today. */}
+            {isGuest ? (
+              <p className="py-2 text-[13px] text-neutral-700" data-testid="asap-guest-price-note">
+                Create a free account (or log in) to see your live price and book.
+              </p>
+            ) : (<>
             <SummaryRow
               label="Total job price"
               value={
@@ -933,6 +964,7 @@ export default function CustomerAsapRequest() {
                 : "Booking fee (deposit, paid now)"}
               value={estimatedDeposit ? `£${estimatedDeposit.toFixed(2)}` : "—"}
             />
+            </>)}
           </div>
           <p className="text-[11px] text-neutral-500 mt-3">
             Prices are indicative. Your final fare is confirmed by the backend before payment.
@@ -949,6 +981,16 @@ export default function CustomerAsapRequest() {
         </p>
       )}
 
+      {isGuest ? (
+        <Button
+          onClick={() => { const v = guestValidationError(); setErr(v); if (!v) setShowAccount(true); }}
+          disabled={!canSubmit}
+          className="w-full"
+          data-testid="asap-guest-continue"
+        >
+          Continue
+        </Button>
+      ) : (
       <Button
         onClick={onSubmit}
         disabled={!canSubmit || submitting}
@@ -960,6 +1002,7 @@ export default function CustomerAsapRequest() {
           ? `Confirm & pay £${estimatedDeposit.toFixed(2)} deposit`
           : "Confirm & find driver"}
       </Button>
+      )}
       <p className="text-xs text-neutral-500 mt-3 flex items-center gap-1">
         <ShieldCheck className="h-3 w-3" /> You pay the deposit now. We only start looking for a driver after payment.
       </p>

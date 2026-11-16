@@ -12,7 +12,7 @@ import {
   cityHubFaqs, cityHubJsonLd, cityHubSeo, cityRoutes, localService, serviceCityJsonLd, serviceCitySeo,
 } from "@/data/seo";
 
-const QUOTE_HREF = "/auth/register?role=customer";
+const QUOTE_HREF = "/get-quote";
 const STEPS = [
   { title: "Get an instant price", body: "Enter pickup, drop-off and what you're moving to see your price straight away." },
   { title: "A verified driver accepts", body: "Drivers are checked before they can take jobs, and you can see who's coming." },

@@ -2785,7 +2785,7 @@ const GUIDES_BASE = [
       { q: "Can a driver collect from the store for me?", a: "Yes. Add the store address, your order number and collection reference, and any ID the store asks for. Check the store's rules on who can collect an order." },
       { q: "Will the driver assemble the furniture?", a: "No. Drivers collect and deliver. Arrange assembly separately if you need it." },
     ],
-    links: [SV("wardrobe-and-flat-pack-delivery"), SV("furniture-delivery"), SV("sofa-delivery"), SV("marketplace-collection"), SV("large-item-courier"), ["Post a job", "/auth/register?role=customer"], BT.bid, BT.fixed],
+    links: [SV("wardrobe-and-flat-pack-delivery"), SV("furniture-delivery"), SV("sofa-delivery"), SV("marketplace-collection"), SV("large-item-courier"), ["Post a job", "/get-quote"], BT.bid, BT.fixed],
   },
 ];
 
@@ -3484,7 +3484,7 @@ export function directoryJsonLd() {
 }
 
 MARKETING_ROUTES.push({
-  ...DIRECTORY_SEO, img: "heroSeoBoxes", faqs: DIRECTORY_FAQS, jsonLd: directoryJsonLd(), detail: true, cta: ["Post a job – get quotes from drivers", "/auth/register?role=customer"],
+  ...DIRECTORY_SEO, img: "heroSeoBoxes", faqs: DIRECTORY_FAQS, jsonLd: directoryJsonLd(), detail: true, cta: ["Post a job – get quotes from drivers", "/get-quote"],
   lists: [
     ...DIRECTORY_CATEGORIES.map((c) => [c.title, [c.body, ...c.links]]),
     ["Popular areas", DIRECTORY_AREAS],

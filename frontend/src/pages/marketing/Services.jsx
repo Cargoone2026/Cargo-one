@@ -57,7 +57,7 @@ export default function Services() {
         title="One platform. Every load size."
         subtitle="From urgent same-day parcels to full house removals and heavy freight — all with vetted UK drivers, live tracking and photo proof of delivery."
         compact
-        primaryCta={{ label: "Get an Instant Quote", href: "/auth/register?role=customer" }}
+        primaryCta={{ label: "Get an Instant Quote", href: "/get-quote" }}
       />
 
       <Section bg="#fff">
@@ -79,7 +79,7 @@ export default function Services() {
                 </div>
                 <p className="text-[14px] leading-snug text-[#6B7280]">{s.body}</p>
                 <Link
-                  to="/auth/register?role=customer"
+                  to="/get-quote"
                   className="mt-1 inline-flex items-center gap-1 text-[14px] font-bold text-[#D62828]"
                 >
                   Get a quote

@@ -16,7 +16,7 @@ export default function AsapPage() {
   return (
     <div data-testid={`${slug}-page`}>
       <SEO title={p.title} description={p.description} path={p.path} image={p.image} jsonLd={asapJsonLd(p)} />
-      <Hero bgImage={p.image} eyebrow={p.eyebrow} title={p.h1} subtitle={p.intro} compact primaryCta={{ label: "Get an instant quote", href: "/auth/register?role=customer" }} />
+      <Hero bgImage={p.image} eyebrow={p.eyebrow} title={p.h1} subtitle={p.intro} compact primaryCta={{ label: "Get an instant quote", href: p.path.startsWith("/asap/recovery") ? "/get-quote/asap?mode=recovery" : "/get-quote/asap" }} />
       <Crumbs items={p.crumbs} />
       <article className="mx-auto max-w-[860px] px-4 py-12 md:px-0" data-testid="asap-article">
         <Badge247 />

@@ -46,7 +46,7 @@ export default function HowItWorks() {
         title="Six steps. Zero surprises."
         subtitle="From posting to proof-of-delivery, here's exactly how a Cargo One booking works."
         compact
-        primaryCta={{ label: "Post a Job — Free", href: "/auth/register?role=customer" }}
+        primaryCta={{ label: "Post a Job — Free", href: "/get-quote" }}
       />
 
       <Section bg="#fff">
@@ -118,7 +118,7 @@ export default function HowItWorks() {
             Post your first delivery and see the difference in 60 seconds.
           </p>
           <Link
-            to="/auth/register?role=customer"
+            to="/get-quote"
             className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[16px] font-bold text-[#D62828]"
           >
             Get Started

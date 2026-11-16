@@ -12,7 +12,7 @@ import {
 import { Access, Asap247, Chips, Crumbs, Faqs, LinkList, QuoteButton, pathParts } from "@/pages/marketing/LocalPlaces";
 
 // London borough pages (SEO Phase 3 · Batch 4), same layout as the city hubs.
-const QUOTE_HREF = "/auth/register?role=customer";
+const QUOTE_HREF = "/get-quote";
 const LONDON = LOCAL_CITY_BY_SLUG.london;
 const CRUMBS = [["Home", "/"], ["Couriers", "/couriers"], ["London", "/couriers/london"]];
 

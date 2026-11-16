@@ -16,7 +16,7 @@ export function GuidesIndex() {
   return (
     <div data-testid="guides-index-page">
       <SEO title={seo.title} description={seo.description} path={seo.path} image={IMG.heroSeoBoxes} jsonLd={guidesIndexJsonLd()} />
-      <Hero bgImage={IMG.heroSeoBoxes} eyebrow="GUIDES" title={seo.h1} subtitle={seo.intro} compact primaryCta={{ label: "Get an instant quote", href: "/auth/register?role=customer" }} />
+      <Hero bgImage={IMG.heroSeoBoxes} eyebrow="GUIDES" title={seo.h1} subtitle={seo.intro} compact primaryCta={{ label: "Get an instant quote", href: "/get-quote" }} />
       <Crumbs items={[["Home", "/"], ["Guides"]]} />
       <Section>
         <SectionHeading eyebrow="RESOURCE CENTRE" title="All guides" />
@@ -47,7 +47,7 @@ export function GuideArticle() {
   return (
     <div data-testid={`guide-page-${g.slug}`}>
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={guideJsonLd(g, image)} />
-      <Hero bgImage={image} eyebrow="GUIDE" title={g.h1} subtitle={g.intro} compact primaryCta={{ label: "Get an instant quote", href: "/auth/register?role=customer" }} />
+      <Hero bgImage={image} eyebrow="GUIDE" title={g.h1} subtitle={g.intro} compact primaryCta={{ label: "Get an instant quote", href: "/get-quote" }} />
       <Crumbs items={[["Home", "/"], ["Guides", "/guides"], [g.h1]]} />
       <article className="mx-auto max-w-[800px] px-4 py-12 md:px-0" data-testid="guide-article">
         {g.sections.map((s) => <GuideSection key={s.h} s={s} />)}
