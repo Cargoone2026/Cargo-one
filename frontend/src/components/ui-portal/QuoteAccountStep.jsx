@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -39,6 +39,11 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    return () => window.scrollTo(0, 0);
+  }, []);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -121,7 +126,7 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
               testId="quote-account-password"
             />
             {tab === "login" ? (
-              <Link to="/auth/forgot-password" className="block text-right text-[13px] font-semibold text-[#D62828]" data-testid="quote-account-forgot">
+              <Link to="/auth/forgot-password" target="_blank" rel="noopener noreferrer" className="block text-right text-[13px] font-semibold text-[#D62828]" data-testid="quote-account-forgot">
                 Forgot password?
               </Link>
             ) : null}
