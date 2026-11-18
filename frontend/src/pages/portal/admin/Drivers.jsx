@@ -179,6 +179,11 @@ function DriverCard({ d }) {
             <span className="rounded-full bg-[#F4F4F4] px-1.5 py-0.5">{docs.uploaded} uploaded</span>
             {docs.missing.length ? <span className="rounded-full bg-[#F4F4F4] px-1.5 py-0.5">{docs.missing.length} missing</span> : null}
             {d.vehicles.map((v) => <span key={v} className="rounded-full bg-[#F4F4F4] px-1.5 py-0.5 text-[#374151]">{VEHICLE_LABEL[v] || v}</span>)}
+            {d.admin_vehicle_tags?.length ? (
+              <span className="italic" data-testid={`admin-driver-vehicle-override-${d.id}`}>
+                Vehicle set by admin (app says: {d.app_vehicles?.length ? d.app_vehicles.map((v) => VEHICLE_LABEL[v] || v).join(", ") : "none"})
+              </span>
+            ) : null}
             {place ? <span>· {place}</span> : null}
             {d.created_at ? <span>· Joined {joined(d.created_at)}</span> : null}
           </div>

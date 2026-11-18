@@ -22,6 +22,9 @@ export default function AdminUsers() {
   const [nudgeResult, setNudgeResult] = useState(null);
   const [nudging, setNudging] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [hideTest, setHideTest] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const runNudge = useCallback(async () => {
     // eslint-disable-next-line no-alert
@@ -90,13 +93,33 @@ export default function AdminUsers() {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter((u) =>
+    const list = hideTest ? users.filter((u) => !u.is_test_account) : users;
+    if (!term) return list;
+    return list.filter((u) =>
       `${u.name || ""} ${u.email || ""} ${u.id || ""} ${u.role || ""}`
         .toLowerCase()
         .includes(term),
     );
-  }, [users, q]);
+  }, [users, q, hideTest]);
+
+  const toggleSel = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  const allSelected = filtered.length > 0 && filtered.every((u) => selected.includes(u.id));
+  const applyBulk = async (isTest) => {
+    const ids = selected.slice(0, 200);
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`${isTest ? "Mark" : "Unmark"} ${ids.length} user${ids.length === 1 ? "" : "s"} as test account${ids.length === 1 ? "" : "s"}? Only the test flag changes.`)) return;
+    setBulkBusy(true);
+    try {
+      await api("/admin/users/test-flag-bulk", { method: "POST", body: { user_ids: ids, is_test: isTest } });
+      setSelected([]);
+      await load();
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert(e?.message || "Update failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white pb-6" data-testid="admin-users">
@@ -227,6 +250,52 @@ export default function AdminUsers() {
         Show deleted
       </label>
 
+      <div className="mx-4 mt-2 flex flex-wrap items-center gap-4 text-[13px] text-[#6B7280] md:mx-8">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => setSelected(allSelected ? [] : filtered.map((u) => u.id))}
+            data-testid="admin-users-select-all"
+            className="h-4 w-4 accent-[#D62828]"
+          />
+          Select all on this page
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={hideTest}
+            onChange={(e) => setHideTest(e.target.checked)}
+            data-testid="admin-users-hide-test"
+            className="h-4 w-4 accent-[#D62828]"
+          />
+          Hide test accounts
+        </label>
+        <button
+          type="button"
+          onClick={() => exportUsersCsv(filtered)}
+          data-testid="admin-users-export-csv"
+          className="rounded-full bg-[#111111] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#D62828]"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      {selected.length > 0 ? (
+        <div className="sticky top-0 z-10 mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#111111] p-3 text-[13px] text-white md:mx-8" data-testid="admin-users-bulk-bar">
+          <span className="mr-auto font-semibold">{selected.length} selected</span>
+          <button type="button" disabled={bulkBusy} onClick={() => applyBulk(true)} data-testid="admin-users-bulk-mark" className="rounded-full bg-white px-3 py-1.5 font-semibold text-[#111111] disabled:opacity-60">
+            Mark {selected.length} as test account
+          </button>
+          <button type="button" disabled={bulkBusy} onClick={() => applyBulk(false)} data-testid="admin-users-bulk-unmark" className="rounded-full border border-white/40 px-3 py-1.5 font-semibold disabled:opacity-60">
+            Unmark test
+          </button>
+          <button type="button" onClick={() => setSelected([])} data-testid="admin-users-bulk-clear" className="px-2 py-1.5 text-white/70 hover:text-white">
+            Clear selection
+          </button>
+        </div>
+      ) : null}
+
       <ul className="mx-4 mt-3 space-y-3 md:mx-8">
         {loading && users.length === 0 ? (
           <li className="text-[13px] text-[#6B7280]">Loading users…</li>
@@ -253,6 +322,16 @@ export default function AdminUsers() {
                 data-testid={`admin-user-open-${u.id}`}
                 className="flex w-full cursor-pointer items-center gap-3 rounded-[12px] border border-[#E5E7EB] p-4 text-left transition-colors hover:border-[#111111] focus:border-[#111111] focus:outline-none"
               >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(u.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onChange={() => toggleSel(u.id)}
+                  aria-label={`Select ${u.name || u.email}`}
+                  data-testid={`admin-user-select-${u.id}`}
+                  className="h-4 w-4 shrink-0 accent-[#D62828]"
+                />
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#111111] text-[16px] font-bold text-white">
                   {(u.name || "?")[0]?.toUpperCase()}
                 </span>
@@ -262,6 +341,11 @@ export default function AdminUsers() {
                       {u.name || "—"}
                     </p>
                     <RoleBadge role={u.role} />
+                    {u.is_test_account ? (
+                      <span className="rounded-full bg-[#F4F4F4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.5px] text-[#6B7280]" data-testid={`admin-user-test-pill-${u.id}`}>
+                        Test
+                      </span>
+                    ) : null}
                     {u.deleted_at ? <DeletedBadge testId={`admin-user-deleted-${u.id}`} /> : null}
                   </div>
                   <p className="truncate text-[12px] text-[#6B7280]">{u.email}</p>
@@ -322,6 +406,20 @@ export default function AdminUsers() {
       ) : null}
     </div>
   );
+}
+
+function exportUsersCsv(list) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = list.map((u) =>
+    [u.name, u.email, u.phone, u.role, u.status || "active", (u.created_at || "").slice(0, 10), u.is_test_account ? "true" : "false"].map(esc).join(","),
+  );
+  const csv = ["name,email,phone,role,status,joined,is_test", ...rows].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cargoone-users-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function RoleBadge({ role }) {

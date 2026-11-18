@@ -17,7 +17,7 @@ export const VEHICLE_GROUPS = [
 export const VEHICLE_LABEL = Object.fromEntries(VEHICLE_GROUPS.map((g) => [g.key, g.label]));
 
 // Admin-only manual vehicle tags (for drivers who haven't added a vehicle in the app). Saves only admin_vehicle_tags.
-export function AdminVehicleTags({ driverId, initial = [] }) {
+export function AdminVehicleTags({ driverId, initial = [], appSays }) {
   const [tags, setTags] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -43,6 +43,11 @@ export function AdminVehicleTags({ driverId, initial = [] }) {
         <p className="text-[12px] font-bold uppercase tracking-[0.5px] text-[#6B7280]">Vehicle tags (admin)</p>
         {msg ? <span className="text-[11px] text-[#6B7280]" data-testid="admin-vehicle-tags-msg">{msg}</span> : null}
       </div>
+      {tags.length > 0 && appSays !== undefined ? (
+        <p className="mt-1 text-[11px] italic text-[#6B7280]" data-testid="admin-vehicle-override-note">
+          Vehicle set by admin (app says: {appSays || "none"})
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {VEHICLE_GROUPS.map((g) => {
           const on = tags.includes(g.key);

@@ -732,3 +732,5 @@ Each future phase must start from the locked baseline.
 - 2026-06: Quote-first flow: public /get-quote + /get-quote/asap (GetQuote.jsx, QuoteAccountStep.jsx), PostJob/AsapRequest guest props (no prices for guests; after login return to summary, user presses existing Post Job / Confirm & pay). Marketing customer CTAs -> /get-quote (ASAP -> /get-quote/asap[?mode=recovery]). noindex, not in sitemap. Known: preview STRIPE_API_KEY is pk_test (ASAP deposit 500 on preview).
 
 - 2026-06: Removed auto-activation in _recompute_documents_verified; added POST /admin/users/{id}/hold (active driver -> pending, history entry, no push/email) + DriverDetail button.
+
+- 2026-06: Users list bulk test flag (POST /admin/users/test-flag-bulk, max 200, shared _set_test_flag), TEST pill (is_test_account in /admin/users), Hide test toggle, CSV. Drivers overview: admin_vehicle_tags override app groups (app_vehicles returned) + "Vehicle set by admin" note.

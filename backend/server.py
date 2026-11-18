@@ -5091,12 +5091,26 @@ class AdminTestFlag(BaseModel):
     is_test: bool
 
 
+async def _set_test_flag(user_ids: list, is_test: bool) -> int:
+    res = await db.users.update_many({"id": {"$in": user_ids}}, {"$set": {"is_test": is_test}})
+    return res.matched_count
+
+
 @api.post("/admin/users/{user_id}/test-flag")
 async def admin_set_test_flag(user_id: str, payload: AdminTestFlag, _: dict = Depends(require_role("admin"))):
-    res = await db.users.update_one({"id": user_id}, {"$set": {"is_test": payload.is_test}})
-    if res.matched_count == 0:
+    if await _set_test_flag([user_id], payload.is_test) == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True, "user_id": user_id, "is_test": payload.is_test}
+
+
+class AdminTestFlagBulk(BaseModel):
+    user_ids: list[str] = Field(..., min_length=1, max_length=200)
+    is_test: bool
+
+
+@api.post("/admin/users/test-flag-bulk")
+async def admin_set_test_flag_bulk(payload: AdminTestFlagBulk, _: dict = Depends(require_role("admin"))):
+    return {"updated": await _set_test_flag(list(dict.fromkeys(payload.user_ids)), payload.is_test)}
 
 
 @api.get("/admin/analytics/rebooks")
@@ -5186,6 +5200,8 @@ async def admin_list_users(role: Optional[str] = None, include_deleted: bool = F
         q["deleted_at"] = None
     users = await db.users.find(q, {"_id": 0, "password_hash": 0}) \
                             .sort("created_at", -1).to_list(500)
+    for u in users:
+        u["is_test_account"] = bool(u.get("is_test")) or bool(re.search(TEST_EMAIL_REGEX, u.get("email") or "", re.I))
     return users
 
 
@@ -5609,15 +5625,16 @@ async def admin_drivers_overview(_: dict = Depends(require_role("admin"))):
             "missing": [t for t in required if t not in per_type],
         }
         v = veh_by_driver.get(u["id"]) or {"types": [], "count": 0}
-        groups = [vehicle_group(t.get("k"), t.get("n")) for t in v["types"]]
-        groups += [t for t in (u.get("admin_vehicle_tags") or []) if t in ADMIN_VEHICLE_TAGS]
+        app_groups = list(dict.fromkeys(vehicle_group(t.get("k"), t.get("n")) for t in v["types"]))
+        admin_tags = [t for t in (u.get("admin_vehicle_tags") or []) if t in ADMIN_VEHICLE_TAGS]
+        groups = admin_tags or app_groups
         out.append({
             "id": u["id"], "name": u.get("name"), "email": u.get("email"), "phone": u.get("phone"),
             "status": u.get("status"), "created_at": u.get("created_at"), "town": u.get("town"),
             "postcode_area": _postcode_area(u.get("postcode")), "documents_verified": bool(u.get("documents_verified")),
             "docs": docs, "stage": _driver_stage(u.get("status"), docs),
             "vehicles": list(dict.fromkeys(groups)), "vehicle_count": v["count"],
-            "admin_vehicle_tags": [t for t in (u.get("admin_vehicle_tags") or []) if t in ADMIN_VEHICLE_TAGS],
+            "admin_vehicle_tags": admin_tags, "app_vehicles": app_groups,
             "total_jobs": u.get("total_jobs") or 0, "rating": u.get("rating"),
         })
     return out
