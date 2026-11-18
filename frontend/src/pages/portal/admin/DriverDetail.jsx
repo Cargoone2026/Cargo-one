@@ -120,6 +120,20 @@ export default function AdminDriverDetail() {
       setBusy(false);
     }
   };
+  const holdDriver = async () => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm("Move this driver back to pending? No push or email will be sent.")) return;
+    setBusy(true);
+    try {
+      await api(`/admin/users/${id}/hold`, { method: "POST" });
+      await load();
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert(e?.message || "Action failed");
+    } finally {
+      setBusy(false);
+    }
+  };
   const submitReason = async () => {
     const trimmed = reason.trim();
     if (trimmed.length < 10) return;
@@ -328,6 +342,17 @@ export default function AdminDriverDetail() {
               }}
               testID="admin-request-changes"
             />
+            {user.status === "active" && (
+              <Button
+                title="Move back to pending (no notification)"
+                variant="outline"
+                fullWidth={false}
+                small
+                loading={busy}
+                onClick={holdDriver}
+                testID="admin-hold-driver"
+              />
+            )}
             {user.status !== "suspended" && (
               <Button
                 title="Suspend"

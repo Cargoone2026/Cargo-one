@@ -1651,11 +1651,6 @@ async def _recompute_documents_verified(user_id: str):
     await db.users.update_one(
         {"id": user_id}, {"$set": {"documents_verified": all_approved}},
     )
-    # If it just became approved and driver was pending, activate
-    if all_approved:
-        await db.users.update_one(
-            {"id": user_id, "status": "pending"}, {"$set": {"status": "active"}},
-        )
 
 
 class DocReview(BaseModel):
@@ -5416,6 +5411,29 @@ async def admin_suspend(
             "Account suspended",
             f"Your Cargo One driver account has been suspended.{(' Reason: ' + reason) if reason else ''}",
         )
+    return {"ok": True}
+
+
+@api.post("/admin/users/{user_id}/hold")
+async def admin_hold_driver(user_id: str, actor: dict = Depends(require_role("admin"))):
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1, "status": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") != "driver" or target.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Only active drivers can be moved back to pending")
+    entry = {
+        "id": new_id(),
+        "action": "hold",
+        "by_admin_id": actor["id"],
+        "by_admin_name": actor.get("name"),
+        "reason": "On hold until jobs open in area",
+        "at": now_iso(),
+        "previous_status": "active",
+    }
+    await db.users.update_one(
+        {"id": user_id, "status": "active"},
+        {"$set": {"status": "pending"}, "$push": {"verification_history": entry}},
+    )
     return {"ok": True}
 
 

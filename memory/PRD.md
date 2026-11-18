@@ -730,3 +730,5 @@ Each future phase must start from the locked baseline.
 - 2026-06: Admin Jobs organiser: GET /admin/jobs/overview (stage, booking_type, bids_count, booking, is_test, waiting_hours), stage tabs/chips/search/meta line/summary/CSV in admin Jobs.jsx (+AdminJobsOrganiser.jsx); rebooks card follows Include test data.
 
 - 2026-06: Quote-first flow: public /get-quote + /get-quote/asap (GetQuote.jsx, QuoteAccountStep.jsx), PostJob/AsapRequest guest props (no prices for guests; after login return to summary, user presses existing Post Job / Confirm & pay). Marketing customer CTAs -> /get-quote (ASAP -> /get-quote/asap[?mode=recovery]). noindex, not in sitemap. Known: preview STRIPE_API_KEY is pk_test (ASAP deposit 500 on preview).
+
+- 2026-06: Removed auto-activation in _recompute_documents_verified; added POST /admin/users/{id}/hold (active driver -> pending, history entry, no push/email) + DriverDetail button.
