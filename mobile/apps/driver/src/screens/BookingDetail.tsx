@@ -44,6 +44,7 @@ import {
 import { RouteMap, MapFallback } from "../components/RouteMap";
 import { SignaturePad } from "../components/SignaturePad";
 import { ReasonSheet } from "../components/ReasonSheet";
+import { hasNavTarget, openNavigation, type NavTarget } from "../lib/navigate";
 
 type P = NativeStackScreenProps<RootStackParamList, "BookingDetail">;
 type Tab = "overview" | "messages" | "pod";
@@ -156,6 +157,10 @@ export default function BookingDetailScreen({ route, navigation }: P) {
   }
 
   const job = b.job;
+  const jx = (job || {}) as any;
+  const showNav = !TERMINAL_STATUSES.has(b.status) && !b.cancelled_at;
+  const pickupNav: NavTarget = { lat: jx.pickup_lat, lng: jx.pickup_lng, address: jx.pickup_address || jx.pickup_postcode };
+  const dropoffNav: NavTarget = { lat: jx.dropoff_lat, lng: jx.dropoff_lng, address: jx.dropoff_address || jx.dropoff_postcode };
   const nextStep = PROGRESSION.find((p) => p.from === b.status);
   const paid = (b as any).payment_status === "paid";
   const canCancel = paid && CANCELLABLE.has(b.status) && !b.cancelled_at;
@@ -310,6 +315,9 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                     {job?.pickup_address && job?.pickup_town && job.pickup_address !== job.pickup_town ? (
                       <Text style={[typography.caption, { marginTop: 2 }]} numberOfLines={2}>{job.pickup_address}</Text>
                     ) : null}
+                    {showNav && hasNavTarget(pickupNav) ? (
+                      <NavButton label="Navigate to pickup" onPress={() => openNavigation(pickupNav, "Pickup")} testID="booking-navigate-pickup" />
+                    ) : null}
                   </View>
                 </View>
                 <View style={{ height: 12 }} />
@@ -320,6 +328,9 @@ export default function BookingDetailScreen({ route, navigation }: P) {
                     <Text style={typography.strong}>{job?.dropoff_town || job?.dropoff_address || "—"}</Text>
                     {job?.dropoff_address && job?.dropoff_town && job.dropoff_address !== job.dropoff_town ? (
                       <Text style={[typography.caption, { marginTop: 2 }]} numberOfLines={2}>{job.dropoff_address}</Text>
+                    ) : null}
+                    {showNav && hasNavTarget(dropoffNav) ? (
+                      <NavButton label="Navigate to drop-off" onPress={() => openNavigation(dropoffNav, "Drop-off")} testID="booking-navigate-dropoff" />
                     ) : null}
                   </View>
                 </View>
@@ -959,7 +970,30 @@ function formatMessageTime(iso?: string): string {
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+function NavButton({ label, onPress, testID }: { label: string; onPress: () => void; testID: string }) {
+  return (
+    <Pressable onPress={onPress} testID={testID} accessibilityRole="button" style={styles.navBtn}>
+      <Icon name="navigation" size={14} color={colors.ink} />
+      <Text style={styles.navBtnText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = {
+  navBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    alignSelf: "flex-start" as const,
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  navBtnText: { fontSize: 13, fontWeight: "600" as const, color: colors.ink },
   cancelledBanner: {
     flexDirection: "row" as const,
     alignItems: "flex-start" as const,

@@ -6,7 +6,8 @@
  * autolinking in this pass.
  */
 import React from "react";
-import { Alert, Linking, Text, View } from "react-native";
+import { Alert, Linking, Platform, Share, Text, View } from "react-native";
+import Constants from "expo-constants";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { useAuth } from "../AuthContext";
@@ -14,7 +15,29 @@ import { Card, Icon, MenuRow, Page, PageHeader, Section, colors, radius, space, 
 
 type P = NativeStackScreenProps<RootStackParamList, "Settings">;
 
-const APP_VERSION = "1.0.0";
+const cfg: any = Constants.expoConfig;
+const APP_VERSION = cfg?.version || "1.0.0";
+const APP_BUILD = Platform.OS === "android" ? cfg?.android?.versionCode : cfg?.ios?.buildNumber;
+const PLATFORM_LABEL = Platform.OS === "android" ? "Android" : "iOS";
+const SHARE_MESSAGE =
+  "I'm using CargoOne Driver to find courier, removals and vehicle recovery jobs across the UK. Bid and Fixed Price jobs are free for drivers. Download it here: https://cargoone.co.uk/drivers";
+const WHATSAPP_URL = "https://wa.me/447983299049?text=Hi%20CargoOne%2C%20I%20need%20help%20with%20the%20Driver%20app";
+const STORE_URLS =
+  Platform.OS === "android"
+    ? ["market://details?id=co.uk.cargoone.driver", "https://play.google.com/store/apps/details?id=co.uk.cargoone.driver"]
+    : ["https://apps.apple.com/gb/app/cargoone-driver-courier-jobs/id6822450098?action=write-review"];
+
+async function openFirst(urls: string[], fallback: () => void) {
+  for (const url of urls) {
+    try {
+      await Linking.openURL(url);
+      return;
+    } catch {
+      // try next
+    }
+  }
+  fallback();
+}
 
 export default function SettingsScreen({ navigation }: P) {
   const { user, logout } = useAuth();
@@ -76,10 +99,28 @@ export default function SettingsScreen({ navigation }: P) {
             onPress={() => openMail("Driver support")}
           />
           <MenuRow
+            label="WhatsApp support"
+            testID="settings-whatsapp"
+            leftGlyph={<Glyph name="message-circle" />}
+            onPress={() => openFirst([WHATSAPP_URL], () => openMail("Driver support"))}
+          />
+          <MenuRow
             label="Rate Cargo One"
             testID="settings-rate"
             leftGlyph={<Glyph name="star" />}
+            onPress={() => openFirst(STORE_URLS, () => openMail("Feedback from Driver app"))}
+          />
+          <MenuRow
+            label="Send feedback"
+            testID="settings-feedback"
+            leftGlyph={<Glyph name="message-square" />}
             onPress={() => openMail("Feedback from Driver app")}
+          />
+          <MenuRow
+            label="Share CargoOne Driver"
+            testID="settings-share"
+            leftGlyph={<Glyph name="share-2" />}
+            onPress={() => Share.share({ message: SHARE_MESSAGE }).catch(() => {})}
           />
         </Card>
 
@@ -87,9 +128,9 @@ export default function SettingsScreen({ navigation }: P) {
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <View style={styles.versionRow} testID="settings-version">
             <Glyph name="code" />
-            <Text style={styles.versionLabel}>App Version {APP_VERSION}</Text>
+            <Text style={styles.versionLabel}>App Version {APP_VERSION}{APP_BUILD ? ` (${APP_BUILD})` : ""}</Text>
             <View style={styles.versionPill}>
-              <Text style={styles.versionPillText}>iOS</Text>
+              <Text style={styles.versionPillText}>{PLATFORM_LABEL}</Text>
             </View>
           </View>
         </Card>

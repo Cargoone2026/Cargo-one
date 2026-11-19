@@ -734,3 +734,5 @@ Each future phase must start from the locked baseline.
 - 2026-06: Removed auto-activation in _recompute_documents_verified; added POST /admin/users/{id}/hold (active driver -> pending, history entry, no push/email) + DriverDetail button.
 
 - 2026-06: Users list bulk test flag (POST /admin/users/test-flag-bulk, max 200, shared _set_test_flag), TEST pill (is_test_account in /admin/users), Hide test toggle, CSV. Drivers overview: admin_vehicle_tags override app groups (app_vehicles returned) + "Vehicle set by admin" note.
+
+- 2026-06: Driver app (Android update): Settings platform/version from Platform+expo-constants, WhatsApp/Rate (store)/Feedback/Share rows; BookingDetail Navigate to pickup/drop-off (src/lib/navigate.ts, Linking only, hidden on terminal/cancelled). Copy location skipped (no clipboard module).
