@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, X as XIcon, Ban, Users as UsersIcon, ExternalLink, MapPin, Truck, AlertTriangle, Send, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { SuspiciousSignups } from "@/components/ui-portal/SuspiciousSignups";
 import { StatusPill } from "@/components/ui-portal/StatusPill";
 
 const ROLE_TABS = [
@@ -280,6 +281,8 @@ export default function AdminUsers() {
           Export CSV
         </button>
       </div>
+
+      <SuspiciousSignups onDone={load} />
 
       {selected.length > 0 ? (
         <div className="sticky top-0 z-10 mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-[#111111] p-3 text-[13px] text-white md:mx-8" data-testid="admin-users-bulk-bar">

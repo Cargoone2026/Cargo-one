@@ -64,7 +64,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "postbuild": "node scripts/prerender.mjs || true",
+    "postbuild": "node scripts/prerender.mjs || true; node scripts/indexnow.mjs || true",
     "test": "craco test"
   },
   "browserslist": {

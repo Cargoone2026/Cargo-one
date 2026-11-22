@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SEO } from "@/components/marketing/SEO";
 import { isValidPhone, isValidUKPostcode } from "@/lib/validators";
 import { trackConversion } from "@/lib/analytics";
+import { EmailCodeStep, useBotFields } from "@/components/ui-portal/EmailVerification";
 
 const COUNTRIES = [
   "United Kingdom",
@@ -46,6 +47,8 @@ export default function Register() {
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const bot = useBotFields();
+  const [verifyFor, setVerifyFor] = useState(null);
 
   const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -88,9 +91,11 @@ export default function Register() {
         county: form.county.trim() || null,
         postcode: form.postcode.trim() || null,
         country: form.country || null,
+        ...bot.payload(),
       });
       trackConversion("sign_up", { method: "email", role: me?.role === "driver" ? "driver" : "customer" });
-      navigate(roleLanding(me?.role), { replace: true });
+      if (me?.email_verified === false) setVerifyFor(me);
+      else navigate(roleLanding(me?.role), { replace: true });
     } catch (err) {
       setError(err?.message || "Failed to register");
     } finally {
@@ -146,7 +151,16 @@ export default function Register() {
             </button>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-3">
+          {verifyFor ? (
+            <EmailCodeStep
+              email={verifyFor.email}
+              cta="Verify email"
+              onVerified={() => navigate(roleLanding(verifyFor.role), { replace: true })}
+              onSkip={() => navigate(roleLanding(verifyFor.role), { replace: true })}
+            />
+          ) : (
+          <form onSubmit={onSubmit} className="relative space-y-3">
+            {bot.field}
             <TextField
               label="Full name"
               value={form.name}
@@ -277,6 +291,7 @@ export default function Register() {
                 : "Create account"}
             </button>
           </form>
+          )}
 
           <Link
             to="/auth/login"

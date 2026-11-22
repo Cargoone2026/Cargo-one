@@ -69,7 +69,7 @@ export default function FAQ() {
   return (
     <>
       <SEO
-        title="FAQ | Cargo One"
+        title="FAQ – Booking Couriers, Man & Van and Recovery | Cargo One"
         description="Frequently asked questions about Cargo One — pricing, driver verification, secure payments, live tracking, and proof of delivery."
         path="/faq"
         image={IMG.heroFaq}

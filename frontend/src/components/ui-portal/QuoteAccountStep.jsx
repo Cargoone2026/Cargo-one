@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { isValidPhone } from "@/lib/validators";
 import { trackConversion } from "@/lib/analytics";
+import { EmailCodeStep, useBotFields } from "@/components/ui-portal/EmailVerification";
 
 export function NonCustomerNote({ user }) {
   const { logout } = useAuth();
@@ -32,7 +33,9 @@ function Field({ label, hint, testId, ...props }) {
 }
 
 export function QuoteAccountStep({ summary, onCustomer, onBack }) {
-  const { register, login, user } = useAuth();
+  const { register, login, logout, user } = useAuth();
+  const bot = useBotFields();
+  const [codeFor, setCodeFor] = useState(null);
   const [tab, setTab] = useState("register");
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [error, setError] = useState(null);
@@ -58,12 +61,14 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
     setLoading(true);
     try {
       const me = tab === "register"
-        ? await register({ email: form.email.trim(), password: form.password, name: form.name.trim(), phone: form.phone.trim() || null, role: "customer" })
+        ? await register({ email: form.email.trim(), password: form.password, name: form.name.trim(), phone: form.phone.trim() || null, role: "customer", ...bot.payload() })
         : await login(form.email.trim(), form.password);
       if (tab === "register") trackConversion("sign_up", { method: "email", role: "customer" });
-      if (me?.role === "customer") onCustomer();
+      if (me?.role === "customer" && me.email_verified === false && me.signup_source === "web") {
+        setCodeFor({ email: me.email, autoSend: tab === "login" });
+      } else if (me?.role === "customer") onCustomer();
     } catch (err) {
-      if (tab === "register" && /already registered/i.test(err?.message || "")) {
+      if (tab === "register" && /already (registered|exists)/i.test(err?.message || "")) {
         setTab("login");
         setForm((f) => ({ ...f, password: "" }));
         setInfo("You already have an account — log in to post your job.");
@@ -97,7 +102,14 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
       <p className="mb-6 mt-2 rounded-[12px] bg-[#F4F4F4] px-4 py-3 text-[14px] text-[#111111]" data-testid="quote-account-summary">
         {summary}
       </p>
-      {user && user.role !== "customer" ? (
+      {codeFor ? (
+        <EmailCodeStep
+          email={codeFor.email}
+          autoSend={codeFor.autoSend}
+          onVerified={onCustomer}
+          onBack={async () => { await logout(); setCodeFor(null); setTab("register"); }}
+        />
+      ) : user && user.role !== "customer" ? (
         <NonCustomerNote user={user} />
       ) : (
         <>
@@ -108,7 +120,8 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
           {info && tab === "login" ? (
             <p className="mb-3 rounded-[10px] bg-[#FFF7ED] px-3 py-2 text-[13px] text-[#111111]" data-testid="quote-account-info">{info}</p>
           ) : null}
-          <form onSubmit={onSubmit} className="space-y-3">
+          <form onSubmit={onSubmit} className="relative space-y-3">
+            {tab === "register" ? bot.field : null}
             {tab === "register" ? (
               <Field label="Full name" value={form.name} onChange={upd("name")} placeholder="Jane Doe" autoComplete="name" testId="quote-account-name" />
             ) : null}

@@ -25,7 +25,7 @@ export default function About() {
   return (
     <>
       <SEO
-        title="About Cargo One"
+        title="About Cargo One – UK Courier, Removals & Recovery Marketplace"
         description="Meet Cargo One — the fair, transparent UK logistics marketplace matching customers with vetted drivers. Our mission, values and story."
         path="/about"
         image={IMG.heroAbout}

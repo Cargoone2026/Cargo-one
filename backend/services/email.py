@@ -646,6 +646,42 @@ async def send_welcome(db, *, user: dict) -> dict:
                                 template=template, user_id=user.get("id"))
 
 
+def render_verification_code(*, name: str, code: str, link: str) -> tuple[str, str, str]:
+    subject = "Your CargoOne code"
+    body = f"""
+      <p style="margin:0 0 12px;font-size:15px;">Hi {name or 'there'},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#374151;">
+        Enter this code to confirm your email address. It expires in 15 minutes.
+      </p>
+      <p style="margin:0 0 20px;font-size:32px;font-weight:700;letter-spacing:8px;color:#111111;">{code}</p>
+      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#374151;">Or tap the button (valid for 24 hours):</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;">
+        <tr><td>
+          <a href="{link}" style="display:inline-block;padding:14px 28px;background:{_BRAND_ACCENT};color:#ffffff;text-decoration:none;font-weight:600;border-radius:8px;font-size:14px;">
+            Verify my email
+          </a>
+        </td></tr>
+      </table>
+      <p style="margin:0;font-size:12px;color:{_BRAND_MUTED};line-height:1.6;">
+        If you didn't create a CargoOne account, you can ignore this email.
+      </p>
+      {_support_line()}
+    """
+    text = (f"Hi {name or 'there'},\n\nYour CargoOne code is {code} (expires in 15 minutes).\n\n"
+            f"Or verify with this link (valid 24 hours):\n{link}\n\n"
+            "If you didn't create a CargoOne account, ignore this email.\n\nCargo One")
+    return subject, _shell(title=subject, preview=f"Your code is {code}", body_html=body), text
+
+
+async def send_verification_code(db, *, user: dict, code: str, link: str) -> dict:
+    to = user.get("email")
+    if not to:
+        return {"status": "skipped", "reason": "no_email"}
+    subject, html, text = render_verification_code(name=user.get("name") or "", code=code, link=link)
+    return await _send_and_log(db, to=to, subject=subject, html=html, text=text,
+                                template="verification_code", user_id=user.get("id"))
+
+
 def _job_bits(booking: dict) -> dict:
     j = booking.get("job") or {}
     return {

@@ -1,6 +1,7 @@
 import React from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { PortalShell } from "@/components/portal/PortalShell";
+import { VerifyEmailBanner } from "@/components/ui-portal/EmailVerification";
 import {
   Home,
   PlusCircle,
@@ -23,6 +24,7 @@ export function CustomerLayout({ children }) {
   return (
     <RequireRole role="customer">
       <PortalShell role="customer" items={CUSTOMER_NAV}>
+        <VerifyEmailBanner />
         {children}
       </PortalShell>
     </RequireRole>

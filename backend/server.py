@@ -149,6 +149,16 @@ client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
 app = FastAPI(title="Cargo One API")
+
+
+class EmailUnverified(Exception):
+    pass
+
+
+@app.exception_handler(EmailUnverified)
+async def _email_unverified_handler(_request, _exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=403, content={"detail": "Please verify your email to post your job.", "code": "email_unverified"})
 api = APIRouter(prefix="/api")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -212,6 +222,12 @@ class UserRegister(UserBase):
     password: str
 
 
+class RegisterIn(UserRegister):
+    company_website: Optional[str] = None
+    form_started_at: Optional[float] = None
+    form_elapsed_ms: Optional[float] = None
+
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
@@ -248,6 +264,8 @@ class UserPublic(BaseModel):
     county: Optional[str] = None
     postcode: Optional[str] = None
     country: Optional[str] = None
+    email_verified: bool = True
+    signup_source: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -500,6 +518,8 @@ def user_to_public(user: dict) -> dict:
         "county": user.get("county"),
         "postcode": user.get("postcode"),
         "country": user.get("country"),
+        "email_verified": user.get("email_verified", True) is not False,
+        "signup_source": user.get("signup_source"),
     }
 
 
@@ -1049,11 +1069,35 @@ async def preview_deposit(driver_charge: float) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _app_base_url() -> str:
+    return (os.environ.get("APP_BASE_URL") or "https://cargoone.co.uk").rstrip("/")
+
+
 @api.post("/auth/register", response_model=TokenResponse)
-async def register(payload: UserRegister, response: Response):
+async def register(payload: RegisterIn, request: Request, response: Response):
+    from services import signup_guard as sg
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    ip = sg.client_ip(request)
+    canon = sg.canonical_email(payload.email)
+    web = payload.form_started_at is not None or payload.form_elapsed_ms is not None
+    if web:
+        elapsed = payload.form_elapsed_ms
+        if elapsed is None:
+            elapsed = datetime.now(timezone.utc).timestamp() * 1000 - payload.form_started_at
+        if (payload.company_website or "").strip() or 0 <= elapsed < 2500:
+            logger.warning("signup blocked (bot check) ip=%s email=%s", ip, canon)
+            raise HTTPException(status_code=400, detail="Please try again.")
+    if sg.is_disposable(payload.email):
+        logger.warning("signup blocked (disposable) ip=%s email=%s", ip, canon)
+        raise HTTPException(status_code=400, detail="Please use a permanent email address.")
+    if await sg.register_limited(db, ip):
+        logger.warning("signup rate-limited ip=%s email=%s", ip, canon)
+        raise HTTPException(status_code=429, detail=sg.RATE_MSG)
+    if await db.users.find_one(sg.canonical_query(canon), {"_id": 0, "id": 1}):
+        logger.warning("signup blocked (canonical duplicate) ip=%s email=%s", ip, canon)
+        raise HTTPException(status_code=409, detail="An account already exists for this email. Please log in.")
     # SEC: only customer/driver may self-register. Admin accounts are provisioned
     # out-of-band (see backend startup seed guarded by ALLOW_INITIAL_ADMIN_SEED).
     if payload.role not in ("customer", "driver"):
@@ -1097,18 +1141,74 @@ async def register(payload: UserRegister, response: Response):
         "county": payload.county,
         "postcode": payload.postcode,
         "country": payload.country,
+        "email_canonical": canon,
+        "email_verified": False,
+        "signup_source": "web" if web else "app",
     }
     await db.users.insert_one(user)
+    await sg.record(db, "register", ip, user["id"])
     token = create_token(user["id"], user["role"])
     set_auth_cookie(response, token)
     set_csrf_cookie(response, new_csrf_token())
-    # Fire-and-forget welcome email. Never blocks registration on failure.
-    try:
-        from services.email import send_welcome
-        await send_welcome(db, user=user)
-    except Exception as _e:  # pragma: no cover
-        logger.warning("welcome email skipped: %s", _e)
+    # Code email replaces the welcome email; welcome is sent after verification.
+    await sg.issue_code(db, user, ip, _app_base_url())
     return {"access_token": token, "token_type": "bearer", "user": user_to_public(user)}
+
+
+class VerifyCodeIn(BaseModel):
+    code: str
+
+
+class VerifyLinkIn(BaseModel):
+    token: str
+
+
+@api.post("/auth/verify-email")
+async def verify_email(payload: VerifyCodeIn, user: dict = Depends(get_current_user)):
+    from services import signup_guard as sg
+    if user.get("email_verified", True) is not False:
+        return {"ok": True, "already": True}
+    err = await sg.check_code(db, user["id"], payload.code)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    await sg.mark_verified(db, user)
+    return {"ok": True}
+
+
+async def _verify_by_token(token: str):
+    from services import signup_guard as sg
+    uid = await sg.user_for_token(db, token)
+    if not uid:
+        raise HTTPException(status_code=400, detail="This link has expired. Please request a new code.")
+    u = await db.users.find_one({"id": uid}, {"_id": 0})
+    if u and u.get("email_verified") is False:
+        await sg.mark_verified(db, u)
+    return {"ok": True}
+
+
+@api.get("/auth/verify-email-link")
+async def verify_email_link_get(token: str = ""):
+    return await _verify_by_token(token)
+
+
+@api.post("/auth/verify-email-link")
+async def verify_email_link_post(payload: VerifyLinkIn):
+    return await _verify_by_token(payload.token)
+
+
+CSRF_EXEMPT_PATHS.add("/api/auth/verify-email-link")
+
+
+@api.post("/auth/resend-code")
+async def resend_code(request: Request, user: dict = Depends(get_current_user)):
+    from services import signup_guard as sg
+    if user.get("email_verified", True) is not False:
+        return {"ok": True, "already": True}
+    err = await sg.resend_limited(db, user["id"])
+    if err:
+        raise HTTPException(status_code=429, detail=err)
+    await sg.issue_code(db, user, sg.client_ip(request), _app_base_url())
+    return {"ok": True}
 
 
 @api.post("/auth/login", response_model=TokenResponse)
@@ -1695,6 +1795,8 @@ async def admin_review_document(doc_id: str, payload: DocReview,
 
 @api.post("/jobs")
 async def create_job(payload: JobCreate, user: dict = Depends(require_role("customer"))):
+    if user.get("email_verified") is False and user.get("signup_source") == "web":
+        raise EmailUnverified()
     data = payload.model_dump()
     # Real-time dispatch validation (Phase 32).
     service_timing = (data.get("service_timing") or "scheduled").lower()
@@ -5106,6 +5208,52 @@ async def admin_set_test_flag(user_id: str, payload: AdminTestFlag, _: dict = De
 class AdminTestFlagBulk(BaseModel):
     user_ids: list[str] = Field(..., min_length=1, max_length=200)
     is_test: bool
+
+
+@api.post("/admin/users/suspicious-signups/preview")
+async def admin_suspicious_signups(_: dict = Depends(require_role("admin"))):
+    from services import signup_guard as sg
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    canon_count: dict = {}
+    async for u in db.users.find({}, {"_id": 0, "email": 1, "email_canonical": 1}):
+        c = u.get("email_canonical") or sg.canonical_email(u.get("email") or "")
+        canon_count[c] = canon_count.get(c, 0) + 1
+    recent = await db.users.find({"created_at": {"$gte": since}, "deleted_at": None},
+                                 {"_id": 0, "id": 1, "name": 1, "email": 1, "email_canonical": 1,
+                                  "created_at": 1, "role": 1, "is_test": 1}).to_list(20000)
+    by_name: dict = {}
+    for u in recent:
+        by_name.setdefault((u.get("name") or "").strip().lower(), []).append(u)
+    burst_ids = set()
+    for name, group in by_name.items():
+        if not name or len(group) < 5:
+            continue
+        times = sorted((datetime.fromisoformat(g["created_at"].replace("Z", "+00:00")), g["id"]) for g in group)
+        for i in range(len(times) - 4):
+            if times[i + 4][0] - times[i][0] <= timedelta(hours=1):
+                burst_ids.update(t[1] for t in times[i:i + 5])
+    customers = [u for u in recent if u.get("role") == "customer"]
+    ids = [u["id"] for u in customers]
+    with_jobs = set(await db.jobs.distinct("customer_id", {"customer_id": {"$in": ids}}))
+    with_bookings = set(await db.bookings.distinct("customer_id", {"customer_id": {"$in": ids}}))
+    out = []
+    for u in customers:
+        if u["id"] in with_jobs or u["id"] in with_bookings:
+            continue
+        reasons = []
+        c = u.get("email_canonical") or sg.canonical_email(u.get("email") or "")
+        if canon_count.get(c, 0) > 1:
+            reasons.append("shared canonical email")
+        if sg.is_disposable(u.get("email") or ""):
+            reasons.append("disposable domain")
+        if u["id"] in burst_ids:
+            reasons.append("same-name burst")
+        if reasons:
+            out.append({"id": u["id"], "name": u.get("name"), "email": u.get("email"),
+                        "created_at": u.get("created_at"), "is_test": bool(u.get("is_test")),
+                        "reason": ", ".join(reasons)})
+    out.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    return out
 
 
 @api.post("/admin/users/test-flag-bulk")
@@ -9176,6 +9324,11 @@ async def root():
 # Seed admin + default deposit bands + service categories + vehicle types
 @app.on_event("startup")
 async def seed_startup():
+    try:
+        from services.signup_guard import ensure_indexes
+        await ensure_indexes(db)
+    except Exception as e:  # pragma: no cover
+        logger.warning("signup guard indexes skipped: %s", e)
     # Real-time dispatch indexes (Phase 31). Idempotent — Mongo skips
     # existing ones. All keys backward-compatible with existing docs.
     try:

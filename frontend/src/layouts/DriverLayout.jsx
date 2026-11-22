@@ -1,6 +1,7 @@
 import React from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { PortalShell } from "@/components/portal/PortalShell";
+import { VerifyEmailBanner } from "@/components/ui-portal/EmailVerification";
 import {
   Home,
   Compass,
@@ -25,6 +26,7 @@ export function DriverLayout({ children }) {
   return (
     <RequireRole role="driver">
       <PortalShell role="driver" items={DRIVER_NAV}>
+        <VerifyEmailBanner />
         {children}
       </PortalShell>
     </RequireRole>
