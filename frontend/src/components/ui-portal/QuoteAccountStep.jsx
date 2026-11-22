@@ -32,7 +32,7 @@ function Field({ label, hint, testId, ...props }) {
   );
 }
 
-export function QuoteAccountStep({ summary, onCustomer, onBack }) {
+export function QuoteAccountStep({ summary, onCustomer, onBack, codeCta }) {
   const { register, login, logout, user } = useAuth();
   const bot = useBotFields();
   const [codeFor, setCodeFor] = useState(null);
@@ -97,7 +97,7 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
         <ChevronLeft className="h-[26px] w-[26px]" />
       </button>
       <h1 className="text-[28px] font-bold leading-tight tracking-[-0.5px] text-[#111111]">
-        Almost done — create your free account to get quotes
+        {codeFor ? "One last step" : "Almost done — create your free account to get quotes"}
       </h1>
       <p className="mb-6 mt-2 rounded-[12px] bg-[#F4F4F4] px-4 py-3 text-[14px] text-[#111111]" data-testid="quote-account-summary">
         {summary}
@@ -106,6 +106,7 @@ export function QuoteAccountStep({ summary, onCustomer, onBack }) {
         <EmailCodeStep
           email={codeFor.email}
           autoSend={codeFor.autoSend}
+          cta={codeCta}
           onVerified={onCustomer}
           onBack={async () => { await logout(); setCodeFor(null); setTab("register"); }}
         />

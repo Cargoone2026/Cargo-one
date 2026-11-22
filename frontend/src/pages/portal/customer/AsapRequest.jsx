@@ -534,7 +534,7 @@ export default function CustomerAsapRequest({ guest = false, initialMode } = {})
     }
   }, [mode, note, vehicle, pickup, dropoff, navigate, photos, transportCategory, transportDescription, transportVehicleKey, asapWeightKg, asapItemCount, asapLengthM, asapWidthM, asapHeightM, needsForklift, needsLoadingHelp, quote, estimatedTotal]);
 
-  if (isGuest && showAccount) {
+  if (guest && showAccount) {
     const vehicleLabel = mode === "breakdown_recovery"
       ? [vehicle.make, vehicle.model].filter(Boolean).join(" ")
       : (transportVehicles.find((v) => v.key === transportVehicleKey)?.label || "");
@@ -543,7 +543,7 @@ export default function CustomerAsapRequest({ guest = false, initialMode } = {})
       `${pickup?.town || pickup?.formatted_address || ""} → ${dropoff?.town || dropoff?.formatted_address || ""}`,
       vehicleLabel,
     ].filter(Boolean).join(" · ");
-    return <QuoteAccountStep summary={summary} onCustomer={() => setShowAccount(false)} onBack={() => setShowAccount(false)} />;
+    return <QuoteAccountStep summary={summary} codeCta="Verify & continue" onCustomer={() => setShowAccount(false)} onBack={() => setShowAccount(false)} />;
   }
 
   return (

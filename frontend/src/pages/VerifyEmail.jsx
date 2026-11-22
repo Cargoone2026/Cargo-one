@@ -34,7 +34,7 @@ export default function VerifyEmail() {
         {state === "ok" ? (
           <>
             <CheckCircle2 className="mx-auto h-12 w-12 text-[#16A34A]" />
-            <h1 className="mt-4 text-[28px] font-bold text-[#111111]" data-testid="verify-email-ok">Email verified ✓</h1>
+            <h1 className="mt-4 text-[28px] font-bold text-[#111111]" data-testid="verify-email-ok">Email verified</h1>
             <Link to={home} className="mt-6 inline-block rounded-full bg-[#D62828] px-6 py-3 font-bold text-white" data-testid="verify-email-continue">
               {user ? "Go to my dashboard" : "Log in"}
             </Link>

@@ -736,3 +736,6 @@ Each future phase must start from the locked baseline.
 - 2026-06: Users list bulk test flag (POST /admin/users/test-flag-bulk, max 200, shared _set_test_flag), TEST pill (is_test_account in /admin/users), Hide test toggle, CSV. Drivers overview: admin_vehicle_tags override app groups (app_vehicles returned) + "Vehicle set by admin" note.
 
 - 2026-06: Driver app (Android update): Settings platform/version from Platform+expo-constants, WhatsApp/Rate (store)/Feedback/Share rows; BookingDetail Navigate to pickup/drop-off (src/lib/navigate.ts, Linking only, hidden on terminal/cancelled). Copy location skipped (no clipboard module).
+
+- 2026-11: IndexNow key file + scripts/indexnow.mjs (postbuild, INDEXNOW_ENABLED=true, INDEXNOW_DRY_RUN) ; /about and /faq titles lengthened.
+- 2026-11: Sign-up protection (services/signup_guard.py): CF-Connecting-IP/XFF rate limits (3/h, 10/24h per IP, 30/10min global, signup_attempts TTL), canonical email 409, disposable block, honeypot+timing (web only), 6-digit code + link verification (email_verified, signup_source web|app), POST /jobs 403 email_unverified for unverified web customers, welcome after verification once per canonical, admin suspicious-signups preview + UI.

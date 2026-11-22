@@ -45,7 +45,7 @@ export function EmailCodeStep({ email, onVerified, onBack, onSkip, autoSend = fa
   const [left, restart] = useCountdown();
   const sent = useRef(false);
 
-  const resend = async () => {
+  const resend = async (auto = false) => {
     setError(null);
     try {
       await api("/auth/resend-code", { method: "POST" });
@@ -53,14 +53,15 @@ export function EmailCodeStep({ email, onVerified, onBack, onSkip, autoSend = fa
       setCode("");
       restart();
     } catch (e) {
-      setError(e?.message || "Could not send a new code.");
+      if (auto && e?.status === 429) setInfo("We've already sent you a code — check your inbox.");
+      else setError(e?.message || "Could not send a new code.");
     }
   };
 
   useEffect(() => {
     if (autoSend && !sent.current) {
       sent.current = true;
-      resend();
+      resend(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSend]);
@@ -108,7 +109,7 @@ export function EmailCodeStep({ email, onVerified, onBack, onSkip, autoSend = fa
         </button>
       </form>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[13px]">
-        <button type="button" disabled={left > 0} onClick={resend} data-testid="email-code-resend" className="font-semibold text-[#D62828] disabled:text-[#9CA3AF]">
+        <button type="button" disabled={left > 0} onClick={() => resend()} data-testid="email-code-resend" className="font-semibold text-[#D62828] disabled:text-[#9CA3AF]">
           {left > 0 ? `Resend code in ${left}s` : "Resend code"}
         </button>
         {onBack ? (

@@ -339,7 +339,7 @@ export default function CustomerPostJob({ guest = false }) {
     setShowAccount(true);
   }
 
-  if (isGuest && showAccount) {
+  if (guest && showAccount) {
     const summary = [
       selectedCategory?.name || title,
       `${pickup?.town || pickup?.formatted_address || ""} → ${dropoff?.town || dropoff?.formatted_address || ""}`,
