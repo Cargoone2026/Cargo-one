@@ -5,6 +5,9 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecoveryWhatsApp, RecoveryWhatsAppBar } from "@/components/marketing/RecoveryWhatsApp";
+
+const RECOVERY_SERVICES = ["vehicle-recovery"];
 import { LOCAL_CITIES, SERVICE_BY_SLUG, serviceJsonLd, serviceSeo } from "@/data/seo";
 
 const QUOTE_HREF = "/get-quote";
@@ -96,6 +99,7 @@ function ServiceLandingBody({ service }) {
         primaryCta={{ label: "Get an instant quote", href: QUOTE_HREF }}
       />
       <Breadcrumb name={service.name} />
+      {RECOVERY_SERVICES.includes(service.slug) ? <RecoveryWhatsApp /> : null}
       {service.recovery247 ? <Recovery247 /> : null}
 
       <Section>
@@ -219,6 +223,8 @@ function ServiceLandingBody({ service }) {
           </ul>
         </div>
       </Section>
+      {RECOVERY_SERVICES.includes(service.slug) ? <RecoveryWhatsApp position="bottom" /> : null}
+      {RECOVERY_SERVICES.includes(service.slug) ? <RecoveryWhatsAppBar /> : null}
     </div>
   );
 }

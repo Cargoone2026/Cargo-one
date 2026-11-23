@@ -5,6 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecoveryWhatsApp, RecoveryWhatsAppBar } from "@/components/marketing/RecoveryWhatsApp";
 import { ALL_SERVICE_BY_SLUG, EXTRA_SERVICE_BY_SLUG, PLACE_SERVICE_PAIRS, extraServiceSeo, serviceJsonLd } from "@/data/seo";
 import { QuoteButton, pathParts } from "@/pages/marketing/LocalPlaces";
 import { RecentJobs } from "@/components/marketing/RecentJobs";
@@ -29,6 +30,7 @@ export default function ExtraServiceLanding() {
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={serviceJsonLd(service)} />
       <Hero bgImage={image} eyebrow="CARGO ONE SERVICES" title={seo.h1} subtitle={service.intro} compact primaryCta={{ label: "Get an instant quote", href: "/get-quote" }} />
       <Breadcrumb name={service.name} />
+      {service.slug === "non-runner-car-transport" ? <RecoveryWhatsApp /> : null}
       {service.recovery247 ? <Recovery247 /> : null}
       <Steps service={service} />
       <MovesVehicles service={service} />
@@ -38,6 +40,8 @@ export default function ExtraServiceLanding() {
       <ServiceFaqs service={service} />
       <RelatedAndBook service={service} />
       <InYourCity service={service} />
+      {service.slug === "non-runner-car-transport" ? <RecoveryWhatsApp position="bottom" /> : null}
+      {service.slug === "non-runner-car-transport" ? <RecoveryWhatsAppBar /> : null}
     </div>
   );
 }

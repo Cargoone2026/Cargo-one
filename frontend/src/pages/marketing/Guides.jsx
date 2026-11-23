@@ -5,6 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecoveryWhatsApp, RecoveryWhatsAppBar } from "@/components/marketing/RecoveryWhatsApp";
 import { GUIDES, GUIDES_INDEX_FAQS, GUIDES_INDEX_SEO, GUIDE_BY_SLUG, guideJsonLd, guideSeo, guidesIndexJsonLd } from "@/data/seo";
 import { Crumbs, Faqs, LinkList, QuoteButton, pathParts } from "@/pages/marketing/LocalPlaces";
 
@@ -39,6 +40,8 @@ export function GuidesIndex() {
   );
 }
 
+const RECOVERY_GUIDE = "what-to-do-if-your-car-breaks-down";
+
 export function GuideArticle() {
   const g = GUIDE_BY_SLUG[pathParts(useLocation().pathname)[1]];
   if (!g) return <Navigate to="/guides" replace />;
@@ -49,11 +52,14 @@ export function GuideArticle() {
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={guideJsonLd(g, image)} />
       <Hero bgImage={image} eyebrow="GUIDE" title={g.h1} subtitle={g.intro} compact primaryCta={{ label: "Get an instant quote", href: "/get-quote" }} />
       <Crumbs items={[["Home", "/"], ["Guides", "/guides"], [g.h1]]} />
+      {g.slug === RECOVERY_GUIDE ? <RecoveryWhatsApp /> : null}
       <article className="mx-auto max-w-[800px] px-4 py-12 md:px-0" data-testid="guide-article">
         {g.sections.map((s) => <GuideSection key={s.h} s={s} />)}
       </article>
       <Faqs faqs={g.faqs} />
       <GuideLinks g={g} />
+      {g.slug === RECOVERY_GUIDE ? <RecoveryWhatsApp position="bottom" /> : null}
+      {g.slug === RECOVERY_GUIDE ? <RecoveryWhatsAppBar /> : null}
     </div>
   );
 }

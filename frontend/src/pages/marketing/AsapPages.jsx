@@ -5,6 +5,7 @@ import { AppStoreButtons } from "@/components/marketing/AppStoreButtons";
 import { Hero } from "@/components/marketing/Hero";
 import { Section } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecoveryWhatsApp, RecoveryWhatsAppBar } from "@/components/marketing/RecoveryWhatsApp";
 import { ASAP_PAGE_BY_PATH, asapJsonLd, asapOtherCities } from "@/data/seo";
 import { Crumbs, Faqs, LinkList, QuoteButton } from "@/pages/marketing/LocalPlaces";
 
@@ -18,6 +19,7 @@ export default function AsapPage() {
       <SEO title={p.title} description={p.description} path={p.path} image={p.image} jsonLd={asapJsonLd(p)} />
       <Hero bgImage={p.image} eyebrow={p.eyebrow} title={p.h1} subtitle={p.intro} compact primaryCta={{ label: "Get an instant quote", href: p.path.startsWith("/asap/recovery") ? "/get-quote/asap?mode=recovery" : "/get-quote/asap" }} />
       <Crumbs items={p.crumbs} />
+      {p.city ? <RecoveryWhatsApp /> : null}
       <article className="mx-auto max-w-[860px] px-4 py-12 md:px-0" data-testid="asap-article">
         <Badge247 />
         {p.sections.map((s) => <AsapSection key={s.h} s={s} />)}
@@ -25,6 +27,8 @@ export default function AsapPage() {
       </article>
       <Faqs faqs={p.faqs} />
       <AsapLinks p={p} />
+      {p.city ? <RecoveryWhatsApp position="bottom" /> : null}
+      {p.city ? <RecoveryWhatsAppBar /> : null}
     </div>
   );
 }

@@ -741,3 +741,5 @@ Each future phase must start from the locked baseline.
 - 2026-11: Sign-up protection (services/signup_guard.py): CF-Connecting-IP/XFF rate limits (3/h, 10/24h per IP, 30/10min global, signup_attempts TTL), canonical email 409, disposable block, honeypot+timing (web only), 6-digit code + link verification (email_verified, signup_source web|app), POST /jobs 403 email_unverified for unverified web customers, welcome after verification once per canonical, admin suspicious-signups preview + UI.
 
 - 2026-11: Guides batch 1: 6 new guides in seo.js (GUIDES_BASE + GUIDE_MORE + GUIDE_FINAL); 19 guides, sitemap 870.
+
+- 2026-11: Recovery WhatsApp block (components/marketing/RecoveryWhatsApp.jsx) top+bottom + mobile sticky bar (after cookie choice) on /services/vehicle-recovery, /services/non-runner-car-transport, /how-it-works/asap-recovery, /asap/recovery/{city}, /guides/what-to-do-if-your-car-breaks-down.

@@ -5,6 +5,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { CATEGORY_IMAGES, IMG } from "@/components/marketing/images";
 import { Section, SectionHeading } from "@/components/marketing/Section";
 import { SEO } from "@/components/marketing/SEO";
+import { RecoveryWhatsApp, RecoveryWhatsAppBar } from "@/components/marketing/RecoveryWhatsApp";
 import { BOOKING_TYPES, BOOKING_TYPE_BY_SLUG, SERVICE_BY_SLUG, bookingTypeJsonLd, bookingTypeSeo } from "@/data/seo";
 
 const QUOTE_HREF = "/get-quote";
@@ -89,6 +90,7 @@ function BookingTypeBody({ type }) {
       <SEO title={seo.title} description={seo.description} path={seo.path} image={image} jsonLd={bookingTypeJsonLd(type)} />
       <Hero bgImage={image} eyebrow="WAYS TO BOOK" title={seo.h1} subtitle={type.intro} compact primaryCta={{ label: "Get an instant quote", href: quoteHref(type.slug) }} />
       <Breadcrumb name={type.name} />
+      {type.slug === "asap-recovery" ? <RecoveryWhatsApp /> : null}
 
       <Section>
         <div className="grid gap-8 md:grid-cols-[3fr_2fr]">
@@ -150,6 +152,8 @@ function BookingTypeBody({ type }) {
           </div>
         </div>
       </Section>
+      {type.slug === "asap-recovery" ? <RecoveryWhatsApp position="bottom" /> : null}
+      {type.slug === "asap-recovery" ? <RecoveryWhatsAppBar /> : null}
     </div>
   );
 }
