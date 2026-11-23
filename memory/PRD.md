@@ -739,3 +739,5 @@ Each future phase must start from the locked baseline.
 
 - 2026-11: IndexNow key file + scripts/indexnow.mjs (postbuild, INDEXNOW_ENABLED=true, INDEXNOW_DRY_RUN) ; /about and /faq titles lengthened.
 - 2026-11: Sign-up protection (services/signup_guard.py): CF-Connecting-IP/XFF rate limits (3/h, 10/24h per IP, 30/10min global, signup_attempts TTL), canonical email 409, disposable block, honeypot+timing (web only), 6-digit code + link verification (email_verified, signup_source web|app), POST /jobs 403 email_unverified for unverified web customers, welcome after verification once per canonical, admin suspicious-signups preview + UI.
+
+- 2026-11: Guides batch 1: 6 new guides in seo.js (GUIDES_BASE + GUIDE_MORE + GUIDE_FINAL); 19 guides, sitemap 870.
