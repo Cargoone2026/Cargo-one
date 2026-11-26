@@ -744,4 +744,4 @@ Each future phase must start from the locked baseline.
 
 - 2026-11: Recovery WhatsApp block (components/marketing/RecoveryWhatsApp.jsx) top+bottom + mobile sticky bar (after cookie choice) on /services/vehicle-recovery, /services/non-runner-car-transport, /how-it-works/asap-recovery, /asap/recovery/{city}, /guides/what-to-do-if-your-car-breaks-down.
 
-- 2026-11: IndexNow moved to backend runtime (services/indexnow.py, scheduled 30s after startup): needs INDEXNOW_ENABLED=true + PRODUCTION_MODE=true + non agent-env host; sitemap hash in indexnow_state, max once/24h. Removed indexnow step from frontend postbuild.
+- 2026-11: IndexNow moved to backend runtime (services/indexnow.py, scheduled 30s after startup): needs INDEXNOW_ENABLED=true + non agent-env host (PRODUCTION_MODE gate removed: prod is false); sitemap hash in indexnow_state, max once/24h. Removed indexnow step from frontend postbuild.

@@ -21,8 +21,6 @@ STATE_ID = "sitemap"
 def _is_production() -> bool:
     if os.environ.get("INDEXNOW_ENABLED") != "true":
         return False
-    if os.environ.get("PRODUCTION_MODE", "").lower() != "true":
-        return False
     return not socket.gethostname().startswith("agent-env-")
 
 
