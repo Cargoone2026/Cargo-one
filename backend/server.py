@@ -9329,6 +9329,11 @@ async def seed_startup():
         await ensure_indexes(db)
     except Exception as e:  # pragma: no cover
         logger.warning("signup guard indexes skipped: %s", e)
+    try:
+        from services.indexnow import schedule as schedule_indexnow
+        schedule_indexnow(db)
+    except Exception as e:  # pragma: no cover
+        logger.warning("indexnow schedule skipped: %s", e)
     # Real-time dispatch indexes (Phase 31). Idempotent — Mongo skips
     # existing ones. All keys backward-compatible with existing docs.
     try:
